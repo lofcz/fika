@@ -1,111 +1,91 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8">
-    <link rel="icon" href="./favicon.ico">
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="./favicon.svg">
+    <meta name="theme-color" content="#18181b">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
     <meta name="renderer" content="webkit">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="PPTist - Online presentation (slides) application, restores most of the commonly used Office PowerPoint functions, realizes online PPT editing and presentation, supports exporting PPT files, and supports AI to generate PPT." />
-    <meta name="keywords" content="pptist,ppt,powerpoint,office powerpoint,在线ppt,幻灯片,演示文稿,ppt在线制作,aippt" />
-    <title>PPTist - Online presentation</title>
+    <meta name="description" content="fika — a calm ink-themed presentation editor." />
+    <meta name="keywords" content="fika,ppt,powerpoint,slides,presentation" />
+    <title>fika</title>
 
     <style>
       .first-screen-loading {
-        width: 200px;
-        height: 200px;
         position: fixed;
-        top: 50%;
-        left: 50%;
-        margin-top: -100px;
-        margin-left: -100px;
+        inset: 0;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
+        gap: 22px;
+        background: #f4f4f5;
       }
-      .first-screen-loading-spinner {
-        width: 36px;
-        height: 36px;
-        border: 3px solid #d14424;
-        border-top-color: transparent;
+      .first-screen-loading-ink {
+        position: relative;
+        width: 72px;
+        height: 72px;
+      }
+      .first-screen-loading-ink .blot {
+        position: absolute;
+        inset: 26px;
         border-radius: 50%;
-        box-sizing: border-box;
-        animation: spinner .8s linear infinite;
+        background: #18181b;
+        animation: ink-blot 2s ease-in-out infinite;
+      }
+      .first-screen-loading-ink .ripple {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 1px solid #18181b;
+        opacity: 0;
+        animation: ink-ripple 2.4s ease-out infinite;
+      }
+      .first-screen-loading-ink .ripple:nth-child(2) {
+        animation-delay: 0.8s;
+      }
+      .first-screen-loading-ink .ripple:nth-child(3) {
+        animation-delay: 1.6s;
       }
       .first-screen-loading-text {
-        margin-top: 20px;
-        color: #d14424;
+        max-width: 240px;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        text-align: center;
+        line-height: 1.4;
+        color: #71717a;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       }
-      @keyframes spinner {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
+      @keyframes ink-blot {
+        0%, 100% { transform: scale(0.72); opacity: 0.35; }
+        50% { transform: scale(1); opacity: 1; }
+      }
+      @keyframes ink-ripple {
+        0% { transform: scale(0.28); opacity: 0.5; }
+        100% { transform: scale(1); opacity: 0; }
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-DPTw-tn5.js"></script>
+    <script type="module" crossorigin src="./assets/index-Oa-_mKBs.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/chunk-BVpWp9h4.js">
     <link rel="modulepreload" crossorigin href="./assets/dist-DtrkcxPN.js">
-    <link rel="modulepreload" crossorigin href="./assets/_plugin-vue_export-helper-CDX5ed73.js">
-    <link rel="modulepreload" crossorigin href="./assets/preload-helper-kNaey6uv.js">
-    <link rel="modulepreload" crossorigin href="./assets/portal-D-CMlyKt.js">
-    <link rel="modulepreload" crossorigin href="./assets/canvas-D_CUD9Ev.js">
-    <link rel="modulepreload" crossorigin href="./assets/common-Ct0FfYE2.js">
-    <link rel="modulepreload" crossorigin href="./assets/components-BW2iDtOB.js">
-    <link rel="modulepreload" crossorigin href="./assets/configs-Csc4ExPO.js">
-    <link rel="modulepreload" crossorigin href="./assets/editor-B2WOgq5O.js">
-    <link rel="modulepreload" crossorigin href="./assets/export-DF0qtarC.js">
-    <link rel="modulepreload" crossorigin href="./assets/cs-CqhwXjlJ.js">
-    <link rel="modulepreload" crossorigin href="./assets/mobile-ClhT-99W.js">
-    <link rel="modulepreload" crossorigin href="./assets/screen--jfs05S8.js">
-    <link rel="modulepreload" crossorigin href="./assets/canvas-nQfoXmvK.js">
-    <link rel="modulepreload" crossorigin href="./assets/common-DNdWLjJm.js">
-    <link rel="modulepreload" crossorigin href="./assets/components-DEZongpr.js">
-    <link rel="modulepreload" crossorigin href="./assets/configs-gE7YKBIQ.js">
-    <link rel="modulepreload" crossorigin href="./assets/editor-fU3qGftn.js">
-    <link rel="modulepreload" crossorigin href="./assets/export-BxQe92-j.js">
-    <link rel="modulepreload" crossorigin href="./assets/en-CqhwXjlJ.js">
-    <link rel="modulepreload" crossorigin href="./assets/mobile-C--uaEU4.js">
-    <link rel="modulepreload" crossorigin href="./assets/screen-BAXu8Pif.js">
-    <link rel="modulepreload" crossorigin href="./assets/canvas-CohT6cNW.js">
-    <link rel="modulepreload" crossorigin href="./assets/common-ZJCndUCj.js">
-    <link rel="modulepreload" crossorigin href="./assets/components-CNfnc2aJ.js">
-    <link rel="modulepreload" crossorigin href="./assets/configs-BlylWIa8.js">
-    <link rel="modulepreload" crossorigin href="./assets/editor-CWiTJyMQ.js">
-    <link rel="modulepreload" crossorigin href="./assets/export-oFkJbYWA.js">
-    <link rel="modulepreload" crossorigin href="./assets/pl-CqhwXjlJ.js">
-    <link rel="modulepreload" crossorigin href="./assets/mobile-D5qq1s_f.js">
-    <link rel="modulepreload" crossorigin href="./assets/screen-CH7JH93V.js">
-    <link rel="modulepreload" crossorigin href="./assets/canvas-D5EwhMkI.js">
-    <link rel="modulepreload" crossorigin href="./assets/common-Dnr59r1t.js">
-    <link rel="modulepreload" crossorigin href="./assets/components-DM8wjNky.js">
-    <link rel="modulepreload" crossorigin href="./assets/configs-CwYQuHEq.js">
-    <link rel="modulepreload" crossorigin href="./assets/editor-CzFVS7C6.js">
-    <link rel="modulepreload" crossorigin href="./assets/export-BLGCM98c.js">
-    <link rel="modulepreload" crossorigin href="./assets/sk-CqhwXjlJ.js">
-    <link rel="modulepreload" crossorigin href="./assets/mobile-C93qSVsY.js">
-    <link rel="modulepreload" crossorigin href="./assets/screen-E27S9VgP.js">
-    <link rel="modulepreload" crossorigin href="./assets/slides-BrVY4RFA.js">
-    <link rel="modulepreload" crossorigin href="./assets/index.browser-Dp-XhYr2.js">
-    <link rel="modulepreload" crossorigin href="./assets/BaseShapeElement-icP8G0eE.js">
-    <link rel="modulepreload" crossorigin href="./assets/dist-DInvRu_f.js">
-    <link rel="modulepreload" crossorigin href="./assets/__vite-browser-external-BufR4LQa.js">
-    <link rel="stylesheet" crossorigin href="./assets/BaseShapeElement-BPfR7D4j.css">
-    <link rel="stylesheet" crossorigin href="./assets/index-Cgjg5vrF.css">
+    <link rel="modulepreload" crossorigin href="./assets/_plugin-vue_export-helper-CmLgOaZD.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-Dy7wFxh-.css">
   </head>
   <body>
     <div id="app">
       <div class="first-screen-loading">
-        <div class="first-screen-loading-spinner"></div>
+        <div class="first-screen-loading-ink" aria-hidden="true">
+          <span class="ripple"></span>
+          <span class="ripple"></span>
+          <span class="ripple"></span>
+          <span class="blot"></span>
+        </div>
         <div class="first-screen-loading-text">Loading, please wait...</div>
       </div>
     </div>
   </body>
-
-  <script>
-    // document.oncontextmenu = e => e.preventDefault()
-  </script>
 </html>
