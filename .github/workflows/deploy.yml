@@ -11,32 +11,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: "24"
-          cache: "npm"
+          bun-version: canary
 
       - name: Install dependencies
-        env:
-          NPM_CONFIG_FETCH_RETRIES: "5"
-          NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "20000"
-          NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "120000"
-          NPM_CONFIG_FETCH_TIMEOUT: "300000"
-          NPM_CONFIG_MAXSOCKETS: "20"
         run: |
           for attempt in 1 2 3 4 5; do
-            echo "npm ci attempt ${attempt}/5"
-            if npm ci; then
+            echo "bun --canary install attempt ${attempt}/5"
+            if bun --canary install --frozen-lockfile; then
               exit 0
             fi
-            echo "npm ci failed (attempt ${attempt}/5), retrying..."
+            echo "bun --canary install failed (attempt ${attempt}/5), retrying..."
             sleep $((attempt * 10))
           done
           exit 1
 
       - name: Build
-        run: npm run build
+        run: bun --canary run build
 
       - name: Deploy to github pages
         uses: peaceiris/actions-gh-pages@v4

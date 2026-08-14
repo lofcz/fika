@@ -26,27 +26,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: canary
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
-          cache: "npm"
 
       - name: Install dependencies
-        env:
-          NPM_CONFIG_FETCH_RETRIES: "5"
-          NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "20000"
-          NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "120000"
-          NPM_CONFIG_FETCH_TIMEOUT: "300000"
-          NPM_CONFIG_MAXSOCKETS: "20"
         run: |
           for attempt in 1 2 3 4 5; do
-            echo "npm ci attempt ${attempt}/5"
-            if npm ci; then
+            echo "bun --canary install attempt ${attempt}/5"
+            if bun --canary install --frozen-lockfile; then
               exit 0
             fi
-            echo "npm ci failed (attempt ${attempt}/5), retrying..."
+            echo "bun --canary install failed (attempt ${attempt}/5), retrying..."
             sleep $((attempt * 10))
           done
           exit 1
@@ -54,20 +52,20 @@ jobs:
       - name: Bump package version
         id: version
         run: |
-          npm version "${{ github.event.inputs.release_type }}" --no-git-tag-version
+          bun --canary pm version "${{ github.event.inputs.release_type }}" --no-git-tag-version
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Verify agentic bridge
-        run: npm run test:agentic-bridge
+        run: bun --canary run test:agentic-bridge
 
       - name: Typecheck
-        run: npm run type-check
+        run: bun --canary run type-check
 
       - name: Build embed package
-        run: npm run build:embed
+        run: bun --canary run build:embed
 
       - name: Verify package contents
-        run: npm pack --dry-run
+        run: bun --canary publish --dry-run --access public
 
       - name: Publish to npm
         run: npm publish --provenance --access public
@@ -76,7 +74,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add package.json package-lock.json
+          git add package.json bun.lock
           git commit -m "chore: release v${{ steps.version.outputs.version }}"
           git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
 
