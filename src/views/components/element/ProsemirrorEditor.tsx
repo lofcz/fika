@@ -347,10 +347,13 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
   }, []);
   const seedPlaceholderStyles = useCallback((options: PlaceholderStyleOptions) => {
     if (!editorView.current) return;
-    const empty = isEmptyEditorDoc(editorView.current);
-    applyPlaceholderStyles(editorView.current, options);
-    if (!empty) handleInput();
-    handleClick();
+    try {
+      const empty = isEmptyEditorDoc(editorView.current);
+      applyPlaceholderStyles(editorView.current, options);
+      if (!empty) handleInput();
+      handleClick();
+    }
+    catch {}
   }, [handleInput, handleClick]);
   const ensureBulletList = useCallback(() => {
     if (!editorView.current) return;

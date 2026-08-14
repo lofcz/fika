@@ -171,6 +171,10 @@ assert(
   registersBlobs,
   'embedded font blobs from pptxtojson must be registered as FontFace, not only sent to Google Fonts',
 )
+assert(
+  fontSrc.includes('isNonWebFontFamily') && fontSrc.includes('twemoji mozilla'),
+  'loadGoogleFonts must skip local emoji/symbol faces (Twemoji Mozilla is not on Google Fonts)',
+)
 
 if (failures.length) {
   console.error('pptx-import-fonts FAILED:\n' + failures.map(f => ` - ${f}`).join('\n'))

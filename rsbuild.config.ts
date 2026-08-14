@@ -12,8 +12,6 @@ export default defineConfig(({ command }) => {
   const isDev = command === 'dev'
 
   return {
-    // Standalone demo: bundle this app's React + React DOM. The embed library
-    // externalizes them as peer deps so hosts share a single React copy.
     plugins: sharedPlugins(),
     html: {
       template: './index.html',

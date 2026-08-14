@@ -47,7 +47,6 @@ export default defineConfig({
     cssModules: sharedCssModules,
     legalComments: 'none',
   },
-  // Default split-by-experience: keep import() lazy chunks. Do not use all-in-one.
   tools: {
     htmlPlugin: false,
     rspack(config) {

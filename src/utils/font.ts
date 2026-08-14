@@ -30,6 +30,37 @@ export const isSystemFont = (font: string) => {
 const requestedCustomFonts = new Set<string>();
 
 /**
+ * Local / symbol / emoji faces that are not on Google Fonts. Fetching them
+ * hits a Google error page with no CORS header (console noise on github.io).
+ */
+const NON_WEBFONT_FAMILY = /emoji|wingding|webding|twemoji|marlett|mt extra|symbol$/i;
+const NON_WEBFONT_FAMILIES = new Set([
+  'twemoji mozilla',
+  'segoe ui emoji',
+  'segoe ui symbol',
+  'apple color emoji',
+  'noto color emoji',
+  'noto emoji',
+  'android emoji',
+  'emojione',
+  'emojione mozilla',
+  'twitter color emoji',
+  'joypixels',
+  'wingdings',
+  'wingdings 2',
+  'wingdings 3',
+  'webdings',
+  'symbol',
+  'marlett',
+  'mt extra',
+]);
+
+const isNonWebFontFamily = (font: string) => {
+  const key = font.toLowerCase().trim();
+  return NON_WEBFONT_FAMILIES.has(key) || NON_WEBFONT_FAMILY.test(key);
+};
+
+/**
  * Proprietary faces (Office defaults, mostly) that are not on Google Fonts.
  * Each maps to a freely available lookalike / metric-compatible family that IS
  * on Google Fonts. The substitute is registered under the ORIGINAL family
@@ -107,7 +138,7 @@ export const loadGoogleFonts = (usedFonts: readonly unknown[] | PptxUsedFont[] =
     if (font.value) presetFontNames.add(font.value.toLowerCase());
   });
   const embeddedNames = new Set(fonts.filter(font => font.blob).map(font => font.name.toLowerCase()));
-  const fontNames = Array.from(new Set(fonts.map(font => font.name).filter(font => font && !embeddedNames.has(font.toLowerCase()) && !presetFontNames.has(font.toLowerCase()) && !isSystemFont(font))));
+  const fontNames = Array.from(new Set(fonts.map(font => font.name).filter(font => font && !embeddedNames.has(font.toLowerCase()) && !presetFontNames.has(font.toLowerCase()) && !isNonWebFontFamily(font) && !isSystemFont(font))));
   fontNames.forEach(async fontName => {
     const fontKey = fontName.toLowerCase();
     if (requestedCustomFonts.has(fontKey)) return;

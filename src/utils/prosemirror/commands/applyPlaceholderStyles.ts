@@ -2,7 +2,6 @@ import { TextSelection, type Transaction } from 'prosemirror-state';
 import type { Mark, MarkType, Node as ProsemirrorNode } from 'prosemirror-model';
 import type { EditorView } from 'prosemirror-view';
 import type { TextAlign } from '@/types/slides';
-import { setTextAlign } from './setTextAlign';
 export interface PlaceholderStyleOptions {
   fontSize: string;
   align: string;
@@ -116,6 +115,15 @@ const textAlreadyPainted = (doc: ProsemirrorNode, marks: readonly Mark[]) => {
 const marksEq = (a: readonly Mark[], b: readonly Mark[]) => (
   a.length === b.length && a.every((mark, index) => mark.eq(b[index]))
 );
+const safeTextSelection = (doc: ProsemirrorNode, pos: number) => {
+  const clamped = Math.max(0, Math.min(pos, doc.content.size));
+  try {
+    return TextSelection.near(doc.resolve(clamped), 1);
+  }
+  catch {
+    return null;
+  }
+};
 const allTextblocksAligned = (doc: ProsemirrorNode, align: string) => {
   let ok = true;
   doc.descendants(node => {
@@ -199,9 +207,10 @@ export const applyPlaceholderStyles = (view: EditorView, options: PlaceholderSty
       tr = tr.addMark(from, to, em.create());
     }
   });
-  tr = setTextAlign(tr.setSelection(TextSelection.create(doc, 0, doc.content.size)), schema, options.align);
+  tr = alignAllTextblocks(tr, options.align);
   const mappedPos = tr.mapping.map(cursorPos, -1);
-  tr = tr.setSelection(TextSelection.create(tr.doc, mappedPos));
+  const nextSel = safeTextSelection(tr.doc, mappedPos);
+  if (nextSel) tr = tr.setSelection(nextSel);
   tr = tr.setStoredMarks(storedMarks);
   view.dispatch(tr);
 };
