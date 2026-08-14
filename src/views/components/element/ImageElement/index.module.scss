@@ -1,0 +1,30 @@
+.editable-element-image {
+  position: absolute;
+
+  &.lock .element-content {
+    cursor: default;
+  }
+}
+.rotate-wrapper {
+  width: 100%;
+  height: 100%;
+}
+.element-content {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  cursor: move;
+
+  .image-content {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+  }
+  img {
+    position: absolute;
+  }
+}
+.color-mask {
+  @include absolute-0();
+}

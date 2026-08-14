@@ -1,0 +1,43 @@
+.operate {
+  position: absolute;
+  z-index: 100;
+  user-select: none;
+  pointer-events: none;
+  overflow: visible;
+
+  &.multi-select {
+    opacity: 0.2;
+  }
+}
+.operate-drag-border {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+  z-index: 3;
+}
+.operate-drag-body {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  cursor: move;
+}
+.operate-edit-surface {
+  position: absolute;
+  pointer-events: auto;
+  cursor: text;
+}
+.operate-handlers {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  overflow: visible;
+}
+.debug-hit {
+  background: rgba(255, 0, 0, 0.5);
+  outline: 1px solid rgba(255, 0, 0, 0.9);
+}
+.debug-hit-edit {
+  background: rgba(0, 220, 255, 0.35);
+  outline: 1px solid rgba(0, 180, 220, 0.8);
+}

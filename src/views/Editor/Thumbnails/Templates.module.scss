@@ -1,0 +1,149 @@
+.templates {
+  width: 500px;
+  height: 500px;
+  display: flex;
+  user-select: none;
+}
+.catalogs {
+  width: 108px;
+  margin-right: 10px;
+  padding-right: 10px;
+  border-right: 1px solid $borderColor;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  .catalog-list {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .catalog {
+    padding: 7px 8px;
+    border-radius: $borderRadius;
+    cursor: pointer;
+
+    &:hover {
+      background-color: #f5f5f5;
+    }
+
+    &.active {
+      color: $ink;
+      background-color: $surface;
+      border-right: 2px solid $ink;
+      font-weight: 700;
+    }
+
+    & + .catalog {
+      margin-top: 3px;
+    }
+  }
+}
+.import-theme {
+  flex: none;
+  margin-top: 8px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid $borderColor;
+  color: $ink;
+  text-align: center;
+  cursor: pointer;
+
+  &:hover {
+    color: #27272a;
+  }
+}
+.content {
+  display: flex;
+  flex-direction: column;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-right: 4px;
+
+  &:hover .header-action {
+    opacity: 1;
+    transition: opacity $transitionDelay;
+  }
+}
+.types {
+  flex: 1;
+  min-width: 0;
+  margin-right: 10px;
+
+  :global { .tabs {
+    border-bottom: 0;
+  } }
+  :global { .tab {
+    border-radius: $borderRadius;
+    padding: 3px 8px;
+    font-size: 12px;
+
+    &.active {
+      border-bottom-color: transparent;
+      color: $ink;
+      background-color: $surface;
+      font-weight: 700;
+    }
+
+    &:hover {
+      background-color: #f5f5f5;
+    }
+  } }
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.header-action {
+  opacity: 0;
+  font-size: 12px;
+  color: $ink;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.list {
+  width: 392px;
+  padding: 2px;
+  margin-right: -10px;
+  padding-right: 10px;
+  overflow: auto;
+  @include flex-grid-layout();
+}
+.slide-item {
+  position: relative;
+  @include flex-grid-layout-children(2, 48%);
+
+  &:hover .btns {
+    opacity: 1;
+  }
+
+  &:hover .thumbnail {
+    outline-color: $ring;
+  }
+
+  .btns {
+    @include absolute-0();
+
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    display: flex;
+    background-color: rgba($color: #000, $alpha: .25);
+    opacity: 0;
+    transition: opacity $transitionDelay;
+    border-radius: $borderRadius;
+  }
+
+  .thumbnail {
+    outline: 1px solid #ececee;
+    transition: outline $transitionDelay;
+    border-radius: $borderRadius;
+    cursor: pointer;
+  }
+}

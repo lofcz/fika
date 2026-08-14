@@ -1,0 +1,60 @@
+.input {
+  height: 32px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  background-color: $surface;
+  border: 0;
+  border-radius: $borderRadius;
+  box-shadow: none;
+  font-size: 13px;
+  transition: background-color .15s ease;
+
+  input {
+    @include native-input-reset;
+    min-width: 0;
+    height: 100%;
+    padding: 0 4px;
+    flex: 1;
+    color: $textColor;
+    font-size: 13px;
+    font-family: inherit;
+    line-height: 32px;
+
+    &::placeholder {
+      color: #a1a1aa;
+    }
+  }
+
+  &:not(.disabled):hover,
+  &.focused {
+    background-color: $surfaceHover;
+  }
+
+  &.disabled {
+    background-color: $surface;
+    color: #b7b7b7;
+
+    input {
+      color: #b7b7b7;
+    }
+  }
+
+  &.simple {
+    background-color: transparent;
+    padding: 0;
+
+    &:not(.disabled):hover,
+    &.focused {
+      background-color: transparent;
+    }
+  }
+
+  .prefix, .suffix {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: $inkMuted;
+    user-select: none;
+  }
+}

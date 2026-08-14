@@ -1,0 +1,45 @@
+.inline-math-editor {
+  .title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+  .field {
+    position: relative;
+    border: 1px solid $borderColor;
+    border-radius: $borderRadius;
+    padding: 10px 12px;
+    min-height: 72px;
+
+    .field-skel {
+      position: absolute;
+      inset: 0;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+    }
+
+    .field-host {
+      width: 100%;
+    }
+
+    :global { math-field {
+      display: block;
+      width: 100%;
+      font-size: 20px;
+      border: none;
+      outline: none;
+      box-shadow: none;
+      background: transparent;
+    } }
+  }
+  .footer {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+
+    .btn {
+      margin-left: 10px;
+    }
+  }
+}

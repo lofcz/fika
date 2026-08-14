@@ -1,0 +1,13 @@
+.base-element-table {
+  position: absolute;
+}
+.rotate-wrapper {
+  width: 100%;
+  height: 100%;
+}
+.element-content {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  font-family: $textElementFont;
+}

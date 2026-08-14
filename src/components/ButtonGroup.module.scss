@@ -1,0 +1,42 @@
+.button-group {
+  display: flex;
+  align-items: center;
+
+  :global { button.button {
+    border-radius: 0;
+    border-left-width: 1px;
+    border-right-width: 0;
+    display: inline-flex;
+  } }
+
+  &:not(.passive) {
+    :global { button.button {
+      &:first-child {
+        border-top-left-radius: $borderRadius;
+        border-bottom-left-radius: $borderRadius;
+        border-left-width: 1px;
+      }
+
+      &:last-child {
+        border-top-right-radius: $borderRadius;
+        border-bottom-right-radius: $borderRadius;
+        border-right-width: 1px;
+      }
+    } }
+  }
+  &.passive {
+    :global { button.button {
+      &.first {
+        border-top-left-radius: $borderRadius;
+        border-bottom-left-radius: $borderRadius;
+        border-left-width: 1px;
+      }
+
+      &.last {
+        border-top-right-radius: $borderRadius;
+        border-bottom-right-radius: $borderRadius;
+        border-right-width: 1px;
+      }
+    } }
+  }
+}

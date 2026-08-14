@@ -1,0 +1,96 @@
+.code-editor-host {
+  position: relative;
+}
+
+.boot-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  background: #fff;
+}
+
+.code-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  &.pending {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.field {
+  min-width: 160px;
+  flex: 1;
+
+  &.size {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+}
+
+.label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: $inkMuted;
+}
+
+.line-numbers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.editor-wrap {
+  position: relative;
+  height: 360px;
+}
+
+.editor-host {
+  height: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+
+  :global { .cm-editor {
+    height: 100%;
+  } }
+}
+
+.load-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: #fff;
+  color: #f5222d;
+  font-size: 13px;
+  text-align: center;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid $borderColor;
+}

@@ -1,0 +1,22 @@
+.media-element-operate {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.media-player-host {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+
+  &:not(:empty) {
+    pointer-events: auto;
+  }
+}
+.operate-resize-handler {
+  z-index: 20;
+}
+.operate-border-line {
+  z-index: 2;
+}

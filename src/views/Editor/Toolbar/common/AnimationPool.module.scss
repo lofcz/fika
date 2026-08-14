@@ -1,0 +1,133 @@
+.animation-pool {
+  width: 252px;
+  user-select: none;
+}
+.pool-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.pool-tab,
+.family {
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: $inkMuted;
+  background: $surface;
+}
+.pool-tab {
+  height: 28px;
+  border-radius: 8px;
+  font-size: 12px;
+
+  &:hover {
+    background: $surfaceHover;
+    color: $ink;
+  }
+  &.active {
+    background: $ink;
+    color: #fff;
+  }
+}
+.families {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.family {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+
+  &:hover {
+    background: $surfaceHover;
+    color: $ink;
+  }
+  &.active {
+    background: $ink;
+    color: #fff;
+  }
+}
+.fx-pad,
+.fx-row {
+  display: grid;
+  gap: 4px;
+}
+.fx-pad {
+  grid-template-columns: repeat(3, 1fr);
+}
+.fx-row.cols-2 { grid-template-columns: 1fr 1fr; }
+.fx-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.fx-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.fx-cell {
+  aspect-ratio: 16 / 10;
+  border: 0;
+  padding: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  display: block;
+
+  &.empty {
+    pointer-events: none;
+  }
+  &.current {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px $ink;
+  }
+}
+.fx-stage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 8px;
+  position: relative;
+  background: $surface;
+}
+.fx-cell:hover:not(.empty) .fx-stage {
+  background: $surfaceHover;
+}
+.fx-tile {
+  position: absolute;
+  width: 34%;
+  height: 48%;
+  border-radius: 3px;
+  background: $ink;
+  top: 26%;
+  left: 33%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &.dir-0 { top: 8%; left: 8%; }
+  &.dir-1 { top: 8%; left: 33%; }
+  &.dir-2 { top: 8%; left: 58%; }
+  &.dir-3 { top: 26%; left: 8%; }
+  &.dir-4 { top: 26%; left: 33%; }
+  &.dir-5 { top: 26%; left: 58%; }
+  &.dir-6 { top: 44%; left: 8%; }
+  &.dir-7 { top: 44%; left: 33%; }
+  &.dir-8 { top: 44%; left: 58%; }
+}
+.fx-axis {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.04em;
+}
+.pool-hint {
+  min-height: 18px;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: $inkMuted;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Math export E2E</title>
+  <link rel="stylesheet" href="/node_modules/mathlive/mathlive-static.css" />
+  <link rel="stylesheet" href="/node_modules/mathlive/mathlive-fonts.css" />
+  <style>
+    .fika-math { display: inline-block; vertical-align: middle; line-height: normal; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 16px; }
+    #status { white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+    #preview img { border: 1px solid #ccc; margin: 8px 0; max-width: 100%; background: #eee; }
+  </style>
+</head>
+<body>
+  <h1>Math export E2E</h1>
+  <div id="status">boot…</div>
+  <div id="preview"></div>
+  <script type="module">
+    const statusEl = document.getElementById('status')
+    const previewEl = document.getElementById('preview')
+    statusEl.textContent = 'importing modules…'
+
+    let convertLatexToMarkup, MathfieldElement, toPng
+    try {
+      const ml = await import('/node_modules/mathlive/mathlive.min.mjs')
+      convertLatexToMarkup = ml.convertLatexToMarkup
+      MathfieldElement = ml.MathfieldElement
+      const h2i = await import('/node_modules/html-to-image/es/index.js')
+      toPng = h2i.toPng
+    } catch (e) {
+      statusEl.textContent += `\nIMPORT FAIL: ${e?.stack || e}`
+      window.__MATH_E2E__ = { anyOk: false, error: String(e?.stack || e), results: [] }
+      throw e
+    }
+
+    try {
+      MathfieldElement.fontsDirectory = null
+      MathfieldElement.soundsDirectory = null
+    } catch { /* ignore */ }
+
+    function wrapMath(latex, display = false) {
+      const attrs = `class="fika-math" data-latex="${latex.replace(/"/g, '&quot;')}"${display ? ' data-display="true"' : ''}`
+      return `<span ${attrs}>${convertLatexToMarkup(latex, { defaultMode: display ? 'math' : 'inline-math' })}</span>`
+    }
+
+    const content = [
+      `<p>• Konstantní rychlost: ${wrapMath('v = \\frac{s}{t}')}</p>`,
+      `<p>• Dráha: ${wrapMath('s = v \\cdot t')}</p>`,
+      `<p>• Zrychlení je nulové: ${wrapMath('a = 0')}</p>`,
+      `<p><strong>Volný pád:</strong> ${wrapMath('a = g \\approx 9{,}81\\,\\text{m/s}^2')}</p>`,
+    ].join('')
+
+    async function inkStats(dataUrl) {
+      const img = await new Promise((resolve, reject) => {
+        const el = new Image()
+        el.onload = () => resolve(el)
+        el.onerror = reject
+        el.src = dataUrl
+      })
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      let opaque = 0, ink = 0, samples = 0
+      for (let i = 0; i < data.length; i += 4) {
+        samples++
+        const a = data[i + 3]
+        if (a < 16) continue
+        opaque++
+        const r = data[i], g = data[i + 1], b = data[i + 2]
+        if (r < 250 || g < 250 || b < 250) ink++
+      }
+      return { w: img.width, h: img.height, opaque, ink, samples, bytes: dataUrl.length }
+    }
+
+    /** Strategies that Fika could use for off-DOM / non-intrusive capture */
+    const STRATEGIES = [
+      {
+        label: 'offscreen-left-99999 (broken)',
+        style: 'position:fixed;left:-99999px;top:0;background:#ffffff',
+        prime: true,
+      },
+      {
+        label: 'production-path (viewport+box-cover)',
+        // Mirrors useExport.ts: in-viewport + cover ONLY the box bounds (not full screen)
+        style: 'position:fixed;left:0;top:0;opacity:1;pointer-events:none;z-index:2147483646;background:#ffffff',
+        cover: 'box',
+        prime: true,
+        required: true,
+      },
+      {
+        label: 'full-viewport-cover (crashes-UI)',
+        style: 'position:fixed;left:0;top:0;opacity:1;pointer-events:none;z-index:2147483646;background:#ffffff',
+        cover: 'viewport',
+        prime: true,
+      },
+      {
+        label: 'viewport-opacity-0.01',
+        style: 'position:fixed;left:0;top:0;opacity:0.01;pointer-events:none;z-index:2147483646;background:#ffffff',
+        prime: true,
+      },
+      {
+        label: 'transform-offscreen',
+        style: 'position:fixed;left:0;top:0;transform:translateX(-10000px);background:#ffffff',
+        prime: true,
+      },
+    ]
+
+    async function captureStrategy(strat) {
+      const box = document.createElement('div')
+      box.style.cssText = [
+        strat.style,
+        'box-sizing:border-box',
+        'width:420px',
+        'padding:10px',
+        'color:#283544',
+        'font-family:Arial',
+        'font-size:16px',
+        'line-height:1.5',
+        'text-align:left',
+        'white-space:normal',
+        'word-break:break-word',
+      ].join(';')
+      box.innerHTML = content
+      document.body.appendChild(box)
+
+      await document.fonts.ready
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+
+      const width = box.offsetWidth
+      const height = box.offsetHeight
+
+      let cover = null
+      if (strat.cover === 'viewport') {
+        cover = document.createElement('div')
+        cover.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:2147483647;pointer-events:none'
+        document.body.appendChild(cover)
+      } else if (strat.cover === 'box' || strat.cover === true) {
+        const rect = box.getBoundingClientRect()
+        cover = document.createElement('div')
+        cover.style.cssText = [
+          'position:fixed',
+          `left:${Math.max(0, rect.left)}px`,
+          `top:${Math.max(0, rect.top)}px`,
+          `width:${Math.ceil(rect.width)}px`,
+          `height:${Math.ceil(rect.height)}px`,
+          'background:#fff',
+          'z-index:2147483647',
+          'pointer-events:none',
+        ].join(';')
+        document.body.appendChild(cover)
+      }
+
+      const pngOpts = { pixelRatio: 2, width, height, backgroundColor: '#ffffff' }
+
+      let data
+      try {
+        if (strat.prime) await toPng(box, pngOpts)
+        data = await toPng(box, pngOpts)
+      } catch (e) {
+        box.remove()
+        cover?.remove()
+        return { label: strat.label, error: String(e), width, height, ok: false }
+      }
+
+      box.remove()
+      cover?.remove()
+
+      const stats = await inkStats(data)
+      const img = document.createElement('img')
+      img.src = data
+      img.alt = strat.label
+      previewEl.appendChild(Object.assign(document.createElement('h3'), { textContent: `${strat.label} ink=${stats.ink}` }))
+      previewEl.appendChild(img)
+
+      return {
+        label: strat.label,
+        width,
+        height,
+        ...stats,
+        ok: stats.ink > 50,
+        dataUrlPrefix: data.slice(0, 40),
+      }
+    }
+
+    try {
+      statusEl.textContent = 'running captures…'
+      await document.fonts.ready
+      const warm = document.createElement('div')
+      warm.innerHTML = wrapMath('\\frac{1}{2}')
+      warm.style.cssText = 'position:fixed;left:0;top:0;opacity:0.01;pointer-events:none'
+      document.body.appendChild(warm)
+      await document.fonts.ready
+      await new Promise(r => setTimeout(r, 500))
+
+      const results = []
+      for (const strat of STRATEGIES) {
+        results.push(await captureStrategy(strat))
+      }
+
+      warm.remove()
+
+      const winners = results.filter(r => r.ok).map(r => r.label)
+      const production = results.find(r => r.label.startsWith('production-path'))
+      const summary = {
+        fontsLoaded: [...document.fonts].filter(f => /KaTeX|Math|ML/i.test(f.family) && f.status === 'loaded').map(f => f.family),
+        results: results.map(r => ({
+          label: r.label,
+          ok: r.ok,
+          ink: r.ink ?? null,
+          opaque: r.opaque ?? null,
+          error: r.error ?? null,
+        })),
+        winners,
+        productionOk: !!(production && production.ok),
+        productionInk: production?.ink ?? 0,
+        anyOk: winners.length > 0,
+        recommended: production?.ok ? production.label : (winners[0] || null),
+      }
+      window.__MATH_E2E__ = summary
+      statusEl.textContent = JSON.stringify(summary, null, 2)
+      console.log('MATH_E2E', summary)
+    } catch (e) {
+      statusEl.textContent += `\nRUN FAIL: ${e?.stack || e}`
+      window.__MATH_E2E__ = { anyOk: false, error: String(e?.stack || e), results: [] }
+    }
+  </script>
+</body>
+</html>

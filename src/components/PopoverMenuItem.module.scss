@@ -1,0 +1,19 @@
+.popover-menu-item {
+  user-select: none;
+
+  &:hover {
+    background-color: $surface;
+  }
+  & + .popover-menu-item {
+    margin-top: 2px;
+  }
+
+  :global { .i-icon, .icon, svg {
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    margin: 0;
+    color: $inkMuted;
+  } }
+}

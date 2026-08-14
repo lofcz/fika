@@ -1,0 +1,24 @@
+@use './assets/styles/variable' as *;
+@use './assets/styles/mixin' as *;
+
+#fika-shell {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  isolation: isolate;
+}
+
+#app {
+  height: 100%;
+}
+
+#fika-portals {
+  position: absolute;
+  inset: 0;
+  z-index: 4000;
+  pointer-events: none;
+}
+
+#fika-portals > * {
+  pointer-events: auto;
+}

@@ -1,0 +1,7 @@
+.mouse-selection {
+  position: absolute;
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--operate-line, #18181b) 8%, transparent);
+  border: 1px solid var(--operate-line, #18181b);
+  z-index: 5;
+}

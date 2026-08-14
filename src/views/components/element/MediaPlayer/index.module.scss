@@ -1,0 +1,481 @@
+.media-player {
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  line-height: 1;
+  transform-origin: 0 0;
+  pointer-events: auto;
+  border-radius: $paneRadius;
+  background: #0f0f12;
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  font-family: $textElementFont;
+
+  &.hide-controller {
+    cursor: none;
+
+    .controller-mask,
+    .controller {
+      opacity: 0;
+      transform: translateY(110%);
+    }
+  }
+
+  &.idle-chrome {
+    .controller-mask,
+    .controller,
+    .bezel-icon {
+      display: none;
+    }
+
+    .play-badge {
+      pointer-events: none;
+    }
+  }
+
+  &.fill-parent {
+    width: 100%;
+    height: 100%;
+    transform: none;
+  }
+
+  &.audio:not(.compact) {
+    background: rgba(24, 24, 27, 0.92);
+  }
+}
+
+.stage {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  cursor: pointer;
+}
+
+.audio-el {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.video-frame {
+  @include absolute-0();
+  overflow: hidden;
+  background: #000;
+  z-index: 1;
+
+  .video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    transform: translateZ(0);
+  }
+}
+
+.audio-art {
+  @include absolute-0();
+  overflow: hidden;
+  background: #18181b;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.poster-skeleton {
+  @include absolute-0();
+  overflow: hidden;
+  background: #18181b;
+  z-index: 2;
+
+  .shimmer {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, #18181b 0%, #2a2a30 45%, #18181b 100%);
+    background-size: 200% 100%;
+    animation: poster-shimmer 1.15s ease-in-out infinite;
+  }
+}
+
+.load-error {
+  @include absolute-0();
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.86);
+  pointer-events: none;
+}
+
+.play-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 5;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border: 0;
+  border-radius: 50%;
+  color: #18181b;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  cursor: pointer;
+  transition: transform $transitionDelayFast ease, background $transitionDelayFast ease;
+
+  &:hover {
+    transform: scale(1.06);
+    background: #fff;
+  }
+}
+
+.compact .play-badge {
+  width: 70%;
+  height: 70%;
+  max-width: 44px;
+  max-height: 44px;
+  margin: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+
+  &:hover {
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+}
+
+.controller-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 96px;
+  z-index: 6;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(15, 15, 18, 0.78), rgba(15, 15, 18, 0));
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.controller {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 7;
+  min-height: 40px;
+  padding: 8px 10px 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  border-radius: 10px;
+  background: rgba(24, 24, 27, 0.62);
+  backdrop-filter: blur(16px) saturate(1.2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.icon,
+.chip {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 18px;
+  flex: 0 0 auto;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.play-icon {
+  font-size: 22px;
+}
+
+.chip {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  background: rgba(255, 255, 255, 0.08);
+
+  &:hover,
+  &.active {
+    background: rgba(255, 255, 255, 0.16);
+  }
+}
+
+.loop {
+  font-size: 14px;
+  width: 26px;
+  padding: 0;
+}
+
+.time {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.78);
+  flex: 0 0 auto;
+}
+
+.volume {
+  display: flex;
+  align-items: center;
+  min-width: 28px;
+
+  &:hover .volume-bar-wrap,
+  &:focus-within .volume-bar-wrap {
+    width: 52px;
+    opacity: 1;
+    margin-left: 2px;
+  }
+}
+
+.volume-bar-wrap {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: width 0.2s ease, opacity 0.2s ease;
+}
+
+.track,
+.bar {
+  position: relative;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+}
+
+.volume-bar-wrap .track {
+  width: 52px;
+  top: 0;
+}
+
+.fill,
+.loaded,
+.played {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+}
+
+.fill,
+.played {
+  background: #fff;
+}
+
+.loaded {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.thumb {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(50%, -50%) scale(0);
+  transition: transform 0.16s ease;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16);
+}
+
+.bar-wrap:hover .thumb,
+.volume:hover .thumb {
+  transform: translate(50%, -50%) scale(1);
+}
+
+.bar-wrap {
+  position: relative;
+  flex: 1 1 100%;
+  order: -1;
+  padding: 8px 0 4px;
+  cursor: pointer;
+}
+
+.bar-time {
+  position: absolute;
+  top: -18px;
+  transform: translateX(-50%);
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(24, 24, 27, 0.9);
+  font-size: 11px;
+  pointer-events: none;
+
+  &.hidden {
+    opacity: 0;
+  }
+}
+
+.speed {
+  position: relative;
+}
+
+.speed-menu {
+  position: absolute;
+  right: 0;
+  bottom: 28px;
+  width: 72px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(24, 24, 27, 0.94);
+  box-shadow: $boxShadow;
+  backdrop-filter: blur(12px);
+}
+
+.speed-menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  padding: 6px 0;
+  border-radius: 7px;
+  cursor: pointer;
+
+  &:hover,
+  &.active {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+}
+
+.bezel-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 4;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(24, 24, 27, 0.45);
+  font-size: 28px;
+  opacity: 0;
+  pointer-events: none;
+
+  &.bezel-transition {
+    animation: bezel-hide 0.45s ease;
+  }
+}
+
+.audio:not(.compact) {
+  .stage {
+    width: 72px;
+    height: calc(100% - 16px);
+    margin: 8px;
+    border-radius: 10px;
+    overflow: hidden;
+    flex: 0 0 auto;
+  }
+  .controller-mask {
+    display: none;
+  }
+  .controller {
+    left: 88px;
+    right: 8px;
+    top: 8px;
+    bottom: 8px;
+    padding: 4px 8px 8px;
+  }
+  .play-badge {
+    width: 36px;
+    height: 36px;
+    margin: -18px 0 0 -18px;
+    font-size: 20px;
+  }
+  .bar-wrap {
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+
+.audio:not(.compact) {
+  display: flex;
+  align-items: stretch;
+}
+
+.compact {
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+
+  .controller-mask {
+    display: none;
+  }
+  .controller {
+    display: none;
+  }
+  .audio-art {
+    border-radius: 50%;
+  }
+
+  &.docked {
+    overflow: visible;
+
+    .controller {
+      display: flex;
+      left: 50%;
+      right: auto;
+      top: calc(100% + 8px);
+      bottom: auto;
+      width: 280px;
+      transform: translateX(-50%);
+      z-index: 8;
+    }
+  }
+}
+
+@keyframes bezel-hide {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+@keyframes poster-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poster-skeleton .shimmer,
+  .bezel-icon.bezel-transition {
+    animation: none;
+  }
+}

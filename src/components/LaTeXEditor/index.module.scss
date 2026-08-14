@@ -1,0 +1,216 @@
+.latex-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.header {
+  margin-bottom: 22px;
+  padding-right: 8px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  color: $ink;
+  line-height: 1.2;
+}
+
+.lede {
+  margin: 8px 0 0;
+  max-width: 36em;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: $inkMuted;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $inkMuted;
+}
+
+.field {
+  position: relative;
+  min-height: 176px;
+  display: flex;
+  align-items: center;
+  padding: 32px 64px 32px 28px;
+  border: 1px solid $borderColor;
+  border-radius: $paneRadius;
+  background: #fafafa;
+  overflow: auto;
+  cursor: text;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+
+  &.ready:focus-within {
+    background: #fff;
+    border-color: $ink;
+    box-shadow: 0 0 0 3px rgba(24, 24, 27, 0.08);
+  }
+
+  :global { math-field {
+    display: block;
+    width: 100%;
+    min-height: 64px;
+    font-size: 28px;
+    color: $ink;
+    background: transparent;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    --caret-color: #{$ink};
+    --hue: 240;
+    --placeholder-color: transparent;
+    --placeholder-opacity: 0;
+    --selection-background-color: rgba(24, 24, 27, 0.12);
+    --contains-highlight-background-color: transparent;
+    --highlight-text: transparent;
+    --text-highlight-background-color: transparent;
+  } }
+
+  :global { math-field::part(virtual-keyboard-toggle), math-field::part(menu-toggle), math-field::part(placeholder), .ML__virtual-keyboard-toggle, .ML__menu-toggle, .ML__placeholder {
+    display: none !important;
+  } }
+}
+
+.field-skel {
+  position: absolute;
+  inset: 0;
+  padding: 32px 28px;
+}
+
+.field-host {
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.field-hint {
+  position: absolute;
+  top: 0;
+  right: 64px;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  font-size: 18px;
+  font-weight: 450;
+  letter-spacing: -0.02em;
+  color: $inkMuted;
+  z-index: 1;
+  transform: translate(-12px, -7px);
+}
+
+.kb-toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid $borderColor;
+  border-radius: 10px;
+  background: transparent;
+  color: $inkMuted;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: $surface;
+    color: $ink;
+    border-color: $ring;
+  }
+
+  &.active {
+    background: $ink;
+    border-color: $ink;
+    color: #fafafa;
+  }
+}
+
+.kb-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tips-block {
+  margin-top: 16px;
+}
+
+.tips-label {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $inkMuted;
+}
+
+.tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 12px 0 6px;
+  border: none;
+  border-radius: 999px;
+  background: $surface;
+  color: $textColor;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: $surfaceHover;
+    color: $ink;
+  }
+
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 6px;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px $borderColor;
+    color: $ink;
+    font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid $borderColor;
+
+  .btn {
+    min-width: 88px;
+
+    &.primary {
+      color: #fff;
+    }
+  }
+}

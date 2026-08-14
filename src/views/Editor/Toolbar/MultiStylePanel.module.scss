@@ -1,0 +1,29 @@
+.multi-style-panel {
+  user-select: none;
+}
+.type-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.font-select {
+  flex: 1;
+  min-width: 0;
+}
+.quiet-line :global { .select {
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: #f4f4f5;
+} }
+.option {
+  height: 32px;
+  padding: 0 5px;
+  border-radius: 8px;
+
+  &:hover {
+    background-color: #f4f4f5;
+    cursor: pointer;
+  }
+}

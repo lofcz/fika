@@ -1,0 +1,56 @@
+.line-pool {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+.category {
+  min-width: 0;
+
+  & + & {
+    padding-left: 10px;
+    border-left: 1px solid $borderColor;
+  }
+}
+.category-name {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: $inkMuted;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.line-list {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.line-item {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: $surface;
+    color: $ink;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $ink;
+    outline-offset: 1px;
+  }
+
+  svg:not(:root) {
+    overflow: visible;
+  }
+}

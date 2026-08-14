@@ -1,0 +1,172 @@
+.tabs-scroll {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+
+  &:not(.scrollable) {
+    pointer-events: none;
+  }
+
+  &.card {
+    height: auto;
+    flex-shrink: 0;
+    padding: 10px 12px;
+    border-bottom: 1px solid $borderColor;
+  }
+
+  &.scrollable {
+    padding-bottom: 10px;
+
+    &::before,
+    &::after {
+      content: '';
+      width: 18px;
+      position: absolute;
+      top: 0;
+      bottom: 10px;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    &::before {
+      left: 0;
+      background: linear-gradient(90deg, #fff 0%, rgba(#fff, 0) 100%);
+    }
+
+    &::after {
+      right: 0;
+      background: linear-gradient(270deg, #fff 0%, rgba(#fff, 0) 100%);
+    }
+  }
+}
+.tabs {
+  position: relative;
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  user-select: none;
+  line-height: 1;
+
+  .pill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+    border-radius: 8px;
+    background-color: $ink;
+    pointer-events: none;
+    will-change: transform;
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+
+    &[data-placed] {
+      opacity: 1;
+    }
+
+    &[data-ready] {
+      transition:
+        transform $inkMotion $inkEase,
+        width $inkMotion $inkEase,
+        height $inkMotion $inkEase;
+    }
+  }
+
+  &:not(.card) {
+    font-size: 13px;
+    align-items: center;
+    justify-content: flex-start;
+    border-bottom: 1px solid $borderColor;
+
+    &.space-around {
+      justify-content: space-around;
+    }
+    &.space-between {
+      justify-content: space-between;
+    }
+
+    .pill {
+      border-radius: 1px;
+    }
+
+    .tab {
+      position: relative;
+      z-index: 1;
+      flex: 0 0 auto;
+      min-width: 0;
+      text-align: center;
+      border-bottom: 2px solid transparent;
+      padding: 8px 10px;
+      cursor: pointer;
+      color: $inkMuted;
+      font-weight: 600;
+      pointer-events: auto;
+      transition: color 180ms $inkEase;
+
+      &.active {
+        color: $ink;
+      }
+      &.disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+    }
+  }
+
+  &.card {
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+    padding: 3px;
+    background: $surface;
+    border-radius: 10px;
+    gap: 2px;
+
+    .tab {
+      position: relative;
+      z-index: 1;
+      flex: 1 1 0;
+      min-width: 0;
+      height: 100%;
+      overflow: hidden;
+      padding: 0 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      background-color: transparent;
+      border: 0;
+      border-radius: 8px;
+      color: $inkMuted;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: color 180ms $inkEase, background-color 180ms $inkEase;
+
+      &:hover:not(.active, .disabled) {
+        color: $ink;
+        background: $surfaceHover;
+      }
+
+      &.active {
+        color: #fff;
+        background-color: transparent;
+
+        :global(.fit-text),
+        :global(.fit-text-content) {
+          color: inherit;
+        }
+      }
+
+      & + .tab {
+        border-left: 0;
+      }
+    }
+  }
+
+  .tab :global { .fit-text {
+    width: max-content;
+    max-width: 100%;
+  } }
+}

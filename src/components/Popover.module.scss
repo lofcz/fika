@@ -1,0 +1,20 @@
+.popover {
+}
+.popover.center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.popover-content {
+  background-color: #fff;
+  padding: 10px;
+  border: 1px solid $borderColor;
+  box-shadow: $boxShadow;
+  border-radius: 12px;
+  font-size: 13px;
+  text-align: left;
+  user-select: none;
+}
+.popover > .popover-content {
+  display: none;
+}

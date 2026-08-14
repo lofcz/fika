@@ -1,0 +1,14 @@
+.mobile-operate {
+  position: absolute;
+  z-index: 100;
+  user-select: none;
+}
+.media-player-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  &:not(:empty) {
+    pointer-events: auto;
+  }
+}

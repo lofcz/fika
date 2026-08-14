@@ -1,0 +1,46 @@
+.toolbar-content {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  gap: 4px;
+}
+.toolbar-btn {
+  min-width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0 5px;
+  border: 0;
+  color: $textColor;
+  background-color: transparent;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  white-space: nowrap;
+  border-radius: $borderRadius;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $lightGray;
+  }
+
+  span {
+    flex-shrink: 0;
+    font-size: 12px;
+    margin-left: 5px;
+  }
+}
+.icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.divider {
+  width: 1px;
+  height: 18px;
+  background-color: $borderColor;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+.table-command-menu {
+  width: 100px;
+}

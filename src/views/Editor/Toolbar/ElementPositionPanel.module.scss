@@ -1,0 +1,61 @@
+.layer-button {
+  padding: 0 8px;
+
+  > svg {
+    flex: 0 0 auto;
+  }
+
+  :global { .fit-text {
+    flex: 1 1 auto;
+    min-width: 0;
+  } }
+}
+.field {
+  :global { .number-input {
+    flex: 1;
+    min-width: 0;
+  } }
+}
+.row {
+  width: 100%;
+}
+.icon-btn {
+  width: 32px;
+  height: 34px;
+  flex: 0 0 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: $inkMuted;
+  cursor: pointer;
+
+  &:hover {
+    background: $surface;
+    color: $ink;
+  }
+
+  &.active {
+    color: $ink;
+    background: $surface;
+  }
+}
+.text-btn {
+  height: 34px;
+  padding: 0 8px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: $surface;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: $surfaceActive;
+  }
+}

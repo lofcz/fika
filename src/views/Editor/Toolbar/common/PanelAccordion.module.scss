@@ -1,0 +1,51 @@
+.panel-accordion {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid $borderColor;
+}
+.panel-accordion-trigger {
+  width: 100%;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0 4px 0 0;
+  cursor: pointer;
+  color: $inkMuted;
+
+  &:hover {
+    background: $surface;
+    color: $ink;
+  }
+}
+.panel-accordion-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.panel-accordion-chevron {
+  font-size: 14px;
+  color: #a1a1aa;
+  transition: transform 0.15s ease;
+
+  &.open {
+    transform: rotate(180deg);
+  }
+}
+.panel-accordion-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+
+  :global { .panel-section:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  } }
+}

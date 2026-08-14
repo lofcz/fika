@@ -1,0 +1,24 @@
+.multi-select-operate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 101;
+  pointer-events: none;
+}
+.operate-drag-body {
+  position: absolute;
+  inset: 0;
+  cursor: move;
+  pointer-events: auto;
+}
+.operate-handlers {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  overflow: visible;
+}
+.debug-hit {
+  background: rgba(255, 0, 0, 0.5);
+  outline: 1px solid rgba(255, 0, 0, 0.9);
+}

@@ -1,0 +1,94 @@
+.drawer {
+  height: 100%;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  z-index: 5000;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  border: 0 solid $borderColor;
+
+  &.left {
+    left: 0;
+    border-right-width: 1px;
+    box-shadow: $boxShadow;
+  }
+  &.right {
+    right: 0;
+    border-left-width: 1px;
+    box-shadow: $boxShadow;
+  }
+}
+
+.header {
+  height: 48px;
+  padding: 0 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: $inkMuted;
+  border-bottom: 1px solid $borderColor;
+
+  .close-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    border-radius: 8px;
+    color: $inkMuted;
+    cursor: pointer;
+
+    &:hover {
+      color: $ink;
+      background: $surface;
+    }
+  }
+}
+.content {
+  padding: 12px 16px;
+  overflow: auto;
+  flex: 1;
+}
+
+.drawer-slide-right-enter-active {
+  animation: drawer-slide-right-enter .25s both ease;
+}
+.drawer-slide-right-leave-active {
+  animation: drawer-slide-right-leave .25s both ease;
+}
+.drawer-slide-left-enter-active {
+  animation: drawer-slide-left-enter .25s both ease;
+}
+.drawer-slide-left-leave-active {
+  animation: drawer-slide-left-leave .25s both ease;
+}
+
+@keyframes drawer-slide-right-enter {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes drawer-slide-right-leave {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes drawer-slide-left-enter {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes drawer-slide-left-leave {
+  to {
+    transform: translateX(-100%);
+  }
+}

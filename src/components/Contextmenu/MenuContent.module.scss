@@ -1,0 +1,121 @@
+$menuWidth: 180px;
+$menuHeight: 30px;
+$subMenuWidth: 120px;
+
+.menu-content {
+  width: $menuWidth;
+  padding: 5px 0;
+  background: #fff;
+  border: 1px solid $borderColor;
+  box-shadow: $boxShadow;
+  border-radius: $borderRadius;
+  list-style: none;
+  margin: 0;
+  pointer-events: auto;
+  user-select: none;
+}
+.menu-item {
+  padding: 0 20px;
+  color: #333;
+  font-size: 12px;
+  transition: all $transitionDelayFast;
+  white-space: nowrap;
+  height: $menuHeight;
+  background-color: #fff;
+  cursor: pointer;
+  overflow: hidden;
+
+  &:not(.disable):hover > .menu-item-content > .sub-menu {
+    display: block;
+  }
+
+  &:not(.disable):hover > .has-children.has-handler::after {
+    transform: scale(1);
+  }
+
+  &:hover:not(.disable) {
+    background-color: $surface;
+  }
+
+  &.divider {
+    height: 1px;
+    overflow: hidden;
+    margin: 5px;
+    background-color: #e5e5e5;
+    line-height: 0;
+    padding: 0;
+  }
+
+  &.disable {
+    color: #b1b1b1;
+    cursor: no-drop;
+  }
+}
+.menu-item-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  gap: 12px;
+
+  &.has-children::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-width: 1px;
+    border-style: solid;
+    border-color: #666 #666 transparent transparent;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+  }
+  &.has-children.has-handler::after {
+    content: '';
+    display: inline-block;
+    width: 1px;
+    height: 24px;
+    background-color: rgba($color: #fff, $alpha: .3);
+    position: absolute;
+    right: 18px;
+    top: 3px;
+    transform: scale(0);
+    transition: transform $transitionDelayFast;
+  }
+
+  .sub-text {
+    flex: 0 0 auto;
+    max-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #666;
+    opacity: 0.6;
+  }
+  .sub-menu {
+    width: $subMenuWidth;
+    position: absolute;
+    display: none;
+    left: 112%;
+    top: -6px;
+  }
+}
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.has-children {
+  padding-right: 14px;
+}
+
+:global(.contextmenu-tooltip) {
+  display: block;
+  max-width: 280px;
+  overflow-wrap: anywhere;
+}

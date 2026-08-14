@@ -1,0 +1,62 @@
+.toolbar-content {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  gap: 4px;
+}
+.toolbar-btn {
+  min-width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0 5px;
+  border: 0;
+  color: $textColor;
+  background-color: transparent;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  white-space: nowrap;
+  border-radius: $borderRadius;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $lightGray;
+  }
+
+  span {
+    flex-shrink: 0;
+    font-size: 12px;
+    margin-left: 5px;
+  }
+}
+.icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.line-style-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.line-style-item {
+  height: 32px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  border-radius: $borderRadius;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $surface;
+  }
+  &.active {
+    color: $ink;
+    font-weight: 600;
+  }
+}
+.width-slider {
+  width: 120px;
+  padding: 0 8px;
+  flex-shrink: 0;
+}

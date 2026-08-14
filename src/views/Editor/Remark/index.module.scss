@@ -1,0 +1,74 @@
+.remark {
+  position: relative;
+  border-top: 1px solid $borderColor;
+  background-color: #fff;
+  min-width: 0;
+  overflow: hidden;
+}
+.resize-handler {
+  height: 7px;
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  cursor: n-resize;
+  z-index: 2;
+}
+.remark-body {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  min-width: 0;
+}
+.remark-editor {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.remark-actions {
+  flex-shrink: 0;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-left: 1px solid $borderColor;
+  background-color: #fff;
+}
+.code-panel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background-color: $surface;
+  color: $inkMuted;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    color: $ink;
+    background-color: $surfaceActive;
+  }
+
+  &.active {
+    color: #fff;
+    background-color: $ink;
+  }
+
+  :global {
+    .i-icon, svg {
+      display: block;
+      width: 1em;
+      height: 1em;
+      font-size: 1em;
+      flex-shrink: 0;
+      color: inherit;
+    }
+  }
+}

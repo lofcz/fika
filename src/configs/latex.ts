@@ -1,0 +1,448 @@
+import { getLL } from '@/i18n/getLL';
+export type FormulaKey = 'gauss' | 'fourier' | 'taylor' | 'definiteIntegral' | 'trigIdentity1' | 'trigIdentity2' | 'binomialExpansion' | 'euler' | 'bernoulli' | 'totalDifferential' | 'nonHomogeneous' | 'cauchyMeanValue' | 'lagrangeMeanValue' | 'derivative' | 'trigIntegral' | 'quadricSurface' | 'secondOrderDifferential' | 'directionalDerivative';
+export type SymbolCategoryKey = 'operators' | 'group' | 'verbatim' | 'greek';
+
+/** Locale-free formula structure. Resolve labels via getFormulaList() or i18n. */
+export const FORMULA_LIST: {
+  key: FormulaKey;
+  latex: string;
+}[] = [{
+  key: 'gauss',
+  latex: `\\int\\int\\int _ { \\Omega } \\left( \\frac { \\partial {P} } { \\partial {x} } + \\frac { \\partial {Q} } { \\partial {y} } + \\frac { \\partial {R} }{ \\partial {z} } \\right) \\mathrm { d } V = \\oint _ { \\partial \\Omega } ( P \\cos \\alpha + Q \\cos \\beta + R \\cos \\gamma ) \\mathrm{ d} S`
+}, {
+  key: 'fourier',
+  latex: `f(x) = \\frac {a_0} 2 + \\sum_{n = 1}^\\infty {({a_n}\\cos {nx} + {b_n}\\sin {nx})}`
+}, {
+  key: 'taylor',
+  latex: `e ^ { x } = 1 + \\frac { x } { 1 ! } + \\frac { x ^ { 2 } } { 2 ! } + \\frac { x ^ { 3 } } { 3 ! } + ... , \\quad - \\infty < x < \\infty`
+}, {
+  key: 'definiteIntegral',
+  latex: `\\lim_ { n \\rightarrow + \\infty } \\sum _ { i = 1 } ^ { n } f \\left[ a + \\frac { i } { n } ( b - a ) \\right] \\frac { b - a } { n } = \\int _ { a } ^ { b } f ( x ) dx`
+}, {
+  key: 'trigIdentity1',
+  latex: `\\sin \\alpha \\pm \\sin \\beta = 2 \\sin \\frac { 1 } { 2 } ( \\alpha \\pm \\beta ) \\cos \\frac { 1 } { 2 } ( \\alpha \\mp \\beta )`
+}, {
+  key: 'trigIdentity2',
+  latex: `\\cos \\alpha + \\cos \\beta = 2 \\cos \\frac { 1 } { 2 } ( \\alpha + \\beta ) \\cos \\frac { 1 } { 2 } ( \\alpha - \\beta )`
+}, {
+  key: 'binomialExpansion',
+  latex: `( 1 + x ) ^ { n } = 1 + \\frac { n x } { 1 ! } + \\frac { n ( n - 1 ) x ^ { 2 } } { 2 ! } + ...`
+}, {
+  key: 'euler',
+  latex: ` e^{ix} = \\cos {x} + i\\sin {x}`
+}, {
+  key: 'bernoulli',
+  latex: `\\frac {dy} {dx} + P(x)y = Q(x) y^n ({n} \\not= {0,1})`
+}, {
+  key: 'totalDifferential',
+  latex: `du(x,y) = P(x,y)dx + Q(x,y)dy = 0`
+}, {
+  key: 'nonHomogeneous',
+  latex: `y = (\\int Q(x) e^{\\int {P(x)dx}}dx + C)e^{-\\int {P(x)dx}}`
+}, {
+  key: 'cauchyMeanValue',
+  latex: `\\frac{{f(b) - f(a)}}{{F(b) - F(a)}} = \\frac{{f'(\\xi )}}{{F'(\\xi )}}`
+}, {
+  key: 'lagrangeMeanValue',
+  latex: `f(b) - f(a) = f'(\\xi )(b - a)`
+}, {
+  key: 'derivative',
+  latex: `(\\arcsin x)' = \\frac{1}{{\\sqrt {1 - x^2} }}`
+}, {
+  key: 'trigIntegral',
+  latex: `\\int {tgxdx = - \\ln \\left| {\\cos x} \\right| + C}`
+}, {
+  key: 'quadricSurface',
+  latex: `\\frac{{{x^2}}}{{{a^2}}} + \\frac{{{y^2}}}{{{b^2}}} - \\frac{{{z^2}}}{{{c^2}}} = 1`
+}, {
+  key: 'secondOrderDifferential',
+  latex: `\\frac {{d^2}y} {dx^2} + P(x) \\frac {dy} {dx} + Q(x)y = f(x)`
+}, {
+  key: 'directionalDerivative',
+  latex: `\\frac{{\\partial f}}{{\\partial l}} = \\frac{{\\partial f}}{{\\partial x}}\\cos \\phi + \\frac{{\\partial f}}{{\\partial y}}\\sin \\phi`
+}];
+
+/** Locale-free symbol categories. Resolve labels via getSymbolList() or i18n. */
+export const SYMBOL_LIST: {
+  type: SymbolCategoryKey;
+  children: {
+    latex: string;
+  }[];
+}[] = [{
+  type: 'operators',
+  children: [{
+    latex: '\\cdot'
+  }, {
+    latex: '\\pm'
+  }, {
+    latex: '\\mp'
+  }, {
+    latex: '+'
+  }, {
+    latex: '-'
+  }, {
+    latex: '\\times'
+  }, {
+    latex: '\\div'
+  }, {
+    latex: '<'
+  }, {
+    latex: '>'
+  }, {
+    latex: '='
+  }, {
+    latex: '\\neq\\ne'
+  }, {
+    latex: '\\leqq'
+  }, {
+    latex: '\\geqq'
+  }, {
+    latex: '\\leq'
+  }, {
+    latex: '\\geq'
+  }, {
+    latex: '\\propto'
+  }, {
+    latex: '\\sim'
+  }, {
+    latex: '\\equiv'
+  }, {
+    latex: '\\dagger'
+  }, {
+    latex: '\\ddagger'
+  }, {
+    latex: '\\ell'
+  }, {
+    latex: '\\#'
+  }, {
+    latex: '\\$'
+  }, {
+    latex: '\\&'
+  }, {
+    latex: '\\%'
+  }, {
+    latex: '\\langle\\rangle'
+  }, {
+    latex: '()'
+  }, {
+    latex: '[]'
+  }, {
+    latex: '\\{\\}'
+  }, {
+    latex: '||'
+  }, {
+    latex: '\\|'
+  }, {
+    latex: '\\exists'
+  }, {
+    latex: '\\in'
+  }, {
+    latex: '\\subset'
+  }, {
+    latex: '\\supset'
+  }, {
+    latex: '\\cup'
+  }, {
+    latex: '\\cap'
+  }, {
+    latex: '\\infty'
+  }, {
+    latex: '\\partial'
+  }, {
+    latex: '\\nabla'
+  }, {
+    latex: '\\aleph'
+  }, {
+    latex: '\\wp'
+  }, {
+    latex: '\\therefore'
+  }, {
+    latex: '\\mid'
+  }, {
+    latex: '\\sum'
+  }, {
+    latex: '\\prod'
+  }, {
+    latex: '\\bigoplus'
+  }, {
+    latex: '\\bigodot'
+  }, {
+    latex: '\\int'
+  }, {
+    latex: '\\oint'
+  }, {
+    latex: '\\oplus'
+  }, {
+    latex: '\\odot'
+  }, {
+    latex: '\\perp'
+  }, {
+    latex: '\\angle'
+  }, {
+    latex: '\\triangle'
+  }, {
+    latex: '\\Box'
+  }, {
+    latex: '\\rightarrow'
+  }, {
+    latex: '\\to'
+  }, {
+    latex: '\\leftarrow'
+  }, {
+    latex: '\\gets'
+  }, {
+    latex: '\\circ'
+  }, {
+    latex: '\\bigcirc'
+  }, {
+    latex: '\\bullet'
+  }, {
+    latex: '\\star'
+  }, {
+    latex: '\\diamond'
+  }, {
+    latex: '\\ast'
+  }, {
+    latex: ','
+  }, {
+    latex: '.'
+  }, {
+    latex: ';'
+  }, {
+    latex: '!'
+  }]
+}, {
+  type: 'group',
+  children: [{
+    latex: '\\frac{a}{b}'
+  }, {
+    latex: '\\frac{dx}{dx}'
+  }, {
+    latex: '\\frac{\\partial a}{\\partial b}'
+  }, {
+    latex: '\\sqrt{x}'
+  }, {
+    latex: '\\sqrt[n]{x}'
+  }, {
+    latex: 'x^{n}'
+  }, {
+    latex: 'x_{n}'
+  }, {
+    latex: 'x_a^b'
+  }, {
+    latex: '\\int_{a}^{b}'
+  }, {
+    latex: '\\oint_a^b'
+  }, {
+    latex: '\\lim_{a \\rightarrow b}'
+  }, {
+    latex: '\\prod_a^b'
+  }, {
+    latex: '\\sum_a^b'
+  }, {
+    latex: '\\left(\\begin{array}a \\\\ b\\end{array}\\right)'
+  }, {
+    latex: '\\begin{bmatrix}a & b \\\\ c & d \\end{bmatrix}'
+  }, {
+    latex: '\\begin{cases}a & x = 0 \\\\ b & x > 0\\end{cases}'
+  }, {
+    latex: '\\hat{a}'
+  }, {
+    latex: '\\breve{a}'
+  }, {
+    latex: '\\acute{a}'
+  }, {
+    latex: '\\grave{a}'
+  }, {
+    latex: '\\tilde{a}'
+  }, {
+    latex: '\\bar{a}'
+  }, {
+    latex: '\\vec{a}'
+  }, {
+    latex: '\\underline{a}'
+  }, {
+    latex: '\\overline{a}'
+  }, {
+    latex: '\\widehat{ab}'
+  }, {
+    latex: '\\overleftarrow{ab}'
+  }, {
+    latex: '\\overrightarrow{ab}'
+  }]
+}, {
+  type: 'verbatim',
+  children: [{
+    latex: '\\log'
+  }, {
+    latex: '\\ln'
+  }, {
+    latex: '\\exp'
+  }, {
+    latex: '\\mod'
+  }, {
+    latex: '\\lim'
+  }, {
+    latex: '\\sin'
+  }, {
+    latex: '\\cos'
+  }, {
+    latex: '\\tan'
+  }, {
+    latex: '\\csc'
+  }, {
+    latex: '\\sec'
+  }, {
+    latex: '\\cot'
+  }, {
+    latex: '\\sinh'
+  }, {
+    latex: '\\cosh'
+  }, {
+    latex: '\\tanh'
+  }, {
+    latex: '\\csch'
+  }, {
+    latex: '\\sech'
+  }, {
+    latex: '\\coth'
+  }, {
+    latex: '\\arcsin'
+  }, {
+    latex: '\\arccos'
+  }, {
+    latex: '\\arctan'
+  }, {
+    latex: '\\arccsc'
+  }, {
+    latex: '\\arcsec'
+  }, {
+    latex: '\\arccot'
+  }]
+}, {
+  type: 'greek',
+  children: [{
+    latex: '\\alpha'
+  }, {
+    latex: '\\beta'
+  }, {
+    latex: '\\gamma'
+  }, {
+    latex: '\\delta'
+  }, {
+    latex: '\\varepsilon'
+  }, {
+    latex: '\\zeta'
+  }, {
+    latex: '\\eta'
+  }, {
+    latex: '\\vartheta'
+  }, {
+    latex: '\\iota'
+  }, {
+    latex: '\\kappa'
+  }, {
+    latex: '\\lambda'
+  }, {
+    latex: '\\mu'
+  }, {
+    latex: '\\nu'
+  }, {
+    latex: '\\xi'
+  }, {
+    latex: '\\omicron'
+  }, {
+    latex: '\\pi'
+  }, {
+    latex: '\\rho'
+  }, {
+    latex: '\\sigma'
+  }, {
+    latex: '\\tau'
+  }, {
+    latex: '\\upsilon'
+  }, {
+    latex: '\\varphi'
+  }, {
+    latex: '\\chi'
+  }, {
+    latex: '\\psi'
+  }, {
+    latex: '\\omega'
+  }, {
+    latex: '\\epsilon'
+  }, {
+    latex: '\\theta'
+  }, {
+    latex: '\\phi'
+  }, {
+    latex: '\\varsigma'
+  }, {
+    latex: '\\Alpha'
+  }, {
+    latex: '\\Beta'
+  }, {
+    latex: '\\Gamma'
+  }, {
+    latex: '\\Delta'
+  }, {
+    latex: '\\Epsilon'
+  }, {
+    latex: '\\Zeta'
+  }, {
+    latex: '\\Eta'
+  }, {
+    latex: '\\Theta'
+  }, {
+    latex: '\\Iota'
+  }, {
+    latex: '\\Kappa'
+  }, {
+    latex: '\\Lambda'
+  }, {
+    latex: '\\Mu'
+  }, {
+    latex: '\\Nu'
+  }, {
+    latex: '\\Xi'
+  }, {
+    latex: '\\Omicron'
+  }, {
+    latex: '\\Pi'
+  }, {
+    latex: '\\Rho'
+  }, {
+    latex: '\\Sigma'
+  }, {
+    latex: '\\Tau'
+  }, {
+    latex: '\\Upsilon'
+  }, {
+    latex: '\\Phi'
+  }, {
+    latex: '\\Chi'
+  }, {
+    latex: '\\Psi'
+  }, {
+    latex: '\\Omega'
+  }]
+}];
+
+/** Formula list with labels in the active locale. */
+export function getFormulaList() {
+  const f = getLL().configs.latex.formulas;
+  return FORMULA_LIST.map(item => ({
+    label: f[item.key](),
+    latex: item.latex
+  }));
+}
+
+/** Symbol categories with labels in the active locale. */
+export function getSymbolList() {
+  const sc = getLL().configs.latex.symbolCategories;
+  return SYMBOL_LIST.map(item => ({
+    type: item.type,
+    label: sc[item.type](),
+    children: item.children
+  }));
+}

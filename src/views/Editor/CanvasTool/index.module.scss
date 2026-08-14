@@ -1,0 +1,233 @@
+.canvas-tool {
+  position: relative;
+  border-bottom: 1px solid $borderColor;
+  background-color: #fff;
+  padding: 6px 12px;
+  font-size: 13px;
+  user-select: none;
+  overflow: hidden;
+}
+.canvas-tool-content {
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) max-content minmax(max-content, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  width: 100%;
+  min-width: max-content;
+  height: 100%;
+}
+.canvas-tool.scrollable {
+  padding-bottom: 2px;
+}
+.tool-cluster {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 38px;
+  padding: 3px;
+  background: $surface;
+  border-radius: 10px;
+
+  :global { .popover {
+    display: flex;
+    align-items: stretch;
+    height: 32px;
+  } }
+
+  :global(.popover.open) {
+    > .insert-handler-item,
+    > .handler-item,
+    > .zoom-value {
+      background-color: $ink;
+      color: #fff;
+    }
+  }
+}
+.left-handler {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+}
+.more {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+
+  :global { .more-icon {
+    display: none;
+  } }
+}
+.add-element-handler {
+  justify-self: center;
+
+  & > div {
+    flex-shrink: 0;
+  }
+
+  .insert-handler-item {
+    height: 32px;
+    min-width: 32px;
+    font-size: 16px;
+    padding: 0 6px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    color: $inkMuted;
+    transition: background-color 0.15s ease, color 0.15s ease;
+
+    &:not(.group-btn, .active, [data-overlay-open]):hover {
+      background-color: $surfaceActive;
+      color: $ink;
+    }
+
+    &.active,
+    &.active:hover {
+      background-color: $ink;
+      color: #fff;
+    }
+
+    @include overlay-open-chip;
+
+    .icon {
+      margin-right: 0;
+    }
+
+    .text {
+      display: none;
+    }
+
+    &.group-btn {
+      padding: 0;
+
+      &:hover:not(.active, [data-overlay-open]) {
+        background-color: $surfaceActive;
+        color: $ink;
+      }
+
+      .group-btn-main {
+        width: 32px;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 0;
+
+        &:hover {
+          background-color: transparent;
+        }
+      }
+
+      .arrow {
+        width: 16px;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 10px;
+        padding: 0;
+        color: inherit;
+  
+        &:hover {
+          background-color: transparent;
+        }
+      }
+
+      &.active,
+      &[data-overlay-open] {
+        .group-btn-main:hover,
+        .arrow:hover {
+          background-color: rgba(255, 255, 255, 0.12);
+        }
+      }
+
+      .arrow {
+        @include overlay-open-chip;
+      }
+    }
+  }
+}
+.handler-item {
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  color: $inkMuted;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &.disable {
+    opacity: .4;
+    pointer-events: none;
+    cursor: default;
+  }
+}
+.left-handler, .right-handler {
+  .handler-item {
+    &.active,
+    &.active:hover {
+      background-color: $ink;
+      color: #fff;
+    }
+    @include overlay-open-chip;
+    &:not(.disable, .active, [data-overlay-open]):hover {
+      background-color: $surfaceActive;
+      color: $ink;
+    }
+  }
+}
+.right-handler {
+  justify-self: end;
+
+  .zoom-value {
+    min-width: 44px;
+    height: 32px;
+    padding: 0 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: $ink;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      background-color: $surfaceActive;
+    }
+
+    @include overlay-open-chip;
+  }
+
+  .viewport-size {
+    font-size: 14px;
+  }
+}
+
+@container (width <= 700px) {
+  .add-element-handler {
+    .insert-handler-item {
+      padding: 0 4px;
+    }
+  }
+}
+@container (width <= 640px) {
+  .right-handler .zoom-value {
+    display: none;
+  }
+  .more > .handler-item {
+    display: none;
+  }
+  .more :global { .more-icon {
+    display: flex;
+  } }
+}

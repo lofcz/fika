@@ -1,0 +1,90 @@
+name: Release and Publish to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Release type
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+
+      - name: Install dependencies
+        env:
+          NPM_CONFIG_FETCH_RETRIES: "5"
+          NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "20000"
+          NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "120000"
+          NPM_CONFIG_FETCH_TIMEOUT: "300000"
+          NPM_CONFIG_MAXSOCKETS: "20"
+        run: |
+          for attempt in 1 2 3 4 5; do
+            echo "npm ci attempt ${attempt}/5"
+            if npm ci; then
+              exit 0
+            fi
+            echo "npm ci failed (attempt ${attempt}/5), retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Bump package version
+        id: version
+        run: |
+          npm version "${{ github.event.inputs.release_type }}" --no-git-tag-version
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Verify agentic bridge
+        run: npm run test:agentic-bridge
+
+      - name: Typecheck
+        run: npm run type-check
+
+      - name: Build embed package
+        run: npm run build:embed
+
+      - name: Verify package contents
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+
+      - name: Commit release version and create tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add package.json package-lock.json
+          git commit -m "chore: release v${{ steps.version.outputs.version }}"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+
+      - name: Push release commit and tag
+        run: git push --follow-tags
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true

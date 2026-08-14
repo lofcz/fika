@@ -1,0 +1,25 @@
+.hue {
+  background: linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+
+  @include absolute-0();
+}
+.hue-container {
+  cursor: pointer;
+  margin: 0 2px;
+  position: relative;
+  height: 100%;
+}
+.hue-pointer {
+  z-index: 2;
+  position: absolute;
+  top: 0;
+}
+.hue-picker {
+  cursor: pointer;
+  margin-top: 1px;
+  width: 4px;
+  height: 8px;
+  box-shadow: 0 0 2px rgba(0, 0, 0, .6);
+  background: #fff;
+  transform: translateX(-2px);
+}

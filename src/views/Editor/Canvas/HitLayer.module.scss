@@ -1,0 +1,51 @@
+.hit-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+
+  &.disabled {
+    display: none;
+  }
+
+  &.retargeting,
+  &:global(.retargeting),
+  &.retargeting :global(*),
+  &:global(.retargeting) :global(*) {
+    pointer-events: none !important;
+  }
+}
+.hit-rect,
+.hit-rect-wrap {
+  position: absolute;
+  transform-origin: center center;
+}
+.hit-rect {
+  pointer-events: auto;
+  cursor: move;
+}
+.hit-rect-wrap {
+  pointer-events: none;
+}
+.hit-border {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+}
+.hit-edit {
+  position: absolute;
+  pointer-events: auto;
+  cursor: text;
+
+  &.hit-play {
+    cursor: pointer;
+  }
+}
+.debug-hit {
+  background: rgba(255, 0, 0, 0.5);
+  outline: 1px solid rgba(255, 0, 0, 0.9);
+}
+.debug-hit-edit {
+  background: rgba(0, 220, 255, 0.35);
+  outline: 1px solid rgba(0, 180, 220, 0.8);
+}

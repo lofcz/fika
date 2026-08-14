@@ -1,0 +1,170 @@
+.code-editor-skeleton {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.field {
+  min-width: 160px;
+  flex: 1;
+
+  &.size-field {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+}
+
+.label,
+.control,
+.step,
+.select,
+.switch,
+.switch-label,
+.gutter,
+.token,
+.btn {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.label {
+  display: block;
+  width: 52px;
+  height: 8px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  background: $surface;
+}
+
+.control {
+  display: block;
+  height: 32px;
+  border-radius: 8px;
+  background: $surface;
+}
+
+.size-control {
+  display: flex;
+  width: 118px;
+  height: 32px;
+  gap: 2px;
+  padding: 1px;
+  background: $surface;
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+
+.step {
+  flex: 0 0 32px;
+  height: 30px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.select {
+  flex: 1;
+  height: 30px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+}
+
+.switch {
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: $surface;
+}
+
+.switch-label {
+  width: 72px;
+  height: 8px;
+  border-radius: 4px;
+  background: $surface;
+}
+
+.editor {
+  height: 360px;
+  padding: 16px 18px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #0d1117;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  height: 1.5em;
+  gap: 6px;
+}
+
+.gutter {
+  flex: 0 0 2.4em;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.token {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.16);
+
+  &.kw { background: rgba(249, 117, 131, 0.45); }
+  &.fn { background: rgba(179, 146, 240, 0.45); }
+  &.str { background: rgba(158, 203, 137, 0.4); }
+  &.dim { background: rgba(230, 237, 243, 0.18); }
+  &.pad { background: transparent; animation: none; }
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid $borderColor;
+}
+
+.btn {
+  width: 88px;
+  height: 32px;
+  border-radius: $borderRadius;
+  background: $surface;
+
+  &.primary {
+    background: $surfaceActive;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .label,
+  .control,
+  .step,
+  .select,
+  .switch,
+  .switch-label,
+  .gutter,
+  .token,
+  .btn {
+    animation: none;
+  }
+}

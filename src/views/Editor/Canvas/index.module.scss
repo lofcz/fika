@@ -1,0 +1,30 @@
+.canvas {
+  height: 100%;
+  user-select: none;
+  overflow: hidden;
+  background-color: $lightGray;
+  position: relative;
+}
+.drag-mask {
+  cursor: grab;
+  @include absolute-0();
+}
+.viewport-wrapper {
+  position: absolute;
+  border-radius: 2px;
+  box-shadow: $canvasShadow;
+}
+.operates {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+.viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 1;
+}

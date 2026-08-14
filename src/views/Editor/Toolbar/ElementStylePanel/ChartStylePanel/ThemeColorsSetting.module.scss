@@ -1,0 +1,58 @@
+.theme-colors-setting {
+  display: flex;
+  flex-direction: column;
+}
+.title {
+  margin-bottom: 16px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.field-label {
+  width: 42%;
+  color: #71717a;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.color-btn-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.full-width-btn {
+  width: 100%;
+}
+.delete-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  bottom: 4px;
+  width: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: #fff;
+  color: #71717a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  &:hover {
+    color: #18181b;
+    background: #f4f4f5;
+  }
+}
+.btn {
+  width: 100%;
+  margin-top: 12px;
+}

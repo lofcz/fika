@@ -1,0 +1,249 @@
+$motion: 0.62s cubic-bezier(0.22, 1, 0.36, 1);
+
+.slide-animation-panel {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  user-select: none;
+}
+.transition-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+.transition-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: $surface;
+  cursor: pointer;
+  color: $ink;
+  text-align: left;
+  overflow: hidden;
+
+  &:hover {
+    background: $surfaceHover;
+  }
+  &.active {
+    background: #fff;
+    box-shadow: inset 0 0 0 1.5px $ink;
+  }
+}
+.stage {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 16 / 9;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #d4d4d8;
+  box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.06);
+  perspective: 220px;
+}
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+}
+.outgoing {
+  background: #e4e4e7;
+  color: #a1a1aa;
+}
+.incoming {
+  background: $ink;
+  color: #e4e4e7;
+  transform-origin: center center;
+}
+.rule {
+  display: block;
+  height: 3px;
+  width: 72%;
+  border-radius: 99px;
+  background: currentColor;
+  opacity: 0.55;
+
+  &.short {
+    width: 42%;
+    opacity: 0.32;
+  }
+}
+.label {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 16px;
+  padding: 0 2px;
+  overflow: hidden;
+  color: $inkMuted;
+  text-align: center;
+}
+.transition-card.active .label {
+  color: $ink;
+}
+
+.no .outgoing {
+  background: #ececee;
+}
+
+.fade .incoming {
+  opacity: 0.22;
+}
+.transition-card:hover .fade .incoming {
+  animation: trans-fade $motion both;
+}
+
+.slideX .incoming {
+  transform: translateX(58%);
+}
+.transition-card:hover .slideX .incoming {
+  animation: trans-slide-x $motion both;
+}
+
+.slideY .incoming {
+  transform: translateY(58%);
+}
+.transition-card:hover .slideY .incoming {
+  animation: trans-slide-y $motion both;
+}
+
+.slideX3D .incoming {
+  transform: translateX(52%) rotateY(-32deg) scale(0.78);
+  transform-origin: left center;
+}
+.transition-card:hover .slideX3D .incoming {
+  animation: trans-slide-x3d $motion both;
+}
+
+.slideY3D .incoming {
+  transform: translateY(52%) rotateX(32deg) scale(0.78);
+  transform-origin: center top;
+}
+.transition-card:hover .slideY3D .incoming {
+  animation: trans-slide-y3d $motion both;
+}
+
+.rotate .incoming {
+  transform: rotate(-55deg);
+  transform-origin: 0 0;
+}
+.transition-card:hover .rotate .incoming {
+  animation: trans-rotate $motion both;
+}
+
+.scaleY .incoming {
+  transform: scaleY(0.18);
+  transform-origin: center top;
+}
+.transition-card:hover .scaleY .incoming {
+  animation: trans-scale-y $motion both;
+}
+
+.scaleX .incoming {
+  transform: scaleX(0.18);
+  transform-origin: left center;
+}
+.transition-card:hover .scaleX .incoming {
+  animation: trans-scale-x $motion both;
+}
+
+.scale .incoming {
+  transform: scale(0.38);
+  opacity: 0.7;
+}
+.transition-card:hover .scale .incoming {
+  animation: trans-scale $motion both;
+}
+
+.scaleReverse .incoming {
+  transform: scale(1.55);
+}
+.transition-card:hover .scaleReverse .incoming {
+  animation: trans-scale-reverse $motion both;
+}
+
+.random .incoming {
+  transform: translate(28%, -12%) rotate(8deg) scale(0.82);
+  opacity: 0.85;
+}
+.transition-card:hover .random .incoming {
+  animation: trans-shuffle 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.apply-all {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: $surface;
+  color: $ink;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: $surfaceHover;
+  }
+}
+
+@keyframes trans-fade {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes trans-slide-x {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(0); }
+}
+@keyframes trans-slide-y {
+  0% { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+@keyframes trans-slide-x3d {
+  0% { transform: translateX(100%) rotateY(-48deg) scale(0.62); }
+  100% { transform: translateX(0) rotateY(0) scale(1); }
+}
+@keyframes trans-slide-y3d {
+  0% { transform: translateY(100%) rotateX(48deg) scale(0.62); }
+  100% { transform: translateY(0) rotateX(0) scale(1); }
+}
+@keyframes trans-rotate {
+  0% { transform: rotate(-90deg); }
+  100% { transform: rotate(0); }
+}
+@keyframes trans-scale-y {
+  0% { transform: scaleY(0.08); }
+  100% { transform: scaleY(1); }
+}
+@keyframes trans-scale-x {
+  0% { transform: scaleX(0.08); }
+  100% { transform: scaleX(1); }
+}
+@keyframes trans-scale {
+  0% { transform: scale(0.22); opacity: 0.4; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes trans-scale-reverse {
+  0% { transform: scale(1.8); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes trans-shuffle {
+  0% { transform: translate(40%, 8%) rotate(12deg) scale(0.7); opacity: 0.35; }
+  40% { transform: translate(-18%, -22%) rotate(-10deg) scale(0.88); opacity: 0.8; }
+  70% { transform: translate(10%, 6%) rotate(4deg) scale(0.96); }
+  100% { transform: none; opacity: 1; }
+}

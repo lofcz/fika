@@ -1,0 +1,79 @@
+.border-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.border-toggle {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border: 0;
+  border-radius: 8px;
+  background: $surface;
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  &:hover,
+  &.on {
+    background: $surfaceHover;
+  }
+
+  &.empty {
+    width: auto;
+    flex: 1;
+    justify-content: flex-start;
+    padding: 5px 12px 5px 5px;
+  }
+}
+.border-toggle-face {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  border-radius: 3px;
+
+  &.none {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    border-radius: 6px;
+    background:
+      linear-gradient(to top right, transparent calc(50% - 0.6px), #ef4444 calc(50% - 0.6px), #ef4444 calc(50% + 0.6px), transparent calc(50% + 0.6px)),
+      repeating-conic-gradient(#fff 0 25%, #e4e4e7 0 50%) 0 0 / 8px 8px;
+  }
+}
+.border-toggle-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: $inkMuted;
+}
+.border-style {
+  flex: 1;
+  min-width: 0;
+}
+.metric-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.quiet-line :global { .select {
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: #f4f4f5;
+} }
+.option {
+  height: 32px;
+  padding: 0 5px;
+  border-radius: 8px;
+
+  &:hover {
+    background-color: #f4f4f5;
+    cursor: pointer;
+  }
+}

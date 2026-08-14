@@ -1,0 +1,999 @@
+{
+  "version": 2,
+  "summary": "Authoring guidance for the Fika agentic bridge. SLIDE NUMBERS START AT 1 everywhere: payload.index, result.data.slideIndex, screenshot.slideIndex, getState().slideIndex, selectedSlideIndexes, plan.slides[].index, and plan.loudIndex are the SAME 1-based number — never subtract or add 1. First slide = 1; last existing = slideCount; omit index to append; index === slideCount+1 also appends; 1 ≤ index ≤ slideCount on createFromLayout REPLACES that slide. The recommended way to build a deck from scratch: (1) ONE bootstrap call deck.setup({ styleId, slideCount, title? }) — applies the visual identity, returns the composition plan (anchors + loud slide), and optionally builds the title slide together; prefer this over separate styles.catalog / deck.applyStyle / deck.planComposition, then (2) for each slide pick a recipe + visual variant from layouts.catalog and add it with slides.createFromLayout({ layoutId, variantId, slots }), preferring a variant whose anchor matches the plan (when variantId is omitted the engine picks a filled/full-width match; an explicit variantId is kept). The engine themes, positions, sanitizes slot markers the layout already draws, AND auto-fits every text box (via responsive measurement) so content does not overflow, and it runs a deterministic QA pass on each slide (overlap / contrast / density / monotony) so you can fix issues in the same turn. Author slot content as Markdown/plain text or structured values (arrays for bullets, { labels, series } for charts) — never hand-written HTML. Host-registered templates (deck.applyTemplate + slides.insertFromTemplate) are optional when the embed host supplies them. Avoid blank slides.create / hand-placed elements unless no layout fits. Pair this with the machine schema (command payload/return types) in the same manifest.",
+  "designSystem": {
+    "summary": "Fika lays elements out in a fixed pixel coordinate space, not inches. Prefer the styles + layouts flow (deck.applyStyle + slides.createFromLayout) so colors, contrast, fonts and layout are chosen for you instead of hand-picked. Host-registered templates (deck.applyTemplate + slides.insertFromTemplate) are optional when the embed host supplies them. These tokens describe the *fallback* defaults for manual placement only.",
+    "coordinateSystem": {
+      "summary": "The default 16:9 canvas is 1000 x 562.5 px (viewport.size = 1000, viewport.ratio = 0.5625). Origin (0,0) is the top-left corner. Every element has left, top, width, height in px and rotate in degrees.",
+      "notes": [
+        "Canvas width = viewport.size; canvas height = viewport.size * viewport.ratio. For the default 16:9 deck that is 1000 x 562.5 px.",
+        "Keep a 40px safe margin from every edge (left/top >= 40, and left+width <= 960, top+height <= 522 on the default canvas).",
+        "Coordinates are absolute px, NOT inches/points. To port an inches-based layout, multiply inches by 100 (10in wide deck -> 1000px).",
+        "rotate is clockwise degrees about the element center. Lines use start/end points instead of width/height/rotate.",
+        "When you use slides.insertFromTemplate you do NOT compute coordinates or sizes — the template slide already has designed elements. The notes above only matter for manual element placement.",
+        "For manual text, write Markdown or plain text (text.create({ markdown }) / { content } as plain text). The engine stores text as HTML internally; you should not author raw HTML tags yourself (they are escaped and show as literal text). Per-run font sizing is an advanced manual concern — reach for a layout instead."
+      ]
+    },
+    "counting": {
+      "summary": "Every slide number the agent sends or receives is 1-based. First slide = 1. There is no slide 0.",
+      "notes": [
+        "payload.index, result.data.slideIndex, screenshot.slideIndex, getState().slideIndex, selectedSlideIndexes, plan.slides[].index, and plan.loudIndex all use the SAME 1-based number. If a screenshot says slide 6, rebuild with index: 6.",
+        "plan.slides is a JavaScript array (first entry at [0]), but each entry.index is the 1-based slide number. plan.slides[0].index === 1. Always pass entry.index or plan.loudIndex — never the array offset.",
+        "Omit index to append (or replace the blank starter / a duplicate title after setup). index === slideCount + 1 also appends. 1 ≤ index ≤ slideCount on slides.createFromLayout REPLACES that slide in place.",
+        "QA warnings say “Slide 6” meaning slide number 6 (the same number you send as index).",
+        "Element z-order, table row/col, and chart series indexes are NOT slide numbers — those stay 0-based."
+      ]
+    },
+    "tokens": {
+      "summary": "The neutral fallback palette/type scale (px) used when no style or host template theme is applied. PREFER deck.setup / deck.applyStyle. Override individual tokens with deck.setTheme only when a style is not enough.",
+      "colors": {
+        "background": "#FFFFFF",
+        "primary": "#1F4E79",
+        "accent": "#2E75B6",
+        "body": "#2D2D2D",
+        "muted": "#777777",
+        "rule": "#CCCCCC",
+        "highlight": "#FFF2CC"
+      },
+      "fontFamily": "Arial",
+      "fontSizePx": {
+        "display": 64,
+        "title": 40,
+        "sectionHeader": 30,
+        "body": 24,
+        "label": 18,
+        "caption": 14
+      },
+      "spacingPx": {
+        "margin": 40,
+        "gutter": 24,
+        "ruleThickness": 3
+      }
+    }
+  },
+  "domains": {
+    "styles": {
+      "title": "Styles",
+      "summary": "Curated visual-identity presets (academic, minimal, bold, playful) — each a contrast-safe color palette with named roles + a heading/body font pairing + a type scale + a signature MOTIF (one distinctive repeated mark: a double rule, hairline, offset block, or rounded chip). styles.catalog lists them; deck.applyStyle picks ONE and records theme.styleId.",
+      "whenToUse": "FIRST, when building a deck from scratch. Pick one style for the whole deck so every layout inherits a coherent, legible look and a consistent motif."
+    },
+    "layouts": {
+      "title": "Layouts",
+      "summary": "Compositional slide recipes (title, section, closing, bullets, twoColumn, imageText, imageFull, bigStat, quote, chart, comparison, cards, numbered), each with 1–4 visual VARIANTS that share slots but compose them differently (different anchor, background treatment, motif placement). layouts.catalog lists each layout's variants and content slots; slides.createFromLayout builds a themed, positioned slide from a layout id + variantId + slots.",
+      "whenToUse": "After deck.setup (or applyStyle + planComposition), once per slide. Pick the layout whose composition matches the slide's job, then pick the VARIANT whose anchor matches the planned anchor for that slide position (this is what keeps consecutive slides from looking identical). Fill its slots with content. The engine themes, positions and auto-fits text to each box, so focus on clear, concise content rather than exact character counts."
+    },
+    "templates": {
+      "title": "Templates",
+      "summary": "Host-registered presentation templates supplied by the embed host (templates + templateLoaders). templates.catalog lists them; templates.slidesCatalog lists insertable slide slugs by type; deck.applyTemplate sets the deck theme. The catalog is empty unless the host registered templates.",
+      "whenToUse": "Only when templates.catalog is non-empty. Otherwise use styles + layouts."
+    },
+    "deck": {
+      "title": "Deck",
+      "summary": "Whole-document state: title, theme, viewport, templates, plus full get/set/patch.",
+      "whenToUse": "Apply a style with deck.setup / deck.applyStyle up front; set the viewport once; use whole-document import/export at persistence boundaries."
+    },
+    "slides": {
+      "title": "Slides",
+      "summary": "Create slides from layouts (slides.createFromLayout); optionally insert host-registered template slides (slides.insertFromTemplate); read, update, delete, duplicate, move, select; set background, transition and speaker remark.",
+      "whenToUse": "Prefer slides.createFromLayout (one call per slide). After insert, use text.setMarkdown on the returned placeholderElementIds/textElementIds. Avoid slides.create for deck building."
+    },
+    "elements": {
+      "title": "Elements",
+      "summary": "Generic element CRUD plus transform, ordering, grouping, lock/hide, and shared styling (outline, shadow, fill, link).",
+      "whenToUse": "Use the generic create/update when you want one call across element types, or the typed sub-domains (text/shapes/charts/...) for richer helpers."
+    },
+    "text": {
+      "title": "Text",
+      "summary": "Text element create/update plus content helpers. Author content as Markdown (text.create({ markdown }) / text.setMarkdown) or plain text.",
+      "whenToUse": "For manual slides only — layouts already place titles, body and captions. Pass Markdown or plain text; do NOT write raw HTML tags (they are escaped and show as literal text). The literal-HTML path (text.setContent / { content }) is reserved for intentionally rendering code-like markup."
+    },
+    "richText": {
+      "title": "Rich text",
+      "summary": "Document-model edits to a text element's prose: set content, run styles and paragraph attributes.",
+      "whenToUse": "Use when you need paragraph alignment / inline run styling on an existing text element."
+    },
+    "shapes": {
+      "title": "Shapes",
+      "summary": "Vector shapes from the preset catalog (shapes.presets) or raw SVG path; fill, gradient, outline, and inner text.",
+      "whenToUse": "Build dividers, callout boxes, accent bars, and backgrounds. Start from a preset, then set fill/outline/text."
+    },
+    "lines": {
+      "title": "Lines",
+      "summary": "Straight/curved connectors with arrowheads and direction.",
+      "whenToUse": "Draw rules, arrows, and connectors. Lines use start/end points, not width/height."
+    },
+    "images": {
+      "title": "Images",
+      "summary": "Image element styling: source, clip/crop, radius, filters, flip, shadow, color mask, set-as-background.",
+      "whenToUse": "Place and style raster art. Resolve media to a URL/data URL before calling the bridge."
+    },
+    "charts": {
+      "title": "Charts",
+      "summary": "Chart element create plus type/data/labels/legends/series/options.",
+      "whenToUse": "Show one quantitative finding per slide. Set data with labels + series, then annotate the takeaway in text."
+    },
+    "tables": {
+      "title": "Tables",
+      "summary": "Table create and cell/row/column edits, styling, merge/split.",
+      "whenToUse": "Comparison grids and small data tables. Keep them small enough to read at body size."
+    },
+    "latex": {
+      "title": "LaTeX",
+      "summary": "Standalone formula ELEMENTS rendered from LaTeX (a display equation that occupies its own block).",
+      "whenToUse": "Only for a big display equation that stands on its own line. For inline math inside a sentence, bullet, heading or any layout slot, write $…$ in the Markdown/slot text instead (it typesets via KaTeX) — do NOT add a separate latex element for math embedded in prose."
+    },
+    "media": {
+      "title": "Media",
+      "summary": "JSON-safe image/video/audio source assignment with mime/ext inference.",
+      "whenToUse": "Attach already-resolved media URLs to elements."
+    },
+    "videos": {
+      "title": "Videos",
+      "summary": "Video element source, poster, playback, autoplay, size, position.",
+      "whenToUse": "Embed a video clip with a poster frame."
+    },
+    "audio": {
+      "title": "Audio",
+      "summary": "Audio element create plus source, playback, icon, transform.",
+      "whenToUse": "Add narration or sound; style the speaker icon."
+    },
+    "animations": {
+      "title": "Animations",
+      "summary": "Per-slide entrance/emphasis/exit animations; list, catalog, create, reorder, trigger and duration.",
+      "whenToUse": "Reveal content progressively. Read animations.catalog for valid effect keys first."
+    },
+    "notes": {
+      "title": "Notes",
+      "summary": "Slide comment threads: notes and replies.",
+      "whenToUse": "Author review comments; not the same as the speaker remark (slides.setRemark)."
+    },
+    "sections": {
+      "title": "Sections",
+      "summary": "Group slides into named sections for long decks.",
+      "whenToUse": "Add a section per major part of a long talk."
+    },
+    "search": {
+      "title": "Search",
+      "summary": "Find/replace across text, shape text and table cells.",
+      "whenToUse": "Bulk rename or correct terminology across the deck."
+    },
+    "history": {
+      "title": "History",
+      "summary": "Commit, undo, redo against the shared history stack.",
+      "whenToUse": "Group a multi-step edit into one undo via executeBatch, or commit/undo manually."
+    },
+    "view": {
+      "title": "View",
+      "summary": "Zoom, locale, slide navigation, enter/exit presentation.",
+      "whenToUse": "Drive presentation playback and the active slide."
+    },
+    "import": {
+      "title": "Import",
+      "summary": "Replace the deck from a JSON-safe document (json / fika / pptxSafe).",
+      "whenToUse": "Load a whole deck the host already reduced to a serializable payload."
+    },
+    "export": {
+      "title": "Export",
+      "summary": "Serializable JSON snapshot of the deck.",
+      "whenToUse": "Persist/autosave from documentChanged events."
+    }
+  },
+  "commands": {
+    "styles.catalog": {
+      "summary": "List the visual-identity style presets (academic, minimal, bold, playful) with their fonts, a color preview, and their signature motif.",
+      "details": "Read this first when building a deck from scratch. Each preset is a contrast-safe palette + heading/body font pairing + type scale + a signature motif (the one distinctive repeated mark that ties the deck together). Pick exactly one whose tone fits the audience, then apply it with deck.applyStyle before adding any slides.",
+      "examples": [
+        "const styles = controller.styles.catalog() // -> [{ id:'academic', label:'Academic', fonts:{...}, preview:{ background, title, body, accent, featureBackground }, motif:{ shape:'doubleRule', colorRole:'accent', size:84, description:'…' } }, ...]"
+      ],
+      "related": [
+        "deck.applyStyle",
+        "deck.planComposition",
+        "layouts.catalog",
+        "slides.createFromLayout"
+      ]
+    },
+    "deck.applyStyle": {
+      "summary": "Apply ONE style preset as the deck's visual identity (palette, fonts, type scale). Records theme.styleId so every layout inherits it.",
+      "details": "Prefer deck.setup({ styleId, slideCount }) which applies the style AND plans composition in one call. Use this alone only when you already have a plan or are restyling an existing deck. An unknown id falls back to the default style and returns a recoverable warning — read valid ids from styles.catalog.",
+      "params": [
+        {
+          "name": "styleId",
+          "type": "string",
+          "required": true,
+          "description": "A preset id from styles.catalog ('academic' | 'minimal' | 'bold' | 'playful')."
+        }
+      ],
+      "examples": [
+        "await controller.deck.applyStyle('academic')"
+      ],
+      "tips": [
+        "Keep one style for the whole deck. Do not hand-pick colors or fonts on top of it — layouts read the preset's role tokens for you.",
+        "For a from-scratch build, call deck.setup instead of applyStyle + planComposition."
+      ],
+      "related": [
+        "deck.setup",
+        "styles.catalog",
+        "layouts.catalog",
+        "slides.createFromLayout"
+      ]
+    },
+    "deck.setup": {
+      "summary": "PREFERRED bootstrap: apply ONE style preset AND plan the whole-deck composition rhythm in a single call. Optionally build the title slide too.",
+      "details": "Replaces the styles.catalog → deck.applyStyle → deck.planComposition opening sequence. Returns { styleId, theme, plan, motif, styles, titleSlideId? }. plan.slides is the ordered anchor-per-slide contract — follow it when picking each createFromLayout variant. Pass title: { slots } to also replace the blank starter with the cover in this same call (1 slide ≈ 1 call for the rest).",
+      "params": [
+        {
+          "name": "styleId",
+          "type": "string",
+          "required": true,
+          "description": "A preset id ('academic' | 'minimal' | 'bold' | 'playful')."
+        },
+        {
+          "name": "slideCount",
+          "type": "number",
+          "required": true,
+          "description": "Total slides in the deck, including title + closing."
+        },
+        {
+          "name": "hints",
+          "type": "CompositionSlideHint[]",
+          "required": false,
+          "description": "Optional per-slide bias: { index -> { anchor?, loud?, density? } }."
+        },
+        {
+          "name": "title",
+          "type": "{ slots, variantId? }",
+          "required": false,
+          "description": "When set, builds the title layout in this call (replaces the blank starter). Prefer this over a separate createFromLayout(title)."
+        }
+      ],
+      "examples": [
+        "const { plan, titleSlideId } = await controller.deck.setup({ styleId: 'academic', slideCount: 7, title: { slots: { title: 'Fotosyntéza', subtitle: 'Zelený zázrak', eyebrow: 'Přírodopis' } } })",
+        "// then createFromLayout once per remaining slide"
+      ],
+      "tips": [
+        "Call this ONCE at the start of a from-scratch build; prefer title.slots so the cover is free.",
+        "Do not also call applyStyle or planComposition in the same build — setup already did both."
+      ],
+      "related": [
+        "styles.catalog",
+        "layouts.catalog",
+        "slides.createFromLayout",
+        "deck.applyStyle",
+        "deck.planComposition"
+      ]
+    },
+    "layouts.catalog": {
+      "summary": "List the compositional slide layouts. For each: its visual variants (id, anchor, and what it looks like) and the content slots you fill (slot name, type, and whether it is required).",
+      "details": "Call before each slide. Pick the layout id whose composition matches the slide's purpose (e.g. 'title' for the cover, 'bullets' for a list, 'twoColumn' for compare/contrast, 'bigStat' for a headline metric, 'chart' for data, 'comparison' for a table, 'closing' for the sign-off). Then pick the VARIANT whose 'anchor' matches the planned anchor for that slide position (from deck.planComposition) and pass its id as variantId. Each variant entry tells you its anchor and a one-line visual description.",
+      "examples": [
+        "const layouts = controller.layouts.catalog() // -> [{ id:'bullets', label:'Bulleted list', variants:[{ id:'standard', label:'Full width', anchor:'leftHeavy', summary:'…' },{ id:'rightRail', label:'Right rail', anchor:'rightHeavy', summary:'…' }], slots:[{ name:'title', type:'text', required:true }, { name:'bullets', type:'bullets', required:true }] }, ...]"
+      ],
+      "related": [
+        "slides.createFromLayout",
+        "deck.planComposition",
+        "styles.catalog"
+      ]
+    },
+    "deck.planComposition": {
+      "summary": "Plan a non-repeating composition rhythm for the whole deck: an anchor per slide plus exactly one loud (full-bleed) slide. Call once after deck.applyStyle.",
+      "details": "Returns { plan, styleId, motif }. plan.slides is an ordered array of { index, anchor, density, loud, note } — one entry per slide. index and plan.loudIndex are 1-based slide numbers (first slide = 1). The array itself is still a JS array (plan.slides[0] is the first slide, and plan.slides[0].index === 1). Always pass entry.index / plan.loudIndex as createFromLayout index — never the array offset. Follow it: for each slide, choose a layout variant whose anchor matches plan.slides[i].anchor. The sequencer guarantees no two consecutive slides share an anchor and designates exactly one loud slide (index = plan.loudIndex) — use a fullBleed layout (imageFull) there. plan.rhythm is a human-readable summary. motif is the active style's signature mark — keep it in mind so the deck reads as one designed whole.",
+      "params": [
+        {
+          "name": "slideCount",
+          "type": "number",
+          "required": true,
+          "description": "Total slides in the deck, including title + closing."
+        },
+        {
+          "name": "hints",
+          "type": "CompositionSlideHint[]",
+          "required": false,
+          "description": "Optional per-slide bias: { index -> { anchor?, loud?, density? } } to force a specific position (e.g. mark a known hero slide loud)."
+        }
+      ],
+      "examples": [
+        "const { plan, motif } = await controller.deck.planComposition({ slideCount: 8 })",
+        "// plan.slides[2] -> { index:3, … } // JS array slot [2] is slide number 3; pass index:3 (or entry.index), never 2"
+      ],
+      "tips": [
+        "Call this ONCE after deck.applyStyle and before the first createFromLayout, then follow the returned anchors slide-by-slide.",
+        "Match each slide's anchor to a variant whose 'anchor' field equals it (see layouts.catalog). When several variants fit, alternate the family too."
+      ],
+      "related": [
+        "deck.applyStyle",
+        "layouts.catalog",
+        "slides.createFromLayout"
+      ]
+    },
+    "slides.createFromLayout": {
+      "summary": "Build + insert a themed slide from a layout id + visual variant + content slots. The PREFERRED way to add a slide when building from scratch.",
+      "details": "The engine positions every element on the canvas, colors it from the active style preset (theme.styleId), draws the style's signature motif, and AUTO-FITS each text box's font size (responsive measurement) so text never overflows — you never pick coordinates, sizes, or colors. It then runs a deterministic QA pass and returns warnings for overlap, sub-AA contrast, over-long/over-many bullets, text shrunk below the legibility floor, empty placeholders, or a repeated composition vs the previous slide — read those warnings and fix the slide in the SAME turn (rebuild with a different variant or tighter copy). Author slot content as Markdown/plain text (titles, bullets, body) or structured values (arrays of strings for bullets; { labels, series, legends } for charts; rows for comparison). Slot text supports inline math: wrap formulas in $…$ (inline) or $$…$$ (display) and they typeset via MathML. Returns the new slideId, the built variantId + anchor, and the created element ids.",
+      "params": [
+        {
+          "name": "layoutId",
+          "type": "string",
+          "required": true,
+          "description": "Layout id from layouts.catalog (e.g. 'title', 'bullets', 'twoColumn', 'chart')."
+        },
+        {
+          "name": "variantId",
+          "type": "string",
+          "required": false,
+          "description": "Visual VARIANT id from the layout's 'variants' in layouts.catalog (e.g. 'grid', 'rightRail', 'even') — NOT a composition anchor. Pick the variant whose anchor matches the planned anchor for this slide. Omit for the default variant. An anchor name passed here is auto-mapped to the matching variant with a warning; an unknown id falls back with a warning."
+        },
+        {
+          "name": "slots",
+          "type": "Record<string, unknown>",
+          "required": false,
+          "description": "Content slots for the layout (keys + shapes per layouts.catalog). Use the EXACT slot names — but near-misses are forgiven: natural aliases (leftColumn→leftBody, columns→rows, items→bullets, content→body, …) are auto-mapped, and any remaining unknown key returns a loud 'unknown slot / did you mean X?' warning instead of being silently dropped."
+        },
+        {
+          "name": "index",
+          "type": "number",
+          "required": false,
+          "description": "1-based slide number. Omit to append (or replace the blank starter / a duplicate title after setup). 1…slideCount REPLACES that slide in place. slideCount+1 appends. First slide is 1, never 0. Same number as result.data.slideIndex and screenshot.slideIndex."
+        },
+        {
+          "name": "select",
+          "type": "boolean",
+          "required": false,
+          "description": "Select the new slide after insert (default true)."
+        },
+        {
+          "name": "backgroundMode",
+          "type": "'auto' | 'feature' | 'plain'",
+          "required": false,
+          "description": "Force a feature (dark) or plain background; defaults to the layout's own preference."
+        }
+      ],
+      "examples": [
+        "await controller.slides.createFromLayout({ layoutId:'title', slots:{ title:'Quarterly Review', subtitle:'Results and outlook', eyebrow:'2026 Q1' } })",
+        "await controller.slides.createFromLayout({ layoutId:'bullets', variantId:'leftRail', slots:{ title:'Key points', bullets:['First point','Second point','Third point'] } })",
+        "await controller.slides.createFromLayout({ layoutId:'cards', variantId:'accentPanel', slots:{ title:'Three pillars', cards:[{ heading:'Speed', body:'Sub-second responses' },{ heading:'Scale', body:'Millions of users' },{ heading:'Safety', body:'Private by default' }] } })",
+        "await controller.slides.createFromLayout({ layoutId:'numbered', variantId:'rightRail', slots:{ title:'How it works', steps:[{ heading:'Collect', body:'Gather the inputs' },{ heading:'Process', body:'Run the model' },{ heading:'Deliver', body:'Return the result' }] } })",
+        "await controller.slides.createFromLayout({ layoutId:'imageFull', slots:{ image:'https://…/photo.jpg', title:'The coastline at dawn', subtitle:'Field site, 2026' } })",
+        "await controller.slides.createFromLayout({ layoutId:'chart', variantId:'inset', slots:{ title:'Revenue by region', chartType:'column', labels:['North','South','East'], series:[[12,28,41]] } })"
+      ],
+      "tips": [
+        "SLIDE NUMBERS START AT 1. payload.index, result.data.slideIndex, and screenshot.slideIndex are the same number. Human “slide 6” = index: 6. There is no slide 0.",
+        "Prefer deck.setup({ styleId, slideCount }) once, then createFromLayout per slide. Separate applyStyle + planComposition is legacy.",
+        "Pick a variant whose anchor matches plan.slides[i].anchor when you can. If you omit variantId, the engine picks a filled/full-width match (never an empty-rail by default). If you pass a variantId, it is KEPT even when the anchor drifts — CompositionDrift is soft; do not rebuild for drift alone.",
+        "VARY the layout family to match the content: 'cards' for parallel items, 'numbered' for ordered steps, 'bigStat'/'chart' for data, 'quote'/'imageFull' for impact. A deck where every slide is 'bullets' is the look to avoid.",
+        "Rail/offset variants (leftRail/rightRail/leftOffset/rightOffset) are ONLY for short/sparse content (≤3 short items). Dense copy auto-collapses to full width. Prefer standard/grid/accentPanel/even for real teaching content.",
+        "Slot sanitization is automatic: bullet/step markers the layout already draws are stripped. For numbered, pass heading WITHOUT '1.'/'2.' — chips are drawn for you. Prefer leftBullets/rightBullets arrays over markdown lists in *Body (body lists are coerced).",
+        "The style MOTIF (e.g. academic doubleRule) is drawn only on feature/hero slides (title/section/closing). Content layouts (cards/bullets/twoColumn/numbered/…) intentionally omit it — their own chrome (card tops, chips, columns) is the accent.",
+        "Keep slot copy concise so the auto-fit keeps text at a comfortable size; if QA warns about density or a too-small box, trim the copy and re-issue createFromLayout (prefer replace/overwrite path over slides.delete).",
+        "Use 'title' for the first slide and 'closing' for the last; 'section' to divide a long deck; 'imageFull' for the single loud slide (plan.loudIndex).",
+        "SOFT warnings (CompositionNearestAnchor, CompositionDrift, CompositionLoudMiss, BootstrapIdempotent, LayoutContent, density/contrast/squeeze, slot aliases, image sourceUrl nest, rail/offset collapse) mean continue — do NOT slides.delete or rebuild solely for these.",
+        "HARD errors (SlideQualityError / contentEmpty): the engine ROLLS BACK the insert — re-issue createFromLayout with corrected slots. Do NOT slides.delete. Pass the 1-based index (same as result.data.slideIndex / screenshot.slideIndex) to rebuild that slide in place. Never delete the blank starter.",
+        "For image layouts, pass image: { src, sourceUrl } (or nest is auto-healed from top-level sourceUrl/href)."
+      ],
+      "related": [
+        "layouts.catalog",
+        "deck.applyStyle",
+        "deck.planComposition",
+        "text.setMarkdown"
+      ]
+    },
+    "templates.catalog": {
+      "summary": "List host-registered presentation templates. Empty unless the embed host passed templates / templateLoaders.",
+      "details": "If the catalog is empty, skip the templates flow and use styles + layouts. If the host registered templates, pick one id, then apply it with deck.applyTemplate before inserting slides.",
+      "examples": [
+        "const templates = controller.templates.catalog() // -> [] unless the host registered templates"
+      ],
+      "related": [
+        "deck.applyTemplate",
+        "templates.slidesCatalog"
+      ]
+    },
+    "deck.applyTemplate": {
+      "summary": "Apply ONE host-registered template theme to the whole deck (fonts, colors, background).",
+      "details": "Only when templates.catalog is non-empty. Do this once, up front, before inserting slides. slides.insertFromTemplate also applies the theme automatically when the deck is still empty (default).",
+      "params": [
+        {
+          "name": "templateId",
+          "type": "string",
+          "required": true,
+          "description": "A host-registered id from templates.catalog."
+        }
+      ],
+      "examples": [
+        "await controller.deck.applyTemplate(templates.catalog()[0].id)"
+      ],
+      "tips": [
+        "Keep one template style for the whole deck. Do not hand-pick colors or fonts on top of a template."
+      ],
+      "related": [
+        "templates.catalog",
+        "templates.slidesCatalog",
+        "slides.insertFromTemplate"
+      ]
+    },
+    "templates.slidesCatalog": {
+      "summary": "List insertable slides for a template, grouped by type (cover, contents, transition, content, end) with slug + description.",
+      "details": "Call after choosing a templateId. Each slug (e.g. cover_1, content_2) maps to one designed slide in that template. Pick the slug whose description best matches the slide you need, then call slides.insertFromTemplate.",
+      "params": [
+        {
+          "name": "templateId",
+          "type": "string",
+          "required": true,
+          "description": "Host-registered template id from templates.catalog."
+        }
+      ],
+      "examples": [
+        "const catalog = await controller.templates.slidesCatalog(templateId)",
+        "// catalog.byType.cover -> [{ slug:'cover_1', description:'...', ... }, ...]"
+      ],
+      "related": [
+        "slides.insertFromTemplate",
+        "templates.catalog"
+      ]
+    },
+    "slides.insertFromTemplate": {
+      "summary": "Insert a designed slide from a host-registered template by slug. Only when templates.catalog is non-empty.",
+      "details": "Clones the template slide (layout, decor, placeholder text boxes) into the deck. You do NOT pick coordinates or sizes. After insert, fill placeholders with text.setMarkdown on the returned placeholderElementIds (or textElementIds). Do not create new text boxes on top of an unfilled placeholder; Office-style placeholders show their prompt until that same placeholder is filled.",
+      "params": [
+        {
+          "name": "templateId",
+          "type": "string",
+          "required": true,
+          "description": "Host-registered template id (same as deck.applyTemplate)."
+        },
+        {
+          "name": "slug",
+          "type": "string",
+          "required": true,
+          "description": "Slide slug from templates.slidesCatalog (e.g. 'cover_1', 'contents_1', 'content_3')."
+        },
+        {
+          "name": "index",
+          "type": "number",
+          "required": false,
+          "description": "1-based insert position; omit or pass slideCount+1 to append. First slide is 1."
+        },
+        {
+          "name": "select",
+          "type": "boolean",
+          "required": false,
+          "description": "Select the new slide after insert (default true)."
+        },
+        {
+          "name": "applyTemplateTheme",
+          "type": "boolean",
+          "required": false,
+          "description": "Apply template theme when deck is empty (default true)."
+        }
+      ],
+      "examples": [
+        "await controller.slides.insertFromTemplate({ templateId, slug:'cover_1' })",
+        "await controller.slides.insertFromTemplate({ templateId, slug:'content_2', index:2 }) // insert as slide 2"
+      ],
+      "tips": [
+        "Plan slide flow: cover → contents → content slides → end. Match slug descriptions from slidesCatalog.",
+        "After insert, batch text.setMarkdown calls for each placeholderElementIds entry that should contain slide copy. Empty placeholders intentionally keep their Office-style prompt."
+      ],
+      "related": [
+        "templates.slidesCatalog",
+        "deck.applyTemplate",
+        "text.setMarkdown"
+      ]
+    },
+    "deck.setTheme": {
+      "summary": "Replace named theme properties (colors, fonts, background, outline, shadow) for the whole deck.",
+      "details": "Set the design tokens once before building slides so element defaults inherit them. Accepts a partial patch; only provided keys change.",
+      "params": [
+        {
+          "name": "theme.themeColors",
+          "type": "string[]",
+          "description": "Accent palette used by charts and pickers."
+        },
+        {
+          "name": "theme.fontColor",
+          "type": "string",
+          "description": "Default body text color."
+        },
+        {
+          "name": "theme.fontName",
+          "type": "string",
+          "description": "Default font family."
+        },
+        {
+          "name": "theme.backgroundColor",
+          "type": "string",
+          "description": "Default slide background."
+        }
+      ],
+      "examples": [
+        "controller.deck.setTheme({ themeColors: ['#2E75B6','#ED7D31','#70AD47'], fontColor: '#2D2D2D', fontName: 'Arial', backgroundColor: '#FFFFFF' })"
+      ],
+      "tips": [
+        "Set the theme before creating elements so defaultColor/defaultFontName inherit it."
+      ],
+      "related": [
+        "deck.setViewport",
+        "slides.setBackground",
+        "slides.applyBackground"
+      ]
+    },
+    "deck.setViewport": {
+      "summary": "Set the canvas size/aspect ratio. size is the canvas width in px; ratio is height/width.",
+      "details": "Default is { size: 1000, ratio: 0.5625 } (16:9, 1000 x 562.5 px). Use ratio 0.75 for 4:3.",
+      "examples": [
+        "controller.deck.setViewport({ size: 1000, ratio: 0.5625 })"
+      ],
+      "related": [
+        "deck.setTheme"
+      ]
+    },
+    "slides.create": {
+      "summary": "Create and append a new slide; returns the created slide (use its id for element placement).",
+      "details": "Pass a partial slide. Omit id to get a generated one. background defaults to the theme. Set select:true to make it the active slide. Use slides.insert to control the position.",
+      "params": [
+        {
+          "name": "slide",
+          "type": "Partial<Slide>",
+          "required": false,
+          "description": "Slide fields. elements may be provided inline, or added later with elements/text/shapes.create."
+        },
+        {
+          "name": "index",
+          "type": "number",
+          "required": false,
+          "description": "1-based insert position; omit or pass slideCount+1 to append. First slide is 1."
+        },
+        {
+          "name": "select",
+          "type": "boolean",
+          "required": false,
+          "description": "Select the new slide (default true)."
+        }
+      ],
+      "examples": [
+        "const res = await controller.slides.create({ slide: { background: { type: 'solid', color: '#1F4E79' } }, select: true })",
+        "const slideId = res.data.id // reuse for every element on this slide"
+      ],
+      "tips": [
+        "Always read result.data.id and pass it as meta.slideId / payload.slideId for subsequent element commands.",
+        "Group the slide + its elements in one executeBatch so the whole slide is a single undo step."
+      ],
+      "related": [
+        "slides.insert",
+        "elements.create",
+        "text.create",
+        "shapes.create"
+      ]
+    },
+    "slides.insert": {
+      "summary": "Insert a slide at a specific index (same payload as slides.create plus index).",
+      "related": [
+        "slides.create",
+        "slides.move"
+      ]
+    },
+    "slides.setBackground": {
+      "summary": "Set one slide's background (solid color, gradient, or image).",
+      "examples": [
+        "controller.slides.setBackground(slideId, { type: 'solid', color: '#1F4E79' })"
+      ],
+      "related": [
+        "slides.applyBackground",
+        "deck.setTheme"
+      ]
+    },
+    "slides.setRemark": {
+      "summary": "Set the speaker notes (remark) for a slide. Content is HTML.",
+      "examples": [
+        "controller.slides.setRemark(slideId, '<p>Pause here and ask the audience.</p>')"
+      ],
+      "related": [
+        "notes.create"
+      ]
+    },
+    "elements.create": {
+      "summary": "Create any element type on a slide (manual placement). payload.element.type is required.",
+      "details": "Generic creator across all element types, for bespoke slides a template can't express. Prefer slides.insertFromTemplate for whole slides, or the typed creators (text.create, shapes.create, charts.create, tables.create) for single elements. Provide left/top/width/height in canvas px and rotate in degrees. For text, pass Markdown via text.create instead of hand-writing HTML here.",
+      "params": [
+        {
+          "name": "slideId",
+          "type": "string",
+          "required": false,
+          "description": "Target slide; defaults to the current slide."
+        },
+        {
+          "name": "element",
+          "type": "Partial<PPTElement> & { type }",
+          "required": true,
+          "description": "Element fields; type is mandatory."
+        },
+        {
+          "name": "index",
+          "type": "number",
+          "required": false,
+          "description": "Z-order insert index."
+        }
+      ],
+      "examples": [
+        "controller.elements.create({ slideId, element: { type:'text', left:40, top:40, width:920, height:90, rotate:0, content:'<p><span style=\"font-size:40px;color:#1F4E79\"><strong>Action title</strong></span></p>', defaultFontName:'Arial', defaultColor:'#1F4E79' } })"
+      ],
+      "tips": [
+        "Text font size lives in inline HTML styles inside content, not in a fontSize field."
+      ],
+      "related": [
+        "text.create",
+        "shapes.create",
+        "charts.create",
+        "tables.create"
+      ]
+    },
+    "text.create": {
+      "summary": "Create a text element (manual placement). Author content as Markdown via `markdown` (recommended) or plain text via `content`.",
+      "details": "Pass `markdown` for formatted copy (the bridge converts it to the HTML Fika stores). Markdown supports inline math: $…$ (inline) and $$…$$ (display) typeset via MathML, so mix prose and formulas freely (e.g. 'Plocha je $\\pi r^2$'). `content` is treated as literal markup — pass plain text there, or intentional HTML only when you specifically want to render markup (e.g. a code snippet). Do NOT type raw HTML tags into `markdown`: they are escaped and appear as literal text (the bridge warns when it detects this). The fallback color/font come from defaultColor/defaultFontName.",
+      "params": [
+        {
+          "name": "slideId",
+          "type": "string",
+          "required": false,
+          "description": "Target slide."
+        },
+        {
+          "name": "markdown",
+          "type": "string",
+          "required": false,
+          "description": "Markdown content (recommended). Converted to HTML."
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": false,
+          "description": "Literal content (plain text, or intentional HTML for code-like markup). Wins over markdown."
+        },
+        {
+          "name": "element",
+          "type": "Partial<PPTTextElement>",
+          "required": false,
+          "description": "Geometry/styling: left, top, width, height, rotate, defaultColor, defaultFontName, lineHeight, wordSpace, fill. Set fixedHeight:true (optionally vAlign:'top'|'middle'|'bottom') to lock the box to its height: the font then auto-fits (shrinks) so the text never overflows the region — the same guarantee layouts give."
+        }
+      ],
+      "examples": [
+        "controller.text.create({ slideId, markdown: '**Key finding:** treated group improved 18%', element: { left:520, top:130, width:440, height:300, rotate:0, defaultColor:'#2D2D2D' } })",
+        "controller.text.create({ slideId, markdown: '- First point\\n- Second point\\n- Third point', element:{ left:40, top:140, width:920, height:300, rotate:0 } })",
+        "controller.text.create({ slideId, markdown: 'Vertically centered, never overflows', element:{ left:80, top:120, width:360, height:200, rotate:0, fixedHeight:true, vAlign:'middle' } })"
+      ],
+      "tips": [
+        "Prefer slides.insertFromTemplate for whole slides. Markdown flavor: markdown-it + markdown-it-texmath (KaTeX). Write Markdown, not HTML.",
+        "For a box that must stay a fixed size, set fixedHeight:true so the text auto-shrinks to fit instead of overflowing."
+      ],
+      "related": [
+        "text.setMarkdown",
+        "text.setContent",
+        "richText.setContent",
+        "slides.insertFromTemplate"
+      ]
+    },
+    "text.setMarkdown": {
+      "summary": "Replace a text element's content from a Markdown string (converted to HTML).",
+      "details": "Author in Markdown. Raw HTML tags are escaped (they would render as literal text) and trigger a warning — use Markdown syntax instead.",
+      "examples": [
+        "controller.text.setMarkdown(elementId, '- First point\\n- Second point\\n- Third point')"
+      ],
+      "related": [
+        "text.setContent",
+        "text.create"
+      ]
+    },
+    "text.setContent": {
+      "summary": "Replace a text element's content with a literal string (the literal-markup path).",
+      "details": "Use for plain text, or for intentionally rendering HTML markup (e.g. a code snippet). For normal formatted copy use text.setMarkdown instead.",
+      "related": [
+        "text.setMarkdown",
+        "richText.setContent"
+      ]
+    },
+    "shapes.create": {
+      "summary": "Create a shape. Start from a preset (shapes.presets) or supply a raw SVG path + viewBox.",
+      "details": "Use shapes for accent rules, callout boxes, dividers and color blocks. Provide left/top/width/height in px; fill is a hex color; outline sets a border; text adds centered inner HTML text. Read shapes.presets(categoryKey?) for ready-made path/viewBox pairs.",
+      "params": [
+        {
+          "name": "slideId",
+          "type": "string",
+          "required": false,
+          "description": "Target slide."
+        },
+        {
+          "name": "preset",
+          "type": "string",
+          "required": false,
+          "description": "A preset id from shapes.presets()."
+        },
+        {
+          "name": "element",
+          "type": "Partial<PPTShapeElement>",
+          "required": false,
+          "description": "viewBox, path, fill, outline, gradient, opacity, text, plus geometry."
+        }
+      ],
+      "examples": [
+        "// thin accent rule under a title\ncontroller.shapes.create({ slideId, element: { left:40, top:120, width:920, height:3, viewBox:[200,200], path:'M 0 0 L 200 0 L 200 200 L 0 200 Z', fill:'#CCCCCC' } })",
+        "// rounded callout box\nconst preset = controller.shapes.presets('rect')[0]\ncontroller.shapes.create({ slideId, element: { ...preset, left:150, top:160, width:700, height:160, fill:'#EBF3FA', outline:{ color:'#2E75B6', width:2, style:'solid' } } })"
+      ],
+      "tips": [
+        "For a filled background band, place a wide low-height shape behind text with a lower z-order."
+      ],
+      "related": [
+        "shapes.presets",
+        "shapes.setFill",
+        "shapes.setOutline",
+        "shapes.setText"
+      ]
+    },
+    "shapes.presets": {
+      "summary": "List preset shapes (path + viewBox) grouped by category. Pass a category key to filter.",
+      "examples": [
+        "controller.shapes.presets() // all categories",
+        "controller.shapes.presets('rect')"
+      ],
+      "related": [
+        "shapes.create"
+      ]
+    },
+    "charts.create": {
+      "summary": "Create a chart element with type + data (labels, legends, series).",
+      "details": "One chart per slide. Provide labels (category axis), legends (series names) and series (arrays of numbers). State the takeaway in an adjacent text element rather than relying on the chart alone.",
+      "params": [
+        {
+          "name": "slideId",
+          "type": "string",
+          "required": false,
+          "description": "Target slide."
+        },
+        {
+          "name": "chartType",
+          "type": "ChartType",
+          "required": false,
+          "description": "bar, column, line, pie, ring, area, radar, scatter."
+        },
+        {
+          "name": "data",
+          "type": "ChartData",
+          "required": false,
+          "description": "{ labels: string[], legends: string[], series: number[][] }."
+        }
+      ],
+      "examples": [
+        "controller.charts.create({ slideId, chartType:'bar', data:{ labels:['Q1','Q2','Q3','Q4'], legends:['Effect %'], series:[[28,22,15,8]] }, element:{ left:40, top:130, width:540, height:360, rotate:0 } })"
+      ],
+      "tips": [
+        "Put the interpretive text on the right (~520px) and the chart on the left (~40px)."
+      ],
+      "related": [
+        "charts.setData",
+        "charts.setType",
+        "charts.setOptions"
+      ]
+    },
+    "tables.create": {
+      "summary": "Create a table with rows x columns of cells.",
+      "details": "Supply data as a 2D array of cells. Edit cells with tables.setCell, style with tables.setCellStyle, and grow/shrink with insert/delete row/column.",
+      "examples": [
+        "controller.tables.create({ slideId, element:{ left:40, top:140, width:920, height:300, rotate:0, colWidths:[0.5,0.5], data:[[{ text:'Metric' },{ text:'Value' }],[{ text:'N' },{ text:'2,400' }]] } })"
+      ],
+      "related": [
+        "tables.setCell",
+        "tables.setCellStyle",
+        "tables.insertRow"
+      ]
+    },
+    "animations.create": {
+      "summary": "Add an animation to an element on a slide. Read animations.catalog for valid effect keys.",
+      "details": "type is 'in' (entrance), 'out' (exit) or 'attention' (emphasis). effect must be a key from animations.catalog. trigger is 'click', 'meantime' or 'auto'.",
+      "examples": [
+        "const cat = controller.animations.catalog()",
+        "controller.animations.create(slideId, { elId: elementId, type:'in', effect:'fadeIn', trigger:'click', duration:600 })"
+      ],
+      "related": [
+        "animations.catalog",
+        "animations.reorder",
+        "animations.setTrigger"
+      ]
+    },
+    "executeBatch": {
+      "summary": "Run several commands as one atomic, single-undo step. Prefer this when one instruction expands to many edits.",
+      "details": "Atomic by default: any failure rolls back the whole batch. Pass { atomic:false } to keep successful child changes. Use deterministic ids so a failed child can be located.",
+      "examples": [
+        "await controller.executeBatch([\n  { type:'slides.create', payload:{ slide:{ id:'s1', background:{ type:'solid', color:'#fff' } }, select:true } },\n  { type:'text.create', payload:{ slideId:'s1', markdown:'# Title', element:{ left:40, top:60, width:920, height:90 } } }\n], { atomic:true })"
+      ],
+      "related": [
+        "execute",
+        "history.commit"
+      ]
+    }
+  },
+  "guides": [
+    {
+      "id": "slide-numbers",
+      "title": "Slide numbers start at 1",
+      "summary": "Every slide number you send or receive is 1-based. First slide = 1. Never add or subtract 1.",
+      "body": [
+        "payload.index, result.data.slideIndex, screenshot.slideIndex, getState().slideIndex, selectedSlideIndexes, plan.slides[].index, and plan.loudIndex are the SAME 1-based number. If a screenshot or QA warning says slide 6, that slide’s index is 6.",
+        "First slide = 1. Last existing slide = slideCount. There is no slide 0.",
+        "Omit index to append (or replace the blank starter / a duplicate title after setup). index === slideCount + 1 also appends. 1 ≤ index ≤ slideCount on slides.createFromLayout REPLACES that slide in place.",
+        "plan.slides is a JS array (first entry at [0]), but each entry.index is the 1-based slide number: plan.slides[0].index === 1. Always pass entry.index or plan.loudIndex — never the array offset.",
+        "To rebuild the loud slide: slides.createFromLayout({ index: plan.loudIndex, layoutId: 'imageFull', … }).",
+        "Element z-order, table row/col, and chart series indexes are not slide numbers — those stay 0-based."
+      ]
+    },
+    {
+      "id": "styles-layouts-flow",
+      "title": "How to build a deck (styles + composition plan + layouts)",
+      "summary": "The recommended flow for a fresh deck: one deck.setup call (style + composition plan), then build each slide from a layout variant that matches the planned anchor.",
+      "body": [
+        "1. Bootstrap once: deck.setup({ styleId:'academic', slideCount }). This applies the visual identity, records theme.styleId + motif, AND returns plan.slides (ordered anchors with no consecutive repeats + exactly one loud slide). Prefer this over separate styles.catalog / applyStyle / planComposition.",
+        "2. For each slide, pick the layout FAMILY whose composition matches the slide's job, then a VARIANT whose anchor matches plan.slides[i].anchor when possible. Prefer filled variants (standard/grid/accentPanel/even) for real teaching content; rail/offset variants are only for short/sparse lists (≤3 items) and auto-collapse when dense. Keep one todo per slide.",
+        "3. Add the slide with slides.createFromLayout({ layoutId, variantId, slots }). Fill slots with Markdown/plain text (titles, bullets, body) or structured values (arrays for bullets; { labels, series } for charts; rows for comparison). Do NOT prefix numbered step headings with '1.'/'2.' — chips are drawn automatically. Prefer leftBullets/rightBullets over markdown lists in *Body. The engine themes, positions, draws the motif, sanitizes doubled markers, and auto-fits text to every box — you never set coordinates, colors, or font sizes.",
+        "4. After each slide, READ THE QA WARNINGS in the result and look at the auto-screenshot. QA flags overlap, low contrast, too-many/too-long bullets, shrunk text, empty placeholders, or a repeated composition vs the previous slide — fix any flag in the same turn (rebuild with a different variant or tighter copy). CompositionDrift is soft: keep the slide. Use the loud slide (plan.loudIndex) for a fullBleed layout (imageFull); use 'title' first and 'closing' last.",
+        "5. Vary the layout FAMILY across the deck as well as the variant: 'cards' for parallel items, 'numbered' for ordered steps, 'bigStat'/'chart' for data, 'quote'/'imageFull' for impact. A deck where every slide is 'bullets' is the look to avoid.",
+        "6. Only drop to host-registered templates (deck.applyTemplate + slides.insertFromTemplate) when templates.catalog is non-empty, or manual slides.create when no layout fits."
+      ]
+    },
+    {
+      "id": "templates-flow",
+      "title": "How to build a deck (alternative: host-registered templates)",
+      "summary": "Only when the embed host registered templates. Pick one catalog id, apply its theme, insert slides by slug, then edit text.",
+      "body": [
+        "1. Read templates.catalog. If it is empty, stop and use the styles + layouts flow instead.",
+        "2. Pick exactly ONE host-registered template and apply it once: deck.applyTemplate({ templateId }). This sets the deck theme. Do not hand-pick colors or fonts after this.",
+        "3. Read templates.slidesCatalog({ templateId }) — slides are grouped by type: cover, contents, transition, content, end. Each entry has a slug and description.",
+        "4. For each slide in your outline, call slides.insertFromTemplate({ templateId, slug }) with the slug that best matches (e.g. cover_1 for title, contents_1 for agenda, content_2 for a text+image slide).",
+        "5. Use the returned placeholderElementIds/textElementIds: batch text.setMarkdown (or text.update) to replace placeholder copy. Do not add separate text boxes over placeholders. Author Markdown/plain text only — never HTML.",
+        "6. After creating or editing a slide, look at the auto-screenshot. Fix overflow and literal markup before moving on.",
+        "7. Only use slides.create + manual elements when no template slide in the catalog fits."
+      ]
+    },
+    {
+      "id": "content-authoring",
+      "title": "Authoring content (Markdown / plain text / structured data — not HTML)",
+      "summary": "What to put in text and layout slots, and why raw HTML does not belong there.",
+      "body": [
+        "Layout slots and the markdown text path accept Markdown, plain text, or structured values (arrays for bullets; { labels, series } for charts; rows for comparison). The engine renders them into clean, themed HTML for you.",
+        "Do NOT write raw HTML tags (<div>, <span style>, <br>, <b>, ...) into Markdown/plain-text inputs. They are ESCAPED and appear as literal angle-bracket text on the slide. The bridge attaches a warning when it detects this — treat that warning as a must-fix.",
+        "Use Markdown syntax for emphasis: **bold**, _italic_, `code`, and - / 1. for lists. Math uses $...$ / $$...$$ (KaTeX).",
+        "The only place literal HTML is appropriate is the explicit literal path (text.setContent / element.content) when you intentionally want to render markup — for example, displaying an HTML code snippet as content. Even then, prefer a fenced code block in Markdown when you just want code to look like code.",
+        "If a screenshot shows literal tags or markup characters on a slide, you used the wrong path: re-author the text as Markdown via text.setMarkdown."
+      ]
+    },
+    {
+      "id": "getting-started",
+      "title": "Manual placement (fallback)",
+      "summary": "For bespoke slides a layout can't express: the read -> style -> per-slide batch -> review loop.",
+      "body": [
+        "Prefer styles + layouts. Use manual placement only when no layout fits.",
+        "1. Read the current deck (controller.export.json() or deck.get) and apply a style (deck.setup / deck.applyStyle) so element defaults inherit a coherent palette and font.",
+        "2. For each slide: create the slide, capture result.data.id, then add its elements in a single executeBatch so the slide is one undo step.",
+        "3. Place elements in canvas px (default 1000 x 562.5). Keep a 40px margin and a clear visual hierarchy: title row, content area, footer/citation.",
+        "4. Author body text in Markdown (text.create({ markdown }) / text.setMarkdown), never raw HTML.",
+        "5. Screenshot the slide and fix overflow/contrast/alignment before moving on. Use meta.dryRun to validate a risky payload before applying it."
+      ]
+    },
+    {
+      "id": "coordinate-system",
+      "title": "Coordinate system & sizing",
+      "summary": "Everything is absolute pixels on a 1000 x 562.5 canvas.",
+      "body": [
+        "Canvas = viewport.size wide by viewport.size * viewport.ratio tall. Default 16:9 -> 1000 x 562.5 px. Origin is top-left.",
+        "Element box: left, top, width, height (px) and rotate (clockwise degrees about the center). Lines use start/end points instead.",
+        "Safe area: keep left/top >= 40 and right/bottom edges <= 960 / 522 on the default canvas.",
+        "Porting an inches layout (e.g. pptxgenjs 10in x 5.625in): multiply inches by 100. 0.5in margin -> 50px; a 5.4in-wide chart -> 540px.",
+        "Text size is set by inline HTML styles inside content, e.g. <span style=\"font-size:40px\">. defaultColor/defaultFontName are only fallbacks for unsized runs."
+      ]
+    },
+    {
+      "id": "title-slide",
+      "title": "Title slide",
+      "summary": "Dark background, large statement title, subtitle, author/affiliation, accent rule.",
+      "body": [
+        "Slide: background solid primary (#1F4E79).",
+        "Title text: left 70, top 150, width 860, height 180. content uses ~64px bold white, framed as a statement or question.",
+        "Subtitle text: left 70, top 330, width 860, height 40. ~18px in a light tint (#A0BBDD).",
+        "Author/affiliation text: left 70, top 380, width 860, height 60. ~16px (#CADCFC).",
+        "Accent rule: a shape at left 70, top 360, width 200, height 4, fill accent (#2E75B6).",
+        "Avoid: clip art, logos (unless requested), decorative images."
+      ]
+    },
+    {
+      "id": "section-divider",
+      "title": "Section divider",
+      "summary": "Orient the audience at the start of each major part of a long deck.",
+      "body": [
+        "Slide: dark background (a slightly lighter navy, e.g. #1A3A5C, for variety).",
+        "Eyebrow text: 'Part 2' at left 40, top 180, ~18px (#7BAFD4).",
+        "Section title text: left 40, top 220, width 920, ~40px bold white.",
+        "Accent rule: shape left 40, top 330, width 250, height 6, fill accent."
+      ]
+    },
+    {
+      "id": "content-bullets",
+      "title": "Content slide (action title + bullets)",
+      "summary": "An action title that states the takeaway, a thin divider, and concise body bullets.",
+      "body": [
+        "Action title text: left 40, top 30, width 920, height 90. ~40px bold primary. Write a full sentence that states the point, not just a topic.",
+        "Divider: shape left 40, top 120, width 920, height 3, fill rule (#CCCCCC).",
+        "Body text: left 40, top 140, width 920, height 360. Author with Markdown bullets (text.create({ markdown })). Keep <= ~40 words; body >= 24px.",
+        "Optional citation: text left 40, top 520, ~14px muted."
+      ]
+    },
+    {
+      "id": "two-column",
+      "title": "Two-column layout",
+      "summary": "A header per column with aligned body blocks; good for design vs. outcomes.",
+      "body": [
+        "Left column header: text left 40, top 130, width 440, ~30px accent bold.",
+        "Left body: text left 40, top 175, width 440, height 300, Markdown bullets.",
+        "Right column header: text left 520, top 130, width 440, ~30px accent bold.",
+        "Right body: text left 520, top 175, width 440, height 300, Markdown bullets.",
+        "Keep the same top for both columns so headers align."
+      ]
+    },
+    {
+      "id": "results-with-chart",
+      "title": "Results slide (chart + interpretation)",
+      "summary": "One exhibit, one finding. Chart left, interpretive text right, takeaway in the title.",
+      "body": [
+        "Action title text: left 40, top 30, width 920, height 90. State the result (e.g. 'Treated group earns 18% more').",
+        "Divider: shape left 40, top 120, width 920, height 3, fill rule.",
+        "Chart: charts.create at left 40, top 135, width 540, height 360 with labels + one series.",
+        "Interpretation header: text left 620, top 135, width 330, ~30px accent bold.",
+        "Interpretation bullets: text left 620, top 180, width 330, height 250, Markdown.",
+        "Source citation: text left 40, top 520, ~14px muted.",
+        "Annotate the single key number directly with a small highlight shape (#FFF2CC) + label over the chart."
+      ]
+    },
+    {
+      "id": "conclusions",
+      "title": "Conclusions slide",
+      "summary": "Mirror the title slide; numbered takeaways that stay on screen during Q&A.",
+      "body": [
+        "Slide: dark background primary (matches the title slide for a 'sandwich' structure).",
+        "Eyebrow text: 'Conclusions' at left 40, top 25, ~20px light tint.",
+        "Accent rule: shape left 40, top 70, width 920, height 4, fill accent.",
+        "Takeaways text: left 40, top 90, width 920, height 350. Numbered Markdown list, ~26px white, with the lead clause of each point bold.",
+        "Contact/link text: left 40, top 480, ~14px light tint."
+      ]
+    },
+    {
+      "id": "shapes-howto",
+      "title": "Working with shapes",
+      "summary": "How to build dividers, rules, callout boxes and color blocks from presets or raw paths.",
+      "body": [
+        "Start from a preset: const presets = controller.shapes.presets('rect'); then spread one into shapes.create and override geometry/fill.",
+        "Raw path: provide viewBox (e.g. [200,200]) and an SVG path in that box; Fika scales it to width/height. A filled rectangle path is 'M 0 0 L 200 0 L 200 200 L 0 200 Z'.",
+        "Accent rule / divider: a wide, low-height filled rectangle (height 3-6px) in the rule or accent color.",
+        "Callout box: a rounded-rect preset with a light fill (#EBF3FA or #FFF2CC) and a 1.5-2px outline in accent; add centered inner text via element.text or shapes.setText.",
+        "Background band: a full-width shape with a low z-order (send it to back with elements.sendToBack) sitting behind text.",
+        "Use opacity and gradient (shapes.setGradient) sparingly for depth; keep contrast high enough to read body text."
+      ]
+    },
+    {
+      "id": "markdown",
+      "title": "Authoring text in Markdown",
+      "summary": "The bridge converts Markdown to the HTML Fika stores. Use it for fast, readable copy.",
+      "body": [
+        "Flavor: markdown-it + markdown-it-texmath (KaTeX).",
+        "Use text.create({ markdown }) / text.setMarkdown(elementId, markdown), or await controller.markdownToHtml(md)."
+      ]
+    },
+    {
+      "id": "quality-checklist",
+      "title": "Pre-delivery checklist",
+      "summary": "Quick checks before declaring a deck done.",
+      "body": [
+        "Every content slide has an action title that states the takeaway (a full sentence, not a topic).",
+        "Reading the titles alone tells the complete argument.",
+        "Results slides show one exhibit each, with the key number annotated.",
+        "Body text >= 24px; no slide has more than ~40 words of body text.",
+        "Borrowed figures/data carry an in-slide citation.",
+        "A 40px margin is respected on every edge; nothing is clipped off-canvas.",
+        "Title and conclusions slides share the dark treatment (sandwich structure)."
+      ]
+    }
+  ]
+}

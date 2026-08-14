@@ -1,0 +1,14 @@
+.operate-keypoint-handler {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  left: 0;
+  top: 0;
+  margin: -5px 0 0 -5px;
+  border: 1.5px solid var(--operate-line, #18181b);
+  background-color: #fff;
+  border-radius: 2px;
+  pointer-events: auto;
+  touch-action: none;
+  z-index: 20;
+}

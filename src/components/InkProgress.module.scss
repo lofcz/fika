@@ -1,0 +1,56 @@
+.ink-progress {
+  position: relative;
+  width: 132px;
+  height: 132px;
+}
+.ring {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+
+  circle {
+    fill: none;
+    stroke-width: 2.5;
+  }
+  .track {
+    stroke: $borderColor;
+  }
+  .fill {
+    stroke: $ink;
+    stroke-linecap: round;
+  }
+}
+.pct {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: $ink;
+}
+.value {
+  display: flex;
+  align-items: baseline;
+  line-height: 1;
+}
+.num {
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.unit {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: $inkMuted;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill {
+    transition: none;
+  }
+}

@@ -1,0 +1,29 @@
+.editable-input {
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+  font-size: 14px;
+
+  &::after {
+    content: '#';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #999;
+  }
+}
+.input-content {
+  @include native-input-reset;
+  width: 100%;
+  padding: 6px 8px 6px 16px;
+  background: $surface;
+  border-radius: 6px;
+  outline: none;
+  text-align: center;
+  font-size: 13px;
+}
+.input-label {
+  text-transform: capitalize;
+}

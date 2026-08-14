@@ -1,0 +1,57 @@
+.toolbar-btn {
+  min-width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0 5px;
+  border: 0;
+  color: $textColor;
+  background-color: transparent;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  white-space: nowrap;
+  border-radius: $borderRadius;
+  cursor: pointer;
+
+  &:hover {
+    background-color: $lightGray;
+  }
+
+  span {
+    flex-shrink: 0;
+    font-size: 12px;
+    margin-left: 5px;
+  }
+}
+.icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.border-popover {
+  user-select: none;
+}
+.row {
+  display: flex;
+  align-items: center;
+
+  & + .row {
+    margin-top: 10px;
+  }
+}
+.label {
+  width: 40%;
+  font-size: 13px;
+}
+.control {
+  width: 60%;
+}
+.option {
+  height: 32px;
+  padding: 0 5px;
+  border-radius: $borderRadius;
+
+  &:hover {
+    background-color: $surface;
+    cursor: pointer;
+  }
+}

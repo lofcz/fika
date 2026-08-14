@@ -1,0 +1,138 @@
+.svg-path-editor {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.container {
+  display: flex;
+  gap: 16px;
+}
+.svg-canvas {
+  width: 500px;
+  height: 500px;
+  border: 1px solid $borderColor;
+  border-radius: $borderRadius;
+  user-select: none;
+}
+.svg-grid {
+  width: 100%;
+  height: 100%;
+}
+.canvas-background {
+  fill: #fafafa;
+}
+.grid-background {
+  fill: #fff;
+  stroke: $borderColor;
+  stroke-width: 1;
+}
+.grid-lines {
+  line {
+    stroke: #ececec;
+    stroke-width: 1;
+  }
+}
+.path-preview {
+  stroke: $ink;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.path-point {
+  fill: #fff;
+  stroke: $ink;
+  stroke-width: 2;
+
+  &.start {
+    stroke: $ink;
+  }
+  &.active {
+    fill: $ink;
+  }
+}
+.anchor-line {
+  stroke: #999;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+.anchor-point {
+  fill: #fff;
+  stroke: #666;
+  stroke-width: 2;
+}
+.svg-panel {
+  flex: 1;
+  height: 500px;
+  overflow: auto;
+}
+.section-title {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.segment-type {
+  width: 100%;
+  
+  &.disabled {
+    pointer-events: none;
+  }
+
+  :global { .button-group {
+    width: 100%;
+  } }
+  :global { button.button {
+    flex: 1;
+    padding: 0;
+  } }
+}
+.input-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+.number-input {
+  width: 100%;
+}
+.checkbox-row {
+  display: flex;
+  gap: 18px;
+}
+.path-content {
+  width: 100%;
+  height: 80px;
+  overflow: auto;
+  border: 1px solid #d9d9d9;
+  border-radius: $borderRadius;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #666;
+  background-color: #fafafa;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+  font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+}
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  margin-top: 16px;
+}
+.tooltips {
+  flex: 1;
+  color: #888;
+  font-style: italic;
+  font-size: 12px;
+}
+.footer-actions {
+  display: flex;
+  gap: 8px;
+}

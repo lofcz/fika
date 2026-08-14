@@ -1,0 +1,147 @@
+.type-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.font-select {
+  flex: 1;
+  min-width: 0;
+}
+.chip-track {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: $surface;
+  border-radius: 10px;
+
+  > :global(.popover) {
+    flex: 1 1 0;
+    min-width: 0;
+
+    :global(.format-chip) {
+      width: 100%;
+    }
+  }
+  :global { .format-chip:hover:not(:disabled, .on) {
+    background: #fff;
+  } }
+}
+.list-chip {
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+
+  :global { .format-chip:not(.compact) {
+    flex: 1;
+  } }
+  :global { .popover {
+    flex: 0 0 auto;
+  } }
+}
+.chip-grow {
+  flex: 1 1 0;
+}
+.swatch-pop {
+  width: 220px;
+}
+.more-menu {
+  width: 232px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.link-popover {
+  width: 240px;
+
+  .btns {
+    margin-top: 10px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+}
+.list-wrap {
+  width: 176px;
+  color: $inkMuted;
+  padding: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+.list {
+  background-color: $surface;
+  border-radius: 8px;
+  padding: 4px 4px 4px 20px;
+  cursor: pointer;
+
+  &:not(:nth-child(3n)) {
+    margin-right: 8px;
+  }
+
+  &:nth-child(4),
+  &:nth-child(5),
+  &:nth-child(6) {
+    margin-top: 8px;
+  }
+
+  &:hover {
+    color: $ink;
+    background: $surfaceActive;
+
+    span {
+      background-color: $ink;
+    }
+  }
+}
+.list-item {
+  width: 24px;
+  height: 12px;
+  position: relative;
+  font-size: 10px;
+  top: -2px;
+
+  span {
+    width: 100%;
+    height: 2px;
+    display: inline-block;
+    position: absolute;
+    top: 8px;
+    background-color: $inkMuted;
+  }
+}
+
+:global { .quiet-select .select {
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: $surface;
+
+  .selector {
+    height: 34px;
+  }
+  .icon {
+    height: 34px;
+    color: #a1a1aa;
+  }
+} }
+:global { .ai-loading {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spinner .8s linear infinite;
+} }
+
+@keyframes spinner {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,7 @@
+.static-table {
+  position: relative;
+  user-select: none;
+}
+table {
+  @include ppt-table-theme;
+}

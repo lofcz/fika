@@ -1,0 +1,123 @@
+.writing-board-tool {
+  font-size: 12px;
+  z-index: 10;
+  pointer-events: none;
+  @include absolute-0();
+
+  .writing-board-wrap {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
+  }
+
+  .tools-panel {
+    pointer-events: auto;
+  }
+
+  .tools {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .tool-content {
+    display: flex;
+    align-items: center;
+  }
+  .btn {
+    padding: 5px;
+    margin-right: 5px;
+    border-radius: $borderRadius;
+    cursor: pointer;
+
+    &:hover:not(.active) {
+      color: $themeColor;
+    }
+    &.active {
+      background-color: rgba($color: $themeColor, $alpha: .5);
+      color: #fff;
+    }
+    &.disabled {
+      opacity: 0.35;
+      cursor: default;
+
+      &:hover {
+        color: inherit;
+      }
+    }
+    &.close {
+      margin-right: 0;
+      margin-left: 5px;
+    }
+  }
+  .icon {
+    font-size: 20px;
+  }
+}
+
+.shape-menu {
+  position: fixed;
+  z-index: 10060;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid $borderColor;
+  border-radius: 12px;
+  box-shadow: $boxShadow;
+  user-select: none;
+  font-size: 13px;
+
+  .label {
+    width: 70px;
+    flex-shrink: 0;
+  }
+  .size-slider {
+    width: 90px;
+  }
+}
+
+.shape-btn {
+  @include native-input-reset;
+  width: 28px;
+  height: 28px;
+  border-radius: $borderRadius;
+  color: $ink;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  &:hover {
+    color: $themeColor;
+  }
+  &.active {
+    background-color: rgba($color: $themeColor, $alpha: .5);
+    color: #fff;
+  }
+
+  .icon {
+    font-size: 18px;
+  }
+}
+
+.setting {
+  width: 200px;
+  display: flex;
+  align-items: center;
+  user-select: none;
+  font-size: 13px;
+
+  .label {
+    width: 70px;
+  }
+  .size-slider {
+    flex: 1;
+  }
+}

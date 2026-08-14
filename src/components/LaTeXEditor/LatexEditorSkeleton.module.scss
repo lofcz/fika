@@ -1,0 +1,117 @@
+.latex-editor-skeleton {
+  min-height: 0;
+}
+
+.header {
+  margin-bottom: 22px;
+}
+
+.title,
+.lede,
+.label,
+.tip,
+.btn {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.title {
+  display: block;
+  width: 148px;
+  height: 20px;
+  border-radius: 6px;
+  background: $surfaceActive;
+}
+
+.lede {
+  display: block;
+  width: 92%;
+  height: 11px;
+  margin-top: 12px;
+  border-radius: 6px;
+  background: $surface;
+
+  &.short {
+    width: 58%;
+    margin-top: 8px;
+  }
+}
+
+.label {
+  display: block;
+  width: 72px;
+  height: 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  background: $surface;
+}
+
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 176px;
+  padding: 32px 64px 32px 28px;
+  margin-bottom: 16px;
+  border: 1px solid $borderColor;
+  border-radius: $paneRadius;
+  background: #fafafa;
+}
+
+.kb {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: $surface;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.tips {
+  display: flex;
+  gap: 8px;
+}
+
+.tip {
+  width: 108px;
+  height: 30px;
+  border-radius: 999px;
+  background: $surface;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid $borderColor;
+}
+
+.btn {
+  width: 88px;
+  height: 32px;
+  border-radius: $borderRadius;
+  background: $surface;
+
+  &.primary {
+    background: $surfaceActive;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title,
+  .lede,
+  .label,
+  .tip,
+  .btn,
+  .kb {
+    animation: none;
+  }
+}

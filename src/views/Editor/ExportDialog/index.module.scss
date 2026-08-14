@@ -1,0 +1,106 @@
+.export-dialog {
+  margin: -8px -4px 0;
+}
+.intro {
+  margin-bottom: 20px;
+  padding-right: 28px;
+}
+.title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: $ink;
+  line-height: 1.2;
+}
+.subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: $inkMuted;
+}
+.formats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+
+  &.is-single {
+    grid-template-columns: 1fr;
+  }
+}
+.format-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 228px;
+  padding: 16px;
+  background: $surface;
+  border: 1px solid transparent;
+  border-radius: $paneRadius;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover:not(.busy) {
+    background: #fff;
+    border-color: $ink;
+    box-shadow: $paneShadow;
+  }
+
+  &.busy {
+    cursor: default;
+    opacity: 0.72;
+  }
+}
+.glyph {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  background: $ink;
+  color: #fff;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+
+  &.glyph-json {
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    font-weight: 600;
+  }
+}
+.body {
+  flex: 1;
+}
+.name {
+  font-size: 13px;
+  font-weight: 600;
+  color: $ink;
+  letter-spacing: -0.01em;
+}
+.desc {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: $inkMuted;
+}
+.meta {
+  margin-top: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: $inkMuted;
+}
+.btns {
+  margin-top: 16px;
+
+  .export {
+    width: 100%;
+  }
+}
+
+.is-single .format-card {
+  min-height: 0;
+}

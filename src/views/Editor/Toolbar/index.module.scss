@@ -1,0 +1,19 @@
+.toolbar {
+  min-width: 0;
+  min-height: 0;
+  background-color: transparent;
+  display: flex;
+  flex-direction: column;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 14px;
+  font-size: 13px;
+
+  @include overflow-overlay();
+}
+.panel-slot[hidden] {
+  display: none !important;
+}

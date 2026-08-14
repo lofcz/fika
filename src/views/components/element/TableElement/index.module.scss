@@ -1,0 +1,39 @@
+.editable-element-table {
+  position: absolute;
+
+  &.lock .element-content {
+    cursor: default;
+  }
+}
+.rotate-wrapper {
+  width: 100%;
+  height: 100%;
+}
+.element-content {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  font-family: $textElementFont;
+  cursor: move;
+}
+.table-mask {
+  @include absolute-0();
+
+  opacity: 0;
+  transition: opacity $transitionDelay;
+
+  .mask-tip {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    background-color: rgba($color: #000, $alpha: .5);
+    color: #fff;
+    padding: 6px 12px;
+    font-size: 12px;
+    transform-origin: 0 0;
+  }
+
+  &:hover:not(.lock) {
+    opacity: .9;
+  }
+}

@@ -1,0 +1,355 @@
+@use './variable.scss' as *;
+
+@mixin ellipsis-oneline() {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@mixin ellipsis-multiline($line: 2) {
+  word-wrap: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: $line;
+  -webkit-box-orient: vertical;
+}
+
+@mixin flex-grid-layout() {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+}
+
+@mixin flex-grid-layout-children($col, $colWidth) {
+  width: $colWidth;
+  margin-bottom: calc(#{100 - $col * $colWidth} / #{$col - 1});
+
+  &:not(:nth-child(#{$col}n)) {
+    margin-right: calc(#{100 - $col * $colWidth} / #{$col - 1});
+  }
+}
+
+@mixin overflow-overlay() {
+  overflow: auto;
+  overflow: overlay;
+}
+
+@mixin absolute-0() {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+@mixin native-input-reset {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  outline: 0;
+}
+
+/** Ink chip while a Popover / Modal / Drawer bound to this host is entering or open. */
+@mixin overlay-open-chip {
+  &[data-overlay-open],
+  &[data-overlay-open]:hover {
+    background-color: $ink;
+    color: #fff;
+  }
+}
+
+@mixin ink-pulse($size: 12px) {
+  width: $size;
+  height: $size;
+  border-radius: 50%;
+  background: $ink;
+  animation: ink-pulse 1.8s ease-in-out infinite;
+}
+
+/** Ink table: charcoal header, zinc paper, gray stripes. */
+@mixin ppt-table-theme {
+  width: 100%;
+  position: relative;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border-spacing: 0;
+  border: 0;
+  word-wrap: break-word;
+  user-select: none;
+
+  &.theme {
+    background-color: #fafafa;
+
+    tr:nth-child(2n) .cell {
+      background-color: var(--subThemeColor1);
+    }
+    tr:nth-child(2n + 1) .cell {
+      background-color: var(--subThemeColor2);
+    }
+
+    &.row-header tr:first-child .cell {
+      background-color: var(--headerColor);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      box-shadow: inset 0 -2px 0 #{$ink};
+    }
+    &.row-header tr:first-child .cell-text {
+      color: #fafafa !important;
+    }
+    &.row-footer tr:last-child .cell {
+      background-color: var(--headerColor);
+      font-weight: 600;
+    }
+    &.row-footer tr:last-child .cell-text {
+      color: #fafafa !important;
+    }
+    &.col-header tr .cell:first-child {
+      background-color: var(--headerColor);
+      font-weight: 600;
+    }
+    &.col-header tr .cell:first-child .cell-text {
+      color: #fafafa !important;
+    }
+    &.col-footer tr .cell:last-child {
+      background-color: var(--headerColor);
+      font-weight: 600;
+    }
+    &.col-footer tr .cell:last-child .cell-text {
+      color: #fafafa !important;
+    }
+  }
+
+  .cell {
+    position: relative;
+    white-space: normal;
+    word-wrap: break-word;
+    vertical-align: middle;
+    background-clip: padding-box;
+  }
+
+  .cell-text {
+    padding: 10px 14px;
+    line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@mixin fika-document-reset {
+  div, span, applet, object, iframe,
+  h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+  a, abbr, acronym, address, big, cite, code,
+  del, dfn, em, img, ins, kbd, q, s, samp,
+  small, strike, strong, sub, sup, tt, var,
+  b, u, i, center,
+  dl, dt, dd, ol, ul, li,
+  fieldset, form, label, legend,
+  table, caption, tbody, tfoot, thead, tr, th, td,
+  article, aside, canvas, details, embed,
+  figure, figcaption, footer, header, hgroup,
+  menu, nav, output, ruby, section, summary,
+  time, mark, audio, video {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font-size: 100%;
+    vertical-align: baseline;
+    box-sizing: border-box;
+  }
+
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  article,
+  aside,
+  details,
+  figcaption,
+  figure,
+  footer,
+  header,
+  hgroup,
+  menu,
+  nav,
+  section {
+    display: block;
+  }
+
+  ol,
+  ul {
+    list-style: none;
+  }
+
+  blockquote, q {
+    quotes: none;
+  }
+
+  blockquote::before,
+  blockquote::after,
+  q::before,
+  q::after {
+    content: '';
+  }
+
+  table {
+    border-collapse: collapse;
+    border-spacing: 0;
+  }
+
+  a {
+    text-decoration: none;
+    color: $themeColor;
+  }
+
+  img {
+    vertical-align: middle;
+    border-style: none;
+  }
+
+  hr {
+    box-sizing: content-box;
+    height: 0;
+    overflow: visible;
+  }
+
+  mark.active {
+    background-color: #ff9632;
+  }
+
+  eq {
+    display: inline-block;
+  }
+
+  eqn {
+    display: block;
+    text-align: center;
+  }
+
+  section.eqno {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  section.eqno > eqn {
+    flex: 1;
+  }
+
+  input,
+  button,
+  select,
+  optgroup,
+  textarea {
+    color: inherit;
+  }
+
+  button,
+  input {
+    overflow: visible;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='button']):not([type='submit']):not([type='reset']),
+  textarea {
+    @include native-input-reset;
+  }
+
+  button,
+  select {
+    text-transform: none;
+  }
+
+  textarea {
+    overflow: auto;
+    resize: vertical;
+  }
+
+  a,
+  area,
+  button,
+  [role='button'],
+  input:not([type='range']),
+  label,
+  select,
+  summary,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+    background-color: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #e1e1e1;
+    border-radius: 3px;
+  }
+
+  .fika-math {
+    display: inline-block;
+    vertical-align: baseline;
+    line-height: normal;
+    user-select: none;
+
+    &[data-display='true'] {
+      display: block;
+      text-align: center;
+      margin: 0.25em 0;
+    }
+
+    &[data-pending='true'] {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      opacity: 0.7;
+    }
+
+    &.latex-el {
+      display: block;
+      margin: 0;
+    }
+  }
+
+  .message-wrap {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 6000;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    max-width: min(360px, calc(100vw - 32px));
+    pointer-events: none !important;
+    box-sizing: border-box;
+  }
+
+  .i-icon,
+  svg.i-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    color: inherit;
+    font-style: normal;
+    line-height: 0;
+    outline: 0;
+    text-align: center;
+    text-transform: none;
+    vertical-align: -.125em;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: visible;
+    flex-shrink: 0;
+  }
+
+  .i-icon svg {
+    display: block;
+    width: 1em;
+    height: 1em;
+  }
+}

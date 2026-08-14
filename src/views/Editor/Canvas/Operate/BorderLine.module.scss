@@ -1,0 +1,61 @@
+.border-line {
+  border: 0 solid var(--operate-line, #18181b);
+  @include absolute-0();
+  pointer-events: none;
+
+  &.top,
+  &:global(.top) {
+    border-top-width: 1.5px;
+  }
+  &.bottom,
+  &:global(.bottom) {
+    border-bottom-width: 1.5px;
+  }
+  &.left,
+  &:global(.left) {
+    border-left-width: 1.5px;
+  }
+  &.right,
+  &:global(.right) {
+    border-right-width: 1.5px;
+  }
+
+  &.wide,
+  &:global(.wide) {
+    &::before {
+      content: '';
+      position: absolute;
+      background: transparent;
+      cursor: move;
+    }
+
+    &.top::before,
+    &:global(.top)::before {
+      top: -8px;
+      left: -8px;
+      width: calc(100% + 16px);
+      height: 16px;
+    }
+    &.bottom::before,
+    &:global(.bottom)::before {
+      bottom: -8px;
+      left: -8px;
+      width: calc(100% + 16px);
+      height: 16px;
+    }
+    &.left::before,
+    &:global(.left)::before {
+      top: -8px;
+      left: -8px;
+      width: 16px;
+      height: calc(100% + 16px);
+    }
+    &.right::before,
+    &:global(.right)::before {
+      top: -8px;
+      right: -8px;
+      width: 16px;
+      height: calc(100% + 16px);
+    }
+  }
+}

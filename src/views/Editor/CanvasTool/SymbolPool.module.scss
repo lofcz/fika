@@ -1,0 +1,84 @@
+.symbol-pool {
+  width: 320px;
+  height: 380px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.category-tabs {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  padding: 2px;
+  border-radius: 8px;
+  background: $surface;
+}
+
+.category-tab {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: $inkMuted;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+
+  &:hover:not(.active) {
+    color: $ink;
+  }
+
+  &.active {
+    background: $ink;
+    color: #fff;
+  }
+}
+
+.emoji-types {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin: 0 0 8px;
+}
+
+.emoji-type {
+  flex: 1;
+  height: 32px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+
+  &:hover:not(.active) {
+    background: $surface;
+  }
+
+  &.active {
+    background: $ink;
+  }
+}
+
+.emoji-type-icon {
+  font-size: 18px;
+  line-height: 1;
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+  pointer-events: none;
+}
+
+.pool {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}

@@ -1,0 +1,65 @@
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+@scope (#fika-shell) {
+  :scope {
+    color: $textColor;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+    background-color: $surface;
+  }
+
+  @include fika-document-reset;
+}
+
+@scope (.fika-embed-root) {
+  :scope {
+    color: $textColor;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  }
+
+  @include fika-document-reset;
+}
+
+#fika-math-keyboard-host {
+  position: fixed;
+  inset: 0;
+  z-index: 5100;
+  pointer-events: none;
+}
+
+#fika-math-keyboard-host > .ML__keyboard {
+  position: fixed;
+  --_padding-bottom: calc(var(--keyboard-padding-bottom, 0px) + env(safe-area-inset-bottom, 0));
+}
+
+#fika-math-keyboard-host > .ML__keyboard.is-visible > .MLK__backdrop {
+  box-shadow: 0 -5px 6px rgba(0, 0, 0, 0.08);
+  border-top: 1px solid var(--_border);
+}
+
+#fika-math-keyboard-host > .ML__keyboard.backdrop-is-transparent.is-visible > .MLK__backdrop {
+  box-shadow: none;
+  border: none;
+}
+
+#fika-math-keyboard-host > .ML__keyboard.is-visible.animate > .MLK__backdrop {
+  transition: 0.28s cubic-bezier(0, 0, 0.2, 1);
+  transition-property: transform, opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@keyframes ink-pulse {
+  0%, 100% {
+    transform: scale(0.78);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

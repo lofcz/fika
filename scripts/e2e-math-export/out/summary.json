@@ -1,0 +1,58 @@
+{
+  "summary": {
+    "fontsLoaded": [
+      "KaTeX_Main",
+      "KaTeX_Math",
+      "KaTeX_Main",
+      "KaTeX_Math"
+    ],
+    "results": [
+      {
+        "label": "offscreen-left-99999 (broken)",
+        "ok": false,
+        "ink": 0,
+        "opaque": 332640,
+        "error": null
+      },
+      {
+        "label": "production-path (viewport+box-cover)",
+        "ok": true,
+        "ink": 11450,
+        "opaque": 332640,
+        "error": null
+      },
+      {
+        "label": "full-viewport-cover (crashes-UI)",
+        "ok": true,
+        "ink": 11450,
+        "opaque": 332640,
+        "error": null
+      },
+      {
+        "label": "viewport-opacity-0.01",
+        "ok": false,
+        "ink": 0,
+        "opaque": 332640,
+        "error": null
+      },
+      {
+        "label": "transform-offscreen",
+        "ok": false,
+        "ink": 0,
+        "opaque": 332640,
+        "error": null
+      }
+    ],
+    "winners": [
+      "production-path (viewport+box-cover)",
+      "full-viewport-cover (crashes-UI)"
+    ],
+    "productionOk": true,
+    "productionInk": 11450,
+    "anyOk": true,
+    "recommended": "production-path (viewport+box-cover)"
+  },
+  "consoleLines": [
+    "[log] MATH_E2E {fontsLoaded: Array(4), results: Array(5), winners: Array(2), productionOk: true, productionInk: 11450}"
+  ]
+}

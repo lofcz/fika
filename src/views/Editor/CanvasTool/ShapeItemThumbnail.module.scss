@@ -1,0 +1,24 @@
+.shape-item-thumbnail {
+  position: relative;
+  cursor: pointer;
+}
+.shape-content {
+  @include absolute-0();
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  &:hover .shape-path {
+    &:not(.outlined) {
+      stroke: $ink;
+    }
+    &.outlined {
+      fill: $ink;
+    }
+  }
+
+  svg:not(:root) {
+    overflow: visible;
+  }
+}

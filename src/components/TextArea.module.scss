@@ -1,0 +1,31 @@
+.textarea {
+  @include native-input-reset;
+  width: 100%;
+  background-color: $surface;
+  border-radius: $borderRadius;
+  padding: 10px;
+  transition: background-color .15s ease;
+  box-sizing: border-box;
+  line-height: 1.5;
+  resize: none;
+  font-size: 13px;
+  font-family: inherit;
+  color: $textColor;
+
+  &:focus {
+    background-color: $surfaceHover;
+  }
+
+  &.resizable {
+    resize: vertical;
+  }
+
+  &.disabled {
+    background-color: $surface;
+    color: #b7b7b7;
+  }
+
+  &::placeholder {
+    color: #a1a1aa;
+  }
+}

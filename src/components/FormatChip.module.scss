@@ -1,0 +1,38 @@
+.format-chip {
+  height: 32px;
+  min-width: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #3f3f46;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  flex: 1 1 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover:not(:disabled, .on) {
+    background: #f4f4f5;
+  }
+
+  &.on {
+    background: #18181b;
+    color: #fff;
+  }
+
+  &.compact {
+    flex: 0 0 32px;
+    padding: 0;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}

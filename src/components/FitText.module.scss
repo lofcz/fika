@@ -1,0 +1,26 @@
+.fit-text {
+  display: flex;
+  align-items: center;
+  justify-content: inherit;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-align: inherit;
+}
+
+.fit-text-content {
+  display: -webkit-box;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: inherit;
+  -webkit-box-orient: vertical;
+}
+
+.fit-text-content.single-line {
+  display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

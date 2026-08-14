@@ -1,0 +1,34 @@
+.audience-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #1d1d1d;
+}
+.writing-board-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 8;
+
+  .writing-board-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .blackboard {
+    width: 100%;
+    height: 100%;
+    background-color: #0f392b;
+  }
+  img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+}

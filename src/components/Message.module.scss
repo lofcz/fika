@@ -1,0 +1,126 @@
+.sonner {
+  width: max-content;
+  max-width: 100%;
+  pointer-events: auto;
+}
+.sonner-card {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 220px;
+  max-width: 356px;
+  padding: 10px;
+  border: 1px solid $borderColor;
+  border-radius: $paneRadius;
+  background: #fff;
+  box-shadow: $boxShadow;
+  color: $ink;
+}
+.mark {
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: $ink;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 12px;
+
+  &.loading {
+    background: transparent;
+    color: $ink;
+    font-size: 16px;
+  }
+  .spin {
+    animation: sonner-spin 0.9s linear infinite;
+  }
+}
+.body {
+  min-width: 0;
+  flex: 1;
+  padding: 1px 0;
+}
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.description {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  color: $ink;
+}
+.title + .description {
+  margin-top: 2px;
+  color: $inkMuted;
+  font-weight: 500;
+}
+.dismiss {
+  @include native-input-reset;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 6px;
+  color: $inkMuted;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: $surface;
+    color: $ink;
+  }
+}
+.sonner-card:hover .dismiss,
+.sonner-card:focus-within .dismiss,
+.sonner-card.sticky .dismiss {
+  opacity: 1;
+}
+
+.sonner-enter-active {
+  animation: sonner-in 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sonner-leave-active {
+  animation: sonner-out 0.22s ease-in forwards;
+}
+
+@keyframes sonner-in {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes sonner-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+@keyframes sonner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

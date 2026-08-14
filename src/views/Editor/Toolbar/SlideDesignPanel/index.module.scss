@@ -1,0 +1,180 @@
+.slide-design-panel {
+  user-select: none;
+  overflow: visible;
+
+  :global {
+    .quiet-select .select,
+    .quiet-line .select {
+      height: 34px;
+      border: 0;
+      border-radius: 8px;
+      background: #f4f4f5;
+
+      .selector {
+        height: 34px;
+      }
+      .icon {
+        height: 34px;
+        color: #a1a1aa;
+      }
+      &:not(.disabled):hover {
+        border-color: transparent;
+      }
+    }
+    .color-swatches {
+      flex-shrink: 0;
+      overflow: visible;
+    }
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .field-label {
+      width: 42%;
+      color: #71717a;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+    .field > :last-child {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+}
+.theme-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 8px;
+}
+.theme-item {
+  min-width: 0;
+}
+.theme-name {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: $inkMuted;
+  letter-spacing: 0.02em;
+}
+.theme-item:has(.selected) .theme-name {
+  color: $ink;
+}
+.theme-card {
+  display: block;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  background: $surface;
+  box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.08);
+
+  &:hover .theme-card-use {
+    opacity: 1;
+  }
+  &.selected {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px $ink;
+  }
+}
+.theme-card-preview {
+  @include absolute-0();
+}
+.theme-card-aa {
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  pointer-events: none;
+}
+.theme-looks {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.theme-look {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: $surface;
+  box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.1);
+
+  &:hover {
+    box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.28);
+  }
+  &.selected {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px $ink;
+  }
+}
+.theme-card-use {
+  @include absolute-0();
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(24, 24, 27, 0.38);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  transition: opacity $transitionDelayFast;
+  pointer-events: none;
+}
+.background-image {
+  height: 0;
+  padding-bottom: 56.25%;
+  border: 1px dashed $borderColor;
+  border-radius: 10px;
+  background: $surface;
+  position: relative;
+
+  &:hover {
+    border-color: $ink;
+    color: $ink;
+    background: $surfaceHover;
+  }
+
+  .content {
+    @include absolute-0();
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-position: center;
+    background-size: contain;
+    background-repeat: no-repeat;
+    cursor: pointer;
+  }
+}
+.accent-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.accent-swatch {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  padding: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+
+  &.light {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16);
+  }
+}

@@ -1,0 +1,19 @@
+.animation-index {
+  position: absolute;
+  font-size: 12px;
+
+  .index-item {
+    width: 18px;
+    height: 18px;
+    background-color: #fff;
+    color: $ink;
+    border: 1px solid $ink;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    & + .index-item {
+      margin-top: 5px;
+    }
+  }
+}

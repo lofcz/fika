@@ -1,0 +1,34 @@
+:host,
+:global(.fika-embed-root) {
+  display: block;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  line-height: normal;
+  font-size: 16px;
+}
+
+:global(.fika-embed-root) img,
+:global(.fika-embed-root) video {
+  max-width: none;
+  max-height: none;
+  height: unset;
+}
+
+:global(.fika-embed-root) svg {
+  max-width: none;
+  max-height: none;
+}
+
+:global(.fika-embed-root) :global(.ProseMirror) img,
+:global(.fika-embed-root) :global(.ProseMirror-static) img {
+  display: inline;
+  vertical-align: middle;
+}
+
+.fika-empty-host-state {
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+}

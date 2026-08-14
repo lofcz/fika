@@ -1,0 +1,18 @@
+.rotate-handler {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  top: -25px;
+  margin-left: -5px;
+  border: 1.5px solid var(--operate-line, #18181b);
+  background-color: #fff;
+  border-radius: 999px;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  z-index: 20;
+
+  &:active {
+    cursor: grabbing;
+  }
+}

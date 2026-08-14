@@ -1,0 +1,43 @@
+.editable-table {
+  position: relative;
+  user-select: none;
+}
+table {
+  @include ppt-table-theme;
+
+  .cell {
+    font-size: 14px;
+    cursor: default;
+
+    &.selected::after {
+      content: '';
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      background-color: rgba($ink, 0.12);
+    }
+  }
+
+  .cell-text {
+    user-select: none;
+    cursor: text;
+
+    &.active {
+      user-select: text;
+    }
+  }
+}
+
+.drag-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: $ink;
+  margin-left: -1px;
+  opacity: 0;
+  z-index: 2;
+  cursor: col-resize;
+}

@@ -1,0 +1,289 @@
+.presenter-view {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) minmax(280px, 360px);
+  grid-template-rows: minmax(0, 1fr) 100px;
+  gap: $paneGap;
+  padding: $paneGap;
+  background: $surface;
+  color: $ink;
+}
+.pane {
+  background: #fff;
+  border: 1px solid $borderColor;
+  border-radius: $paneRadius;
+  box-shadow: $paneShadow;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+.pane-head {
+  flex: 0 0 40px;
+  height: 40px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid $borderColor;
+}
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $inkMuted;
+}
+.progress {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: $ink;
+}
+.kicker,
+.times,
+.scale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rail {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.rail-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+
+  :global { .laser-swatches.grid {
+    margin-top: 4px;
+  } }
+}
+.rule {
+  width: 18px;
+  height: 1px;
+  margin: 6px 0;
+  background: $borderColor;
+  flex-shrink: 0;
+}
+.tool {
+  @include native-input-reset;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: $inkMuted;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover:not(:disabled):not(.on) {
+    background: $surface;
+    color: $ink;
+  }
+  &.on {
+    background: $ink;
+    color: #fff;
+  }
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  &.compact {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+  &.end {
+    margin-top: auto;
+  }
+  &.end:hover:not(:disabled) {
+    background: $ink;
+    color: #fff;
+  }
+}
+
+.stage {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+}
+.times {
+  color: $inkMuted;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.elapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: $ink;
+
+  svg {
+    font-size: 14px;
+    color: $inkMuted;
+  }
+}
+.clock {
+  padding-left: 8px;
+  border-left: 1px solid $borderColor;
+}
+.stage-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  margin: 10px 12px 12px;
+  background: $surface;
+  border-radius: 8px;
+  overflow: hidden;
+
+  &.laser-pen {
+    cursor: none !important;
+  }
+}
+
+.filmstrip {
+  grid-column: 2;
+  grid-row: 2;
+}
+.filmstrip-scroller {
+  height: 100%;
+  padding: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.filmstrip-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  height: 100%;
+  margin-inline: auto;
+}
+.thumb {
+  @include native-input-reset;
+  position: relative;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid $borderColor;
+  border-radius: 8px;
+  overflow: hidden;
+  background: $surface;
+  cursor: pointer;
+  line-height: 0;
+
+  &:hover {
+    border-color: $ring;
+  }
+  &.active {
+    border-color: $ink;
+    box-shadow: inset 0 0 0 1px $ink;
+  }
+}
+.thumb-index {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: $ink;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.side {
+  grid-column: 3;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: $paneGap;
+  min-height: 0;
+}
+.next-pane {
+  flex: 0 1 42%;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+}
+.next-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: $surface;
+}
+.next-card {
+  @include native-input-reset;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 0;
+  border: 1px solid $borderColor;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  cursor: pointer;
+  line-height: 0;
+
+  &:hover {
+    border-color: $ring;
+  }
+}
+.next-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed $borderColor;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: $inkMuted;
+}
+.notes-pane {
+  flex: 1 1 58%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.notes-body {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 18px 20px;
+  line-height: 1.55;
+  color: $ink;
+  @include overflow-overlay();
+
+  &.empty {
+    color: $inkMuted;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}

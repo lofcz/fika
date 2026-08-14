@@ -1,0 +1,140 @@
+.shape-gallery {
+  width: 412px;
+  margin: -2px -2px -4px;
+}
+.gallery-section {
+  & + & {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid $borderColor;
+  }
+}
+.section-label {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+}
+.draw-tools {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.draw-tool {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 10px 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: $surface;
+  color: $ink;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    background: #fff;
+    border-color: $ring;
+    box-shadow: 0 1px 2px rgba(24, 24, 27, 0.04);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $ink;
+    outline-offset: 1px;
+  }
+}
+.draw-tool-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #fff;
+  color: $inkMuted;
+  font-size: 16px;
+
+  .draw-tool:hover & {
+    color: $ink;
+  }
+}
+.draw-tool-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.draw-tool-title {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: $ink;
+}
+.draw-tool-desc {
+  font-size: 11px;
+  line-height: 1.3;
+  color: $inkMuted;
+}
+.category-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.category-tab {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: $inkMuted;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover:not(.active) {
+    background: $surface;
+    color: $ink;
+  }
+
+  &.active {
+    background: $ink;
+    color: #fff;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $ink;
+    outline-offset: 1px;
+  }
+}
+.shape-list {
+  @include flex-grid-layout();
+
+  max-height: 228px;
+  overflow: auto;
+  margin-right: -6px;
+  padding-right: 6px;
+}
+.shape-item {
+  @include flex-grid-layout-children(10, 8.4%);
+
+  height: 0;
+  padding-bottom: 8.4%;
+  flex-shrink: 0;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: $surface;
+  }
+}

@@ -1,0 +1,26 @@
+.latex-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.latex-stage {
+  line-height: normal;
+  width: max-content;
+  transform-origin: center center;
+  color: inherit;
+
+  :global { .fika-math {
+    display: block;
+    margin: 0;
+    color: inherit;
+  } }
+
+  :global { .ML__base, [class^='ML__'] {
+    color: inherit;
+  } }
+}

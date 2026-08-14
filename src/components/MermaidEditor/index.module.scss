@@ -1,0 +1,79 @@
+.mermaid-editor {
+  height: 560px;
+}
+
+.container {
+  height: calc(100% - 50px);
+  display: flex;
+  flex-direction: column;
+}
+
+.input-area {
+  flex: 1;
+  min-height: 0;
+
+  textarea {
+    height: 100% !important;
+    border-color: $borderColor !important;
+    padding: 10px !important;
+    font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+
+    &:focus {
+      box-shadow: none !important;
+    }
+  }
+}
+
+.preview {
+  height: 220px;
+  margin-top: 20px;
+  border: 1px solid $borderColor;
+  border-radius: $borderRadius;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  text-align: center;
+  user-select: none;
+}
+
+.placeholder {
+  color: #888;
+  font-size: 13px;
+}
+
+.preview-content {
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+
+  :global { svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  } }
+}
+
+.error {
+  max-width: 100%;
+  max-height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow: auto;
+  color: #f5222d;
+  font-size: 13px;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.footer {
+  height: 50px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+
+  .btn {
+    margin-left: 10px;
+  }
+}

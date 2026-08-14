@@ -1,0 +1,104 @@
+.number-input {
+  height: 32px;
+  padding: 0 0 0 8px;
+  display: inline-flex;
+  align-items: center;
+  background-color: $surface;
+  border: 0;
+  border-radius: $borderRadius;
+  box-shadow: none;
+  font-size: 13px;
+  transition: background-color .15s ease;
+
+  .input-wrap {
+    flex: 1;
+    color: $textColor;
+    padding: 0 0 0 4px;
+    position: relative;
+    min-width: 0;
+    height: 100%;
+  }
+  &:not(.disabled) .input-wrap:hover .handlers {
+    opacity: 1;
+  }
+  .handlers {
+    width: 18px;
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    right: 4px;
+    display: flex;
+    flex-direction: column;
+    font-size: 6px;
+    color: $inkMuted;
+    opacity: 0;
+    user-select: none;
+    overflow: hidden;
+    border-radius: 4px;
+    transition: opacity .15s;
+    background: transparent;
+
+    .handler {
+      width: 100%;
+      height: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+
+      &:hover {
+        color: $ink;
+        background: $surfaceActive;
+      }
+    }
+  }
+  input {
+    @include native-input-reset;
+    width: calc(100% - 22px);
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    color: $textColor;
+    font-size: 13px;
+    font-family: inherit;
+    line-height: 32px;
+
+    &::placeholder {
+      color: #a1a1aa;
+    }
+  }
+
+  &:not(.disabled):hover, &.focused {
+    background-color: $surfaceHover;
+  }
+
+  &.disabled {
+    background-color: $surface;
+    color: #b7b7b7;
+
+    input {
+      color: #b7b7b7;
+    }
+  }
+
+  .prefix, .suffix {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    user-select: none;
+  }
+
+  .prefix--fit {
+    flex: 0 1 auto;
+    max-width: 62%;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+
+    :global { .fit-text {
+      width: 100%;
+      height: 100%;
+    } }
+  }
+}

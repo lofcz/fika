@@ -1,0 +1,63 @@
+.editor {
+  height: 100%;
+  overflow: auto;
+}
+.prosemirror-editor {
+  height: 100%;
+  cursor: text;
+
+  :global { .ProseMirror {
+    height: 100%;
+    font-size: 12px;
+    overflow: auto;
+    padding: 8px;
+    line-height: 1.5;
+
+    & > p[data-placeholder]::before {
+      content: attr(data-placeholder);
+      pointer-events: none;
+      position: absolute;
+      font-size: 12px;
+      color: rgba(#666, 0.5);
+    }
+  } }
+}
+.menu {
+  display: flex;
+  background-color: #fff;
+  padding: 4px;
+  border: 0;
+  box-shadow: $boxShadow;
+  border-radius: 10px;
+
+  button {
+    outline: 0;
+    border: 0;
+    background-color: transparent;
+    padding: 6px;
+    border-radius: 8px;
+    font-size: 15px;
+    margin: 0 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: $inkMuted;
+
+    &:hover, &.active {
+      background-color: $ink;
+      color: #fff;
+    }
+
+    :global {
+      .i-icon, svg {
+        display: block;
+        width: 1em;
+        height: 1em;
+        font-size: 1em;
+        flex-shrink: 0;
+        color: inherit;
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+$fonts: 'SourceSerif4', 'Inter', 'JetBrainsMono', 'Literata', 'Roboto', 'OpenSans', 'Montserrat', 'SourceSansPro', 'Merriweather', 'Lato';
+
+@each $font in $fonts {
+  @font-face {
+    font-display: swap;
+    font-family: $font;
+    src: url('../fonts/#{$font}.woff2') format('woff2');
+  }
+}

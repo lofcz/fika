@@ -1,0 +1,31 @@
+.alpha {
+  @include absolute-0();
+}
+.alpha-checkboard-wrap {
+  overflow: hidden;
+
+  @include absolute-0();
+}
+.alpha-gradient {
+  @include absolute-0();
+}
+.alpha-container {
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  margin: 0 3px;
+}
+.alpha-pointer {
+  z-index: 2;
+  position: absolute;
+}
+.alpha-picker {
+  cursor: pointer;
+  width: 4px;
+  height: 8px;
+  box-shadow: 0 0 2px rgba(0, 0, 0, .6);
+  background: #fff;
+  margin-top: 1px;
+  transform: translateX(-2px);
+}

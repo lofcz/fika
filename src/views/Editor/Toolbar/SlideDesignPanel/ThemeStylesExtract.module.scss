@@ -1,0 +1,120 @@
+.theme-styles-extract {
+  height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+.content {
+  flex: 1;
+  overflow: auto;
+  padding-right: 20px;
+  margin-right: -20px;
+}
+.config-item {
+  padding: 12px 0 10px;
+  border-bottom: 1px dashed #f5f5f5;
+  font-size: 13px;
+}
+.label {
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+
+  .tip {
+    font-size: 12px;
+    color: #999;
+  }
+}
+.values {
+  &.inline {
+    @include flex-grid-layout();
+
+    .value-wrap {
+      @include flex-grid-layout-children(10, 9%);
+      margin-top: 0 !important;
+      cursor: pointer;
+    }
+    .value {
+      height: 25px;
+      padding: 0;
+
+      &.disabled {
+        opacity: 0.2;
+        position: relative;
+
+        &::after {
+          content: '';
+          width: 24px;
+          height: 2px;
+          position: absolute;
+          top: 11px;
+          left: -1px;
+          transform: rotate(-45deg);
+          background-color: #000;
+        }
+        &::before {
+          content: '';
+          width: 24px;
+          height: 2px;
+          position: absolute;
+          top: 11px;
+          left: -1px;
+          transform: rotate(45deg);
+          background-color: #000;
+        }
+      }
+    }
+  }
+
+  .value-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    & + .value-wrap {
+      margin-top: 3px;
+    }
+  }
+  .handler {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-left: 10px;
+
+    .state {
+      opacity: 0;
+      font-size: 15px;
+
+      &.active {
+        opacity: 1;
+      }
+    }
+
+    .config-btn {
+      cursor: pointer;
+
+      &:hover {
+        color: $ink;
+      }
+    }
+  }
+  .value {
+    width: 150px;
+    height: 25px;
+    line-height: 25px;
+    text-align: center;
+    border: 1px solid $borderColor;
+    font-size: 12px;
+    padding: 0 5px;
+    border-radius: $borderRadius;
+    @include ellipsis-oneline();
+  }
+}
+.btns {
+  margin-top: 12px;
+
+  .btn {
+    width: 100%;
+  }
+}

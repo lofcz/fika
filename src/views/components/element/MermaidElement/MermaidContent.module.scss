@@ -1,0 +1,27 @@
+.mermaid-content,
+.mermaid-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.mermaid-svg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  :global { svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  } }
+}
+
+.mermaid-error {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  overflow: hidden;
+  color: #f5222d;
+  background-color: #fff1f0;
+  white-space: pre-wrap;
+}

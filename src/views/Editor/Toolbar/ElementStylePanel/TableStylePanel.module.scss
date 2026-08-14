@@ -1,0 +1,30 @@
+.table-style-panel {
+  user-select: none;
+}
+.split-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f4f4f5;
+  border-radius: 8px;
+  padding: 2px;
+}
+.split-main {
+  flex: 1;
+  height: 32px !important;
+  border: 0 !important;
+  background: transparent !important;
+  border-radius: 6px !important;
+  letter-spacing: 0 !important;
+
+  &:hover {
+    background: #ececee !important;
+    color: #18181b !important;
+    border: 0 !important;
+  }
+}
+.theme-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+}

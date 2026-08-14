@@ -1,0 +1,53 @@
+.export-theme-dialog {
+  padding: 4px;
+}
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: $ink;
+  margin-bottom: 6px;
+}
+.description {
+  color: $inkMuted;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 20px;
+}
+.name-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+
+  .label {
+    flex: none;
+    width: 110px;
+    font-size: 12px;
+    font-weight: 600;
+    color: $inkMuted;
+  }
+
+  .name-input {
+    flex: 1;
+  }
+}
+.formats {
+  display: flex;
+
+  :global { .button {
+    flex: 1;
+  } }
+}
+.tip {
+  min-height: 42px;
+  padding-top: 10px;
+  color: $inkMuted;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}

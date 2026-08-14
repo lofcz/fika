@@ -1,0 +1,12 @@
+.floating-toolbar {
+  position: absolute;
+  width: max-content;
+  height: 40px;
+  padding: 0 6px;
+  background-color: #fff;
+  border: 0;
+  box-shadow: $boxShadow;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+}

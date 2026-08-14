@@ -1,0 +1,139 @@
+.alignment-line {
+  position: absolute;
+  z-index: 100;
+  pointer-events: none;
+  color: $ink;
+  animation: ink-guide-in 160ms $inkEase both;
+
+  .stroke {
+    display: block;
+    overflow: visible;
+  }
+
+  .wash {
+    fill: none;
+    stroke-width: 5;
+    stroke-linecap: round;
+    opacity: 0.07;
+  }
+
+  .hairline {
+    fill: none;
+    stroke-width: 1.15;
+    stroke-linecap: round;
+    opacity: 0.55;
+  }
+
+  .tick {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.15;
+    stroke-linecap: round;
+    opacity: 0.62;
+  }
+
+  .mark {
+    fill: $ink;
+    stroke: #fff;
+    stroke-width: 1;
+  }
+
+  .measure {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(250, 250, 250, 0.94);
+    color: $ink;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    line-height: 1.3;
+    box-shadow: 0 1px 2px rgba(24, 24, 27, 0.08);
+    white-space: nowrap;
+  }
+
+  &.center {
+    color: #3f3f46;
+
+    .hairline {
+      opacity: 0.42;
+    }
+  }
+
+  &.canvas {
+    color: $inkMuted;
+
+    .hairline {
+      opacity: 0.28;
+    }
+
+    .wash {
+      opacity: 0.04;
+    }
+  }
+
+  &.spacing,
+  &.size {
+    color: $ink;
+
+    .hairline {
+      stroke-width: 1;
+      opacity: 0.48;
+    }
+
+    .wash {
+      opacity: 0.05;
+    }
+  }
+
+  &.measure {
+    color: $ink;
+    z-index: 101;
+
+    .hairline {
+      stroke-width: 1.15;
+      opacity: 0.62;
+    }
+
+    .wash {
+      opacity: 0.08;
+    }
+
+    .tick {
+      opacity: 0.75;
+    }
+
+    .measure {
+      background: $ink;
+      color: #fafafa;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-variant-numeric: tabular-nums;
+      box-shadow: 0 1px 3px rgba(24, 24, 27, 0.18);
+    }
+  }
+
+  &.grid {
+    color: $ink;
+
+    .hairline {
+      stroke-width: 1.15;
+      opacity: 0.4;
+      stroke-dasharray: 1.2 3;
+    }
+
+    .wash {
+      opacity: 0.06;
+    }
+  }
+}
+
+@keyframes ink-guide-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

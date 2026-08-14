@@ -1,0 +1,40 @@
+.layout-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 8px;
+  width: 360px;
+  max-height: 420px;
+  overflow: auto;
+  padding: 2px;
+}
+.layout-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.thumbnail {
+  width: 100%;
+  border-radius: 10px;
+  outline: 1px solid #ececee;
+  overflow: hidden;
+  pointer-events: none;
+}
+.layout-card:hover .thumbnail {
+  outline-color: $ring;
+}
+.layout-name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: $inkMuted;
+}
+.layout-card:hover .layout-name {
+  color: $ink;
+}

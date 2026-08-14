@@ -1,0 +1,46 @@
+name: deploy
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        env:
+          NPM_CONFIG_FETCH_RETRIES: "5"
+          NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "20000"
+          NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "120000"
+          NPM_CONFIG_FETCH_TIMEOUT: "300000"
+          NPM_CONFIG_MAXSOCKETS: "20"
+        run: |
+          for attempt in 1 2 3 4 5; do
+            echo "npm ci attempt ${attempt}/5"
+            if npm ci; then
+              exit 0
+            fi
+            echo "npm ci failed (attempt ${attempt}/5), retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to github pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          commit_message: deploy to github pages
+          publish_dir: ./dist

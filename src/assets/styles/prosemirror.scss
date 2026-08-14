@@ -1,0 +1,161 @@
+@scope (#fika-shell, .fika-embed-root) {
+.ProseMirror, .ProseMirror-static {
+  outline: 0;
+  border: 0;
+  position: relative;
+  font-size: var(--text-fit-base-size, 16px);
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  word-break: break-word;
+  white-space: pre-wrap;
+  white-space: break-spaces;
+  -webkit-font-variant-ligatures: none;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0;
+
+  &:not(.ProseMirror-static) {
+    user-select: text;
+  }
+
+  ::selection {
+    background-color: rgba($ink, 0.12);
+    color: inherit;
+  }
+
+  p {
+    margin: 0;
+    margin-top: var(--paragraphSpace);
+  }
+  p:first-child {
+    margin-top: 0;
+  }
+
+  strong,
+  em {
+    display: contents;
+  }
+
+  a {
+    color: #0563C1;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  a:visited {
+    color: #954F72;
+  }
+  a [style*='color: #0563C1'],
+  a [style*='color:#0563C1'],
+  a [style*='color: #0563c1'] {
+    color: inherit !important;
+  }
+
+  ul, ol {
+    margin: 0;
+    list-style-position: outside;
+    padding-inline-start: 1em;
+
+    li {
+      display: list-item;
+      list-style-position: outside;
+      margin: 0;
+      padding-inline-start: 0.4em;
+    }
+
+    li + li {
+      margin-top: var(--paragraphSpace);
+    }
+  }
+  ul {
+    list-style-type: disc;
+  }
+  ul > li::marker,
+  ol > li::marker {
+    color: currentColor;
+  }
+  ul > li::marker {
+    content: '•';
+    font-family: Arial, 'Segoe UI', sans-serif;
+    font-size: 1em;
+    font-weight: 400;
+    line-height: inherit;
+  }
+  ul[style*='list-style-type: circle'] > li::marker,
+  ul[style*='list-style-type: square'] > li::marker {
+    content: normal;
+  }
+
+  ol {
+    list-style-type: decimal;
+  }
+
+  code {
+    background-color: #f1f1f1;
+    padding: 2px 6px;
+    margin: 0 1px;
+    border-radius: 4px;
+    font-family: SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  }
+
+  sup {
+    vertical-align: super;
+    font-size: smaller;
+  }
+  sub {
+    vertical-align: sub;
+    font-size: smaller;
+  }
+
+  blockquote {
+    overflow: hidden;
+    padding: 0 1.2em;
+    margin: 0.6em 0;
+    font-style: italic;
+    border-left: 4px solid #e0e0e0;
+  }
+
+  [data-indent='1'] {
+    padding-left: 1em;
+  }
+  [data-indent='2'] {
+    padding-left: 2em;
+  }
+  [data-indent='3'] {
+    padding-left: 3em;
+  }
+  [data-indent='4'] {
+    padding-left: 4em;
+  }
+  [data-indent='5'] {
+    padding-left: 5em;
+  }
+  [data-indent='6'] {
+    padding-left: 6em;
+  }
+  [data-indent='7'] {
+    padding-left: 7em;
+  }
+  [data-indent='8'] {
+    padding-left: 8em;
+  }
+}
+
+.ProseMirror br.ProseMirror-trailingBreak {
+  display: none;
+}
+.ProseMirror p > br.ProseMirror-trailingBreak:only-child {
+  display: inline;
+}
+
+.placeholder-element.show-placeholder .ProseMirror p:first-child::before,
+.placeholder-element.show-placeholder .ProseMirror-static p:first-child::before {
+  content: var(--placeholder-prompt);
+  color: var(--placeholder-color, inherit);
+  pointer-events: none;
+  font-weight: var(--placeholder-weight, 400);
+  font-style: normal;
+}
+
+.ProseMirror-selectednode {
+  outline: none !important;
+}
+}

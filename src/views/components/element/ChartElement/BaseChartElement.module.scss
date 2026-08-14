@@ -1,0 +1,15 @@
+.base-element-chart {
+  position: absolute;
+
+  &.is-thumbnail {
+    pointer-events: none;
+  }
+}
+.rotate-wrapper {
+  width: 100%;
+  height: 100%;
+}
+.element-content {
+  width: 100%;
+  height: 100%;
+}

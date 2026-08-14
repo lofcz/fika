@@ -1,0 +1,44 @@
+.directive-loading-overlay {
+  overflow: hidden;
+  z-index: 99;
+  @include absolute-0();
+
+  &::before {
+    content: '';
+    @include ink-pulse(10px);
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    z-index: 1;
+  }
+  &.has-text::before {
+    top: calc(50% - 16px);
+  }
+
+  &::after {
+    content: var(--directive-loading-text, '');
+    padding-top: 28px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background-color: rgba($color: #fff, $alpha: .78);
+    color: $inkMuted;
+    @include absolute-0();
+  }
+}
+
+@keyframes ink-pulse {
+  0%, 100% {
+    transform: scale(0.78);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
