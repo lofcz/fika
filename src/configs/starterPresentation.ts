@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 import type { TranslationFunctions } from '@/i18n/i18n-types';
 import type { PPTTextElement, Slide, SlideTheme, TextAlign, TextInset } from '@/types/slides';
 import { computePlaceholderSlotHeight } from '@/utils/placeholderLayout';
-import { TEXT_PRESET_LARGE_TITLE, TEXT_PRESET_SMALL_TITLE } from '@/configs/textPresets';
+import { isListPlaceholderType, TEXT_PRESET_LARGE_TITLE, TEXT_PRESET_SMALL_TITLE } from '@/configs/textPresets';
 import { DEFAULT_THEME_COLORS } from '@/configs/theme';
 import { preferredInk } from '@/utils/textContrast';
 export interface StarterPresentationOptions {
@@ -76,8 +76,8 @@ const textPlaceholder = (textType: 'title' | 'subtitle' | 'content' | 'item', pl
     lineHeight,
     inset,
     placeholderLayoutHeight: height,
-    ...(props.fixedHeight !== undefined ? {
-      fixedHeight: props.fixedHeight
+    ...((props.fixedHeight ?? isListPlaceholderType(textType)) ? {
+      fixedHeight: true
     } : {}),
     ...(props.vAlign !== undefined ? {
       vAlign: props.vAlign

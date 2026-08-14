@@ -57,6 +57,10 @@ export default defineConfig({
         ...config.module.parser,
         ...shared.module.parser,
       }
+      config.node = {
+        ...(typeof config.node === 'object' ? config.node : {}),
+        ...shared.node,
+      }
       config.output ??= {}
       config.output.library = { type: 'module' }
       config.experiments = { ...config.experiments, outputModule: true }

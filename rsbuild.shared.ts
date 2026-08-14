@@ -60,6 +60,11 @@ export function sharedRspack() {
         },
       },
     },
+    // wawoff2's Emscripten bindings reference `__dirname` only in the Node
+    // branch. Web target defaults to `warn-mock`; opt into the same `/` mock.
+    node: {
+      __dirname: 'mock' as const,
+    },
   }
 }
 

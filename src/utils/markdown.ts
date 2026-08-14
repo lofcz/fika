@@ -1,4 +1,5 @@
-import MarkdownIt from 'markdown-it';
+import MarkdownItCtor from 'markdown-it';
+import type { MarkdownIt } from 'markdown-it';
 import { decodeHtmlEntities, unescapeAgentNewlines } from './agentText';
 import { ensureMathliveReady, texmathEngine } from './math';
 
@@ -24,7 +25,7 @@ type TexMathPluginOptions = {
 };
 type TexMathPlugin = (md: MarkdownIt, options: TexMathPluginOptions) => void;
 function createBaseParser() {
-  const parser = new MarkdownIt({
+  const parser = new MarkdownItCtor({
     breaks: true,
     html: false,
     linkify: true,
