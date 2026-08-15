@@ -107,27 +107,11 @@ async function counts(page) {
 
 async function clickTool(page, name) {
   await closeOpenEditor(page)
-  await page.evaluate(() => {
-    const main = window.__FIKA_MAIN__
-    if (!main) return
-    const state = main.getState()
-    state.setEditingElementId('')
-    state.setActiveElementIdList([])
-    state.setDisableHotkeysState(false)
-  }).catch(() => {})
-  const found = await page.waitForFunction((tool) => {
-    const el = document.querySelector(`[data-canvas-tool="${tool}"]`)
-    if (!(el instanceof HTMLElement)) return false
-    el.scrollIntoView({ block: 'nearest', inline: 'center' })
-    return true
-  }, name, { timeout: 8000 }).then(() => true).catch(() => false)
-  if (!found) {
-    const tools = await page.evaluate(() => [...document.querySelectorAll('[data-canvas-tool]')].map(el => el.getAttribute('data-canvas-tool')))
-    throw new Error(`canvas tool ${name} missing; have ${tools.join(',') || 'none'}`)
-  }
-  await page.evaluate((tool) => {
-    document.querySelector(`[data-canvas-tool="${tool}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  }, name)
+  const el = name === 'insert-text'
+    ? page.locator('[data-canvas-tool=insert-text] [class*=group-btn-main]').first()
+    : page.locator(`[data-canvas-tool=${name}]`).first()
+  await el.waitFor({ state: 'attached', timeout: 8000 })
+  await el.click({ timeout: 8000, force: true })
   await sleep(200)
 }
 
