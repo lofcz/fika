@@ -1,5 +1,7 @@
-# Prefer this over .gitignore when packing. dist/ is gitignored but must ship.
+# This file replaces .gitignore for npm pack. dist/ is gitignored but must ship.
 node_modules
 coverage
 *.local
 .DS_Store
+!dist/
+!dist/**

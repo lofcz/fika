@@ -65,11 +65,34 @@ jobs:
       - name: Build embed package
         run: bun --canary run build:embed
 
+      # Use the npm next to `node`, not Bun's PATH shim. Pack once, verify
+      # that exact tarball, then publish it so dist/embed cannot be dropped.
+      - name: Pack embed tarball
+        id: pack
+        run: |
+          set -euo pipefail
+          NPM="$(dirname "$(command -v node)")/npm"
+          echo "node=$(command -v node) ($(node --version))"
+          echo "npm=${NPM} ($("${NPM}" --version))"
+          echo "path-npm=$(command -v npm) ($(npm --version || true))"
+          ls -la dist/embed/fika-embed.js dist/embed/fika-embed.css dist/embed/agentic-manifest.json dist/types/embed/index.d.ts
+          DEST="${RUNNER_TEMP}/fika-pack"
+          mkdir -p "${DEST}"
+          "${NPM}" pack --pack-destination "${DEST}" --ignore-scripts
+          TARBALL="$(find "${DEST}" -maxdepth 1 -name '*.tgz' -print -quit)"
+          test -n "${TARBALL}"
+          echo "tarball=${TARBALL}" >> "${GITHUB_OUTPUT}"
+          echo "size=$(du -h "${TARBALL}" | cut -f1)"
+          echo "files=$(tar -tzf "${TARBALL}" | wc -l)"
+          tar -tzf "${TARBALL}" | sed -n '1,40p'
+
       - name: Verify package contents
-        run: bun --canary run pack:verify
+        run: node scripts/verify-embed-pack.mjs --tarball "${{ steps.pack.outputs.tarball }}"
 
       - name: Publish to npm
-        run: npm publish --access public --ignore-scripts
+        run: |
+          NPM="$(dirname "$(command -v node)")/npm"
+          "${NPM}" publish "${{ steps.pack.outputs.tarball }}" --access public --ignore-scripts
 
       - name: Commit release version and create tag
         run: |
