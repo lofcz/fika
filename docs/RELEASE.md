@@ -11,4 +11,6 @@ On npmjs.com → `fika-editor` → Settings → Trusted publishing, the GitHub A
 
 Do not store an `NPM_TOKEN` for publish. The workflow requests `id-token: write` and publishes with no auth token so npm exchanges the OIDC token.
 
+Release commits, tags, and GitHub releases are authored by the `fika-bot` GitHub App (mug logo). Store `FIKA_BOT_CLIENT_ID` as a repository variable and `FIKA_BOT_PRIVATE_KEY` as a repository secret. Do not commit the `.pem`.
+
 The published tarball is the prebuilt embed (`dist/embed` + `dist/types`). `dist/` stays gitignored; the workflow runs `build:embed`, packs with the npm next to Node (not Bun's PATH shim), verifies that `.tgz` with `tar`, then publishes the same file. `prepack` / `prepublishOnly` refuse a docs-only tarball if those artifacts are missing.
