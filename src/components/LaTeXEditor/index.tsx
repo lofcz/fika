@@ -54,8 +54,10 @@ export default function LaTeXEditor({
   const fieldBoxRef = useRef<HTMLDivElement | null>(null)
   const fieldHostRef = useRef<HTMLDivElement | null>(null)
   const mathFieldRef = useRef<MathField | null>(null)
+  const pendingSnippetRef = useRef('')
   const [fieldReady, setFieldReady] = useState(false)
   const [empty, setEmpty] = useState(!value)
+  const [hasDraft, setHasDraft] = useState(!!value)
   const [keyboardOpen, setKeyboardOpen] = useState(false)
   const [hintStyle, setHintStyle] = useState<CSSProperties>({ left: '44px' })
 
@@ -103,7 +105,9 @@ export default function LaTeXEditor({
   }, [])
 
   const syncEmpty = useCallback(() => {
-    setEmpty(!readLatex())
+    const next = !readLatex()
+    setEmpty(next)
+    setHasDraft(!next || !!pendingSnippetRef.current)
   }, [])
 
   const hideKeyboard = useCallback(() => {
@@ -148,6 +152,11 @@ export default function LaTeXEditor({
       field.addEventListener('focus', placeHint)
       host.appendChild(field)
       mathFieldRef.current = field
+      const queued = pendingSnippetRef.current
+      if (queued) {
+        field.insert(queued, { focus: true, selectionMode: 'placeholder' })
+        pendingSnippetRef.current = ''
+      }
       setFieldReady(true)
       syncEmpty()
       getKeyboard()?.addEventListener('virtual-keyboard-toggle', syncKeyboard)
@@ -187,14 +196,20 @@ export default function LaTeXEditor({
 
   const insertSnippet = (latex: string) => {
     const mathField = mathFieldRef.current
-    if (!mathField) return
+    if (!mathField) {
+      pendingSnippetRef.current = latex
+      setEmpty(false)
+      setHasDraft(true)
+      return
+    }
     mathField.focus()
     mathField.insert(latex, { focus: true, selectionMode: 'placeholder' })
+    pendingSnippetRef.current = ''
     syncEmpty()
   }
 
   const update = async () => {
-    const latex = readLatex()
+    const latex = readLatex() || pendingSnippetRef.current
     if (!latex) return message.error(LL.components.latexEditor.formulaEmpty())
 
     let width = 160
@@ -260,17 +275,17 @@ export default function LaTeXEditor({
       <div className={cx('tips-block')}>
         <div className={cx('tips-label')}>{LL.components.latexEditor.tipsLabel()}</div>
         <div className={cx('tips')}>
-          <button type="button" className={cx('tip')} onClick={() => insertSnippet('\\frac{#?}{#?}')}>
+          <button type="button" className={cx('tip')} data-latex-tip="frac" onClick={() => insertSnippet('\\frac{#?}{#?}')}>
             <kbd>frac</kbd>
             {' '}
             {LL.components.latexEditor.tipFraction()}
           </button>
-          <button type="button" className={cx('tip')} onClick={() => insertSnippet('^{#?}')}>
+          <button type="button" className={cx('tip')} data-latex-tip="power" onClick={() => insertSnippet('^{#?}')}>
             <kbd>^</kbd>
             {' '}
             {LL.components.latexEditor.tipPower()}
           </button>
-          <button type="button" className={cx('tip')} onClick={() => insertSnippet('\\sqrt{#?}')}>
+          <button type="button" className={cx('tip')} data-latex-tip="sqrt" onClick={() => insertSnippet('\\sqrt{#?}')}>
             <kbd>sqrt</kbd>
             {' '}
             {LL.components.latexEditor.tipRoot()}
@@ -280,7 +295,7 @@ export default function LaTeXEditor({
 
       <div className={cx('footer')}>
         <Button className={cx('btn')} onClick={() => onClose?.()}>{LL.common.cancel()}</Button>
-        <Button className={cx('btn')} type="primary" data-editor-insert="latex" disabled={!fieldReady} onClick={() => { void update() }}>
+        <Button className={cx('btn')} type="primary" data-editor-insert="latex" disabled={!hasDraft} onClick={() => { void update() }}>
           {editing ? LL.common.save() : LL.components.latexEditor.insert()}
         </Button>
       </div>

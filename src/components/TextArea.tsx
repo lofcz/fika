@@ -17,6 +17,7 @@ export type ITextAreaProps = {
   className?: string
   style?: CSSProperties
   'data-tooltip'?: string
+  'data-mermaid-source'?: string
   onUpdateValue?: (payload: string) => void
   onFocus?: (payload: FocusEvent) => void
   onBlur?: (payload: FocusEvent) => void
@@ -34,6 +35,7 @@ const TextArea = forwardRef<TextAreaHandle, ITextAreaProps>(function TextArea(vr
     className,
     style,
     'data-tooltip': dataTooltip,
+    'data-mermaid-source': dataMermaidSource,
     onUpdateValue,
     onFocus,
     onBlur,
@@ -56,6 +58,7 @@ const TextArea = forwardRef<TextAreaHandle, ITextAreaProps>(function TextArea(vr
       placeholder={placeholder}
       style={{ padding: padding ? `${padding}px` : '10px', ...style }}
       data-tooltip={dataTooltip}
+      data-mermaid-source={dataMermaidSource}
       onInput={(event) => onUpdateValue?.(event.currentTarget.value)}
       onFocus={(event) => onFocus?.(event.nativeEvent)}
       onBlur={(event) => onBlur?.(event.nativeEvent)}

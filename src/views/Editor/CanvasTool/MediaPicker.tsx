@@ -186,7 +186,7 @@ export default function MediaPicker(props: IMediaPickerProps) {
           <strong>{dragOver ? LL.editor.canvasTool.mediaPicker.dropHere() : (items.length ? LL.editor.canvasTool.mediaPicker.addMore() : LL.editor.canvasTool.mediaPicker.title())}</strong>
           <span>{constraintsHint}</span>
         </div>
-        <FileInput accept={accept} multiple onChange={onPick}>
+        <FileInput accept={accept} multiple data-media-file="picker" onChange={onPick}>
           <Button type="primary" size="small">
             <Icon icon="folder-up" />
             {LL.editor.canvasTool.mediaPicker.browse()}

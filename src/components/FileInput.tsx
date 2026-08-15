@@ -10,6 +10,7 @@ export type IFileInputProps = {
   style?: CSSProperties
   onChange?: (payload: FileList) => void
   children?: ReactNode
+  'data-media-file'?: string
 }
 
 export default function FileInput({
@@ -19,6 +20,7 @@ export default function FileInput({
   style,
   onChange,
   children,
+  'data-media-file': dataMediaFile,
 }: IFileInputProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -40,6 +42,7 @@ export default function FileInput({
         className={cx('input')}
         type="file"
         name="upload"
+        data-media-file={dataMediaFile}
         ref={inputRef}
         accept={accept}
         multiple={multiple}

@@ -99,22 +99,26 @@ async function typeInto(page, i, text) {
 }
 
 async function deselect(page) {
-  await page.keyboard.press('Escape').catch(() => {})
   await page.evaluate(() => {
+    const focused = document.activeElement
+    if (focused && focused !== document.body) focused.blur()
     const main = window.__FIKA_MAIN__
     if (!main) return
-    main.getState().setEditingElementId('')
-    main.getState().setActiveElementIdList([])
-    main.getState().setToolbarState('slideDesign')
+    const state = main.getState()
+    state.setEditingElementId('')
+    state.setActiveElementIdList([])
+    state.setDisableHotkeysState(false)
+    state.setToolbarState('slideDesign')
   })
-  await sleep(150)
+  await page.keyboard.press('Escape').catch(() => {})
+  await sleep(200)
 }
 
 async function openDesign(page) {
   await deselect(page)
-  const tab = page.locator('[data-toolbar-tab=slideDesign]')
-  if (await tab.count()) await tab.click({ timeout: 8000 }).catch(() => {})
-  await page.locator('[data-theme-id]').first().waitFor({ state: 'visible', timeout: 8000 })
+  const tab = page.locator('[data-toolbar-tab=slideDesign]').filter({ visible: true })
+  if (await tab.count()) await tab.first().click({ timeout: 4000 }).catch(() => {})
+  await page.locator('[data-theme-id]').filter({ visible: true }).first().waitFor({ timeout: 8000 })
   await sleep(120)
 }
 
@@ -131,13 +135,21 @@ async function enterPresent(page) {
   await btn.hover()
   await sleep(200)
   await btn.click()
-  await page.locator('[data-fika-screen]').waitFor({ state: 'visible', timeout: 15000 })
+  await page.locator('[data-fika-screen]:not([data-fika-screen-shell]) [data-live-box]').first().waitFor({
+    state: 'attached',
+    timeout: 20000,
+  })
   await sleep(250)
 }
 
 async function exitPresent(page) {
   await page.keyboard.press('Escape')
-  await page.locator('[data-fika-screen]').waitFor({ state: 'hidden', timeout: 8000 }).catch(() => {})
+  const screen = page.locator('[data-fika-screen]')
+  const gone = await screen.first().waitFor({ state: 'detached', timeout: 2500 }).then(() => true).catch(() => false)
+  if (!gone) {
+    await page.evaluate(() => window.__FIKA_SCREEN__?.getState().setScreening(false))
+    await screen.first().waitFor({ state: 'detached', timeout: 8000 }).catch(() => {})
+  }
   await sleep(200)
 }
 
@@ -163,7 +175,8 @@ const snapshotScript = (scope) => {
     }
   }
   const root = scope === 'screen'
-    ? document.querySelector('[data-fika-screen] [data-screen-current]') || document.querySelector('[data-fika-screen]')
+    ? document.querySelector('[data-fika-screen]:not([data-fika-screen-shell]) [data-screen-current]')
+      || document.querySelector('[data-fika-screen]:not([data-fika-screen-shell])')
     : document.querySelector('[class*=viewport-wrapper]')
   const boxes = [...(root?.querySelectorAll('[data-live-box]') || [])].map(boxInk)
   const bgEl = root?.querySelector('[class*=background]') || root
@@ -245,7 +258,7 @@ try {
   rec(3, 'Typing a subtitle keeps the text on the live box', /PresentSub/.test(edit.subtitle?.text || ''), edit.subtitle)
 
   await openDesign(page)
-  rec(4, 'Deselect shows the Design tab', await page.getByText('Design', { exact: true }).count() > 0)
+  rec(4, 'Deselect shows the Design tab', await page.locator('[data-toolbar-tab=slideDesign]').filter({ visible: true }).count() > 0)
   rec(5, 'Design panel lists preset themes', await page.locator('[data-theme-id]').count() >= 6)
 
   await applyTheme(page, 'dusk')

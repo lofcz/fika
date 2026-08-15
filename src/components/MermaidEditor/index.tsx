@@ -97,6 +97,7 @@ const MermaidEditor = memo((props: IMermaidEditorProps) => {
             value={code}
             onUpdateValue={setCode}
             placeholder={LL.components.mermaidEditor.inputPlaceholder()}
+            data-mermaid-source="1"
           />
         </div>
         <div className={cx('preview')}>
