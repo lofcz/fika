@@ -2,6 +2,9 @@
 logs
 *.log
 npm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*

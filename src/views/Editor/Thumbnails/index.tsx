@@ -324,7 +324,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
       { text: menu.deleteSlide(), subText: 'Delete', handler: () => deleteSlide() },
       { text: menu.addSection(), handler: createSection, disable: currentSlideHasSection },
       { divider: true },
-      { text: menu.presentFromCurrent(), subText: 'Shift + F5', handler: enterScreening },
+      { text: menu.presentFromCurrent(), subText: 'Shift + F5', handler: () => enterScreening() },
     ]
   }, [LL, cutSlide, copySlide, pasteSlide, selectAllSlide, createSlide, copyAndPasteSlide, deleteSlide, createSection, currentSlideHasSection, enterScreening])
 

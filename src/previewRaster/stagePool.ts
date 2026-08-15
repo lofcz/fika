@@ -89,6 +89,10 @@ const applyLayerScale = (entry: StageEntry) => {
   entry.layer.scale({ x: scale, y: scale })
 }
 
+const asLayerChild = (node: Konva.Node): Konva.Group | Konva.Shape | null => (
+  node instanceof Konva.Group || node instanceof Konva.Shape ? node : null
+)
+
 const shouldCacheNode = (node: Konva.Node) => {
   if (node.getAttr('previewBitmap')) return false
   const name = node.getClassName()
@@ -97,7 +101,7 @@ const shouldCacheNode = (node: Konva.Node) => {
   if (typeof find === 'function') {
     if (find.call(node, 'Image').length || find.call(node, 'Text').length) return false
   }
-  return typeof node.shadowEnabled === 'function' && node.shadowEnabled()
+  return node instanceof Konva.Shape && node.shadowEnabled()
 }
 
 const recacheLayer = (entry: StageEntry) => {
@@ -405,8 +409,10 @@ const attachPaintedNode = (entry: StageEntry, element: PPTElement, node: Konva.N
   node.x(element.left)
   node.y(element.top)
   node.scale({ x: 1, y: 1 })
-  entry.layer.add(node)
-  entry.nodes.set(element.id, node)
+  const child = asLayerChild(node)
+  if (!child) return
+  entry.layer.add(child)
+  entry.nodes.set(element.id, child)
   applyStoredStack(entry)
   if (!entry.busy && shouldCacheNode(node)) node.cache({ pixelRatio: cachePixelRatio(entry) })
   entry.cachedDestDpr = Math.max(entry.cachedDestDpr, destTimesDpr(entry.destWidth, entry.pixelRatio))
@@ -467,11 +473,13 @@ export const invalidateBackground = async (
   node.listening(false)
   node.x(0)
   node.y(0)
-  entry.layer.add(node)
-  node.zIndex(0)
-  entry.nodes.set(BG_ID, node)
+  const child = asLayerChild(node)
+  if (!child) return
+  entry.layer.add(child)
+  child.zIndex(0)
+  entry.nodes.set(BG_ID, child)
   if (!entry.busy) {
-    node.cache({ pixelRatio: cachePixelRatio(entry) })
+    child.cache({ pixelRatio: cachePixelRatio(entry) })
     entry.layer.batchDraw()
   }
 }
