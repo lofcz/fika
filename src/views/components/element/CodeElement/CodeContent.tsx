@@ -2,8 +2,6 @@ import { bindStyles } from '@/utils/cssm'
 import styles from './CodeContent.module.scss'
 const cx = bindStyles(styles)
 import { memo, useRef, useState, useEffect } from 'react';
-import { OverlayScrollbars } from 'overlayscrollbars';
-import 'overlayscrollbars/overlayscrollbars.css';
 
 import type { PPTCodeElement } from '@/types/slides';
 import { highlightCodeBlock } from '@/utils/codeHighlight';
@@ -25,8 +23,6 @@ const CodeContent = memo((props: ICodeContentProps) => {
   const [fg, setFg] = useState('#e6edf3');
   const [error, setError] = useState('');
   const renderVersion = useRef(0);
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  const scrollbarsRef = useRef<ReturnType<typeof OverlayScrollbars> | null>(null);
   const code = props.elementInfo.code;
   const language = props.elementInfo.language;
   const theme = props.elementInfo.theme;
@@ -55,23 +51,7 @@ const CodeContent = memo((props: ICodeContentProps) => {
     })();
   }, [code, language, theme]);
 
-  useEffect(() => {
-    if (!hostRef.current) return;
-    scrollbarsRef.current = OverlayScrollbars(hostRef.current, {
-      overflow: { x: 'scroll', y: 'scroll' },
-      scrollbars: { visibility: 'auto', autoHide: 'leave', autoHideDelay: 600 },
-    });
-    return () => {
-      scrollbarsRef.current?.destroy();
-      scrollbarsRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    scrollbarsRef.current?.update(true);
-  }, [html, elementInfo.fontSize, elementInfo.showLineNumbers, elementInfo.width, elementInfo.height]);
-
-  return <div ref={hostRef} className={cx('code-content', { 'line-numbers': elementInfo.showLineNumbers })} style={contentStyle} data-code-scroll>
+  return <div className={cx('code-content', { 'line-numbers': elementInfo.showLineNumbers })} style={contentStyle} data-code-scroll>
     {html ? <div className={cx('code-html')} dangerouslySetInnerHTML={{ __html: html }} /> : error ? <div className={cx('code-error')}>{error}</div> : (
       <CodeBlockSkeleton
         code={code}

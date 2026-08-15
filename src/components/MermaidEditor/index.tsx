@@ -9,6 +9,8 @@ import { useI18nContext } from '@/i18n/useI18nContext'
 import Button from '@/components/Button'
 import TextArea from '@/components/TextArea'
 
+export const DEFAULT_MERMAID_SAMPLE = 'flowchart TD\n    A --> B'
+
 export type IMermaidEditorProps = {
   value?: string
   onUpdate?: (payload: string) => void
@@ -18,7 +20,7 @@ export type IMermaidEditorProps = {
 const MermaidEditor = memo((props: IMermaidEditorProps) => {
   const value = props.value ?? ''
   const { LL } = useI18nContext()
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(value || DEFAULT_MERMAID_SAMPLE)
   const [svg, setSvg] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -60,7 +62,7 @@ const MermaidEditor = memo((props: IMermaidEditorProps) => {
   }, [code, engineReady])
 
   useEffect(() => {
-    setCode(value)
+    setCode(value || DEFAULT_MERMAID_SAMPLE)
     setTimeout(() => textAreaRef.current?.focus(), 0)
   }, [])
 

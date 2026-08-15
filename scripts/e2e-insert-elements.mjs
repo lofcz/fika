@@ -339,18 +339,25 @@ try {
 
   await clickTool(page, 'insert-mermaid')
   const mermaidBtn = await waitInsert(page, 'mermaid').catch(() => null)
-  const mermaidArea = page.locator('[data-mermaid-source], [class*=mermaid-editor] textarea').last()
+  const mermaidArea = page.locator('[data-mermaid-source]').first()
   rec(45, 'Mermaid modal opens from the toolbar', !!mermaidBtn || await mermaidArea.count() > 0)
   const beforeMermaid = await counts(page)
   if (await mermaidArea.count()) {
-    await mermaidArea.click()
-    await mermaidArea.fill('graph TD; A-->B')
+    await mermaidArea.waitFor({ state: 'visible', timeout: 8000 }).catch(() => {})
+    const current = await mermaidArea.inputValue().catch(() => '')
+    if (!current.trim()) {
+      await mermaidArea.click()
+      await mermaidArea.fill('flowchart TD\n    A --> B')
+    }
+    await page.waitForFunction(() => {
+      const el = document.querySelector('[data-mermaid-source]')
+      return !!el && el instanceof HTMLTextAreaElement && el.value.trim().length > 0
+    }, { timeout: 8000 }).catch(() => {})
     await sleep(400)
   }
   if (mermaidBtn) {
     await mermaidBtn.click()
     await page.locator('[data-element-type=mermaid]').first().waitFor({ timeout: 20000 }).catch(() => {})
-    await page.locator('[data-editor-insert=mermaid]').waitFor({ state: 'hidden', timeout: 8000 }).catch(() => {})
     await sleep(200)
   }
   const afterMermaid = await counts(page)
