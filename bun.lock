@@ -14,7 +14,7 @@
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
         "@dnd-kit/utilities": "^3.2.2",
-        "@lofcz/pptxgenjs": "^4.1.16",
+        "@lofcz/pptxgenjs": "^4.1.17",
         "@tanstack/react-virtual": "^3.14.9",
         "@use-gesture/react": "^10.3.1",
         "@use-gesture/vanilla": "^10.3.1",
@@ -242,7 +242,7 @@
 
     "@lezer/lr": ["@lezer/lr@1.4.10", "", { "dependencies": { "@lezer/common": "^1.0.0" } }, "sha512-rnCpTIBafOx4mRp43xOxDJbFipJm/c0cia/V5TiGlhmMa+wsSdoGmUN3w5Bqrks/09Q/D4tNAmWaT8p6NRi77A=="],
 
-    "@lofcz/pptxgenjs": ["@lofcz/pptxgenjs@4.1.16", "", { "dependencies": { "@node-projects/jszip": "^4.2.1", "pako": "3.0.1" } }, "sha512-2qYCuGCUV7b/xYxLT3WbptG8e4g/t6l3bOJCnALCxHUFFZXuh6zlSCfluscDcvia+n1CYtrUhF1pro91TF0qkg=="],
+    "@lofcz/pptxgenjs": ["@lofcz/pptxgenjs@4.1.17", "", { "dependencies": { "@node-projects/jszip": "^4.2.1", "pako": "3.0.1" } }, "sha512-LWUuPBjKamEcK2p+bt2z02oYhLPuY68aXjT9hMeUDYlr1Ntp4zETf6qr7w39U5eoCUwOfERaWMfRsNMJ+yF3Lw=="],
 
     "@marijn/find-cluster-break": ["@marijn/find-cluster-break@1.0.3", "", {}, "sha512-FY+MKLBoTsLNJF/eLWaOsXGdz6uh3Iu1axjPf6TUq92IYumcTcXWHoS747JARLkcdlJ/Waiaxc5wQfFO8jC6NA=="],
 
