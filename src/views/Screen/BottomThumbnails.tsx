@@ -3,9 +3,9 @@ import styles from './BottomThumbnails.module.scss'
 const cx = bindStyles(styles)
 import { useEffect, useRef } from 'react'
 import { useSlidesStore } from '@/store'
-import useLoadSlides from '@/hooks/useLoadSlides'
 import useExecPlay from './hooks/useExecPlay'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
+import { isInScreenWindow, SCREEN_THUMB_RADIUS } from './screenWindow'
 
 export default function BottomThumbnails() {
   const slides = useSlidesStore(s => s.slides)
@@ -13,7 +13,6 @@ export default function BottomThumbnails() {
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const thumbnailsRef = useRef<HTMLDivElement | null>(null)
   const { turnSlideToIndex } = useExecPlay()
-  const { slidesLoadLimit } = useLoadSlides()
 
   const handleMousewheelThumbnails = (e: React.WheelEvent) => {
     e.preventDefault()
@@ -46,7 +45,7 @@ export default function BottomThumbnails() {
             key={slide.id}
             onClick={() => turnSlideToIndex(index)}
           >
-            <ThumbnailSlide slide={slide} size={100 / viewportRatio} visible={index < slidesLoadLimit} />
+            <ThumbnailSlide slide={{ id: slide.id }} size={100 / viewportRatio} visible={isInScreenWindow(index, slideIndex, SCREEN_THUMB_RADIUS)} />
           </div>
         ))}
       </div>

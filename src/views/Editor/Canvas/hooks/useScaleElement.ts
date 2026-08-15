@@ -1,13 +1,39 @@
 import { useRef, useCallback } from 'react'
-import { useMainStore, useSlidesStore, useKeyboardStore, selectCtrlOrShiftKeyActive, syncPointerModifiers } from '@/store'
+import { useMainStore, useKeyboardStore, selectCtrlOrShiftKeyActive } from '@/store'
 import type { PPTElement, PPTImageElement, PPTLineElement, PPTShapeElement } from '@/types/slides'
-import { OperateResizeHandlers, type AlignmentLineProps, type MultiSelectRange } from '@/types/edit'
+import { OperateResizeHandlers, type MultiSelectRange } from '@/types/edit'
 import { MIN_SIZE } from '@/configs/element'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
-import { getElementRange } from '@/utils/element'
-import { resolveGridSize, snapResizePoint, type SnapBox } from '@/utils/snap'
+import { clonePlain } from '@/utils/clonePlain'
+import { bindDocumentDrag, rafCoalesce } from '@/utils/gestureBind'
 import { findSlideViewport, getPointerClient, getViewportRenderedScale, pointerDeltaToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import { applyLiveSize, tableCellMinHeight } from '@/utils/liveElementSize'
+import { commitSlideElements } from '@/utils/commitSlideElements'
+
+const applyLiveMultiSelectBox = (minX: number, minY: number, maxX: number, maxY: number, canvasScale: number) => {
+  const multi = document.querySelector('.multi-select-operate') as HTMLElement | null
+  if (!multi) return
+  multi.style.left = `${minX * canvasScale}px`
+  multi.style.top = `${minY * canvasScale}px`
+  multi.style.width = `${(maxX - minX) * canvasScale}px`
+  multi.style.height = `${(maxY - minY) * canvasScale}px`
+}
+
+const bindLiveGesture = (
+  onMove: (event: MouseEvent | TouchEvent) => void,
+  onEnd: (event: MouseEvent | TouchEvent) => void,
+) => {
+  const coalesced = rafCoalesce(onMove)
+  const unbind = bindDocumentDrag({
+    onDrag: state => coalesced(state.event as MouseEvent | TouchEvent),
+    onDragEnd: state => onEnd(state.event as MouseEvent | TouchEvent),
+  })
+  return () => {
+    coalesced.cancel()
+    unbind()
+  }
+}
 
 interface RotateElementData {
   left: number
@@ -90,60 +116,25 @@ const getOppositePoint = (direction: OperateResizeHandlers, points: ReturnType<t
 }
 
 /**
- * Whether the active handle is a corner.
+ * Live resize follows the pointer only. Snap/guides belong on move, not scale —
+ * setAlignmentLines during the gesture re-renders the canvas (even `[] !== []`)
+ * and makes the preview lag.
  */
-const isCornerResizeHandler = (direction: OperateResizeHandlers) => {
-  return direction === OperateResizeHandlers.RIGHT_BOTTOM ||
-    direction === OperateResizeHandlers.LEFT_BOTTOM ||
-    direction === OperateResizeHandlers.LEFT_TOP ||
-    direction === OperateResizeHandlers.RIGHT_TOP
-}
-
-/**
- * Position of the active resize handle.
- */
-const getResizeHandlerPoint = (direction: OperateResizeHandlers, points: ReturnType<typeof getRotateElementPoints>): { left: number; top: number } => {
-  const pointMap = {
-    [OperateResizeHandlers.RIGHT_BOTTOM]: points.rightBottomPoint,
-    [OperateResizeHandlers.LEFT_BOTTOM]: points.leftBottomPoint,
-    [OperateResizeHandlers.LEFT_TOP]: points.leftTopPoint,
-    [OperateResizeHandlers.RIGHT_TOP]: points.rightTopPoint,
-    [OperateResizeHandlers.TOP]: points.topPoint,
-    [OperateResizeHandlers.BOTTOM]: points.bottomPoint,
-    [OperateResizeHandlers.LEFT]: points.leftPoint,
-    [OperateResizeHandlers.RIGHT]: points.rightPoint,
-  }
-  return pointMap[direction]
-}
-
 export default (
   elementList: PPTElement[],
   setElementList: (value: PPTElement[]) => void,
-  _alignmentLines: AlignmentLineProps[],
-  setAlignmentLines: (value: AlignmentLineProps[]) => void,
   canvasScale: number,
 ) => {
   const activeElementIdList = useMainStore(s => s.activeElementIdList)
-  const activeGroupElementId = useMainStore(s => s.activeGroupElementId)
-  const viewportRatio = useSlidesStore(s => s.viewportRatio)
-  const viewportSize = useSlidesStore(s => s.viewportSize)
-  const gridLineSize = useMainStore(s => s.gridLineSize)
   const ctrlOrShiftKeyActive = useKeyboardStore(selectCtrlOrShiftKeyActive)
 
   const elementListRef = useRef(elementList)
-  elementListRef.current = elementList
+  const gesturingRef = useRef(false)
+  if (!gesturingRef.current) elementListRef.current = elementList
   const canvasScaleRef = useRef(canvasScale)
   canvasScaleRef.current = canvasScale
   const activeElementIdListRef = useRef(activeElementIdList)
   activeElementIdListRef.current = activeElementIdList
-  const activeGroupElementIdRef = useRef(activeGroupElementId)
-  activeGroupElementIdRef.current = activeGroupElementId
-  const viewportRatioRef = useRef(viewportRatio)
-  viewportRatioRef.current = viewportRatio
-  const viewportSizeRef = useRef(viewportSize)
-  viewportSizeRef.current = viewportSize
-  const gridLineSizeRef = useRef(gridLineSize)
-  gridLineSizeRef.current = gridLineSize
   const ctrlOrShiftKeyActiveRef = useRef(ctrlOrShiftKeyActive)
   ctrlOrShiftKeyActiveRef.current = ctrlOrShiftKeyActive
 
@@ -152,30 +143,22 @@ export default (
   const scaleElement = useCallback((e: MouseEvent | TouchEvent, element: Exclude<PPTElement, PPTLineElement>, command: OperateResizeHandlers) => {
     const elementList = elementListRef.current
     const canvasScale = canvasScaleRef.current
-    const activeElementIdList = activeElementIdListRef.current
-    const activeGroupElementId = activeGroupElementIdRef.current
-    const viewportRatio = viewportRatioRef.current
-    const viewportSize = viewportSizeRef.current
     const ctrlOrShiftKeyActive = ctrlOrShiftKeyActiveRef.current
     let liveList = elementList
-    const commitElements = (next: PPTElement[]) => {
-      liveList = next
-      elementListRef.current = next
-      setElementList(next)
-    }
     const isTouchEvent = !(e instanceof MouseEvent)
     if (isTouchEvent && (!e.changedTouches || !e.changedTouches[0])) return
 
     let isMouseDown = true
+    let stopGesture: (() => void) | null = null
+    gesturingRef.current = true
     useMainStore.getState().setScalingState(true)
+    useMainStore.getState().setGesturingState(true)
 
     const elOriginLeft = element.left
     const elOriginTop = element.top
     const elOriginWidth = element.width
     const elOriginHeight = element.height
 
-    const originTableCellMinHeight = element.type === 'table' ? element.cellMinHeight : 0
-    
     const elRotate = ('rotate' in element && element.rotate) ? element.rotate : 0
     const rotateRadian = Math.PI * elRotate / 180
 
@@ -200,54 +183,17 @@ export default (
       return size < minHeight ? minHeight : size
     }
 
-    let points: ReturnType<typeof getRotateElementPoints>
     let baseLeft = 0
     let baseTop = 0
-    const isCornerScaling = elRotate ? isCornerResizeHandler(command) : false
-    const others: SnapBox[] = []
 
     if ('rotate' in element && element.rotate) {
-      const { left, top, width, height } = element
-      points = getRotateElementPoints({ left, top, width, height }, elRotate)
-      const oppositePoint = getOppositePoint(command, points)
-
+      const oppositePoint = getOppositePoint(command, getRotateElementPoints(element, elRotate))
       baseLeft = oppositePoint.left
       baseTop = oppositePoint.top
     }
 
-    if (!elRotate || isCornerScaling) {
-      const isActiveGroupElement = element.id === activeGroupElementId
-      for (const el of elementList) {
-        if (isActiveGroupElement && el.id === element.id) continue
-        if (!isActiveGroupElement && activeElementIdList.includes(el.id)) continue
-        others.push(getElementRange(el))
-      }
-    }
-
-    let currentEvent: MouseEvent | TouchEvent | null = null
-    const alignedAdsorption = (currentX: number | null, currentY: number | null) => {
-      if (currentEvent && 'altKey' in currentEvent) syncPointerModifiers(currentEvent)
-      const altGrid = !!currentEvent && 'altKey' in currentEvent && currentEvent.altKey
-      const result = snapResizePoint(currentX, currentY, others, {
-        mode: altGrid ? 'grid' : 'smart',
-        canvas: { width: viewportSize, height: viewportSize * viewportRatio },
-        gridSize: resolveGridSize(gridLineSizeRef.current, altGrid),
-        moving: {
-          minX: elOriginLeft,
-          maxX: elOriginLeft + elOriginWidth,
-          minY: elOriginTop,
-          maxY: elOriginTop + elOriginHeight,
-        },
-        resizeWidth: currentX !== null,
-        resizeHeight: currentY !== null,
-      })
-      setAlignmentLines(result.guides)
-      return result
-    }
-
     const handleMousemove = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
-      currentEvent = e
 
       const currentPointer = getPointerClient(e)
 
@@ -326,37 +272,6 @@ export default (
 
         updateRotatedElementSize()
         correctRotatedElementPosition()
-
-        if (isCornerScaling) {
-          const currentPoints = getRotateElementPoints({ width, height, left, top }, elRotate)
-          const currentHandlerPoint = getResizeHandlerPoint(command, currentPoints)
-          const { offsetX, offsetY } = alignedAdsorption(currentHandlerPoint.left, currentHandlerPoint.top)
-
-          if (offsetX || offsetY) {
-            const worldCorrectionX = -offsetX
-            const worldCorrectionY = -offsetY
-
-            if (fixedRatio) {
-              const ratioDirection = command === OperateResizeHandlers.RIGHT_BOTTOM || command === OperateResizeHandlers.LEFT_TOP ? 1 : -1
-              const vectorX = Math.cos(rotateRadian) - Math.sin(rotateRadian) * ratioDirection / aspectRatio
-              const vectorY = Math.sin(rotateRadian) + Math.cos(rotateRadian) * ratioDirection / aspectRatio
-
-              if (offsetY && vectorY) revisedX = revisedX + worldCorrectionY / vectorY
-              else if (offsetX && vectorX) revisedX = revisedX + worldCorrectionX / vectorX
-              revisedY = ratioDirection * revisedX / aspectRatio
-            }
-            else {
-              const localCorrectionX = Math.cos(rotateRadian) * worldCorrectionX + Math.sin(rotateRadian) * worldCorrectionY
-              const localCorrectionY = Math.cos(rotateRadian) * worldCorrectionY - Math.sin(rotateRadian) * worldCorrectionX
-
-              revisedX = revisedX + localCorrectionX
-              revisedY = revisedY + localCorrectionY
-            }
-
-            updateRotatedElementSize()
-            correctRotatedElementPosition()
-          }
-        }
       }
 
       else {
@@ -369,78 +284,43 @@ export default (
         }
 
         if (command === OperateResizeHandlers.RIGHT_BOTTOM) {
-          const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + elOriginWidth + moveX, elOriginTop + elOriginHeight + moveY)
-          moveX = moveX - offsetX
-          moveY = moveY - offsetY
-          if (fixedRatio) {
-            if (offsetY) moveX = moveY * aspectRatio
-            else moveY = moveX / aspectRatio
-          }
           width = getSizeWithinRange(elOriginWidth + moveX, 'width')
           height = getSizeWithinRange(elOriginHeight + moveY, 'height')
         }
         else if (command === OperateResizeHandlers.LEFT_BOTTOM) {
-          const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + moveX, elOriginTop + elOriginHeight + moveY)
-          moveX = moveX - offsetX
-          moveY = moveY - offsetY
-          if (fixedRatio) {
-            if (offsetY) moveX = -moveY * aspectRatio
-            else moveY = -moveX / aspectRatio
-          }
           width = getSizeWithinRange(elOriginWidth - moveX, 'width')
           height = getSizeWithinRange(elOriginHeight + moveY, 'height')
           left = elOriginLeft - (width - elOriginWidth)
         }
         else if (command === OperateResizeHandlers.LEFT_TOP) {
-          const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + moveX, elOriginTop + moveY)
-          moveX = moveX - offsetX
-          moveY = moveY - offsetY
-          if (fixedRatio) {
-            if (offsetY) moveX = moveY * aspectRatio
-            else moveY = moveX / aspectRatio
-          }
           width = getSizeWithinRange(elOriginWidth - moveX, 'width')
           height = getSizeWithinRange(elOriginHeight - moveY, 'height')
           left = elOriginLeft - (width - elOriginWidth)
           top = elOriginTop - (height - elOriginHeight)
         }
         else if (command === OperateResizeHandlers.RIGHT_TOP) {
-          const { offsetX, offsetY } = alignedAdsorption(elOriginLeft + elOriginWidth + moveX, elOriginTop + moveY)
-          moveX = moveX - offsetX
-          moveY = moveY - offsetY
-          if (fixedRatio) {
-            if (offsetY) moveX = -moveY * aspectRatio
-            else moveY = -moveX / aspectRatio
-          }
           width = getSizeWithinRange(elOriginWidth + moveX, 'width')
           height = getSizeWithinRange(elOriginHeight - moveY, 'height')
           top = elOriginTop - (height - elOriginHeight)
         }
         else if (command === OperateResizeHandlers.LEFT) {
-          const { offsetX } = alignedAdsorption(elOriginLeft + moveX, null)
-          moveX = moveX - offsetX
           width = getSizeWithinRange(elOriginWidth - moveX, 'width')
           left = elOriginLeft - (width - elOriginWidth)
         }
         else if (command === OperateResizeHandlers.RIGHT) {
-          const { offsetX } = alignedAdsorption(elOriginLeft + elOriginWidth + moveX, null)
-          moveX = moveX - offsetX
           width = getSizeWithinRange(elOriginWidth + moveX, 'width')
         }
         else if (command === OperateResizeHandlers.TOP) {
-          const { offsetY } = alignedAdsorption(null, elOriginTop + moveY)
-          moveY = moveY - offsetY
           height = getSizeWithinRange(elOriginHeight - moveY, 'height')
           top = elOriginTop - (height - elOriginHeight)
         }
         else if (command === OperateResizeHandlers.BOTTOM) {
-          const { offsetY } = alignedAdsorption(null, elOriginTop + elOriginHeight + moveY)
-          moveY = moveY - offsetY
           height = getSizeWithinRange(elOriginHeight + moveY, 'height')
         }
       }
       
-      commitElements(liveList.map(el => {
+      let livePaint: { path: string, viewBox: [number, number] } | undefined
+      liveList = liveList.map(el => {
         if (element.id !== el.id) return el
         if (el.type === 'shape' && 'pathFormula' in el && el.pathFormula) {
           const pathFormula = SHAPE_PATH_FORMULAS[el.pathFormula]
@@ -449,6 +329,7 @@ export default (
           if ('editable' in pathFormula) path = pathFormula.formula(width, height, el.keypoints!)
           else path = pathFormula.formula(width, height)
 
+          livePaint = { path, viewBox: [width, height] }
           return {
             ...el, left, top, width, height,
             viewBox: [width, height],
@@ -456,61 +337,49 @@ export default (
           }
         }
         if (el.type === 'table') {
-          let cellMinHeight = originTableCellMinHeight + (height - elOriginHeight) / el.data.length
-          cellMinHeight = cellMinHeight < 36 ? 36 : cellMinHeight
-
-          if (cellMinHeight === originTableCellMinHeight) return { ...el, left, width }
           return {
             ...el, left, top, width, height,
-            cellMinHeight: cellMinHeight < 36 ? 36 : cellMinHeight,
+            cellMinHeight: tableCellMinHeight(height, el.data.length),
           }
         }
         return { ...el, left, top, width, height }
-      }))
+      })
+      applyLiveSize(element.id, left, top, width, height, canvasScaleRef.current, livePaint)
     }
 
     const handleMouseup = (e: MouseEvent | TouchEvent) => {
+      if (!isMouseDown) return
       isMouseDown = false
-      
-      document.ontouchmove = null
-      document.ontouchend = null
-      document.onmousemove = null
-      document.onmouseup = null
-
-      setAlignmentLines([])
+      stopGesture?.()
+      stopGesture = null
 
       const currentPointer = getPointerClient(e)
-      
-      if (startPointer.x === currentPointer.x && startPointer.y === currentPointer.y) return
-      
-      useSlidesStore.getState().updateSlide({ elements: liveList })
+      const moved = startPointer.x !== currentPointer.x || startPointer.y !== currentPointer.y
+      if (moved) {
+        const merged = commitSlideElements(liveList)
+        elementListRef.current = merged
+        setElementList(merged)
+        addHistorySnapshot()
+      }
+
+      gesturingRef.current = false
       useMainStore.getState().setScalingState(false)
-      
-      addHistorySnapshot()
+      useMainStore.getState().setGesturingState(false)
     }
 
-    if (isTouchEvent) {
-      document.ontouchmove = handleMousemove
-      document.ontouchend = handleMouseup
-    }
-    else {
-      document.onmousemove = handleMousemove
-      document.onmouseup = handleMouseup
-    }
-  }, [setElementList, setAlignmentLines, addHistorySnapshot])
+    stopGesture = bindLiveGesture(handleMousemove, handleMouseup)
+  }, [setElementList, addHistorySnapshot])
 
   const scaleMultiElement = useCallback((e: MouseEvent, range: MultiSelectRange, command: OperateResizeHandlers) => {
     const elementList = elementListRef.current
-    const canvasScale = canvasScaleRef.current
     const activeElementIdList = activeElementIdListRef.current
     const ctrlOrShiftKeyActive = ctrlOrShiftKeyActiveRef.current
     let liveList = elementList
-    const commitElements = (next: PPTElement[]) => {
-      liveList = next
-      elementListRef.current = next
-      setElementList(next)
-    }
     let isMouseDown = true
+    let stopGesture: (() => void) | null = null
+    gesturingRef.current = true
+    useMainStore.getState().setScalingState(true)
+    useMainStore.getState().setGesturingState(true)
     
     const { minX, maxX, minY, maxY } = range
     const operateWidth = maxX - minX
@@ -520,12 +389,15 @@ export default (
     const viewport = findSlideViewport(e.target)
     const startPointer = getPointerClient(e)
 
-    const originElementList: PPTElement[] = JSON.parse(JSON.stringify(elementList))
+    const activeIds = new Set(activeElementIdList)
+    const originElementList: PPTElement[] = elementList.map(el => (
+      activeIds.has(el.id) ? clonePlain(el) : el
+    ))
 
-    document.onmousemove = e => {
+    const handleMousemove = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
       
-      const { x, y: scaledY } = pointerDeltaToCanvas(startPointer, e, viewport, canvasScale)
+      const { x, y: scaledY } = pointerDeltaToCanvas(startPointer, e, viewport, canvasScaleRef.current)
       let y = scaledY
 
       if (ctrlOrShiftKeyActive) {
@@ -576,32 +448,55 @@ export default (
       if (widthScale <= 0) widthScale = 0
       if (heightScale <= 0) heightScale = 0
       
-      commitElements(liveList.map(el => {
+      liveList = liveList.map(el => {
         if ((el.type === 'image' || el.type === 'shape') && activeElementIdList.includes(el.id)) {
           const originElement = originElementList.find(originEl => originEl.id === el.id) as PPTImageElement | PPTShapeElement
-          return {
+          const next = {
             ...el,
             width: originElement.width * widthScale,
             height: originElement.height * heightScale,
             left: currentMinX + (originElement.left - minX) * widthScale,
             top: currentMinY + (originElement.top - minY) * heightScale,
           }
+          let livePaint: { path: string, viewBox: [number, number] } | undefined
+          if (next.type === 'shape' && next.pathFormula) {
+            const pathFormula = SHAPE_PATH_FORMULAS[next.pathFormula]
+            const path = 'editable' in pathFormula
+              ? pathFormula.formula(next.width, next.height, next.keypoints!)
+              : pathFormula.formula(next.width, next.height)
+            next.path = path
+            next.viewBox = [next.width, next.height]
+            livePaint = { path, viewBox: [next.width, next.height] }
+          }
+          applyLiveSize(el.id, next.left, next.top, next.width, next.height, canvasScaleRef.current, livePaint)
+          return next
         }
         return el
-      }))
+      })
+      applyLiveMultiSelectBox(currentMinX, currentMinY, currentMaxX, currentMaxY, canvasScaleRef.current)
     }
 
-    document.onmouseup = e => {
+    const handleMouseup = (e: MouseEvent | TouchEvent) => {
+      if (!isMouseDown) return
       isMouseDown = false
-      document.onmousemove = null
-      document.onmouseup = null
+      stopGesture?.()
+      stopGesture = null
 
       const currentPointer = getPointerClient(e)
-      if (startPointer.x === currentPointer.x && startPointer.y === currentPointer.y) return
+      const moved = startPointer.x !== currentPointer.x || startPointer.y !== currentPointer.y
+      if (moved) {
+        const merged = commitSlideElements(liveList)
+        elementListRef.current = merged
+        setElementList(merged)
+        addHistorySnapshot()
+      }
 
-      useSlidesStore.getState().updateSlide({ elements: liveList })
-      addHistorySnapshot()
+      gesturingRef.current = false
+      useMainStore.getState().setScalingState(false)
+      useMainStore.getState().setGesturingState(false)
     }
+
+    stopGesture = bindLiveGesture(handleMousemove, handleMouseup)
   }, [setElementList, addHistorySnapshot])
 
   return {

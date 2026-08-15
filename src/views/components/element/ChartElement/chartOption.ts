@@ -211,6 +211,16 @@ const pieSeries = (data: ChartData, textColor: string | undefined, ring: boolean
     }
   }
 });
+export const expandChartThemeColors = (themeColors: string[]): string[] => {
+  if (themeColors.length >= 10) return themeColors
+  if (themeColors.length === 1) {
+    return tinycolor(themeColors[0]).analogous(10).map(color => color.toRgbString())
+  }
+  const len = themeColors.length
+  const supplement = tinycolor(themeColors[len - 1]).analogous(10 + 1 - len).map(color => color.toRgbString())
+  return [...themeColors.slice(0, len - 1), ...supplement]
+}
+
 export interface ChartOptionPayload {
   type: ChartType;
   data: ChartData;

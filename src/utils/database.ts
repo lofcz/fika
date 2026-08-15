@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
+import type { Patch } from 'immer';
 import { databaseId } from '@/store/main';
 import type { Slide } from '@/types/slides';
 import { LOCALSTORAGE_KEY_DISCARDED_DB } from '@/configs/storage';
@@ -9,7 +10,9 @@ export interface writingBoardImg {
 export interface Snapshot {
   id: number;
   index: number;
-  slides: Slide[];
+  slides?: Slide[];
+  patches?: Patch[];
+  inversePatches?: Patch[];
 }
 const databaseNamePrefix = 'Fika';
 
@@ -33,7 +36,7 @@ const db = new Dexie(`${databaseNamePrefix}_${databaseId}_${new Date().getTime()
   snapshots: EntityTable<Snapshot, 'id'>;
   writingBoardImgs: EntityTable<writingBoardImg, 'id'>;
 };
-db.version(1).stores({
+db.version(2).stores({
   snapshots: '++id',
   writingBoardImgs: 'id'
 });

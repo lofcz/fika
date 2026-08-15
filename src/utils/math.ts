@@ -180,7 +180,10 @@ export async function measureLatexElement(latex: string): Promise<{
 }> {
   await ensureMathliveReady();
   try {
-    await document.fonts.ready;
+    await Promise.race([
+      document.fonts.ready,
+      new Promise<void>(resolve => { setTimeout(resolve, 80) }),
+    ])
   } catch {}
   const probe = document.createElement('div');
   probe.style.cssText = ['position:absolute', 'left:-99999px', 'top:0', `font-size:${LATEX_ELEMENT_FONT_SIZE}px`, 'line-height:normal', 'width:max-content', 'pointer-events:none'].join(';');

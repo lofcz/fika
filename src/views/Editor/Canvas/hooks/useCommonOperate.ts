@@ -1,47 +1,40 @@
-import { useMemo } from 'react'
 import { OperateResizeHandlers, OperateBorderLines } from '@/types/edit'
 
-export default (width: number, height: number) => {
-  const resizeHandlers = useMemo(() => {
-    return [
-      { direction: OperateResizeHandlers.LEFT_TOP, style: {} },
-      { direction: OperateResizeHandlers.TOP, style: { left: width / 2 + 'px' } },
-      { direction: OperateResizeHandlers.RIGHT_TOP, style: { left: width + 'px' } },
-      { direction: OperateResizeHandlers.LEFT, style: { top: height / 2 + 'px' } },
-      { direction: OperateResizeHandlers.RIGHT, style: { left: width + 'px', top: height / 2 + 'px' } },
-      { direction: OperateResizeHandlers.LEFT_BOTTOM, style: { top: height + 'px' } },
-      { direction: OperateResizeHandlers.BOTTOM, style: { left: width / 2 + 'px', top: height + 'px' } },
-      { direction: OperateResizeHandlers.RIGHT_BOTTOM, style: { left: width + 'px', top: height + 'px' } },
-    ]
-  }, [width, height])
+const BOX_RESIZE_HANDLERS = [
+  { direction: OperateResizeHandlers.LEFT_TOP },
+  { direction: OperateResizeHandlers.TOP },
+  { direction: OperateResizeHandlers.RIGHT_TOP },
+  { direction: OperateResizeHandlers.LEFT },
+  { direction: OperateResizeHandlers.RIGHT },
+  { direction: OperateResizeHandlers.LEFT_BOTTOM },
+  { direction: OperateResizeHandlers.BOTTOM },
+  { direction: OperateResizeHandlers.RIGHT_BOTTOM },
+] as const
 
-  const textElementResizeHandlers = useMemo(() => {
-    return [
-      { direction: OperateResizeHandlers.LEFT, style: { top: height / 2 + 'px' } },
-      { direction: OperateResizeHandlers.RIGHT, style: { left: width + 'px', top: height / 2 + 'px' } },
-    ]
-  }, [width, height])
+const TEXT_RESIZE_HANDLERS = [
+  { direction: OperateResizeHandlers.LEFT },
+  { direction: OperateResizeHandlers.RIGHT },
+] as const
 
-  const verticalTextElementResizeHandlers = useMemo(() => {
-    return [
-      { direction: OperateResizeHandlers.TOP, style: { left: width / 2 + 'px' } },
-      { direction: OperateResizeHandlers.BOTTOM, style: { left: width / 2 + 'px', top: height + 'px' } },
-    ]
-  }, [width, height])
+const VERTICAL_TEXT_RESIZE_HANDLERS = [
+  { direction: OperateResizeHandlers.TOP },
+  { direction: OperateResizeHandlers.BOTTOM },
+] as const
 
-  const borderLines = useMemo(() => {
-    return [
-      { type: OperateBorderLines.T, style: { width: width + 'px' } },
-      { type: OperateBorderLines.B, style: { top: height + 'px', width: width + 'px' } },
-      { type: OperateBorderLines.L, style: { height: height + 'px' } },
-      { type: OperateBorderLines.R, style: { left: width + 'px', height: height + 'px' } },
-    ]
-  }, [width, height])
+const BORDER_LINES = [
+  { type: OperateBorderLines.T },
+  { type: OperateBorderLines.B },
+  { type: OperateBorderLines.L },
+  { type: OperateBorderLines.R },
+] as const
 
-  return {
-    resizeHandlers,
-    textElementResizeHandlers,
-    verticalTextElementResizeHandlers,
-    borderLines,
-  }
-}
+/**
+ * Handle/border lists only. Positions live in CSS against the operate wrapper
+ * so applyLiveSize can resize the box without a React re-render.
+ */
+export default () => ({
+  resizeHandlers: BOX_RESIZE_HANDLERS,
+  textElementResizeHandlers: TEXT_RESIZE_HANDLERS,
+  verticalTextElementResizeHandlers: VERTICAL_TEXT_RESIZE_HANDLERS,
+  borderLines: BORDER_LINES,
+})

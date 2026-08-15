@@ -5,18 +5,18 @@ const cx = bindStyles(styles)
 import { useRef, useMemo, useCallback, memo, useState, useEffect, type CSSProperties, type RefObject } from 'react'
 
 import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
-import type { Slide, SlideThemeFile } from '@/types/slides'
-import { areRailItemSlidesEqual, useRailItemSlide, useRailSlides } from '@/views/components/ThumbnailSlide/paintedSlide'
+import type { SlideThemeFile } from '@/types/slides'
+import { useRailItemSlide, useRailSlideMetas } from '@/views/components/ThumbnailSlide/paintedSlide'
 import { fillDigit } from '@/utils/common'
-import { isElementInViewport } from '@/utils/element'
 import { queryFika } from '@/utils/portal'
 import { openContextmenu } from '@/utils/openContextmenu'
 import type { ContextmenuItem } from '@/components/Contextmenu/types'
 import useSlideHandler from '@/hooks/useSlideHandler'
 import useSectionHandler from '@/hooks/useSectionHandler'
 import useScreening from '@/hooks/useScreening'
-import useLoadSlides from '@/hooks/useLoadSlides'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { useThumbnailVirtualizer } from './useThumbnailVirtualizer'
+import { startPreviewRasterSubscription, setVisibleSlideIds } from '@/previewRaster'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
 import LayoutPicker from './LayoutPicker'
 import ExportThemeDialog from './ExportThemeDialog'
@@ -36,51 +36,51 @@ type RailHandlers = {
 }
 
 type ThumbnailRailItemProps = {
-  slide: Slide
+  slideId: string
   index: number
   isActive: boolean
   isSelected: boolean
-  visible: boolean
   hasSection: boolean
   editingSectionId: string
   handlersRef: RefObject<RailHandlers>
   sectionNamePlaceholder: string
   untitledSection: string
   defaultSection: string
+  thumbSize: number
 }
 
 function areThumbnailRailItemPropsEqual(prev: ThumbnailRailItemProps, next: ThumbnailRailItemProps) {
-  return prev.index === next.index
+  return prev.slideId === next.slideId
+    && prev.index === next.index
     && prev.isActive === next.isActive
     && prev.isSelected === next.isSelected
-    && prev.visible === next.visible
     && prev.hasSection === next.hasSection
     && prev.editingSectionId === next.editingSectionId
     && prev.sectionNamePlaceholder === next.sectionNamePlaceholder
     && prev.untitledSection === next.untitledSection
     && prev.defaultSection === next.defaultSection
     && prev.handlersRef === next.handlersRef
-    && areRailItemSlidesEqual(prev.slide, next.slide)
+    && prev.thumbSize === next.thumbSize
 }
 
 const ThumbnailRailItem = memo(function ThumbnailRailItem({
-  slide: slideProp,
+  slideId,
   index,
   isActive,
   isSelected,
-  visible,
   hasSection,
   editingSectionId,
   handlersRef,
   sectionNamePlaceholder,
   untitledSection,
   defaultSection,
+  thumbSize,
 }: ThumbnailRailItemProps) {
-  const slide = useRailItemSlide(slideProp.id) ?? slideProp
+  const slide = useRailItemSlide(slideId)
 
-  const showSection = !!(slide.sectionTag || (hasSection && index === 0))
-  const sectionId = slide.sectionTag?.id || ''
-  const editingThisSection = editingSectionId === slide.sectionTag?.id || (index === 0 && editingSectionId === 'default')
+  const showSection = !!(slide?.sectionTag || (hasSection && index === 0))
+  const sectionId = slide?.sectionTag?.id || ''
+  const editingThisSection = editingSectionId === slide?.sectionTag?.id || (index === 0 && editingSectionId === 'default')
 
   return (
     <div className={cx('thumbnail-container')}>
@@ -103,7 +103,7 @@ const ThumbnailRailItem = memo(function ThumbnailRailItem({
           ) : (
             <span className={cx('text')}>
               <div className={cx('text-content')}>
-                {slide.sectionTag
+                {slide?.sectionTag
                   ? (slide.sectionTag.title || untitledSection)
                   : defaultSection}
               </div>
@@ -116,13 +116,14 @@ const ThumbnailRailItem = memo(function ThumbnailRailItem({
           active: isActive,
           selected: isSelected,
         })}
+        data-thumb-active={isActive ? '' : undefined}
         onMouseDown={event => handlersRef.current.handleClickSlideThumbnail(event, index)}
         onDoubleClick={() => handlersRef.current.enterScreening()}
         onContextMenu={event => { event.preventDefault(); event.stopPropagation(); openContextmenu(event, handlersRef.current.contextmenusThumbnailItem) }}
       >
         <div className={cx('label', { 'offset-left': index >= 99 })}>{fillDigit(index + 1, 2)}</div>
-        <ThumbnailSlide className={cx('thumbnail')} slide={slide} size={120} visible={visible} />
-        {slide.notes && slide.notes.length ? (
+        <ThumbnailSlide className={cx('thumbnail')} slide={{ id: slideId }} size={thumbSize} />
+        {slide?.notes && slide.notes.length ? (
           <div className={cx('note-flag')} onClick={() => handlersRef.current.openNotesPanel()}>{slide.notes.length}</div>
         ) : null}
       </div>
@@ -134,12 +135,13 @@ ThumbnailRailItem.displayName = 'ThumbnailRailItem'
 
 const Thumbnails = memo(({ className, style }: { className?: string; style?: CSSProperties }) => {
   const { LL } = useI18nContext()
-  const slides = useRailSlides()
+  const slides = useRailSlideMetas()
   const slideIndex = useSlidesStore(s => s.slideIndex)
   const currentSlideHasSection = useSlidesStore(s => !!s.slides[s.slideIndex]?.sectionTag)
   const _selectedSlidesIndex = useMainStore(s => s.selectedSlidesIndex)
-  const { slidesLoadLimit } = useLoadSlides()
   const selectedSlidesIndex = useMemo(() => [..._selectedSlidesIndex, slideIndex], [_selectedSlidesIndex, slideIndex])
+  const hasSection = useMemo(() => slides.some(item => item.sectionTag), [slides])
+  const { scrollRef, virtualizer, virtualItems, visibleSlideIds, dest } = useThumbnailVirtualizer(slides, hasSection)
   const [presetLayoutPopoverVisible, setPresetLayoutPopoverVisible] = useState(false)
   const [themeExportDialogVisible, setThemeExportDialogVisible] = useState(false)
   const [themeForExport, setThemeForExport] = useState<SlideThemeFile | null>(null)
@@ -151,8 +153,6 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
     setThemeExportDialogVisible(false)
     setThemeForExport(null)
   }, [])
-
-  const hasSection = useMemo(() => slides.some(item => item.sectionTag), [slides])
 
   const {
     copySlide,
@@ -175,22 +175,11 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
   } = useSectionHandler()
 
   useEffect(() => {
-    const extraSelected = useMainStore.getState().selectedSlidesIndex
-    const currentIndex = useSlidesStore.getState().slideIndex
-    if ([...extraSelected, currentIndex].length) {
+    if (useMainStore.getState().selectedSlidesIndex.length) {
       useMainStore.getState().updateSelectedSlidesIndex([])
     }
-
-    Promise.resolve().then(() => {
-      const listEl = thumbnailsRootRef.current?.querySelector<HTMLElement>('.thumbnail-list')
-      const activeThumbnailRef = listEl?.querySelector<HTMLElement>('.thumbnail-item.active')
-      if (listEl && activeThumbnailRef && !isElementInViewport(activeThumbnailRef, listEl)) {
-        setTimeout(() => {
-          activeThumbnailRef.scrollIntoView({ behavior: 'smooth' })
-        }, 100)
-      }
-    })
-  }, [slideIndex])
+    virtualizer.scrollToIndex(slideIndex, { align: 'auto' })
+  }, [slideIndex, virtualizer])
 
   const changeSlideIndex = useCallback((index: number) => {
     useMainStore.getState().setActiveElementIdList([])
@@ -256,8 +245,13 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
   }, [])
 
   useEffect(() => {
+    startPreviewRasterSubscription()
     setThumbnailsFocus(true)
   }, [setThumbnailsFocus])
+
+  useEffect(() => {
+    setVisibleSlideIds(visibleSlideIds)
+  }, [visibleSlideIds])
 
   const blurThumbnails = useCallback(() => setThumbnailsFocus(false), [setThumbnailsFocus])
   useClickOutside(thumbnailsRootRef, blurThumbnails)
@@ -305,7 +299,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
     ]
   }, [LL, removeSection, removeSectionSlides, removeAllSection, editSection])
 
-  const { enterScreening, enterScreeningFromStart } = useScreening()
+  const { enterScreening, enterScreeningFromStart, prefetchScreen } = useScreening()
 
   const contextmenusThumbnails = useCallback((): ContextmenuItem[] => {
     const menu = LL.editor.thumbnails.contextMenu
@@ -349,6 +343,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
       ref={thumbnailsRootRef}
       className={cx('thumbnails', className)}
       style={style}
+      onPointerEnter={prefetchScreen}
       onMouseDown={() => setThumbnailsFocus(true)}
     >
       <div className={cx('add-slide')}>
@@ -371,26 +366,27 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
       <Draggable
         className={cx('thumbnail-list')}
         modelValue={slides}
-        animation={200}
-        scroll
-        scrollSensitivity={50}
         disabled={!!editingSectionId}
         itemKey="id"
+        scrollRef={scrollRef}
+        virtualItems={virtualItems}
+        virtualizer={virtualizer}
+        totalSize={virtualizer.getTotalSize()}
         onEnd={handleDragEnd}
         onContextMenu={event => { event.preventDefault(); event.stopPropagation(); openContextmenu(event, contextmenusThumbnails) }}
         item={({ element, index }) => (
           <ThumbnailRailItem
-            slide={element}
+            slideId={element.id}
             index={index}
             isActive={slideIndex === index}
             isSelected={selectedSlidesIndex.includes(index)}
-            visible={index < slidesLoadLimit}
             hasSection={hasSection}
             editingSectionId={editingSectionId}
             handlersRef={railHandlersRef}
             sectionNamePlaceholder={LL.editor.thumbnails.sectionNamePlaceholder()}
             untitledSection={LL.editor.thumbnails.untitledSection()}
             defaultSection={LL.editor.thumbnails.defaultSection()}
+            thumbSize={dest.cssWidth}
           />
         )}
       />

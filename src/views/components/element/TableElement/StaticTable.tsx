@@ -49,6 +49,8 @@ const StaticTable = memo((props: IStaticTableProps) => {
       <tbody>{data.map((rowCells, rowIndex) => <tr key={rowIndex} style={{ height: cellMinHeight + 'px' }}>
         {rowCells.map((cell, colIndex) => <td
           className={cx('cell')}
+          data-cell-fill={cell.style?.backcolor || undefined}
+          data-cell-color={cell.style?.color || undefined}
           style={{
             ...getCellStyle(outline, cell.style),
             display: !hideCells.includes(`${rowIndex}_${colIndex}`) ? '' : 'none'

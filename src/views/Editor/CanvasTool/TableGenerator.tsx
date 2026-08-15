@@ -102,6 +102,7 @@ export default function TableGenerator({
             <div
               key={`${row}-${col}`}
               className={cx('cell', { active: isActive(row, col) })}
+              data-table-cell={`${row}x${col}`}
               onMouseEnter={() => {
                 const next = [row, col]
                 endCellRef.current = next

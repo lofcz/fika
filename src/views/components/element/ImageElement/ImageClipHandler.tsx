@@ -9,6 +9,7 @@ import { KEYS } from '@/configs/hotkey'
 import { type ImageClipedEmitData, OperateResizeHandlers } from '@/types/edit'
 import type { ImageClipDataRange, ImageElementClip } from '@/types/slides'
 import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/utils/canvasPointer'
+import ImageBitmapSurface from './ImageBitmapSurface'
 
 export type IImageClipHandlerProps = {
   src: string
@@ -348,7 +349,7 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
 
   return (
     <div className={cx('image-clip-handler')} style={clipWrapperPositionStyle} ref={clipHandlerRef}>
-      <img className={cx('bottom-img')} src={src} draggable={false} alt="" style={bottomImgPositionStyle} />
+      <ImageBitmapSurface className={cx('bottom-img')} src={src} draggable={false} style={bottomImgPositionStyle} />
       <div
         className={cx('top-image-content')}
         style={{
@@ -356,7 +357,7 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
           clipPath,
         }}
       >
-        <img className={cx('top-img')} src={src} draggable={false} alt="" style={topImgPositionStyle} />
+        <ImageBitmapSurface className={cx('top-img')} src={src} draggable={false} style={topImgPositionStyle} />
       </div>
       <div
         className={cx('operate')}

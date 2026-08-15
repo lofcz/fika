@@ -55,9 +55,6 @@ export default function ThemeColorsSetting({ onClose, className, style }: ITheme
       <Draggable
         className={cx('list')}
         modelValue={themeColors}
-        animation={200}
-        scroll
-        scrollSensitivity={50}
         itemKey="id"
         handle=".label"
         onEnd={handleDragEnd}

@@ -322,6 +322,13 @@ const en_editor: BaseTranslation = {
     proprietaryFormat: '(proprietary format)',
     exportFiles: 'Export file',
     resetSlides: 'New presentation',
+    resetConfirm: {
+      kicker: 'New presentation',
+      title: 'Start from a blank deck?',
+      description: 'This presentation has {count:number} slides. Starting new will replace them.',
+      actionTitle: 'Start new',
+      actionHint: 'Replace the current slides with a blank title slide.',
+    },
     markupSlides: 'Slide type markup',
     hotkeys: 'Keyboard shortcuts',
     feedback: 'Feedback',

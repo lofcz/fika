@@ -78,6 +78,7 @@ function viewportStylesEqual(
 }
 
 function floatLayerPropsEqual(prev: IElementFloatLayerProps, next: IElementFloatLayerProps) {
+  if (useMainStore.getState().isGesturing) return true
   return (
     prev.openLinkDialog === next.openLinkDialog &&
     prev.canvasRef === next.canvasRef &&
@@ -88,6 +89,7 @@ function floatLayerPropsEqual(prev: IElementFloatLayerProps, next: IElementFloat
 
 const ElementFloatLayer = memo((props: IElementFloatLayerProps) => {
   const { openLinkDialog } = props
+  const isGesturing = useMainStore(s => s.isGesturing)
   const activeElementIdList = useMainStore(s => s.activeElementIdList)
   const activeGroupElementId = useMainStore(s => s.activeGroupElementId)
   const canvasScale = useMainStore(s => s.canvasScale)
@@ -101,6 +103,8 @@ const ElementFloatLayer = memo((props: IElementFloatLayerProps) => {
   )
   const [floatingToolbarWidth, setFloatingToolbarWidth] = useState(100)
   const onMeasure = useCallback((value: number) => setFloatingToolbarWidth(value), [])
+
+  if (isGesturing) return null
 
   const getAnimationIndexList = (element: PPTElement) => {
     const indexList = []

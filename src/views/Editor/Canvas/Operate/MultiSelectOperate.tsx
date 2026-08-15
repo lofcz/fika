@@ -47,7 +47,7 @@ const MultiSelectOperateChrome = memo((props: MultiSelectChromeProps) => {
   const range = useMemo(() => getElementListRange(localActiveElementList), [localActiveElementList])
   const width = (range.maxX - range.minX) * canvasScale
   const height = (range.maxY - range.minY) * canvasScale
-  const { resizeHandlers, borderLines } = useCommonOperate(width, height)
+  const { resizeHandlers, borderLines } = useCommonOperate()
 
   const disableResize = localActiveElementList.some(item => {
     if ((item.type === 'image' || item.type === 'shape') && !item.rotate) return false
@@ -79,14 +79,13 @@ const MultiSelectOperateChrome = memo((props: MultiSelectChromeProps) => {
         onMouseDown={e => { e.stopPropagation(); e.nativeEvent.stopPropagation(); onBorderDrag(e) }}
       />
       {borderLines.map(line => (
-        <BorderLine key={line.type} type={line.type} style={line.style} />
+        <BorderLine key={line.type} type={line.type} />
       ))}
       <div className={cx('operate-handlers')}>
         {!disableResize ? resizeHandlers.map(point => (
           <ResizeHandler
             key={point.direction}
             type={point.direction}
-            style={point.style}
             onMouseDown={e => {
               propsRef.current.scaleMultiElement(e.nativeEvent, range, point.direction)
             }}
@@ -94,7 +93,6 @@ const MultiSelectOperateChrome = memo((props: MultiSelectChromeProps) => {
         )) : null}
         {showRotateHandler ? (
           <RotateHandler
-            style={{ left: width / 2 + 'px' }}
             onMouseDown={e => {
               propsRef.current.rotateGroupElement(e.nativeEvent, localActiveElementList)
             }}

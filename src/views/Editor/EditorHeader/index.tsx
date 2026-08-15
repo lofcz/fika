@@ -22,6 +22,7 @@ import Divider from '@/components/Divider'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { EXTRAS_ENABLED } from '@/configs/featureFlags'
 import { isMac } from '@/utils/common'
+import ConfirmDialog from '@/components/ConfirmDialog'
 
 const LOCALE_ORDER: Locales[] = ['en', 'cs', 'sk', 'pl']
 
@@ -122,8 +123,9 @@ const HeaderTitle = memo(() => {
 
 const EditorHeader = memo(({ className, style }: { className?: string; style?: CSSProperties }) => {
   const { LL, locale, setLocale } = useI18nContext()
-  const { enterScreening, enterScreeningFromStart } = useScreening()
+  const { enterScreening, enterScreeningFromStart, prefetchScreen } = useScreening()
   const { resetSlides } = useSlideHandler()
+  const slideCount = useSlidesStore(s => s.slides.length)
   const isMacOS = isMac()
 
   const localeSwitcherEnabled = isFikaLocaleSwitcherEnabled()
@@ -151,6 +153,7 @@ const EditorHeader = memo(({ className, style }: { className?: string; style?: C
   const [mainMenuVisible, setMainMenuVisible] = useState(false)
   const [screeningMenuVisible, setScreeningMenuVisible] = useState(false)
   const [hotkeyDrawerVisible, setHotkeyDrawerVisible] = useState(false)
+  const [newPresentationOpen, setNewPresentationOpen] = useState(false)
   const importInputRef = useRef<HTMLInputElement | null>(null)
 
   const openImportPicker = useCallback(() => {
@@ -180,6 +183,25 @@ const EditorHeader = memo(({ className, style }: { className?: string; style?: C
     useMainStore.getState().setMarkupPanelState(true)
   }, [])
 
+  const isBlankDeck = () => {
+    const slides = useSlidesStore.getState().slides
+    return slides.length === 0 || (slides.length === 1 && slides[0].elements.length === 0)
+  }
+
+  const requestNewPresentation = useCallback(() => {
+    setMainMenuVisible(false)
+    if (isBlankDeck()) {
+      resetSlides()
+      return
+    }
+    setNewPresentationOpen(true)
+  }, [resetSlides])
+
+  const confirmNewPresentation = useCallback(() => {
+    resetSlides()
+    setNewPresentationOpen(false)
+  }, [resetSlides])
+
   const hostMenuItems = getFikaHeaderMenuItems()
 
   const hostMenuItemIcon = (item: FikaHeaderMenuItem): IconName | null => {
@@ -202,10 +224,7 @@ const EditorHeader = memo(({ className, style }: { className?: string; style?: C
       <Divider margin={10} />
       <PopoverMenuItem
         className={cx('popover-menu-item')}
-        onClick={() => {
-          resetSlides()
-          setMainMenuVisible(false)
-        }}
+        onClick={requestNewPresentation}
       >
         <Icon icon="file-plus" className={cx('icon')} /> {LL.editor.header.resetSlides()}
       </PopoverMenuItem>
@@ -243,7 +262,7 @@ const EditorHeader = memo(({ className, style }: { className?: string; style?: C
         </>
       ) : null}
     </>
-  ), [LL, goLink, isMacOS, openImportPicker, openMarkupPanel, resetSlides, setDialogForExport])
+  ), [LL, goLink, isMacOS, openImportPicker, openMarkupPanel, requestNewPresentation, setDialogForExport])
 
   const screeningMenuContent = useMemo(() => (
     <>
@@ -299,7 +318,7 @@ const EditorHeader = memo(({ className, style }: { className?: string; style?: C
 
       <div className={cx('right')}>
         <div className={cx('group-menu-item')}>
-          <div className={cx('menu-item')} data-tooltip={LL.editor.header.screeningTooltip()} onClick={() => enterScreening()}>
+          <div className={cx('menu-item')} data-editor-tool="present" data-tooltip={LL.editor.header.screeningTooltip()} onPointerEnter={prefetchScreen} onClick={() => enterScreening()}>
             <Icon icon="presentation" className={cx('icon')} />
           </div>
           <Popover
@@ -357,6 +376,19 @@ const EditorHeader = memo(({ className, style }: { className?: string; style?: C
         type="file"
         accept=".pptx,.json,application/vnd.openxmlformats-officedocument.presentationml.presentation"
         onChange={handleImportInputChange}
+      />
+
+      <ConfirmDialog
+        visible={newPresentationOpen}
+        icon="file-plus"
+        kicker={LL.editor.header.resetConfirm.kicker()}
+        title={LL.editor.header.resetConfirm.title()}
+        description={LL.editor.header.resetConfirm.description({ count: slideCount })}
+        actionTitle={LL.editor.header.resetConfirm.actionTitle()}
+        actionHint={LL.editor.header.resetConfirm.actionHint()}
+        cancelLabel={LL.common.cancel()}
+        onConfirm={confirmNewPresentation}
+        onCancel={() => setNewPresentationOpen(false)}
       />
     </div>
   )

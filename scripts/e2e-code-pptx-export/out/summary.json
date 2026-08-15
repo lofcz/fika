@@ -1,0 +1,29 @@
+{
+  "outFile": "C:\\Users\\mstagl-dev\\Documents\\GitHub\\fika\\scripts\\e2e-code-pptx-export\\out\\code-export.pptx",
+  "plain": "1 function greet(name: string) {2 return `Hello, ${name}!`3 }4 5 console.log(greet('world'))",
+  "colors": [
+    "24292E",
+    "707478",
+    "F97583",
+    "E1E4E8",
+    "B392F0",
+    "FFAB70",
+    "79B8FF",
+    "9ECBFF"
+  ],
+  "fills": [
+    "24292E",
+    "707478",
+    "F97583",
+    "E1E4E8",
+    "B392F0",
+    "FFAB70",
+    "79B8FF",
+    "9ECBFF"
+  ],
+  "media": [],
+  "failures": [
+    "code box clips vertical overflow",
+    "code box clips horizontal overflow"
+  ]
+}

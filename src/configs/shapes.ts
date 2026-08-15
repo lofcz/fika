@@ -803,8 +803,18 @@ const SHAPE_LIST_BASE: ShapeListItemBase[] = [{
 
 /** Shape categories with paths; resolve labels via `LL.configs.shapes` in UI. */
 const SHAPE_CATEGORY_ORDER: ShapeCategoryKey[] = ['rectangle', 'common', 'arrow', 'line', 'other'];
+const formulaPathAtViewBox = (item: ShapePoolItem) => {
+  if (!item.pathFormula) return item.path;
+  const formula = SHAPE_PATH_FORMULAS[item.pathFormula];
+  const [width, height] = item.viewBox;
+  return formula.editable ? formula.formula(width, height, formula.defaultValue) : formula.formula(width, height);
+};
+
 export const SHAPE_LIST: ShapeListItem[] = SHAPE_CATEGORY_ORDER.map(categoryKey => {
   const item = SHAPE_LIST_BASE.find(entry => entry.categoryKey === categoryKey);
   if (!item) throw new Error(`Missing shape category: ${categoryKey}`);
-  return item;
+  return {
+    ...item,
+    children: item.children.map(child => ({ ...child, path: formulaPathAtViewBox(child) })),
+  };
 });

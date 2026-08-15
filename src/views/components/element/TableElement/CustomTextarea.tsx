@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './CustomTextarea.module.scss'
 const cx = bindStyles(styles)
-import { type CSSProperties, useRef, useCallback, memo, useEffect, useLayoutEffect } from 'react';
+import { type CSSProperties, useRef, useCallback, memo, useLayoutEffect } from 'react';
 
 import { pasteCustomClipboardString, pasteExcelClipboardString, pasteHTMLTableClipboardString } from '@/utils/clipboard';
 
@@ -11,6 +11,7 @@ export type ICustomTextareaProps = {
   style?: CSSProperties;
 } & {
   onUpdateValue?: (payload: string) => void;
+  onCommitValue?: (payload: string) => void;
   onInsertExcelData?: (payload: string[][]) => void;
 };
 
@@ -20,9 +21,11 @@ const CustomTextarea = memo((props: ICustomTextareaProps) => {
   const isFocusRef = useRef(false);
   const valueRef = useRef(value);
   const onUpdateValueRef = useRef(props.onUpdateValue);
+  const onCommitValueRef = useRef(props.onCommitValue);
   const onInsertExcelDataRef = useRef(props.onInsertExcelData);
   valueRef.current = value;
   onUpdateValueRef.current = props.onUpdateValue;
+  onCommitValueRef.current = props.onCommitValue;
   onInsertExcelDataRef.current = props.onInsertExcelData;
 
   const syncDom = useCallback((next: string) => {
@@ -36,6 +39,11 @@ const CustomTextarea = memo((props: ICustomTextareaProps) => {
     textareaRef.current = el;
     if (!el) return;
     syncDom(valueRef.current);
+    return () => {
+      el.onpaste = null;
+      onCommitValueRef.current?.(el.innerHTML);
+      if (textareaRef.current === el) textareaRef.current = null;
+    };
   }, [syncDom]);
 
   useLayoutEffect(() => {
@@ -83,11 +91,10 @@ const CustomTextarea = memo((props: ICustomTextareaProps) => {
 
   const handleBlur = useCallback(() => {
     isFocusRef.current = false;
-    if (textareaRef.current) textareaRef.current.onpaste = null;
-  }, []);
-
-  useEffect(() => () => {
-    if (textareaRef.current) textareaRef.current.onpaste = null;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.onpaste = null;
+    onCommitValueRef.current?.(el.innerHTML);
   }, []);
 
   return <div

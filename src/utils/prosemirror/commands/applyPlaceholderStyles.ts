@@ -2,6 +2,7 @@ import { TextSelection, type Transaction } from 'prosemirror-state';
 import type { Mark, MarkType, Node as ProsemirrorNode } from 'prosemirror-model';
 import type { EditorView } from 'prosemirror-view';
 import type { TextAlign } from '@/types/slides';
+import { shouldSkipPlaceholderStyleApply } from '@/utils/placeholderPaint';
 export interface PlaceholderStyleOptions {
   fontSize: string;
   align: string;
@@ -156,7 +157,11 @@ export const paintFilledPlaceholderTr = (
 };
 
 /** Apply placeholder typography without leaving a range selection on empty docs. */
-export const applyPlaceholderStyles = (view: EditorView, options: PlaceholderStyleOptions) => {
+export const applyPlaceholderStyles = (
+  view: EditorView,
+  options: PlaceholderStyleOptions,
+  phaseHint?: 'empty' | 'filled',
+) => {
   const {
     state
   } = view;
@@ -165,7 +170,9 @@ export const applyPlaceholderStyles = (view: EditorView, options: PlaceholderSty
     schema,
     selection
   } = state;
-  const phase = doc.textContent.trim().length === 0 ? 'empty' : 'filled';
+  const docEmpty = doc.textContent.trim().length === 0;
+  const phase = phaseHint ?? (docEmpty ? 'empty' : 'filled');
+  if (shouldSkipPlaceholderStyleApply({ docEmpty, phaseHint, fontSize: options.fontSize })) return;
   const storedMarks = storedMarksFor(schema, options, phase);
   const {
     fontsize,

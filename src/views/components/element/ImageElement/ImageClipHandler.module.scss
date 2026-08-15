@@ -11,7 +11,8 @@
     opacity: .5;
   }
 
-  img {
+  img,
+  canvas {
     width: 100%;
     height: 100%;
   }
@@ -20,7 +21,8 @@
     position: absolute;
     overflow: hidden;
 
-    img {
+    img,
+    canvas {
       position: absolute;
     }
   }

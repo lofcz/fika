@@ -1,5 +1,6 @@
 import type { PPTElement } from '@/types/slides';
 import { queryFika } from '@/utils/portal';
+import { HitIndex, type HitBox } from '@/utils/spatial/hitIndex';
 import { consumePendingCaret, getEditorView, setPendingCaret, type ClientCoords } from '@/utils/prosemirror/caret';
 
 /** Temporary: paint every pointer hit target so the hit engine can be verified. */
@@ -116,6 +117,7 @@ export function resizeHandleDirectionsFor(element: PPTElement): readonly ResizeH
     if (element.fixedHeight) return RESIZE_HANDLE_DIRECTIONS;
     return element.vertical ? ['top', 'bottom'] : ['left', 'right'];
   }
+  if (element.type === 'shape' && element.text?.fixedHeight === false) return ['left', 'right'];
   return RESIZE_HANDLE_DIRECTIONS;
 }
 export interface HitRingLayout {
@@ -303,14 +305,125 @@ export function pointInVisualHitRect(x: number, y: number, rect: VisualHitRect):
   return Math.abs(localX) <= rect.width / 2 && Math.abs(localY) <= rect.height / 2;
 }
 
-/** Topmost rect at a wrapper-local point (highest zIndex wins). */
-export function hitTestVisualRects(rects: VisualHitRect[], x: number, y: number): VisualHitRect | null {
-  let best: VisualHitRect | null = null;
-  for (const rect of rects) {
-    if (!pointInVisualHitRect(x, y, rect)) continue;
-    if (!best || rect.zIndex >= best.zIndex) best = rect;
+function visualHitRectKey(id: string, zIndex: number) {
+  return id + '\0' + String(zIndex)
+}
+
+function visualHitRectGeometryEqual(a: VisualHitRect, b: VisualHitRect) {
+  return a.id === b.id && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height && a.rotate === b.rotate && a.zIndex === b.zIndex
+}
+
+function visualHitRectsGeometryEqual(prev: VisualHitRect[], next: VisualHitRect[]) {
+  if (prev.length !== next.length) return false
+  for (let i = 0; i < next.length; i++) {
+    if (!visualHitRectGeometryEqual(prev[i], next[i])) return false
   }
-  return best;
+  return true
+}
+
+function visualHitRectToBox(rect: VisualHitRect): HitBox {
+  const aabb = visualHitAabb(rect)
+  return {
+    minX: aabb.left,
+    minY: aabb.top,
+    maxX: aabb.right,
+    maxY: aabb.bottom,
+    id: rect.id,
+    zIndex: rect.zIndex,
+  }
+}
+
+const visualHitIndex = new HitIndex()
+let indexedRects: VisualHitRect[] | null = null
+const rectByKey = new Map<string, VisualHitRect>()
+const boxByKey = new Map<string, HitBox>()
+
+const clearVisualHitIndex = () => {
+  visualHitIndex.clear()
+  rectByKey.clear()
+  boxByKey.clear()
+}
+
+const loadVisualHitIndex = (rects: VisualHitRect[]) => {
+  const boxes = rects.map(visualHitRectToBox)
+  visualHitIndex.load(boxes)
+  rectByKey.clear()
+  boxByKey.clear()
+  for (let i = 0; i < rects.length; i++) {
+    const rect = rects[i]
+    const key = visualHitRectKey(rect.id, rect.zIndex)
+    rectByKey.set(key, rect)
+    boxByKey.set(key, boxes[i])
+  }
+}
+
+/** Insert/remove only when VisualHitRect geometry identity changes — not on a new array during a gesture. */
+const syncVisualHitIndex = (rects: VisualHitRect[]) => {
+  if (rects === indexedRects) return
+  if (indexedRects && visualHitRectsGeometryEqual(indexedRects, rects)) {
+    indexedRects = rects
+    for (const rect of rects) {
+      rectByKey.set(visualHitRectKey(rect.id, rect.zIndex), rect)
+    }
+    return
+  }
+  indexedRects = rects
+  if (!rects.length) {
+    clearVisualHitIndex()
+    return
+  }
+  if (!boxByKey.size) {
+    loadVisualHitIndex(rects)
+    return
+  }
+  const nextKeys = new Set<string>()
+  for (const rect of rects) {
+    const key = visualHitRectKey(rect.id, rect.zIndex)
+    nextKeys.add(key)
+    const prev = rectByKey.get(key)
+    if (prev && visualHitRectGeometryEqual(prev, rect)) {
+      rectByKey.set(key, rect)
+      continue
+    }
+    const prevBox = boxByKey.get(key)
+    if (prevBox) visualHitIndex.remove(prevBox)
+    const box = visualHitRectToBox(rect)
+    visualHitIndex.insert(box)
+    boxByKey.set(key, box)
+    rectByKey.set(key, rect)
+  }
+  const staleKeys: string[] = []
+  for (const key of boxByKey.keys()) {
+    if (!nextKeys.has(key)) staleKeys.push(key)
+  }
+  for (const key of staleKeys) {
+    const box = boxByKey.get(key)
+    if (box) visualHitIndex.remove(box)
+    boxByKey.delete(key)
+    rectByKey.delete(key)
+  }
+}
+
+function searchIndexedVisualHitRects(minX: number, minY: number, maxX: number, maxY: number): VisualHitRect[] {
+  const hits = visualHitIndex.search(minX, minY, maxX, maxY)
+  const out: VisualHitRect[] = []
+  for (const hit of hits) {
+    const rect = rectByKey.get(visualHitRectKey(hit.id, hit.zIndex))
+    if (rect) out.push(rect)
+  }
+  return out
+}
+
+/** Topmost rect at a wrapper-local point (highest zIndex wins). RBush AABB, then pointInVisualHitRect refine. */
+export function hitTestVisualRects(rects: VisualHitRect[], x: number, y: number): VisualHitRect | null {
+  syncVisualHitIndex(rects)
+  const candidates = searchIndexedVisualHitRects(x, y, x, y)
+  let best: VisualHitRect | null = null
+  for (const rect of candidates) {
+    if (!pointInVisualHitRect(x, y, rect)) continue
+    if (!best || rect.zIndex >= best.zIndex) best = rect
+  }
+  return best
 }
 export const TEXT_EDITABLE_TYPES = new Set(['text', 'shape', 'table']);
 function shapeHasText(element: PPTElement): boolean {
@@ -384,6 +497,59 @@ export type HitLayerMemoInput = {
   clipingImageElementId: string;
   disabled: boolean;
 };
+
+export type VisualHitPlanInput = {
+  elementList: PPTElement[];
+  canvasScale: number;
+  hiddenElementIdList: Iterable<string>;
+  activeElementIdList: Iterable<string>;
+  editingElementId: string | null;
+  clipingImageElementId: string;
+};
+
+export type VisualHitPlan = {
+  hitRects: VisualHitRect[];
+  occluderRects: VisualHitRect[];
+};
+
+/**
+ * Selected / editing / clipping boxes leave HitLayer so Operate or the live
+ * editor can own the pointer. Those boxes must still punch holes in every
+ * *lower* hit rect — otherwise the first click works, then hover/click/drag
+ * fall through to the card underneath.
+ */
+export function collectVisualHitPlan(input: VisualHitPlanInput): VisualHitPlan {
+  const hidden = input.hiddenElementIdList instanceof Set ? input.hiddenElementIdList : new Set(input.hiddenElementIdList);
+  const selected = input.activeElementIdList instanceof Set ? input.activeElementIdList : new Set(input.activeElementIdList);
+  const hitRects: VisualHitRect[] = [];
+  const occluderRects: VisualHitRect[] = [];
+  for (let i = 0; i < input.elementList.length; i++) {
+    const element = input.elementList[i];
+    if (hidden.has(element.id)) continue;
+    const rect = elementVisualHitRect(element, input.canvasScale, i + 1);
+    const occupiesBox = element.id === input.editingElementId
+      || element.id === input.clipingImageElementId
+      || selected.has(element.id) && element.type !== 'line';
+    if (occupiesBox) {
+      occluderRects.push(rect);
+      continue;
+    }
+    hitRects.push(rect);
+  }
+  return { hitRects, occluderRects };
+}
+
+export function pointInAnyVisualHitRect(x: number, y: number, rects: VisualHitRect[]): boolean {
+  for (const rect of rects) {
+    if (pointInVisualHitRect(x, y, rect)) return true;
+  }
+  return false;
+}
+
+/** Occluders that sit on top of `rect` (same stack level included). */
+export function occludersAboveRect(rect: VisualHitRect, occluders: VisualHitRect[]): VisualHitRect[] {
+  return occluders.filter(hole => hole.id !== rect.id && hole.zIndex >= rect.zIndex);
+}
 
 /**
  * Skip rebuilding hit rects when only HTML content changed,
@@ -477,11 +643,22 @@ export function elementIdsIntersectingSelection(elements: PPTElement[], box: {
   const hidden = hiddenIds instanceof Set ? hiddenIds : new Set(hiddenIds);
   const hitIds = new Set<string>();
   const hitGroups = new Set<string>();
+  if (!(box.width > 0) || !(box.height > 0)) return [];
+  const rects: VisualHitRect[] = [];
+  const elementById = new Map<string, PPTElement>();
   for (let i = 0; i < elements.length; i++) {
     const element = elements[i];
     if (hidden.has(element.id) || element.lock) continue;
     const rect = elementVisualHitRect(element, canvasScale, i + 1);
+    rects.push(rect);
+    elementById.set(element.id, element);
+  }
+  syncVisualHitIndex(rects);
+  const candidates = searchIndexedVisualHitRects(box.left, box.top, box.left + box.width, box.top + box.height);
+  for (const rect of candidates) {
     if (!visualHitIntersectsBox(rect, box)) continue;
+    const element = elementById.get(rect.id);
+    if (!element) continue;
     hitIds.add(element.id);
     if (element.groupId) hitGroups.add(element.groupId);
   }
@@ -523,12 +700,12 @@ export function visualHitAabb(rect: VisualHitRect) {
 }
 
 /**
- * Clip a hit rect so selected media sitting above it can receive the pointer.
- * HitLayer is stacked above the viewport player; without this hole, text/shapes
- * under a focused video steal play/seek clicks into edit mode.
+ * Clip a hit rect so a higher selected/editing box can keep the pointer.
+ * HitLayer sits above the viewport; without this hole, lower cards steal
+ * hover/click/drag after the top element leaves the hit layer.
  */
 export function hitRectClipPath(rect: VisualHitRect, occluders: VisualHitRect[]): string | undefined {
-  const holes = occluders.filter(hole => hole.id !== rect.id && visualHitRectsOverlap(rect, hole));
+  const holes = occludersAboveRect(rect, occluders).filter(hole => visualHitRectsOverlap(rect, hole));
   if (!holes.length) return undefined;
   const parts = [`M0 0H${clipPathNum(rect.width)}V${clipPathNum(rect.height)}H0Z`];
   for (const hole of holes) {
@@ -601,6 +778,41 @@ export function retryPendingCaret(elementId: string) {
   const view = getEditorView(elementId);
   if (view) consumePendingCaret(elementId, view);
 }
+function focusTableCell(root: HTMLElement, coords?: ClientCoords) {
+  if (!root.querySelector('[data-cell-index]')) return;
+  const active = root.querySelector('.cell-text.active');
+  if (active instanceof HTMLElement) {
+    active.focus();
+    return;
+  }
+  let cell: HTMLElement | null = null;
+  if (coords) {
+    for (const el of document.elementsFromPoint(coords.left, coords.top)) {
+      if (!root.contains(el)) continue;
+      const host = el.closest('[data-cell-index]');
+      if (host instanceof HTMLElement) {
+        cell = host;
+        break;
+      }
+    }
+  }
+  if (!cell) cell = root.querySelector('[data-cell-index]');
+  if (!cell) return;
+  cell.dispatchEvent(new MouseEvent('mousedown', {
+    bubbles: true,
+    cancelable: true,
+    view: window,
+    button: 0,
+    buttons: 1,
+    clientX: coords?.left,
+    clientY: coords?.top,
+  }));
+  requestAnimationFrame(() => {
+    const text = root.querySelector('.cell-text.active');
+    if (text instanceof HTMLElement) text.focus();
+  });
+}
+
 export function focusElementEditor(elementId: string, coords?: ClientCoords) {
   if (coords) setPendingCaret(elementId, coords);
   const root = queryFika(`#editable-element-${elementId}`);
@@ -617,6 +829,7 @@ export function focusElementEditor(elementId: string, coords?: ClientCoords) {
     const editor = root.querySelector('.ProseMirror');
     if (editor instanceof HTMLElement) editor.focus();
     if (view) consumePendingCaret(elementId, view);
+    focusTableCell(root, coords);
   };
   apply();
   requestAnimationFrame(apply);

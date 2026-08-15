@@ -138,6 +138,7 @@ const ElementCreateSelection = memo((props: IElementCreateSelectionProps) => {
     <div
       className={cx('element-create-selection')}
       ref={selectionRef}
+      data-create-selection={creatingElement?.type || ''}
       onMouseDown={e => { e.stopPropagation(); createSelection(e) }}
       onContextMenu={e => { e.stopPropagation(); e.preventDefault() }}
     >

@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { useRef, useMemo, useCallback, memo, useState, useEffect, type CSSProperties, type ElementRef } from 'react';
+import { useRef, useMemo, useCallback, memo, useState, useEffect, useLayoutEffect, type CSSProperties, type ElementRef } from 'react';
 import type { CSSPropertiesWithVars } from '@/types/css';
 import { nativePointerEvent, type ReactPointerEvent } from '@/utils/canvasPointer';
 
@@ -15,9 +15,9 @@ import useTextFit from '@/views/components/element/hooks/useTextFit';
 import { useOutlineRadiusCss } from '@/views/components/element/hooks/useElementOutline';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 import { resolveElementDefaultFontColor, resolveElementSurfaces, resolvePlaceholderColor } from '@/utils/textContrast';
-import { computePlaceholderSlotHeight, getPlaceholderBaselineHeight, resolveTextBoxLayout, shouldBlockPlaceholderHeightShrink } from '@/utils/placeholderLayout';
+import { computePlaceholderSlotHeight, resolveTextBoxLayout, shouldBlockPlaceholderHeightShrink, textBoxFlexColumn, textBoxJustify, textBoxLiveMode, textBoxPaintSize, type TextBoxLiveMode } from '@/utils/placeholderLayout';
 import { isPlaceholderPromptFontSize } from '@/configs/textPresets';
-import { isListPlaceholder, placeholderBoxVars, placeholderPhase, placeholderSeed } from '@/utils/placeholderPaint';
+import { isEmptyRichText, isListPlaceholder, placeholderBoxVars, placeholderPhase, placeholderSeed, repairFilledPlaceholderHtml } from '@/utils/placeholderPaint';
 import type { EmptyPlaceholderStylePatch } from '@/utils/prosemirror/commands/applyPlaceholderStyles';
 import ElementOutline from '@/views/components/element/ElementOutline';
 import ProsemirrorEditor from '@/views/components/element/ProsemirrorEditor';
@@ -35,6 +35,15 @@ const readSlideTheme = () => {
     currentSlide: selectCurrentSlide(state),
     theme: state.theme
   };
+};
+
+const applyAutoHeightChrome = (id: string, height: number) => {
+  const operate = document.getElementById(`operate-element-${id}`);
+  if (!operate) return;
+  const scale = useMainStore.getState().canvasScale;
+  const scaleHeight = height * scale;
+  operate.style.height = `${scaleHeight}px`;
+  operate.style.transformOrigin = `${operate.offsetWidth / 2}px ${scaleHeight / 2}px`;
 };
 const TextElement = memo((props: ITextElementProps) => {
   const { elementInfo, contextmenus, isEditing, className, style } = props;
@@ -61,31 +70,15 @@ const TextElement = memo((props: ITextElementProps) => {
   const textFitHostRef = useRef<HTMLDivElement | null>(null);
   const { shadowStyle } = useElementShadow(elementInfo.shadow);
   const inset: TextInset = elementInfo.inset || [10, 10, 10, 10];
-  const { textFitPaintStyle, setLiveContent } = useTextFit(elementInfo, liveContentRef, textFitHostRef, {
-    observeResize: false
-  });
+  const { textFitPaintStyle, setLiveContent, resync: resyncTextFit } = useTextFit(elementInfo, liveContentRef, textFitHostRef);
   const outlineBorderRadius = useOutlineRadiusCss(elementInfo.outline, elementInfo.width, elementInfo.height);
-  const textBoxLayout = resolveTextBoxLayout(elementInfo, currentSlide?.type);
-  const fixedContentJustify = (() => {
-    if (!textBoxLayout.fixedHeight) return undefined;
-    const vAlignMap: Record<NonNullable<PPTTextElement['vAlign']>, CSSProperties['justifyContent']> = {
-      top: 'flex-start',
-      middle: 'center',
-      bottom: 'flex-end'
-    };
-    return vAlignMap[textBoxLayout.vAlign];
-  })();
-  const contentBoxJustify = textBoxLayout.flexCenterInLayoutBox ? 'center' : fixedContentJustify;
-  const placeholderVAlign = (() => {
-    if (textBoxLayout.flexCenterInLayoutBox) return 'middle' as const;
-    return elementInfo.vAlign ?? (elementInfo.textType === 'content' ? 'top' : 'middle');
-  })();
-  const contentTitleLayoutMinHeight = textBoxLayout.flexCenterInLayoutBox ? `${elementInfo.height}px` : undefined;
-  const computeEmpty = (html: string) => {
-    return !html.replace(/<br\s*\/?>/gi, '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
-  };
-
-  const [editorEmpty, setEditorEmpty] = useState(computeEmpty(elementInfo.content));
+  const [liveHtml, setLiveHtml] = useState(elementInfo.content);
+  const editorEmpty = isEmptyRichText(liveHtml);
+  const textBoxLayout = resolveTextBoxLayout(elementInfo, currentSlide?.type, editorEmpty);
+  const paintSize = textBoxPaintSize(elementInfo, textBoxLayout);
+  const contentBoxJustify = textBoxJustify(textBoxLayout);
+  const useFlexColumn = textBoxFlexColumn(textBoxLayout);
+  const liveMode = textBoxLiveMode(elementInfo, textBoxLayout);
   const elementInfoRef = useRef(elementInfo);
   elementInfoRef.current = elementInfo;
   const editorEmptyRef = useRef(editorEmpty);
@@ -97,23 +90,33 @@ const TextElement = memo((props: ITextElementProps) => {
   const textBoxLayoutRef = useRef(textBoxLayout);
   textBoxLayoutRef.current = textBoxLayout;
   useEffect(() => {
-    if (editorFocused) return;
-    setEditorEmpty(computeEmpty(elementInfo.content));
-  }, [elementInfo.content, editorFocused]);
+    if (editorFocused || isEditing || placeholderTextEditing) return;
+    setLiveHtml(elementInfo.content);
+    liveContentRef.current = isEmptyRichText(elementInfo.content) ? null : elementInfo.content;
+  }, [elementInfo.content, editorFocused, isEditing, placeholderTextEditing]);
   const listPlaceholder = isListPlaceholder(elementInfo);
   const isEmptyPlaceholder = !!elementInfo.placeholder && editorEmpty;
   const editingActive = !!(isEditing || placeholderTextEditing);
   const isEditingEmpty = isEmptyPlaceholder && editingActive;
   const showPlaceholder = isEmptyPlaceholder && !editingActive;
   const seedPlaceholder = (info: PPTTextElement, empty: boolean) => {
+    const phase = placeholderPhase(empty);
+    if (phase === 'empty' && (!isEmptyRichText(info.content) || !editorEmptyRef.current)) return;
     prosemirrorEditorRef.current?.seedPlaceholderStyles(
-      placeholderSeed(info, placeholderPhase(empty), defaultInkColorRef.current),
+      placeholderSeed(info, phase, defaultInkColorRef.current),
+      phase,
     );
   };
   const applyPlaceholderPreset = useCallback(() => {
     const info = elementInfoRef.current;
     if (!info.placeholder) return;
-    Promise.resolve().then(() => seedPlaceholder(info, true));
+    if (!isEmptyRichText(info.content) || !editorEmptyRef.current) return;
+    Promise.resolve().then(() => {
+      const next = elementInfoRef.current;
+      if (!next.placeholder) return;
+      if (!isEmptyRichText(next.content) || !editorEmptyRef.current) return;
+      seedPlaceholder(next, true);
+    });
   }, []);
   const handleEditorFocus = useCallback(() => {
     setEditorFocused(true);
@@ -125,23 +128,7 @@ const TextElement = memo((props: ITextElementProps) => {
   }, [applyPlaceholderPreset]);
   const handleEditorBlur = useCallback(() => {
     setEditorFocused(false);
-    setLiveContent(null);
-  }, [setLiveContent]);
-  const placeholderLayoutMinHeight = elementInfo.placeholder
-    ? `${getPlaceholderBaselineHeight(elementInfo)}px`
-    : undefined;
-  useEffect(() => {
-    if (!elementInfo.placeholder) return;
-    const slot = computePlaceholderSlotHeight(elementInfo);
-    const next: Partial<PPTTextElement> = {};
-    if (elementInfo.height < slot) next.height = slot;
-    if ((elementInfo.placeholderLayoutHeight ?? 0) < slot) next.placeholderLayoutHeight = slot;
-    if (!Object.keys(next).length) return;
-    useSlidesStore.getState().updateElement({
-      id: elementInfo.id,
-      props: next
-    });
-  }, [elementInfo.id, elementInfo.placeholder, elementInfo.placeholderFontSize, elementInfo.height, elementInfo.placeholderLayoutHeight, elementInfo.lineHeight, elementInfo.inset, elementInfo.paragraphSpace]);
+  }, []);
   const placeholderColor = resolvePlaceholderColor({
     author: elementInfo.placeholderColor,
     surfaces: elementSurfaces
@@ -174,16 +161,14 @@ const TextElement = memo((props: ITextElementProps) => {
   }, []);
   const startEditRef = useRef(startEdit);
   startEditRef.current = startEdit;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isEditing) startEditRef.current();
   }, [isEditing]);
   const handleEmptyChange = useCallback((empty: boolean) => {
     if (empty) {
-      setEditorEmpty(true);
       setPlaceholderSeeded(false);
       return;
     }
-    setEditorEmpty(false);
     setPlaceholderTextEditing(true);
     seedPlaceholderContentStyles();
     setPlaceholderSeeded(true);
@@ -210,7 +195,6 @@ const TextElement = memo((props: ITextElementProps) => {
     } else if (patch.defaultColor) next.defaultColor = patch.defaultColor;
     const slot = computePlaceholderSlotHeight({ ...info, ...next });
     if (slot !== info.placeholderLayoutHeight) next.placeholderLayoutHeight = slot;
-    if (!textBoxLayoutRef.current.fixedHeight && info.height < slot) next.height = slot;
     useSlidesStore.getState().updateElement({
       id: info.id,
       props: next
@@ -235,37 +219,42 @@ const TextElement = memo((props: ITextElementProps) => {
 
   const realHeightCache = useRef(-1);
   const realWidthCache = useRef(-1);
-  const wasFixedHeightRef = useRef<boolean | undefined>(undefined);
-  useEffect(() => {
-    const fixed = textBoxLayout.fixedHeight;
-    const wasFixed = wasFixedHeightRef.current;
-    wasFixedHeightRef.current = fixed;
-    if (fixed || wasFixed === undefined) return;
-    Promise.resolve().then(() => {
-      const info = elementInfoRef.current;
-      if (!elementRef.current || info.vertical || info.placeholder) return;
-      const realHeight = elementRef.current.offsetHeight;
-      if (info.height === realHeight) return;
-      if (shouldBlockPlaceholderHeightShrink(info, realHeight, editorEmptyRef.current)) return;
-      useSlidesStore.getState().updateElement({
-        id: info.id,
-        props: { height: realHeight }
-      });
+  const prevLiveModeRef = useRef<TextBoxLiveMode | undefined>(undefined);
+  useLayoutEffect(() => {
+    const prev = prevLiveModeRef.current;
+    prevLiveModeRef.current = liveMode;
+    if (prev === undefined || prev === liveMode) return;
+    resyncTextFit();
+    if (useMainStore.getState().isGesturing) return;
+    const info = elementInfoRef.current;
+    if (info.vertical || !elementRef.current) return;
+    if (liveMode !== 'grow') {
+      applyAutoHeightChrome(info.id, info.height);
+      return;
+    }
+    const realHeight = Math.ceil(elementRef.current.offsetHeight);
+    if (shouldBlockPlaceholderHeightShrink(info, realHeight, editorEmptyRef.current)) return;
+    applyAutoHeightChrome(info.id, realHeight);
+    if (info.height === realHeight) return;
+    useSlidesStore.getState().updateElement({
+      id: info.id,
+      props: { height: realHeight }
     });
-  }, [textBoxLayout.fixedHeight]);
+  }, [liveMode, resyncTextFit]);
   useEffect(() => {
     if (!isHandleElement) return;
     if (!isScaling) {
       const info = elementInfoRef.current;
       const layout = textBoxLayoutRef.current;
-      if (!layout.fixedHeight && !info.vertical && realHeightCache.current !== -1) {
+      if (!layout.lockPaintHeight && !info.vertical && realHeightCache.current !== -1) {
+        applyAutoHeightChrome(info.id, realHeightCache.current);
         useSlidesStore.getState().updateElement({
           id: info.id,
           props: { height: realHeightCache.current }
         });
         realHeightCache.current = -1;
       }
-      if (!layout.fixedHeight && info.vertical && realWidthCache.current !== -1) {
+      if (!layout.lockPaintHeight && info.vertical && realWidthCache.current !== -1) {
         useSlidesStore.getState().updateElement({
           id: info.id,
           props: { width: realWidthCache.current }
@@ -277,17 +266,19 @@ const TextElement = memo((props: ITextElementProps) => {
   const insetKey = inset.join(',');
   useEffect(() => {
     Promise.resolve().then(() => {
+      if (useMainStore.getState().isGesturing) return;
       if (!elementRef.current) return;
       const info = elementInfoRef.current;
       const layout = textBoxLayoutRef.current;
-      if (!layout.fixedHeight && !info.vertical && !info.placeholder && info.height !== elementRef.current.offsetHeight) {
+      if (!layout.lockPaintHeight && !info.vertical && info.height !== elementRef.current.offsetHeight) {
         if (shouldBlockPlaceholderHeightShrink(info, elementRef.current.offsetHeight, editorEmptyRef.current)) return;
+        applyAutoHeightChrome(info.id, elementRef.current.offsetHeight);
         useSlidesStore.getState().updateElement({
           id: info.id,
           props: { height: elementRef.current.offsetHeight }
         });
       }
-      if (!layout.fixedHeight && info.vertical && info.width !== elementRef.current.offsetWidth) {
+      if (!layout.lockPaintHeight && info.vertical && info.width !== elementRef.current.offsetWidth) {
         if (info.placeholder && editorEmptyRef.current) return;
         useSlidesStore.getState().updateElement({
           id: info.id,
@@ -296,18 +287,19 @@ const TextElement = memo((props: ITextElementProps) => {
       }
     });
   }, [insetKey]);
-  const updateTextElementHeight = useCallback((entries: ResizeObserverEntry[]) => {
-    const contentRect = entries[0].contentRect;
-    if (!elementRef.current) return;
+  const updateTextElementHeight = useCallback((_entries: ResizeObserverEntry[]) => {
+    const node = elementRef.current;
+    if (!node) return;
     const info = elementInfoRef.current;
-    const currentInset = info.inset || [10, 10, 10, 10];
-    const realHeight = contentRect.height + currentInset[0] + currentInset[2];
-    const realWidth = contentRect.width + currentInset[1] + currentInset[3];
+    const realHeight = Math.ceil(node.offsetHeight);
+    const realWidth = Math.ceil(node.offsetWidth);
     if (shouldBlockPlaceholderHeightShrink(info, realHeight, editorEmptyRef.current)) return;
     const layout = textBoxLayoutRef.current;
-    const scaling = useMainStore.getState().isScaling;
-    if (info.placeholder && !scaling) return;
-    if (!layout.fixedHeight && !info.vertical && info.height !== realHeight) {
+    const main = useMainStore.getState();
+    if (main.isGesturing) return;
+    const scaling = main.isScaling;
+    if (!layout.lockPaintHeight && !info.vertical && info.height !== realHeight) {
+      applyAutoHeightChrome(info.id, realHeight);
       if (!scaling) {
         useSlidesStore.getState().updateElement({
           id: info.id,
@@ -315,7 +307,7 @@ const TextElement = memo((props: ITextElementProps) => {
         });
       } else realHeightCache.current = realHeight;
     }
-    if (!layout.fixedHeight && info.vertical && info.width !== realWidth) {
+    if (!layout.lockPaintHeight && info.vertical && info.width !== realWidth) {
       if (!scaling) {
         useSlidesStore.getState().updateElement({
           id: info.id,
@@ -330,15 +322,21 @@ const TextElement = memo((props: ITextElementProps) => {
     const el = elementRef.current;
     const resizeObserver = new ResizeObserver(entries => updateTextElementHeightRef.current(entries));
     if (el) resizeObserver.observe(el);
-    if (elementInfoRef.current.placeholder) applyPlaceholderPreset();
+    const info = elementInfoRef.current;
+    if (info.placeholder) {
+      if (isEmptyRichText(info.content)) applyPlaceholderPreset();
+      else Promise.resolve().then(() => seedPlaceholder(info, false));
+    }
     return () => {
       if (el) resizeObserver.unobserve(el);
     };
   }, []);
   const updateContent = useCallback((content: string, ignore = false) => {
+    const info = elementInfoRef.current;
+    const nextContent = info.placeholder ? repairFilledPlaceholderHtml(info, content) : content;
     useSlidesStore.getState().updateElement({
       id: elementId,
-      props: { content }
+      props: { content: nextContent }
     });
     if (!ignore) addHistorySnapshot();
   }, [elementId, addHistorySnapshot]);
@@ -363,7 +361,10 @@ const TextElement = memo((props: ITextElementProps) => {
     handleSelectElementRef.current(event, false);
   }, []);
   const handleDocChange = useCallback((html: string) => {
+    liveContentRef.current = html;
+    setLiveHtml(html);
     setLiveContent(html);
+    requestAnimationFrame(() => updateTextElementHeightRef.current([]));
   }, [setLiveContent]);
   return <div className={cx('editable-element-text', className, {
     'lock': elementInfo.lock
@@ -371,20 +372,23 @@ const TextElement = memo((props: ITextElementProps) => {
     top: elementInfo.top + 'px',
     left: elementInfo.left + 'px',
     width: elementInfo.width + 'px',
-    height: elementInfo.height + 'px',
+    height: paintSize.height,
+    boxSizing: 'border-box',
+    overflow: textBoxLayout.lockPaintHeight ? 'hidden' : undefined,
     ...style
   }}><div className={cx('rotate-wrapper')} style={{
-      transform: `rotate(${elementInfo.rotate}deg)`
+      transform: `rotate(${elementInfo.rotate}deg)`,
+      height: paintSize.height === 'auto' ? 'auto' : undefined
     }}><div className={cx('element-content', {
         'placeholder-element': elementInfo.placeholder,
         'content-title-placeholder': textBoxLayout.flexCenterInLayoutBox,
-        'placeholder-top': placeholderVAlign === 'top',
+        'v-align-box': useFlexColumn,
         'show-placeholder': showPlaceholder,
         'editing-empty': isEditingEmpty,
         'is-editing': isEditing || placeholderTextEditing
-      })} ref={elementRef} style={{
-        width: elementInfo.vertical && !textBoxLayout.fixedHeight ? 'auto' : elementInfo.width + 'px',
-        height: !elementInfo.vertical && !textBoxLayout.fixedHeight && !elementInfo.placeholder ? 'auto' : elementInfo.height + 'px',
+      })} ref={elementRef} data-live-box data-text-box-mode={textBoxLiveMode(elementInfo, textBoxLayout)} {...(textBoxLayout.fixedHeight ? { 'data-fixed-height': '' } : {})} {...(paintSize.height === 'auto' ? { 'data-live-auto-height': '' } : {})} style={{
+        width: paintSize.width,
+        height: paintSize.height,
         backgroundColor: elementInfo.fill,
         opacity: elementInfo.opacity,
         textShadow: shadowStyle,
@@ -396,11 +400,11 @@ const TextElement = memo((props: ITextElementProps) => {
         ...placeholderTypography,
         writingMode: elementInfo.vertical ? 'vertical-rl' : 'horizontal-tb',
         padding: `${inset[0]}px ${inset[1]}px ${inset[2]}px ${inset[3]}px`,
-        minHeight: contentTitleLayoutMinHeight ?? placeholderLayoutMinHeight,
-        display: textBoxLayout.fixedHeight || textBoxLayout.flexCenterInLayoutBox ? 'flex' : undefined,
-        flexDirection: textBoxLayout.fixedHeight || textBoxLayout.flexCenterInLayoutBox ? 'column' : undefined,
+        boxSizing: 'border-box',
+        display: useFlexColumn ? 'flex' : undefined,
+        flexDirection: useFlexColumn ? 'column' : undefined,
         justifyContent: contentBoxJustify,
-        overflow: textBoxLayout.fixedHeight || outlineBorderRadius ? 'hidden' : undefined,
+        overflow: textBoxLayout.lockPaintHeight || outlineBorderRadius ? 'hidden' : undefined,
         borderRadius: outlineBorderRadius,
         '--paragraphSpace': `${elementInfo.paragraphSpace === undefined ? 5 : elementInfo.paragraphSpace}px`
       } as CSSPropertiesWithVars} onContextMenu={(event) => { event.stopPropagation(); event.preventDefault(); openContextmenu(event, contextmenus); }} onMouseDown={($event) => {

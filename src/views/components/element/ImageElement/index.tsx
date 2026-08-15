@@ -15,6 +15,8 @@ import useClipImage from './useClipImage'
 import useFilter from './useFilter'
 import ImageOutline from './ImageOutline/index'
 import ImageClipHandler from './ImageClipHandler'
+import ImageBitmapSurface from './ImageBitmapSurface'
+import { useSyncImageBitmapCache } from './useImageBitmap'
 
 export type IImageElementProps = {
   elementInfo: PPTImageElement
@@ -33,6 +35,7 @@ const ImageElement = memo((props: IImageElementProps) => {
   const { flipStyle } = useElementFlip(props.elementInfo.flipH, props.elementInfo.flipV)
   const { clipShape, imgPosition } = useClipImage(props.elementInfo)
   const { filter } = useFilter(props.elementInfo.filters)
+  useSyncImageBitmapCache()
 
   const handleSelectElement = useCallback((e: MouseEvent | TouchEvent) => {
     if (props.elementInfo.lock) return
@@ -102,6 +105,7 @@ const ImageElement = memo((props: IImageElementProps) => {
         ) : (
           <div
             className={cx('element-content')}
+            data-live-box
             style={{
               filter: shadowStyle ? `drop-shadow(${shadowStyle})` : '',
               transform: flipStyle,
@@ -116,7 +120,8 @@ const ImageElement = memo((props: IImageElementProps) => {
           >
             <ImageOutline elementInfo={elementInfo} />
             <div className={cx('image-content')} style={{ clipPath: clipShape.style }}>
-              <img
+              <ImageBitmapSurface
+                key={elementInfo.src}
                 src={elementInfo.src}
                 draggable={false}
                 style={{
@@ -127,7 +132,6 @@ const ImageElement = memo((props: IImageElementProps) => {
                   filter,
                 }}
                 onDragStart={event => { event.preventDefault() }}
-                alt=""
               />
               {elementInfo.colorMask ? (
                 <div className={cx('color-mask')} style={{ backgroundColor: elementInfo.colorMask }} />

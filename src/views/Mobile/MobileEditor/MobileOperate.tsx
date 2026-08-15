@@ -27,14 +27,12 @@ export default function MobileOperate({
   rotateElement,
 }: IMobileOperateProps) {
   const rotate = 'rotate' in elementInfo ? elementInfo.rotate : 0
-  const scaleWidth = elementInfo.width * canvasScale
-  const scaleHeight = elementInfo.height * canvasScale
   const {
     borderLines,
     resizeHandlers: _resizeHandlers,
     textElementResizeHandlers,
     verticalTextElementResizeHandlers,
-  } = useCommonOperate(scaleWidth, scaleHeight)
+  } = useCommonOperate()
 
   const resizeHandlers = (() => {
     if (elementInfo.type === 'text') {
@@ -65,7 +63,7 @@ export default function MobileOperate({
       {isSelected ? (
         <>
           {borderLines.map(line => (
-            <BorderLine className={cx('operate-border-line')} key={line.type} type={line.type} style={line.style} />
+            <BorderLine className={cx('operate-border-line')} key={line.type} type={line.type} />
           ))}
           {resizeHandlers.map(point => (
             <div
@@ -79,7 +77,6 @@ export default function MobileOperate({
                 className={cx('operate-resize-handler')}
                 type={point.direction}
                 rotate={'rotate' in elementInfo ? elementInfo.rotate : 0}
-                style={point.style}
               />
             </div>
           ))}
@@ -90,10 +87,7 @@ export default function MobileOperate({
                 rotateElement(event.nativeEvent, elementInfo as CanRotatePPTElement)
               }}
             >
-              <RotateHandler
-                className={cx('operate-rotate-handler')}
-                style={{ left: scaleWidth / 2 + 'px' }}
-              />
+              <RotateHandler className={cx('operate-rotate-handler')} />
             </div>
           ) : null}
         </>

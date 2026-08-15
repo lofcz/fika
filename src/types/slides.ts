@@ -296,6 +296,8 @@ export interface ShapeText {
   paragraphSpace?: number;
   inset?: TextInset;
   type?: TextType;
+  /** Lock height to the box. `false` grows the shape with the text, same as PPTTextElement. */
+  fixedHeight?: boolean;
 }
 
 /**

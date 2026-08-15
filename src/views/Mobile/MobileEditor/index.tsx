@@ -38,7 +38,7 @@ export default function MobileEditor({ changeMode }: IMobileEditorProps) {
   const [canvasScale, setCanvasScale] = useState(1)
   const background = currentSlide?.background
   const { backgroundStyle } = useSlideBackgroundStyle(background)
-  const { operateLineColor } = useOperateChrome()
+  const { operateLineColor, operateLineHalo } = useOperateChrome()
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -71,7 +71,7 @@ export default function MobileEditor({ changeMode }: IMobileEditorProps) {
   }, [currentSlide])
 
   const { dragElement } = useDragElement(elementList, setElementList, alignmentLines, setAlignmentLines, canvasScale)
-  const { scaleElement } = useScaleElement(elementList, setElementList, alignmentLines, setAlignmentLines, canvasScale)
+  const { scaleElement } = useScaleElement(elementList, setElementList, canvasScale)
   const { rotateElement } = useRotateElement(elementList, setElementList, viewportRef, canvasScale)
 
   const selectElement = (e: TouchEvent, element: PPTElement, startMove = true) => {
@@ -95,6 +95,7 @@ export default function MobileEditor({ changeMode }: IMobileEditorProps) {
           style={{
             ...viewportStyles,
             ['--operate-line' as string]: operateLineColor,
+            ['--operate-line-halo' as string]: operateLineHalo,
           }}
         >
           <div className={cx('background')} style={backgroundStyle} />

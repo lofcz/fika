@@ -14,6 +14,11 @@ dist-ssr
 coverage
 *.local
 
+# Runtime copies of tests/fixtures decks (never commit these)
+/public/_e2e-houby.pptx
+/public/_e2e-text-fit.pptx
+/public/_e2e-sb1.pptx
+
 /cypress/videos/
 /cypress/screenshots/
 

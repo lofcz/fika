@@ -5,6 +5,7 @@ import { OperateLineHandlers } from '@/types/edit'
 import { getBroken2LineDirection } from '@/utils/element'
 import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import { commitSlideElements } from '@/utils/commitSlideElements'
 
 interface AdsorptionPoint {
   x: number
@@ -246,7 +247,7 @@ export default (elementList: PPTElement[],
 
       if (startPointer.x === currentPointer.x && startPointer.y === currentPointer.y) return
 
-      useSlidesStore.getState().updateSlide({ elements: liveList })
+      commitSlideElements(liveList)
       addHistorySnapshot()
     }
   }, [setElementList, addHistorySnapshot])

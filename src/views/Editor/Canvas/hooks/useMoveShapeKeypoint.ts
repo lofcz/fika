@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react'
-import { useSlidesStore } from '@/store'
+import { commitSlideElements } from '@/utils/commitSlideElements'
 import type { PPTElement, PPTShapeElement } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
@@ -113,7 +113,7 @@ export default (
 
       if (startPointer.x === currentPointer.x && startPointer.y === currentPointer.y) return
 
-      useSlidesStore.getState().updateSlide({ elements: liveList })
+      commitSlideElements(liveList)
       addHistorySnapshot()
     }
 

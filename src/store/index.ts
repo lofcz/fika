@@ -30,3 +30,10 @@ export {
   useScreenStore,
   useImportConfirmStore,
 }
+
+if (typeof window !== 'undefined' && import.meta.env.MODE === 'development') {
+  Object.assign(window, {
+    __FIKA_SLIDES__: useSlidesStore,
+    __FIKA_MAIN__: useMainStore,
+  })
+}

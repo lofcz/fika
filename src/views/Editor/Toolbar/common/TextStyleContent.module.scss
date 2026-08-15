@@ -1,0 +1,119 @@
+.text-style-content {
+  user-select: none;
+
+  :global { .quiet-select .select {
+    height: 34px;
+    border: 0;
+    border-radius: 8px;
+    background: $surface;
+
+    .selector {
+      height: 34px;
+    }
+    .icon {
+      height: 34px;
+      color: #a1a1aa;
+    }
+  } }
+}
+.preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.preset-card {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: $surface;
+  text-align: left;
+  cursor: pointer;
+  color: $ink;
+  overflow: hidden;
+
+  &:hover:not(.selected) {
+    background: $surfaceHover;
+  }
+  &.selected {
+    background: $ink;
+    color: #fff;
+  }
+  &.wide {
+    grid-column: 1 / -1;
+  }
+}
+.preset-card-label {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+.field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  .quiet-select,
+  .switch-wrapper {
+    flex: 1;
+  }
+}
+.field-icon {
+  width: 28px;
+  flex: 0 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $inkMuted;
+  font-size: 16px;
+}
+.chip-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.target-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: $surface;
+  border-radius: 8px;
+}
+.target-btn {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: $inkMuted;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  &:hover:not(.on) {
+    color: $ink;
+  }
+  &.on {
+    background: $ink;
+    color: #fff;
+  }
+
+  :global { svg {
+    width: 14px;
+    height: 14px;
+  } }
+}
+.fill-glyph {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: currentColor;
+}

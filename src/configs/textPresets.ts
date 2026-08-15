@@ -50,9 +50,13 @@ export const placeholderPromptFontSize = (contentFontSize: number) => {
   return Math.round(contentFontSize * PLACEHOLDER_PROMPT_SCALE);
 };
 export const placeholderContentFontSize = (fontSize?: number) => fontSize ?? 20;
-export const isCoverTitlePlaceholder = (el: { textType?: string; placeholderFontSize?: number }) => (
-  el.textType === 'title' && placeholderContentFontSize(el.placeholderFontSize) >= PLACEHOLDER_PROMPT_MIN_COVER
-);
+export const isCoverTitlePlaceholder = (el: { textType?: string; placeholderFontSize?: number }) => {
+  if (el.textType !== 'title') return false;
+  const size = el.placeholderFontSize;
+  // A leaked prompt size (36) must not demote the cover slot — typed size stays 66.
+  if (size === COVER_TITLE_PROMPT_SIZE) return true;
+  return placeholderContentFontSize(size) >= PLACEHOLDER_PROMPT_MIN_COVER;
+};
 export const placeholderPromptSizeOf = (el: { textType?: string; placeholderFontSize?: number }) => (
   isCoverTitlePlaceholder(el)
     ? COVER_TITLE_PROMPT_SIZE

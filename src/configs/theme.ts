@@ -1,5 +1,5 @@
 import type { Gradient, PPTElementOutline, PPTElementShadow, Slide, SlideBackground, SlideType } from '@/types/slides';
-import { preferredInk, resolveSlideSurfaceColors } from '@/utils/textContrast';
+import { preferredInk, resolveChartSeriesColors, resolveSlideSurfaceColors } from '@/utils/textContrast';
 
 /** Default accent swatches: 8 hues so Color + None + neutrals + custom fill a 7×2 grid. */
 export const DEFAULT_THEME_COLORS = ['#3b5bdb', '#1c7ed6', '#0ca678', '#f59f00', '#7048e8', '#2f9e44', '#e64980', '#1098ad'];
@@ -11,6 +11,8 @@ export interface PresetTheme {
   featureFontColor?: string;
   fontname: string;
   colors: string[];
+  /** Series palette when `colors` includes near-background swatches (Ink #171717). */
+  chartColors?: string[];
   borderColor?: string;
   outline?: PPTElementOutline;
   shadow?: PPTElementShadow;
@@ -117,6 +119,10 @@ export const resolvePresetFontColor = (theme: PresetTheme, _slideType?: SlideTyp
     isFeatureSlide(_slideType) ? theme.featureFontColor || theme.fontColor : theme.fontColor
   )
 );
+export const themeChartColors = (theme: Pick<PresetTheme, 'colors' | 'chartColors'>) => (
+  [...(theme.chartColors?.length ? theme.chartColors : theme.colors)]
+);
+
 export const matchPresetTheme = (themeColors: string[]): PresetTheme | undefined => {
   const key = themeColors.map(color => color.toLowerCase()).join(',');
   return PRESET_THEMES.find(item => item.colors.map(color => color.toLowerCase()).join(',') === key);
@@ -133,6 +139,10 @@ export const applyPresetToLayoutSlide = (slide: Slide, theme: PresetTheme, index
       el.placeholderColor = ink;
     } else if (el.type === 'chart') {
       el.textColor = ink;
+      el.themeColors = resolveChartSeriesColors(
+        themeChartColors(theme),
+        resolveSlideSurfaceColors(slide.background, theme.background),
+      );
     }
   }
 };
@@ -196,6 +206,7 @@ export const PRESET_THEMES: PresetTheme[] = [{
   featureFontColor: '#f5f5f4',
   fontname: '',
   colors: ['#2563eb', '#171717', '#64748b', '#60a5fa', '#e5e7eb', '#f59e0b'],
+  chartColors: ['#2563eb', '#38bdf8', '#94a3b8', '#60a5fa', '#e5e7eb', '#f59e0b'],
   borderColor: '#2563eb',
   ...vibe(
     radial('#0c0d10', '#1a2744'),

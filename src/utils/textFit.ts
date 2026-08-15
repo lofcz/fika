@@ -91,6 +91,51 @@ export function fitScaleFromContentHeight(contentHeight: number, innerHeight: nu
  * under-measure and snap the scale back to 100% on click). Width is locked to
  * the box inner width because Chrome `zoom` shrinks `clientWidth`.
  */
+/**
+ * Content-box size of the clipped text frame (padding already removed).
+ * Prefers the live DOM box so shrink-to-fit tracks applyLiveSize / resize
+ * instead of the last committed store width/height.
+ */
+export function innerBoxFromContentElement(
+  box: HTMLElement | null | undefined,
+  fallback: { innerWidth: number; innerHeight: number },
+): { innerWidth: number; innerHeight: number } {
+  if (!box) return fallback
+  const style = getComputedStyle(box)
+  const innerWidth = box.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+  const innerHeight = box.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
+  if (!(innerWidth > 1) || !(innerHeight > 1)) return fallback
+  return { innerWidth, innerHeight }
+}
+
+const parseStylePx = (value: string | undefined): number => {
+  if (!value) return 0
+  const n = parseFloat(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * Inner box from applyLiveSize inline styles + authored inset.
+ * No getComputedStyle / clientWidth — safe on the resize hot path.
+ */
+export function innerBoxFromLiveStyles(
+  box: HTMLElement | null | undefined,
+  el: { width: number; height: number; inset?: [number, number, number, number] },
+): { innerWidth: number; innerHeight: number } {
+  const inset = el.inset || [10, 10, 10, 10]
+  const width = parseStylePx(box?.style.width) || el.width
+  const height = parseStylePx(box?.style.height) || el.height
+  return {
+    innerWidth: Math.max(1, width - inset[1] - inset[3]),
+    innerHeight: Math.max(1, height - inset[0] - inset[2]),
+  }
+}
+
+export function contentBoxOfHost(host: HTMLElement | null | undefined): HTMLElement | null {
+  if (!host) return null
+  return (host.closest('[data-live-box]') as HTMLElement | null) ?? host.parentElement
+}
+
 export function measureUnzoomedScrollHeight(host: HTMLElement, innerWidth: number): number {
   const content = host.querySelector('.ProseMirror, .ProseMirror-static, .prosemirror-editor') as HTMLElement | null;
   const target = content || host;
@@ -219,11 +264,157 @@ export function fitZoomScaleForBlocks(blocks: TextFitBlock[], options: FitFontSc
     return 1;
   }
 }
-const FONT_SIZE_PX_RE = /(\d+(?:\.\d+)?)px/;
+
+export type FitMeasureSession = {
+  key: string
+  lineHeight: number
+  maxFont: number
+  items: Array<{
+    block: TextFitBlock
+    size: number
+    handle: ReturnType<typeof pretextPrepare>
+  }>
+}
+
+export function fitSessionKey(
+  html: string,
+  fontFamily: string,
+  lineHeight: number,
+  letterSpacing: number,
+  locale: string,
+  defaultSize = DEFAULT_TEXT_FONT_SIZE,
+): string {
+  return `${locale}\0${fontFamily}\0${lineHeight}\0${letterSpacing}\0${defaultSize}\0${html}`
+}
+
+/**
+ * One-time pretext `prepare()` for authored font sizes. Resize then only
+ * calls `layout()` with the new width (no canvas, no DOM, no re-prepare).
+ */
+export function createFitMeasureSession(
+  html: string,
+  options: {
+    key: string
+    defaultFontFamily: string
+    lineHeight: number
+    letterSpacing?: number
+    /** Painted size for runs with no inline `font-size` (placeholder body is 20, not 16). */
+    defaultSize?: number
+  },
+): FitMeasureSession | null {
+  const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
+  const { blocks } = extractFitBlocksFromHtml(html, {
+    defaultFontFamily: options.defaultFontFamily,
+    defaultSize,
+  })
+  const maxFont = blocks.reduce((max, block) => Math.max(max, block.size), defaultSize)
+  if (!blocks.length) {
+    return { key: options.key, lineHeight: options.lineHeight, maxFont, items: [] }
+  }
+  try {
+    const prepareOptions = options.letterSpacing ? { letterSpacing: options.letterSpacing } : undefined
+    return {
+      key: options.key,
+      lineHeight: options.lineHeight,
+      maxFont,
+      items: blocks.map(block => ({
+        block,
+        size: block.size,
+        handle: pretextPrepare(block.text, canvasFont(block, block.size), prepareOptions),
+      })),
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+/** Resize hot path: pure `layout()` over cached prepare handles. */
+export function measureSessionHeight(
+  session: FitMeasureSession,
+  innerWidth: number,
+  blockSpace = 0,
+  bulletIndent?: number,
+): number {
+  if (!session.items.length) return 0
+  let total = 0
+  for (const item of session.items) {
+    const lineHeightPx = item.size * session.lineHeight
+    const width = Math.max(1, innerWidth - listColumnInset(item.block, item.size, bulletIndent))
+    total += pretextLayout(item.handle, width, lineHeightPx).height
+  }
+  total += Math.max(0, session.items.length - 1) * blockSpace
+  return total
+}
+
+export function fitZoomScaleFromSession(
+  session: FitMeasureSession,
+  innerWidth: number,
+  innerHeight: number,
+  blockSpace = 0,
+): number {
+  const pad = fitClipPadding(session.maxFont, session.lineHeight)
+  const height = measureSessionHeight(session, innerWidth, blockSpace)
+  return fitScaleFromContentHeight(height, Math.max(1, innerHeight - pad))
+}
+
+const DEFAULT_FIT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+
+/**
+ * One-shot locked-box scale for a rich-text HTML string. Editor resize keeps a
+ * cached session; preview/export call this so they shrink with the same math.
+ */
+export function textFitScaleForHtml(
+  html: string,
+  options: {
+    innerWidth: number
+    innerHeight: number
+    defaultFontFamily?: string
+    defaultSize?: number
+    lineHeight: number
+    letterSpacing?: number
+    blockSpace?: number
+    locale?: string
+  },
+): number {
+  if (!html || options.innerWidth <= 2 || options.innerHeight <= 2) return 1
+  const fontFamily = options.defaultFontFamily || DEFAULT_FIT_FONT_FAMILY
+  const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
+  const letterSpacing = options.letterSpacing || 0
+  const key = fitSessionKey(
+    html,
+    fontFamily,
+    options.lineHeight,
+    letterSpacing,
+    options.locale || 'en',
+    defaultSize,
+  )
+  const session = createFitMeasureSession(html, {
+    key,
+    defaultFontFamily: fontFamily,
+    defaultSize,
+    lineHeight: options.lineHeight,
+    letterSpacing: letterSpacing || undefined,
+  })
+  if (!session?.items.length) return 1
+  return fitZoomScaleFromSession(
+    session,
+    options.innerWidth,
+    options.innerHeight,
+    options.blockSpace ?? 0,
+  )
+}
+const FONT_SIZE_RE = /(\d+(?:\.\d+)?)\s*(px|pt|em)?/i;
 function parseFontSizePx(value: string | null | undefined): number {
   if (!value) return 0;
-  const match = FONT_SIZE_PX_RE.exec(value);
-  return match ? parseFloat(match[1]) : 0;
+  const match = FONT_SIZE_RE.exec(value);
+  if (!match) return 0;
+  const n = parseFloat(match[1]);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const unit = (match[2] || 'px').toLowerCase();
+  if (unit === 'pt') return n * (96 / 72);
+  if (unit === 'em') return n * DEFAULT_TEXT_FONT_SIZE;
+  return n;
 }
 
 /** Largest inline px font size declared on `block` or any descendant. */
@@ -310,10 +501,11 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
   const blocks: TextFitBlock[] = [];
   for (const el of candidates) {
     const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
-    if (!text) continue;
     const isList = el.tagName === 'LI';
+    // Empty bullets still occupy a line (Enter on a list placeholder).
+    if (!text && !isList) continue;
     blocks.push({
-      text,
+      text: text || ' ',
       size: blockFontSize(el, defaultSize),
       bold: !!el.querySelector('strong, b'),
       italic: !!el.querySelector('em, i'),

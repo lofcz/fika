@@ -35,6 +35,6 @@ export function LazyCodeEditor(props: ICodeEditorProps) {
     void loadCodeEditor().then(next => setComp(() => next))
   }, [])
 
-  if (!Comp) return createElement(CodeEditorSkeleton)
+  if (!Comp) return createElement(CodeEditorSkeleton, { onUpdate: props.onUpdate, onClose: props.onClose })
   return createElement(Comp, props)
 }

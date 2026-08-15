@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { homedir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { RIZIKA_PPTX } from '../tests/fixtures/paths.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const {
@@ -59,7 +59,11 @@ const importSrc = readFileSync(join(root, 'src/hooks/useImport.ts'), 'utf8')
 assert(importSrc.includes('pptxPictureSource'), 'useImport maps picture-shapes via pptxPictureSource')
 assert(importSrc.includes('pptxImageClip'), 'useImport applies pptxImageClip')
 
-const sample = join(homedir(), 'Desktop', 'Rizika použití EF s ohledem na výkonnost.pptx')
+const sample = RIZIKA_PPTX
+if (!existsSync(sample)) {
+  console.error('Missing fixture:', sample)
+  process.exit(1)
+}
 if (existsSync(sample)) {
   const buf = readFileSync(sample)
   const { parse } = await import(pathToFileURL(join(root, 'node_modules/pptxtojson/dist/index.js')).href)

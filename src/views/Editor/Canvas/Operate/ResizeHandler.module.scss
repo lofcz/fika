@@ -13,6 +13,38 @@
   touch-action: none;
   z-index: 20;
 
+  &.top,
+  &:global(.top) {
+    left: 50%;
+  }
+  &.right-top,
+  &:global(.right-top) {
+    left: 100%;
+  }
+  &.left,
+  &:global(.left) {
+    top: 50%;
+  }
+  &.right,
+  &:global(.right) {
+    left: 100%;
+    top: 50%;
+  }
+  &.left-bottom,
+  &:global(.left-bottom) {
+    top: 100%;
+  }
+  &.bottom,
+  &:global(.bottom) {
+    left: 50%;
+    top: 100%;
+  }
+  &.right-bottom,
+  &:global(.right-bottom) {
+    left: 100%;
+    top: 100%;
+  }
+
   &.left-top.rotate-0,
   &.right-bottom.rotate-0,
   &.left.rotate-45,

@@ -1,8 +1,10 @@
 import { useRef, useCallback } from 'react'
-import { useSlidesStore } from '@/store'
+import { useMainStore } from '@/store'
 import type { PPTElement, PPTLineElement, PPTVideoElement, PPTAudioElement, PPTChartElement } from '@/types/slides'
+import { bindDocumentDrag, rafCoalesce } from '@/utils/gestureBind'
 import { clientToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import { commitSlideElements } from '@/utils/commitSlideElements'
 
 /**
  * Angle from the origin to the given coordinate, in degrees.
@@ -13,6 +15,14 @@ const getAngleFromCoordinate = (x: number, y: number) => {
   return angle
 }
 
+const applyLiveRotateDelta = (id: string, delta: number) => {
+  const css = delta ? `${delta}deg` : ''
+  const box = document.getElementById(`editable-element-${id}`)?.firstElementChild as HTMLElement | null
+  const operate = document.getElementById(`operate-element-${id}`)
+  if (box) box.style.rotate = css
+  if (operate) operate.style.rotate = css
+}
+
 export default (
   elementList: PPTElement[],
   setElementList: (value: PPTElement[]) => void,
@@ -20,7 +30,8 @@ export default (
   canvasScale: number,
 ) => {
   const elementListRef = useRef(elementList)
-  elementListRef.current = elementList
+  const gesturingRef = useRef(false)
+  if (!gesturingRef.current) elementListRef.current = elementList
   const canvasScaleRef = useRef(canvasScale)
   canvasScaleRef.current = canvasScale
 
@@ -29,16 +40,11 @@ export default (
   const rotateElement = useCallback((e: MouseEvent | TouchEvent, element: Exclude<PPTElement, PPTChartElement | PPTLineElement | PPTVideoElement | PPTAudioElement>) => {
     const elementList = elementListRef.current
     const canvasScale = canvasScaleRef.current
-    let liveList = elementList
-    const commitElements = (next: PPTElement[]) => {
-      liveList = next
-      elementListRef.current = next
-      setElementList(next)
-    }
     const isTouchEvent = !(e instanceof MouseEvent)
     if (isTouchEvent && (!e.changedTouches || !e.changedTouches[0])) return
   
     let isMouseDown = true
+    let stopGesture: (() => void) | null = null
     let angle = 0
     const elOriginRotate = element.rotate || 0
 
@@ -51,6 +57,9 @@ export default (
     const centerY = elTop + elHeight / 2
 
     if (!viewportRef.current) return
+
+    gesturingRef.current = true
+    useMainStore.getState().setGesturingState(true)
 
     const handleMousemove = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
@@ -73,27 +82,35 @@ export default (
       else if ( angle > 0 && Math.abs(angle - 180) <= sorptionRange ) angle -= (angle - 180)
       else if ( angle < 0 && Math.abs(angle + 180) <= sorptionRange ) angle -= (angle + 180)
 
-      commitElements(liveList.map(el => element.id === el.id ? { ...el, rotate: angle } : el))
+      applyLiveRotateDelta(element.id, angle - elOriginRotate)
     }
 
     const handleMouseup = () => {
+      if (!isMouseDown) return
       isMouseDown = false
-      document.onmousemove = null
-      document.onmouseup = null
+      stopGesture?.()
+      stopGesture = null
+
+      applyLiveRotateDelta(element.id, 0)
+      gesturingRef.current = false
+      useMainStore.getState().setGesturingState(false)
 
       if (elOriginRotate === angle) return
 
-      useSlidesStore.getState().updateSlide({ elements: liveList })
+      const next = commitSlideElements(elementList.map(el => element.id === el.id ? { ...el, rotate: angle } : el))
+      elementListRef.current = next
+      setElementList(next)
       addHistorySnapshot()
     }
 
-    if (isTouchEvent) {
-      document.ontouchmove = handleMousemove
-      document.ontouchend = handleMouseup
-    }
-    else {
-      document.onmousemove = handleMousemove
-      document.onmouseup = handleMouseup
+    const onMove = rafCoalesce(handleMousemove)
+    const unbind = bindDocumentDrag({
+      onDrag: state => onMove(state.event as MouseEvent | TouchEvent),
+      onDragEnd: () => handleMouseup(),
+    })
+    stopGesture = () => {
+      onMove.cancel()
+      unbind()
     }
   }, [setElementList, viewportRef, addHistorySnapshot])
 

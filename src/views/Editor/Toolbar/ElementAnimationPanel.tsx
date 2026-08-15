@@ -288,9 +288,6 @@ const ElementAnimationPanel = memo(function ElementAnimationPanel() {
       <Draggable
         className={cx('animation-sequence')}
         modelValue={animationSequence}
-        animation={200}
-        scroll
-        scrollSensitivity={50}
         itemKey="id"
         handle=".sequence-content"
         onEnd={handleDragEnd}

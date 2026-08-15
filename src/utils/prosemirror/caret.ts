@@ -15,6 +15,9 @@ export function unregisterEditorView(elementId: string, view?: EditorView) {
 export function getEditorView(elementId: string): EditorView | undefined {
   return views.get(elementId);
 }
+export function liveEditorIds(): string[] {
+  return [...views.keys()];
+}
 let pendingCaret: {
   elementId: string;
   coords: ClientCoords;

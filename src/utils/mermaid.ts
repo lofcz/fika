@@ -7,9 +7,26 @@ type MermaidAPI = {
 type DOMPurifyAPI = {
   sanitize: (dirty: string, config?: Record<string, unknown>) => string;
 };
+
+export class MermaidRenderSuperseded extends Error {
+  constructor() {
+    super('superseded')
+    this.name = 'MermaidRenderSuperseded'
+  }
+}
+
+export const isMermaidRenderSuperseded = (err: unknown) => (
+  err instanceof MermaidRenderSuperseded
+  || (err instanceof Error && err.name === 'MermaidRenderSuperseded')
+)
+
 let mermaidPromise: Promise<MermaidAPI> | null = null;
 let purifyPromise: Promise<DOMPurifyAPI> | null = null;
+let readyPromise: Promise<[MermaidAPI, DOMPurifyAPI]> | null = null;
+let mermaidReady = false;
 let renderIndex = 0;
+let renderToken = 0;
+let exclusive: Promise<unknown> = Promise.resolve();
 
 /** Lazily load + configure mermaid (kept out of the initial embed graph). */
 function ensureMermaid(): Promise<MermaidAPI> {
@@ -32,13 +49,22 @@ function ensureDOMPurify(): Promise<DOMPurifyAPI> {
   });
   return purifyPromise;
 }
-export const renderMermaid = async (code: string, key = 'diagram') => {
-  const [mermaid, DOMPurify] = await Promise.all([ensureMermaid(), ensureDOMPurify()]);
-  const safeKey = key.replace(/[^a-zA-Z0-9]/g, '') || 'diagram';
-  const id = `mermaid${safeKey}${renderIndex++}`;
-  const {
-    svg
-  } = await mermaid.render(id, code);
+
+export const whenMermaidReady = () => {
+  readyPromise ??= Promise.all([ensureMermaid(), ensureDOMPurify()]).then(pair => {
+    mermaidReady = true
+    return pair
+  })
+  return readyPromise
+}
+
+export const prefetchMermaid = () => {
+  void whenMermaidReady()
+}
+
+export const isMermaidReady = () => mermaidReady
+
+const paintSvg = (svg: string, DOMPurify: DOMPurifyAPI) => {
   const document = new DOMParser().parseFromString(svg, 'image/svg+xml');
   const svgElement = document.documentElement;
   svgElement.setAttribute('width', '100%');
@@ -51,4 +77,21 @@ export const renderMermaid = async (code: string, key = 'diagram') => {
       svgFilters: true
     }
   });
-};
+}
+
+export const renderMermaid = async (code: string, key = 'diagram') => {
+  const mine = ++renderToken
+  const [mermaid, DOMPurify] = await whenMermaidReady()
+  if (mine !== renderToken) throw new MermaidRenderSuperseded()
+
+  const run = exclusive.then(async () => {
+    if (mine !== renderToken) throw new MermaidRenderSuperseded()
+    const safeKey = key.replace(/[^a-zA-Z0-9]/g, '') || 'diagram'
+    const id = `mermaid${safeKey}${renderIndex++}`
+    const { svg } = await mermaid.render(id, code)
+    if (mine !== renderToken) throw new MermaidRenderSuperseded()
+    return paintSvg(svg, DOMPurify)
+  })
+  exclusive = run.then(() => undefined, () => undefined)
+  return run
+}

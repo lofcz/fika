@@ -1,3 +1,30 @@
+import type { PPTLatexElement } from '@/types/slides'
+
+/**
+ * Apply an editor save onto an existing formula.
+ *
+ * The canvas box (`width` / `height`) is the authored scale. Never replace it
+ * with the newly measured natural size — `useLiveBoxFit` scales the new
+ * formula into that box. `viewBox` stores the natural measure for export.
+ */
+export function latexPropsAfterEdit(
+  _current: Pick<PPTLatexElement, 'width' | 'height'>,
+  next: { latex: string; path?: string; w: number; h: number },
+): Pick<PPTLatexElement, 'latex' | 'path' | 'viewBox'> {
+  return {
+    latex: next.latex,
+    path: next.path ?? '',
+    viewBox: [next.w, next.h],
+  }
+}
+
+/** Same uniform scale `useLiveBoxFit` writes: authored box / natural viewBox. */
+export function latexPaintScale(el: Pick<PPTLatexElement, 'width' | 'height' | 'viewBox'>): number {
+  const [naturalW, naturalH] = el.viewBox || [0, 0]
+  if (!(naturalW > 0) || !(naturalH > 0) || !(el.width > 0) || !(el.height > 0)) return 1
+  return Math.min(el.width / naturalW, el.height / naturalH)
+}
+
 /**
  * Extract the contents of every equation (or equation*) environment.
  */

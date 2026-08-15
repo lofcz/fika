@@ -48,6 +48,11 @@ const AlignmentLine = memo((props: IAlignmentLineProps) => {
   const y1 = vertical ? 0 : pad
   const x2 = vertical ? pad : length
   const y2 = vertical ? length : pad
+  const tickPath = tick
+    ? (vertical
+      ? `M${pad - tick} 0.5 L${pad + tick} 0.5 M${pad - tick} ${length - 0.5} L${pad + tick} ${length - 0.5}`
+      : `M0.5 ${pad - tick} L0.5 ${pad + tick} M${length - 0.5} ${pad - tick} L${length - 0.5} ${pad + tick}`)
+    : ''
 
   return (
     <div
@@ -76,7 +81,28 @@ const AlignmentLine = memo((props: IAlignmentLineProps) => {
             <stop offset={`${100 - fadePct}%`} stopColor="currentColor" stopOpacity="1" />
             <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
           </linearGradient>
+          <linearGradient
+            id={`${gradId}-halo`}
+            gradientUnits="userSpaceOnUse"
+            x1={x1}
+            y1={y1}
+            x2={x2}
+            y2={y2}
+          >
+            <stop offset="0%" stopColor="var(--operate-line-halo, #ffffff)" stopOpacity="0" />
+            <stop offset={`${fadePct}%`} stopColor="var(--operate-line-halo, #ffffff)" stopOpacity="1" />
+            <stop offset={`${100 - fadePct}%`} stopColor="var(--operate-line-halo, #ffffff)" stopOpacity="1" />
+            <stop offset="100%" stopColor="var(--operate-line-halo, #ffffff)" stopOpacity="0" />
+          </linearGradient>
         </defs>
+        <line
+          className={cx('halo')}
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke={`url(#${gradId}-halo)`}
+        />
         <line
           className={cx('wash')}
           x1={x1}
@@ -93,12 +119,10 @@ const AlignmentLine = memo((props: IAlignmentLineProps) => {
           y2={y2}
           stroke={`url(#${gradId}-fade)`}
         />
-        {tick ? (
+        {tickPath ? (
           <>
-            <path className={cx('tick')} d={vertical
-              ? `M${pad - tick} 0.5 L${pad + tick} 0.5 M${pad - tick} ${length - 0.5} L${pad + tick} ${length - 0.5}`
-              : `M0.5 ${pad - tick} L0.5 ${pad + tick} M${length - 0.5} ${pad - tick} L${length - 0.5} ${pad + tick}`
-            } />
+            <path className={cx('tick-halo')} d={tickPath} />
+            <path className={cx('tick')} d={tickPath} />
           </>
         ) : null}
         {markPositions.map((pos, index) => {

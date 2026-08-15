@@ -4,7 +4,6 @@ import styles from './MobilePreview.module.scss'
 const cx = bindStyles(styles)
 import { useEffect, useRef, useState } from 'react'
 import { useSlidesStore } from '@/store'
-import useLoadSlides from '@/hooks/useLoadSlides'
 import type { Mode } from '@/types/mobile'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
 import Divider from '@/components/Divider'
@@ -17,7 +16,6 @@ export type IMobilePreviewProps = {
 export default function MobilePreview({ changeMode }: IMobilePreviewProps) {
   const { LL } = useI18nContext()
   const slides = useSlidesStore(s => s.slides)
-  const { slidesLoadLimit } = useLoadSlides()
   const mobileRef = useRef<HTMLDivElement | null>(null)
   const [screenWidth, setScreenWidth] = useState(0)
 
@@ -29,12 +27,11 @@ export default function MobilePreview({ changeMode }: IMobilePreviewProps) {
   return (
     <div className={cx('mobile-preview')} ref={mobileRef}>
       <div className={cx('thumbnail-list')}>
-        {slides.map((slide, index) => (
+        {slides.map(slide => (
           <div className={cx('thumbnail-item')} key={slide.id}>
             <ThumbnailSlide
-              slide={slide}
+              slide={{ id: slide.id }}
               size={screenWidth - 20}
-              visible={index < slidesLoadLimit}
             />
           </div>
         ))}

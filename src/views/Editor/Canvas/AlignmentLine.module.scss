@@ -2,12 +2,19 @@
   position: absolute;
   z-index: 100;
   pointer-events: none;
-  color: $ink;
+  color: var(--operate-line, #18181b);
   animation: ink-guide-in 160ms $inkEase both;
 
   .stroke {
     display: block;
     overflow: visible;
+  }
+
+  .halo {
+    fill: none;
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    opacity: 0.42;
   }
 
   .wash {
@@ -21,7 +28,15 @@
     fill: none;
     stroke-width: 1.15;
     stroke-linecap: round;
-    opacity: 0.55;
+    opacity: 0.7;
+  }
+
+  .tick-halo {
+    fill: none;
+    stroke: var(--operate-line-halo, #ffffff);
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    opacity: 0.42;
   }
 
   .tick {
@@ -29,12 +44,12 @@
     stroke: currentColor;
     stroke-width: 1.15;
     stroke-linecap: round;
-    opacity: 0.62;
+    opacity: 0.72;
   }
 
   .mark {
-    fill: $ink;
-    stroke: #fff;
+    fill: currentColor;
+    stroke: var(--operate-line-halo, #ffffff);
     stroke-width: 1;
   }
 
@@ -54,17 +69,17 @@
   }
 
   &.center {
-    color: #3f3f46;
-
     .hairline {
-      opacity: 0.42;
+      opacity: 0.5;
     }
   }
 
   &.canvas {
-    color: $inkMuted;
-
     .hairline {
+      opacity: 0.36;
+    }
+
+    .halo {
       opacity: 0.28;
     }
 
@@ -75,11 +90,9 @@
 
   &.spacing,
   &.size {
-    color: $ink;
-
     .hairline {
       stroke-width: 1;
-      opacity: 0.48;
+      opacity: 0.55;
     }
 
     .wash {
@@ -88,12 +101,11 @@
   }
 
   &.measure {
-    color: $ink;
     z-index: 101;
 
     .hairline {
       stroke-width: 1.15;
-      opacity: 0.62;
+      opacity: 0.72;
     }
 
     .wash {
@@ -101,12 +113,12 @@
     }
 
     .tick {
-      opacity: 0.75;
+      opacity: 0.8;
     }
 
     .measure {
-      background: $ink;
-      color: #fafafa;
+      background: var(--operate-line, #18181b);
+      color: var(--operate-line-halo, #ffffff);
       padding: 2px 6px;
       border-radius: 999px;
       font-variant-numeric: tabular-nums;
@@ -115,11 +127,9 @@
   }
 
   &.grid {
-    color: $ink;
-
     .hairline {
       stroke-width: 1.15;
-      opacity: 0.4;
+      opacity: 0.48;
       stroke-dasharray: 1.2 3;
     }
 

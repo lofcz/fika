@@ -44,6 +44,7 @@ function LinePool(props: ILinePoolProps) {
               <button
                 type="button"
                 className={cx('line-item')}
+                data-line-item=""
                 key={j}
                 onClick={() => selectLine(line)}
               >

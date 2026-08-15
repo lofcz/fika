@@ -23,17 +23,14 @@ export type IImageElementOperateProps = {
 const ImageElementOperate = memo((props: IImageElementOperateProps) => {
   const propsRef = useLatest(props)
   const { elementInfo, handlerVisible } = props
-  const canvasScale = useMainStore(s => s.canvasScale)
   const clipingImageElementId = useMainStore(s => s.clipingImageElementId)
   const isCliping = clipingImageElementId === elementInfo.id
-  const scaleWidth = props.elementInfo.width * canvasScale
-  const scaleHeight = props.elementInfo.height * canvasScale
-  const { resizeHandlers, borderLines } = useCommonOperate(scaleWidth, scaleHeight)
+  const { resizeHandlers, borderLines } = useCommonOperate()
 
   return (
     <div className={cx('image-element-operate', { cliping: isCliping })}>
       {borderLines.map(line => (
-        <BorderLine className={cx('operate-border-line')} key={line.type} type={line.type} style={line.style} />
+        <BorderLine className={cx('operate-border-line')} key={line.type} type={line.type} />
       ))}
       {handlerVisible ? (
         <>
@@ -43,7 +40,6 @@ const ImageElementOperate = memo((props: IImageElementOperateProps) => {
               key={point.direction}
               type={point.direction}
               rotate={elementInfo.rotate}
-              style={point.style}
               onMouseDown={e => {
                 const { scaleElement, elementInfo: el } = propsRef.current
                 scaleElement(e.nativeEvent, el, point.direction)
@@ -52,7 +48,6 @@ const ImageElementOperate = memo((props: IImageElementOperateProps) => {
           ))}
           <RotateHandler
             className={cx('operate-rotate-handler')}
-            style={{ left: scaleWidth / 2 + 'px' }}
             onMouseDown={e => {
               const { rotateElement, elementInfo: el } = propsRef.current
               rotateElement(e.nativeEvent, el)

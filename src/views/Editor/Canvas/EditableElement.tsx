@@ -51,14 +51,14 @@ const EditableElement = memo((props: IEditableElementProps) => {
   const contextmenus = useCallback(() => contextmenusFor(elementInfo, isMultiSelect), [contextmenusFor, elementInfo, isMultiSelect])
 
   return (
-    <div className={cx('editable-element', { 'is-editing': isEditing })} id={`editable-element-${elementInfo.id}`} style={{ zIndex: elementIndex, ...style }}>
+    <div className={cx('editable-element', { 'is-editing': isEditing })} id={`editable-element-${elementInfo.id}`} data-element-type={elementInfo.type} style={{ zIndex: elementIndex, ...style }}>
       {currentElementComponent ? (
         <Suspense fallback={elementInfo.type === ElementTypes.CODE ? <CodeElementPlaceholder elementInfo={elementInfo} /> : null}>
           {createElement(currentElementComponent as ComponentType<any>, {
             elementInfo,
             selectElement,
             contextmenus,
-            ...((elementInfo.type === 'text' || elementInfo.type === 'shape') ? { isEditing } : {}),
+            ...((elementInfo.type === 'text' || elementInfo.type === 'shape' || elementInfo.type === 'table') ? { isEditing } : {}),
           })}
         </Suspense>
       ) : null}

@@ -3229,6 +3229,29 @@ export type NamespaceEditorTranslation = {
 		 * N​e​w​ ​p​r​e​s​e​n​t​a​t​i​o​n
 		 */
 		resetSlides: string
+		resetConfirm: {
+			/**
+			 * N​e​w​ ​p​r​e​s​e​n​t​a​t​i​o​n
+			 */
+			kicker: string
+			/**
+			 * S​t​a​r​t​ ​f​r​o​m​ ​a​ ​b​l​a​n​k​ ​d​e​c​k​?
+			 */
+			title: string
+			/**
+			 * T​h​i​s​ ​p​r​e​s​e​n​t​a​t​i​o​n​ ​h​a​s​ ​{​c​o​u​n​t​}​ ​s​l​i​d​e​s​.​ ​S​t​a​r​t​i​n​g​ ​n​e​w​ ​w​i​l​l​ ​r​e​p​l​a​c​e​ ​t​h​e​m​.
+			 * @param {number} count
+			 */
+			description: RequiredParams<'count'>
+			/**
+			 * S​t​a​r​t​ ​n​e​w
+			 */
+			actionTitle: string
+			/**
+			 * R​e​p​l​a​c​e​ ​t​h​e​ ​c​u​r​r​e​n​t​ ​s​l​i​d​e​s​ ​w​i​t​h​ ​a​ ​b​l​a​n​k​ ​t​i​t​l​e​ ​s​l​i​d​e​.
+			 */
+			actionHint: string
+		}
 		/**
 		 * S​l​i​d​e​ ​t​y​p​e​ ​m​a​r​k​u​p
 		 */
@@ -8326,6 +8349,28 @@ export type TranslationFunctions = {
 			 * New presentation
 			 */
 			resetSlides: () => LocalizedString
+			resetConfirm: {
+				/**
+				 * New presentation
+				 */
+				kicker: () => LocalizedString
+				/**
+				 * Start from a blank deck?
+				 */
+				title: () => LocalizedString
+				/**
+				 * This presentation has {count} slides. Starting new will replace them.
+				 */
+				description: (arg: { count: number }) => LocalizedString
+				/**
+				 * Start new
+				 */
+				actionTitle: () => LocalizedString
+				/**
+				 * Replace the current slides with a blank title slide.
+				 */
+				actionHint: () => LocalizedString
+			}
 			/**
 			 * Slide type markup
 			 */

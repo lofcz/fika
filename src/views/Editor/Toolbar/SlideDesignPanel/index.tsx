@@ -31,6 +31,7 @@ import GradientBar from '@/components/GradientBar'
 import PanelSection from '../common/PanelSection'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { Icon } from '@/components/Icon'
+import { applyLiveBackgroundGradient } from '@/utils/liveElementPaint'
 
 const DEFAULT_BACKGROUND: SlideBackground = { type: 'solid', color: '#fff' }
 
@@ -58,6 +59,7 @@ const ThemeList = memo(function ThemeList({
           <button
             type="button"
             className={cx('theme-card', { selected: activeThemeId === item.id })}
+            data-theme-id={item.id}
             onMouseDown={event => event.preventDefault()}
             onClick={() => onApply(item)}
           >
@@ -88,6 +90,7 @@ const ThemeLooks = memo(function ThemeLooks({
           key={index}
           type="button"
           className={cx('theme-look', { selected: index === activeIndex })}
+          data-theme-look={index}
           style={slideBackgroundToStyle(look)}
           onMouseDown={event => event.preventDefault()}
           onClick={() => onPick(index)}
@@ -217,9 +220,21 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
     addHistorySnapshot()
   }
 
+  const paintGradientBackground = (props: Partial<Gradient>) => {
+    const current = readBackground()
+    if (!current.gradient) return
+    applyLiveBackgroundGradient({ ...current.gradient, ...props })
+  }
+
   const updateGradientBackground = (props: Partial<Gradient>) => {
-    const background = readBackground()
-    updateBackground({ gradient: { ...background.gradient!, ...props } })
+    const current = readBackground()
+    if (!current.gradient) return
+    const next = { ...current.gradient, ...props }
+    applyLiveBackgroundGradient(next)
+    useSlidesStore.getState().updateSlide({
+      background: { ...current, gradient: next },
+    })
+    addHistorySnapshot()
   }
 
   const updateGradientBackgroundColors = (color: string) => {
@@ -341,6 +356,7 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
               <GradientBar
                 value={background.gradient?.colors || []}
                 index={currentGradientIndex}
+                onInput={value => paintGradientBackground({ colors: value })}
                 onUpdateValue={value => updateGradientBackground({ colors: value })}
                 onUpdateIndex={index => setCurrentGradientIndex(index)}
               />
@@ -357,7 +373,9 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
                     max={360}
                     step={15}
                     value={background.gradient.rotate || 0}
-                    onUpdateValue={value => updateGradientBackground({ rotate: value as number })}
+                    data-style-slider="background-gradient-angle"
+                    onInput={value => paintGradientBackground({ rotate: value })}
+                    onUpdateValue={value => updateGradientBackground({ rotate: value })}
                   />
                 </div>
               ) : null}

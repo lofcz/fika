@@ -101,7 +101,8 @@ export function createJobProgress(): JobProgress {
   }) => {
     if (!isCurrent(gen)) return false;
     current.value = slide;
-    progress.value = Math.min(1, Math.max(0, value));
+    const next = Math.min(1, Math.max(0, value));
+    progress.value = Math.max(progress.value, next);
     notify();
     if (options?.yieldPaint === false) return true;
     await Promise.resolve();
@@ -110,6 +111,7 @@ export function createJobProgress(): JobProgress {
   };
   const finish = (gen = generation) => {
     if (!isCurrent(gen)) return false;
+    progress.value = 1;
     running.value = false;
     notify();
     return true;

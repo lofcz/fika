@@ -43,7 +43,7 @@
     }
   }
   &.turning-mode-fade {
-    transition: opacity .75s;
+    transition: opacity .22s ease-out;
     &.before {
       pointer-events: none;
       opacity: 0;
@@ -54,7 +54,7 @@
     }
   }
   &.turning-mode-slideX {
-    transition: transform .35s;
+    transition: transform .2s ease-out;
     &.before {
       transform: translateX(-100%);
     }
@@ -63,7 +63,7 @@
     }
   }
   &.turning-mode-slideY {
-    transition: transform .35s;
+    transition: transform .2s ease-out;
     &.before {
       transform: translateY(-100%);
     }
@@ -72,7 +72,7 @@
     }
   }
   &.turning-mode-slideX3D {
-    transition: transform .5s;
+    transition: transform .22s ease-out;
     &.before {
       transform: translateX(-100%) scale(.5);
     }
@@ -81,7 +81,7 @@
     }
   }
   &.turning-mode-slideY3D {
-    transition: transform .5s;
+    transition: transform .22s ease-out;
     &.before {
       transform: translateY(-100%) scale(.5);
     }
@@ -90,7 +90,7 @@
     }
   }
   &.turning-mode-rotate {
-    transition: transform .5s;
+    transition: transform .22s ease-out;
     transform-origin: 0 0;
     &.before {
       transform: rotate(90deg);
@@ -100,7 +100,7 @@
     }
   }
   &.turning-mode-scaleY {
-    transition: transform .5s;
+    transition: transform .22s ease-out;
     &.before {
       transform: scaleY(.1);
     }
@@ -109,7 +109,7 @@
     }
   }
   &.turning-mode-scaleX {
-    transition: transform .5s;
+    transition: transform .22s ease-out;
     &.before {
       transform: scaleX(.1);
     }
@@ -118,7 +118,7 @@
     }
   }
   &.turning-mode-scale {
-    transition: transform .5s;
+    transition: transform .22s ease-out;
     &.before {
       transform: scale(.25);
     }
@@ -127,7 +127,7 @@
     }
   }
   &.turning-mode-scaleReverse {
-    transition: transform .5s;
+    transition: transform .22s ease-out;
     &.before {
       transform: scale(2);
     }

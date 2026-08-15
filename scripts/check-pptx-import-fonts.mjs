@@ -8,13 +8,12 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { homedir } from 'node:os'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { HOUBY_PPTX, PLEX_FONT } from '../tests/fixtures/paths.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const houby = join(homedir(), 'Desktop', 'Houby-Skryty-svet-nasich-lesu.pptx')
-const plex = join(root, '..', 'factory-cursor-bridge', 'PptxGenJS', 'test', 'fonts', 'IBMPlexSans-Regular.ttf')
-const plexAlt = 'C:/Users/mstagl-dev/Documents/factory-cursor-bridge/PptxGenJS/test/fonts/IBMPlexSans-Regular.ttf'
+const houby = HOUBY_PPTX
+const plex = PLEX_FONT
 
 const failures = []
 function assert(condition, message) {
@@ -87,7 +86,7 @@ async function parsePptx(path) {
 }
 
 async function parseGeneratedEmbeddedFontDeck() {
-  const fontPath = existsSync(plex) ? plex : plexAlt
+  const fontPath = plex
   if (!existsSync(fontPath)) return null
   const pptxgen = (await import('@lofcz/pptxgenjs')).default
   const pptx = new pptxgen()
@@ -145,7 +144,7 @@ if (existsSync(houby)) {
   )
 }
 else {
-  failures.push('Houby PPTX missing from Desktop — cannot verify the reported crash file')
+  failures.push('Houby PPTX missing from tests/fixtures/pptx/houby.pptx')
 }
 
 const generated = await parseGeneratedEmbeddedFontDeck()

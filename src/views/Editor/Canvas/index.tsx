@@ -8,18 +8,19 @@ import { useMainStore, useSlidesStore, useKeyboardStore, selectCurrentSlide, sel
 import { useToolbarStoreSelect } from '@/views/Editor/Toolbar/common/handleElement'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import type { ContextmenuItem } from '@/components/Contextmenu/types'
-import type { PPTElement, PPTShapeElement, Slide } from '@/types/slides'
+import type { PPTElement, PPTShapeElement } from '@/types/slides'
 import type { AlignmentLineProps, CreateCustomShapeData } from '@/types/edit'
 import { SlideScaleContext } from '@/types/injectKey'
 import { removeAllRanges } from '@/utils/selection'
 import { clientToCanvas } from '@/utils/canvasPointer'
-import { clicksToEditText, elementVisualHitRect, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInVisualHitRect, retryPendingCaret, type ClientCoords, type VisualHitRect } from '@/utils/canvasHitTest'
+import { clicksToEditText, collectVisualHitPlan, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInAnyVisualHitRect, retryPendingCaret, type ClientCoords } from '@/utils/canvasHitTest'
 import { getEditorView } from '@/utils/prosemirror/caret'
-import { commitLiveEditorToStore } from '@/utils/prosemirror/commitEditor'
+import { commitAllLiveEditors } from '@/utils/commitSlideElements'
 import { richTextAttrsFromElement } from '@/utils/prosemirror/richTextAttrsFromElement'
 import { KEYS } from '@/configs/hotkey'
 import { getElementRange } from '@/utils/element'
-import { collectCtrlMeasures, unionBoxes } from '@/utils/snap'
+import { boxesNear, buildSnapIndex } from '@/utils/spatial'
+import { collectCtrlMeasures, snapQueryPad, unionBoxes } from '@/utils/snap'
 import useViewportSize from './hooks/useViewportSize'
 import useOperateChrome from './hooks/useOperateChrome'
 import useMouseSelection from './hooks/useMouseSelection'
@@ -56,6 +57,7 @@ import LinkDialog from './LinkDialog'
 import Modal from '@/components/Modal'
 import message from '@/utils/message'
 import { useI18nContext } from '@/i18n/useI18nContext'
+import { classifyElementListSync, patchEditingElementChrome, snapSlideElements, slideElementsSnapEqual } from './elementListSync'
 
 const WHEEL_PAGE_STEP = 100
 
@@ -87,91 +89,7 @@ const isOperateChromeTarget = (target: EventTarget | null) => (
 
 const HIDDEN_STYLE: CSSProperties = { display: 'none' }
 
-const cloneElements = (elements: PPTElement[]): PPTElement[] => (
-  JSON.parse(JSON.stringify(elements))
-)
-
-const shallowChangedKeys = (prev: object, next: object): string[] => {
-  const keys = new Set([...Object.keys(prev), ...Object.keys(next)])
-  const changed: string[] = []
-  for (const key of keys) {
-    if ((prev as Record<string, unknown>)[key] !== (next as Record<string, unknown>)[key]) {
-      changed.push(key)
-    }
-  }
-  return changed
-}
-
-const isShapeTextContentOnly = (prev: PPTElement, next: PPTElement): boolean => {
-  const prevText = 'text' in prev ? prev.text : undefined
-  const nextText = 'text' in next ? next.text : undefined
-  if (!nextText) return false
-  if (!prevText) return true
-  return shallowChangedKeys(prevText, nextText).every(key => key === 'content')
-}
-
-const isContentLikeKey = (key: string, prev: PPTElement, next: PPTElement): boolean => {
-  if (key === 'content' || key === 'data') return true
-  if (key === 'text') return isShapeTextContentOnly(prev, next)
-  return false
-}
-
-const isChromeSizeKey = (key: string) => key === 'height' || key === 'width'
-
-type ElementListSyncAction = 'replace' | 'skip' | 'patch-chrome'
-
-const classifyElementListSync = (
-  prev: Slide | undefined,
-  next: Slide | undefined,
-  editingId: string,
-): ElementListSyncAction => {
-  if (!next) return 'replace'
-  if (!prev || prev.id !== next.id) return 'replace'
-  if (prev.elements === next.elements) return 'skip'
-  if (prev.elements.length !== next.elements.length) return 'replace'
-
-  let changedIndex = -1
-  for (let i = 0; i < next.elements.length; i++) {
-    if (prev.elements[i].id !== next.elements[i].id) return 'replace'
-    if (prev.elements[i] !== next.elements[i]) {
-      if (changedIndex !== -1) return 'replace'
-      changedIndex = i
-    }
-  }
-  if (changedIndex === -1) return 'skip'
-
-  const prevEl = prev.elements[changedIndex]
-  const nextEl = next.elements[changedIndex]
-  if (!editingId || nextEl.id !== editingId) return 'replace'
-
-  const keys = shallowChangedKeys(prevEl, nextEl)
-  if (keys.length === 0) return 'skip'
-  if (keys.every(key => isContentLikeKey(key, prevEl, nextEl))) return 'skip'
-  if (keys.every(key => isChromeSizeKey(key) || isContentLikeKey(key, prevEl, nextEl))) return 'patch-chrome'
-  return 'replace'
-}
-
-const isInPlaceEditingContentPatch = (
-  prev: Slide | undefined,
-  next: Slide | undefined,
-  editingId: string,
-) => classifyElementListSync(prev, next, editingId) === 'skip'
-
-const patchEditingElementChrome = (list: PPTElement[], storeEl: PPTElement): PPTElement[] => {
-  const index = list.findIndex(el => el.id === storeEl.id)
-  if (index < 0) return list
-  const el = list[index]
-  const nextHeight = 'height' in storeEl ? storeEl.height : undefined
-  const prevHeight = 'height' in el ? el.height : undefined
-  if (el.width === storeEl.width && prevHeight === nextHeight) return list
-  const next = list.slice()
-  next[index] = {
-    ...el,
-    width: storeEl.width,
-    ...(nextHeight !== undefined ? { height: nextHeight } : {}),
-  } as PPTElement
-  return next
-}
+const cloneElements = (elements: PPTElement[]): PPTElement[] => elements.slice()
 
 const findViewportWrapper = (from: EventTarget | null, canvas: HTMLElement | null): HTMLElement | null => {
   if (from instanceof Element) {
@@ -194,15 +112,18 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
   const canvasScale = useMainStore(s => s.canvasScale)
   const clipingImageElementId = useMainStore(s => s.clipingImageElementId)
   const editingElementId = useMainStore(s => s.editingElementId)
-  const currentSlide = useToolbarStoreSelect(
-    () => selectCurrentSlide(useSlidesStore.getState()),
-    (prev, next) => isInPlaceEditingContentPatch(prev, next, useMainStore.getState().editingElementId),
+  const currentSnap = useToolbarStoreSelect(
+    () => snapSlideElements(selectCurrentSlide(useSlidesStore.getState())),
+    (prev, next) => slideElementsSnapEqual(prev, next, useMainStore.getState().editingElementId),
   )
+  const currentSlide = currentSnap
+    ? selectCurrentSlide(useSlidesStore.getState())
+    : undefined
   const spaceKeyState = useKeyboardStore(s => s.spaceKeyState)
   const ctrlKeyState = useKeyboardStore(s => s.ctrlKeyState)
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const viewportSize = useSlidesStore(s => s.viewportSize)
-  const { operateLineColor } = useOperateChrome()
+  const { operateLineColor, operateLineHalo } = useOperateChrome()
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const [alignmentLines, setAlignmentLines] = useState<AlignmentLineProps[]>([])
@@ -247,26 +168,34 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
   const [elementList, setElementList] = useState<PPTElement[]>(() => (
     currentSlide ? cloneElements(currentSlide.elements) : []
   ))
-  const prevSlideRef = useRef(currentSlide)
+  const prevSlideRef = useRef(currentSnap)
 
   const endEdit = useCallback(() => {
     const editingId = useMainStore.getState().editingElementId
+    commitAllLiveEditors()
     if (editingId) {
-      commitLiveEditorToStore(editingId)
       const view = getEditorView(editingId)
       if (view?.hasFocus()) view.dom.blur()
     }
     const storeSlide = selectCurrentSlide(useSlidesStore.getState())
-    prevSlideRef.current = storeSlide
+    prevSlideRef.current = snapSlideElements(storeSlide)
     setElementList(storeSlide ? cloneElements(storeSlide.elements) : [])
     if (!useMainStore.getState().editingElementId) return
     useMainStore.getState().setEditingElementId('')
   }, [])
 
-  const liveSlide = selectCurrentSlide(useSlidesStore.getState())
-  if (prevSlideRef.current !== liveSlide) {
-    const prevSlide = prevSlideRef.current
-    prevSlideRef.current = liveSlide
+  const liveSnap = currentSnap
+  const prevSnap = prevSlideRef.current
+  if (prevSnap?.id !== liveSnap?.id) {
+    prevSlideRef.current = liveSnap
+    setElementList(currentSlide ? cloneElements(currentSlide.elements) : [])
+  }
+  else if (prevSnap?.elements !== liveSnap?.elements) {
+    const liveSlide = currentSlide
+    const prevSlide = liveSlide
+      ? { ...liveSlide, elements: prevSnap.elements }
+      : undefined
+    prevSlideRef.current = liveSnap
     const liveEditingId = useMainStore.getState().editingElementId
     const action = classifyElementListSync(prevSlide, liveSlide, liveEditingId)
     if (action === 'replace') {
@@ -305,7 +234,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
   const { dragElement } = useDragElement(elementList, setElementList, alignmentLines, setAlignmentLines, canvasScale)
   const { dragLineElement } = useDragLineElement(elementList, setElementList)
   const { selectElement } = useSelectAndMoveElement(elementList, dragElement)
-  const { scaleElement, scaleMultiElement } = useScaleElement(elementList, setElementList, alignmentLines, setAlignmentLines, canvasScale)
+  const { scaleElement, scaleMultiElement } = useScaleElement(elementList, setElementList, canvasScale)
   const { rotateElement } = useRotateElement(elementList, setElementList, viewportRef, canvasScale)
   const { rotateGroupElement } = useRotateGroupElement(elementList, setElementList, viewportRef, canvasScale)
   const { moveShapeKeypoint } = useMoveShapeKeypoint(elementList, setElementList, canvasScale)
@@ -333,30 +262,21 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     const wrapper = findViewportWrapper(e.target, canvasRef.current)
     if (!wrapper) return
 
-    const hiddenSet = new Set(main.hiddenElementIdList)
-    const selectedSet = new Set(main.activeElementIdList)
-    const rects = []
-    const occluderRects: VisualHitRect[] = []
-    const byId = new Map<string, PPTElement>()
-    for (let i = 0; i < elementList.length; i++) {
-      const element = elementList[i]
-      if (hiddenSet.has(element.id)) continue
-      if (element.id === editingElementId) continue
-      if (element.id === main.clipingImageElementId) continue
-      if (selectedSet.has(element.id) && (element.type === 'video' || element.type === 'audio') && main.activeElementIdList.length === 1) {
-        occluderRects.push(elementVisualHitRect(element, main.canvasScale, i + 1))
-      }
-      if (selectedSet.has(element.id) && element.type !== 'line') continue
-      const rect = elementVisualHitRect(element, main.canvasScale, i + 1)
-      rects.push(rect)
-      byId.set(element.id, element)
-    }
+    const { hitRects, occluderRects } = collectVisualHitPlan({
+      elementList,
+      canvasScale: main.canvasScale,
+      hiddenElementIdList: main.hiddenElementIdList,
+      activeElementIdList: main.activeElementIdList,
+      editingElementId,
+      clipingImageElementId: main.clipingImageElementId,
+    })
+    const byId = new Map(elementList.map(element => [element.id, element]))
 
     const bounds = wrapper.getBoundingClientRect()
     const x = e.clientX - bounds.left
     const y = e.clientY - bounds.top
-    if (occluderRects.some(hole => pointInVisualHitRect(x, y, hole))) return
-    const hit = hitTestVisualRects(rects, x, y)
+    if (pointInAnyVisualHitRect(x, y, occluderRects)) return
+    const hit = hitTestVisualRects(hitRects, x, y)
     if (!hit) return
     const element = byId.get(hit.id)
     if (!element || element.lock) return
@@ -377,6 +297,21 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     if (isOperateChromeTarget(e.target)) return
     if (e.target instanceof Element && e.target.closest('.hit-rect, .hit-border, .hit-edit')) return
 
+    const wrapper = findViewportWrapper(e.target, canvasRef.current)
+    if (wrapper) {
+      const main = useMainStore.getState()
+      const { occluderRects } = collectVisualHitPlan({
+        elementList,
+        canvasScale: main.canvasScale,
+        hiddenElementIdList: main.hiddenElementIdList,
+        activeElementIdList: main.activeElementIdList,
+        editingElementId: main.editingElementId,
+        clipingImageElementId: main.clipingImageElementId,
+      })
+      const bounds = wrapper.getBoundingClientRect()
+      if (pointInAnyVisualHitRect(e.clientX - bounds.left, e.clientY - bounds.top, occluderRects)) return
+    }
+
     endEdit()
     const main = useMainStore.getState()
     const keyboard = useKeyboardStore.getState()
@@ -386,7 +321,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     if (!main.editorAreaFocus) main.setEditorareaFocus(true)
     if (main.textFormatPainter) main.setTextFormatPainter(null)
     removeAllRanges()
-  }, [endEdit, updateMouseSelection, dragViewport])
+  }, [elementList, endEdit, updateMouseSelection, dragViewport])
 
   const handleDblClick = useCallback((e: MouseEvent) => {
     const main = useMainStore.getState()
@@ -568,9 +503,10 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     const moving = unionBoxes(elementList.filter(el => selected.has(el.id)).map(getElementRange))
     if (!moving) return snapGuides
     const others = elementList.filter(el => !selected.has(el.id)).map(getElementRange)
+    const nearby = boxesNear(buildSnapIndex(others), moving, snapQueryPad())
     const measures = collectCtrlMeasures(
       moving,
-      others,
+      nearby,
       { width: viewportSize, height: viewportSize * viewportRatio },
       snapGuides,
     )
@@ -582,7 +518,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
       <div
         className={[cx('canvas'), className].filter(Boolean).join(' ')}
         ref={canvasRef}
-        style={{ '--operate-line': operateLineColor, ...style } as CSSProperties}
+        style={{ '--operate-line': operateLineColor, '--operate-line-halo': operateLineHalo, ...style } as CSSProperties}
         onMouseDownCapture={e => {
           handleMousedownCanvasCapture(e.nativeEvent)
           handleCanvasHitSelect(e)

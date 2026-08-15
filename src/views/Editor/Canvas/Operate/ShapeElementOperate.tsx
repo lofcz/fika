@@ -3,7 +3,6 @@ import styles from './ShapeElementOperate.module.scss'
 const cx = bindStyles(styles)
 import { memo } from 'react'
 
-import { useMainStore } from '@/store'
 import type { PPTShapeElement } from '@/types/slides'
 import type { OperateResizeHandlers } from '@/types/edit'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
@@ -26,10 +25,10 @@ export type IShapeElementOperateProps = {
 const ShapeElementOperate = memo((props: IShapeElementOperateProps) => {
   const propsRef = useLatest(props)
   const { elementInfo, handlerVisible } = props
-  const canvasScale = useMainStore(s => s.canvasScale)
-  const scaleWidth = props.elementInfo.width * canvasScale
-  const scaleHeight = props.elementInfo.height * canvasScale
-  const { resizeHandlers, borderLines } = useCommonOperate(scaleWidth, scaleHeight)
+  const { resizeHandlers: boxResizeHandlers, textElementResizeHandlers, borderLines } = useCommonOperate()
+  const resizeHandlers = elementInfo.text?.fixedHeight === false ? textElementResizeHandlers : boxResizeHandlers
+  const boxWidth = props.elementInfo.width
+  const boxHeight = props.elementInfo.height
 
   const keypoints = (() => {
     if (!props.elementInfo.pathFormula || props.elementInfo.keypoints === undefined) return []
@@ -37,17 +36,17 @@ const ShapeElementOperate = memo((props: IShapeElementOperateProps) => {
     return props.elementInfo.keypoints.map((keypoint, index) => {
       const getBaseSize = pathFormula.getBaseSize![index]
       const relative = pathFormula.relative![index]
-      const keypointPos = getBaseSize(props.elementInfo.width, props.elementInfo.height) * keypoint
+      const keypointPos = getBaseSize(boxWidth, boxHeight) * keypoint
       let keypointStyles: Record<string, string> = {}
-      if (relative === 'left') keypointStyles = { left: keypointPos * canvasScale + 'px' }
-      else if (relative === 'right') keypointStyles = { left: (props.elementInfo.width - keypointPos) * canvasScale + 'px' }
-      else if (relative === 'center') keypointStyles = { left: (props.elementInfo.width - keypointPos) / 2 * canvasScale + 'px' }
-      else if (relative === 'top') keypointStyles = { top: keypointPos * canvasScale + 'px' }
-      else if (relative === 'bottom') keypointStyles = { top: (props.elementInfo.height - keypointPos) * canvasScale + 'px' }
-      else if (relative === 'left_bottom') keypointStyles = { left: keypointPos * canvasScale + 'px', top: props.elementInfo.height * canvasScale + 'px' }
-      else if (relative === 'right_bottom') keypointStyles = { left: (props.elementInfo.width - keypointPos) * canvasScale + 'px', top: props.elementInfo.height * canvasScale + 'px' }
-      else if (relative === 'top_right') keypointStyles = { left: props.elementInfo.width * canvasScale + 'px', top: keypointPos * canvasScale + 'px' }
-      else if (relative === 'bottom_right') keypointStyles = { left: props.elementInfo.width * canvasScale + 'px', top: (props.elementInfo.height - keypointPos) * canvasScale + 'px' }
+      if (relative === 'left') keypointStyles = { left: `${(keypointPos / boxWidth) * 100}%` }
+      else if (relative === 'right') keypointStyles = { left: `${((boxWidth - keypointPos) / boxWidth) * 100}%` }
+      else if (relative === 'center') keypointStyles = { left: `${((boxWidth - keypointPos) / 2 / boxWidth) * 100}%` }
+      else if (relative === 'top') keypointStyles = { top: `${(keypointPos / boxHeight) * 100}%` }
+      else if (relative === 'bottom') keypointStyles = { top: `${((boxHeight - keypointPos) / boxHeight) * 100}%` }
+      else if (relative === 'left_bottom') keypointStyles = { left: `${(keypointPos / boxWidth) * 100}%`, top: '100%' }
+      else if (relative === 'right_bottom') keypointStyles = { left: `${((boxWidth - keypointPos) / boxWidth) * 100}%`, top: '100%' }
+      else if (relative === 'top_right') keypointStyles = { left: '100%', top: `${(keypointPos / boxHeight) * 100}%` }
+      else if (relative === 'bottom_right') keypointStyles = { left: '100%', top: `${((boxHeight - keypointPos) / boxHeight) * 100}%` }
       return { keypoint, styles: keypointStyles }
     })
   })()
@@ -55,7 +54,7 @@ const ShapeElementOperate = memo((props: IShapeElementOperateProps) => {
   return (
     <div className={cx('shape-element-operate')}>
       {borderLines.map(line => (
-        <BorderLine className={cx('operate-border-line')} key={line.type} type={line.type} style={line.style} />
+        <BorderLine className={cx('operate-border-line')} key={line.type} type={line.type} />
       ))}
       {handlerVisible ? (
         <>
@@ -65,7 +64,6 @@ const ShapeElementOperate = memo((props: IShapeElementOperateProps) => {
               key={point.direction}
               type={point.direction}
               rotate={elementInfo.rotate}
-              style={point.style}
               onMouseDown={e => {
                 const { scaleElement, elementInfo: el } = propsRef.current
                 scaleElement(e.nativeEvent, el, point.direction)
@@ -74,7 +72,6 @@ const ShapeElementOperate = memo((props: IShapeElementOperateProps) => {
           ))}
           <RotateHandler
             className={cx('operate-rotate-handler')}
-            style={{ left: scaleWidth / 2 + 'px' }}
             onMouseDown={e => {
               const { rotateElement, elementInfo: el } = propsRef.current
               rotateElement(e.nativeEvent, el)

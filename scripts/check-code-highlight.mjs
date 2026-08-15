@@ -24,8 +24,11 @@ registerHooks({
 const { DEFAULT_CODE_LANGUAGE, DEFAULT_CODE_SAMPLE, DEFAULT_CODE_THEME, measureCodeElementSize, resolveCodeLanguage, resolveCodeTheme } = await import(
   pathToFileURL(join(root, 'src/configs/code.ts')).href
 )
-const { highlightCodeBlock, highlightEditorHtml, prepareHighlighter } = await import(
+const { codeElementToBoothHtml, highlightCodeBlock, highlightCodeTokens, highlightEditorHtml, injectBoothLineNumbers, prepareHighlighter } = await import(
   pathToFileURL(join(root, 'src/utils/codeHighlight.ts')).href
+)
+const { codeElementToPptxText } = await import(
+  pathToFileURL(join(root, 'src/utils/codePptxExport.ts')).href
 )
 
 const failures = []
@@ -75,6 +78,35 @@ for (const code of ['const n = 1', 'const n = 1\n', 'a\nb', 'a\nb\n', DEFAULT_CO
   assert(!html.includes('class="line"'), `no line wrappers for ${JSON.stringify(code)}`)
   assert(!html.includes('<br'), `no br for ${JSON.stringify(code)}`)
 }
+
+const booth = await codeElementToBoothHtml({
+  code: DEFAULT_CODE_SAMPLE,
+  language: 'typescript',
+  theme: 'github-dark',
+  fontSize: 18,
+  showLineNumbers: true,
+})
+assert(booth.includes('class="code-booth"'), 'booth wraps highlighted code')
+assert(booth.includes('class="gutter"'), 'booth injects real line-number gutters')
+assert(booth.includes('>1</span>') && booth.includes('>5</span>'), 'booth numbers the sample lines')
+assert(/style="[^"]*color:#[0-9a-fA-F]{3,8}/.test(booth), 'booth keeps Shiki token colors')
+assert(!/color:#e4e4e7;background:#18181b/.test(booth), 'booth is not the old monochrome plaintext dump')
+const tokens = await highlightCodeTokens(DEFAULT_CODE_SAMPLE, 'ts', 'github-dark')
+assert(tokens.lines.length >= 5, 'token lines cover the sample')
+assert(tokens.lines.some(line => line.some(token => token.color && token.color !== tokens.fg)), 'tokens carry highlight colors')
+const pptxText = await codeElementToPptxText({
+  code: DEFAULT_CODE_SAMPLE,
+  language: 'typescript',
+  theme: 'github-dark',
+  showLineNumbers: true,
+})
+assert(pptxText.runs.some(run => run.text.includes('function')), 'pptx runs keep source text')
+assert(new Set(pptxText.runs.map(run => run.options.color)).size >= 3, 'pptx runs keep multiple token colors')
+assert(pptxText.runs.some(run => /^\s*1\s+$/.test(run.text)), 'pptx runs include line-number gutters')
+
+const noGutter = injectBoothLineNumbers(highlighted.html, false)
+assert(!noGutter.includes('class="gutter"'), 'gutters are optional')
+assert(noGutter.includes('class="line"'), 'line wrappers stay without gutters')
 
 const source = readFileSync(join(root, 'src/utils/codeHighlight.ts'), 'utf8')
 assert(!/(?:^|\n)\s*import\s+[^;]*\s+from\s+['"]shiki['"]/.test(source), 'codeHighlight must not import shiki barrel')

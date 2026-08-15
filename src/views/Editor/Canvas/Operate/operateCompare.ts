@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import type { PPTElement } from '@/types/slides'
+import { elementLocksTextBox } from '../../../../utils/textBoxLock'
 
 /** HTML / cell text — operate chrome does not read these while idle. */
 const CONTENT_KEYS = new Set(['content', 'text'])
@@ -40,6 +41,7 @@ export function deepEqualIgnore(a: unknown, b: unknown, ignoreKeys: ReadonlySet<
 
 export function elementChromeEqual(prev: PPTElement, next: PPTElement, ignoreContent = true) {
   if (prev === next) return true
+  if (elementLocksTextBox(prev) !== elementLocksTextBox(next)) return false
   return deepEqualIgnore(prev, next, ignoreContent ? CONTENT_KEYS : new Set())
 }
 
@@ -50,7 +52,8 @@ export function boxGeometryChanged(prev: PPTElement, next: PPTElement) {
   if (prevH !== nextH) return true
   const prevR = 'rotate' in prev ? prev.rotate : 0
   const nextR = 'rotate' in next ? next.rotate : 0
-  return prevR !== nextR
+  if (prevR !== nextR) return true
+  return elementLocksTextBox(prev) !== elementLocksTextBox(next)
 }
 
 type OperateFlags = {

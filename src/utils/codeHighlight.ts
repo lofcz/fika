@@ -158,6 +158,34 @@ export function toEditorHighlightHtml(shikiHtml: string, code: string): string {
   if (!code.endsWith('\n')) html = html.replace(/\n$/, '');
   return html;
 }
+export type HighlightedToken = {
+  content: string;
+  color?: string;
+};
+export type HighlightedTokens = {
+  lines: HighlightedToken[][];
+  bg: string;
+  fg: string;
+  language: CodeLanguageId;
+  theme: CodeThemeId;
+};
+export async function highlightCodeTokens(code: string, language: string, theme: string): Promise<HighlightedTokens> {
+  const prepared = await prepareHighlighter(language, theme);
+  const result = highlighter!.codeToTokens(code, {
+    lang: prepared.language,
+    theme: prepared.theme
+  });
+  return {
+    lines: result.tokens.map(line => line.map(token => ({
+      content: token.content,
+      color: token.color
+    }))),
+    bg: result.bg || prepared.bg,
+    fg: result.fg || prepared.fg,
+    language: prepared.language,
+    theme: prepared.theme
+  };
+}
 export async function highlightCodeBlock(code: string, language: string, theme: string): Promise<HighlightedCode> {
   const prepared = await prepareHighlighter(language, theme);
   const html = highlighter!.codeToHtml(code, {
@@ -213,39 +241,50 @@ export function highlightEditorHtml(code: string, language: string, theme: strin
   });
   return toEditorHighlightHtml(html, code);
 }
-const CODE_EXPORT_STYLES = `
-.code-export{overflow:hidden;border-radius:10px;font-family:ui-monospace,'Cascadia Code','JetBrains Mono',Menlo,Consolas,monospace;line-height:1.5;counter-reset:code-line;box-sizing:border-box}
-.code-export pre{margin:0;padding:12px 16px;min-height:100%;background:transparent!important;white-space:normal;tab-size:2;box-sizing:border-box}
-.code-export code{font-family:inherit;font-size:inherit;background:none}
-.code-export .line{display:block;white-space:pre;min-height:1.5em;line-height:1.5}
-.code-export.line-numbers .line::before{content:counter(code-line);counter-increment:code-line;display:inline-block;width:2.4em;margin-right:1em;text-align:right;opacity:.4}
-`;
-export async function renderCodeElementPng(el: {
+const CODE_BOOTH_FONT = "ui-monospace, 'Cascadia Code', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
+const LINE_STYLE = 'display:block;white-space:pre;min-height:1.5em;line-height:1.5';
+const GUTTER_STYLE = 'display:inline-block;width:2.4em;margin-right:1em;text-align:right;opacity:0.4;user-select:none;color:inherit';
+export type CodeRasterInput = {
   code: string;
   language: string;
   theme: string;
   fontSize: number;
   showLineNumbers: boolean;
-  width: number;
-  height: number;
-}): Promise<string> {
+};
+
+/** Real gutter spans so SnapDOM / html-to-image do not depend on CSS counters. */
+export function injectBoothLineNumbers(shikiHtml: string, showLineNumbers: boolean): string {
+  let n = 0;
+  return innerCodeHtml(shikiHtml).replace(/<span class="line"([^>]*)>/g, (_, attrs: string) => {
+    n += 1;
+    const gutter = showLineNumbers ? `<span class="gutter" style="${GUTTER_STYLE}">${n}</span>` : '';
+    if (/\bstyle\s*=/.test(attrs)) {
+      return `<span class="line"${attrs.replace(/style=(['"])(.*?)\1/, (_m: string, q: string, s: string) => `style=${q}${s};${LINE_STYLE}${q}`)}>${gutter}`;
+    }
+    return `<span class="line"${attrs} style="${LINE_STYLE}">${gutter}`;
+  });
+}
+export async function codeElementToBoothHtml(el: CodeRasterInput): Promise<string> {
   const {
     html,
     bg,
     fg
   } = await highlightCodeBlock(el.code, el.language, el.theme);
+  const lines = injectBoothLineNumbers(html, el.showLineNumbers);
+  const fontSize = Math.max(8, el.fontSize || 13);
+  return `<div class="code-booth" style="width:100%;height:100%;overflow:hidden;border-radius:10px;box-sizing:border-box;background:${bg};color:${fg};font-size:${fontSize}px;font-family:${CODE_BOOTH_FONT};line-height:1.5"><pre style="margin:0;padding:12px 16px;min-height:100%;background:transparent;white-space:normal;tab-size:2;box-sizing:border-box;font:inherit;color:inherit;font-family:${CODE_BOOTH_FONT}"><code style="font:inherit;background:none">${lines}</code></pre></div>`;
+}
+export async function renderCodeElementPng(el: CodeRasterInput & {
+  width: number;
+  height: number;
+}): Promise<string> {
+  const html = await codeElementToBoothHtml(el);
   const {
     toPng
   } = await import('html-to-image');
   const host = document.createElement('div');
-  host.className = el.showLineNumbers ? 'code-export line-numbers' : 'code-export';
-  host.style.cssText = ['position:fixed', 'left:-99999px', 'top:0', `width:${el.width}px`, `height:${el.height}px`, `background:${bg}`, `color:${fg}`, `font-size:${el.fontSize}px`].join(';');
-  const style = document.createElement('style');
-  style.textContent = CODE_EXPORT_STYLES;
-  host.appendChild(style);
-  const body = document.createElement('div');
-  body.innerHTML = html;
-  host.appendChild(body);
+  host.style.cssText = ['position:fixed', 'left:-99999px', 'top:0', `width:${el.width}px`, `height:${el.height}px`].join(';');
+  host.innerHTML = html;
   document.body.appendChild(host);
   try {
     return await toPng(host, {

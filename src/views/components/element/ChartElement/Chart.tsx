@@ -3,9 +3,8 @@ import styles from './Chart.module.scss'
 const cx = bindStyles(styles)
 import { useRef, useMemo, memo, useEffect } from 'react';
 
-import tinycolor from 'tinycolor2';
 import type { ChartData, ChartOptions, ChartType } from '@/types/slides';
-import { getChartOption } from './chartOption';
+import { expandChartThemeColors, getChartOption } from './chartOption';
 import * as echarts from 'echarts/core';
 import { BarChart, LineChart, PieChart, ScatterChart, RadarChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, RadarComponent } from 'echarts/components';
@@ -44,17 +43,7 @@ const Chart = memo((props: IChartProps) => {
   const lineColor = props.lineColor;
   const options = props.options;
 
-  const themeColors = useMemo(() => {
-    let colors: string[] = [];
-    if (themeColorsProp.length >= 10) colors = themeColorsProp;
-    else if (themeColorsProp.length === 1) colors = tinycolor(themeColorsProp[0]).analogous(10).map(color => color.toRgbString());
-    else {
-      const len = themeColorsProp.length;
-      const supplement = tinycolor(themeColorsProp[len - 1]).analogous(10 + 1 - len).map(color => color.toRgbString());
-      colors = [...themeColorsProp.slice(0, len - 1), ...supplement];
-    }
-    return colors;
-  }, [themeColorsProp]);
+  const themeColors = useMemo(() => expandChartThemeColors(themeColorsProp), [themeColorsProp]);
 
   const typeRef = useRef(type);
   const dataRef = useRef(data);

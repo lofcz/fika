@@ -9,6 +9,8 @@ import useElementFlip from '@/views/components/element/hooks/useElementFlip'
 import useClipImage from './useClipImage'
 import useFilter from './useFilter'
 import ImageOutline from './ImageOutline/index'
+import ImageBitmapSurface from './ImageBitmapSurface'
+import { useSyncImageBitmapCache } from './useImageBitmap'
 
 export type IBaseImageElementProps = {
   elementInfo: PPTImageElement
@@ -20,6 +22,7 @@ const BaseImageElement = memo((props: IBaseImageElementProps) => {
   const { flipStyle } = useElementFlip(props.elementInfo.flipH, props.elementInfo.flipV)
   const { clipShape, imgPosition } = useClipImage(props.elementInfo)
   const { filter } = useFilter(props.elementInfo.filters)
+  useSyncImageBitmapCache()
 
   return (
     <div
@@ -34,6 +37,7 @@ const BaseImageElement = memo((props: IBaseImageElementProps) => {
       <div className={cx('rotate-wrapper')} style={{ transform: `rotate(${elementInfo.rotate}deg)` }}>
         <div
           className={cx('element-content')}
+          data-live-box
           style={{
             filter: shadowStyle ? `drop-shadow(${shadowStyle})` : '',
             transform: flipStyle,
@@ -41,7 +45,8 @@ const BaseImageElement = memo((props: IBaseImageElementProps) => {
         >
           <ImageOutline elementInfo={elementInfo} />
           <div className={cx('image-content')} style={{ clipPath: clipShape.style }}>
-            <img
+            <ImageBitmapSurface
+              key={elementInfo.src}
               src={elementInfo.src}
               draggable={false}
               style={{
@@ -51,7 +56,6 @@ const BaseImageElement = memo((props: IBaseImageElementProps) => {
                 height: imgPosition.height,
                 filter,
               }}
-              alt=""
             />
             {elementInfo.colorMask ? (
               <div className={cx('color-mask')} style={{ backgroundColor: elementInfo.colorMask }} />

@@ -32,6 +32,11 @@
   z-index: 20;
   pointer-events: none;
   overflow: visible;
+
+  > * {
+    position: absolute;
+    inset: 0;
+  }
 }
 .debug-hit {
   background: rgba(255, 0, 0, 0.5);

@@ -2,7 +2,7 @@ import { bindStyles } from '@/utils/cssm'
 import styles from './Popover.module.scss'
 const cx = bindStyles(styles)
 import { type CSSProperties, type ReactNode, useRef, memo, useState, useEffect, useLayoutEffect } from 'react'
-import { createPortal, flushSync } from 'react-dom'
+import { createPortal } from 'react-dom'
 
 import tippy, { type Instance, type Placement } from 'tippy.js'
 import { resolveFikaPortalTarget } from '@/utils/portal'
@@ -58,16 +58,12 @@ const Popover = memo((vrProps: IPopoverProps) => {
   const onHideRef = useRef(vrProps.onHide)
   onHideRef.current = vrProps.onHide
 
-  const mountContent = (inst: Instance, sync: boolean) => {
+  const mountContent = (inst: Instance) => {
     const box = inst.popper.querySelector('.tippy-content')
     if (!box) return
     if (contentVisibleRef.current && portalBoxRef.current === box) return
-    const apply = () => {
-      setPortalBox(box)
-      setContentVisible(true)
-    }
-    if (sync) flushSync(apply)
-    else apply()
+    setPortalBox(box)
+    setContentVisible(true)
   }
 
   useLayoutEffect(() => {
@@ -96,17 +92,16 @@ const Popover = memo((vrProps: IPopoverProps) => {
           }
         : undefined,
       onShow(next) {
-        flushSync(() => setTriggerOpen(true))
+        setTriggerOpen(true)
         const already = contentVisibleRef.current && portalBoxRef.current
         if (!already) {
           next.popper.style.visibility = 'hidden'
-          mountContent(next, true)
-          next.popperInstance?.update()
-          next.popper.style.visibility = ''
+          mountContent(next)
         }
       },
       onHide() {
-        flushSync(() => setTriggerOpen(false))
+        if (!instanceRef.current) return
+        setTriggerOpen(false)
       },
       onShown() {
         if (!valueRef.current) {
@@ -122,10 +117,14 @@ const Popover = memo((vrProps: IPopoverProps) => {
       },
     })
     instanceRef.current = inst
-    if (valueRef.current) inst.show()
+    if (valueRef.current) {
+      queueMicrotask(() => {
+        if (instanceRef.current === inst && valueRef.current) inst.show()
+      })
+    }
     return () => {
-      inst.destroy()
       instanceRef.current = undefined
+      inst.destroy()
       setContentVisible(false)
       setTriggerOpen(false)
       setPortalBox(null)
@@ -152,7 +151,7 @@ const Popover = memo((vrProps: IPopoverProps) => {
   const prefetch = () => {
     const inst = instanceRef.current
     if (!inst) return
-    mountContent(inst, false)
+    mountContent(inst)
   }
 
   return (

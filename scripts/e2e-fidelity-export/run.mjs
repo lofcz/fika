@@ -19,8 +19,8 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 import pptxgen from '@lofcz/pptxgenjs'
-import { JSZip } from '@node-projects/jszip'
 import tinycolor from 'tinycolor2'
+import { loadPptx, readPptxPart } from '../lib/pptx-inspect.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '../..')
@@ -168,13 +168,14 @@ applyPPTXTheme(pptx, {
 
 const buf = await pptx.write({ outputType: 'nodebuffer' })
 writeFileSync(join(OUT, 'fidelity.pptx'), buf)
-const zip = await JSZip.loadAsync(buf)
-const presXml = await zip.file('ppt/presentation.xml').async('string')
-const slide1 = await zip.file('ppt/slides/slide1.xml').async('string')
-const slide2 = await zip.file('ppt/slides/slide2.xml').async('string')
-const slide6 = await zip.file('ppt/slides/slide6.xml').async('string')
-const themeXml = await zip.file('ppt/theme/theme1.xml').async('string')
-const chart1 = await zip.file('ppt/charts/chart1.xml').async('string')
+const deck = await loadPptx(buf)
+const zip = deck.zip
+const presXml = await readPptxPart(deck, 'ppt/presentation.xml')
+const slide1 = deck.slides[0].xml
+const slide2 = deck.slides[1].xml
+const slide6 = deck.slides[5].xml
+const themeXml = await readPptxPart(deck, 'ppt/theme/theme1.xml')
+const chart1 = await readPptxPart(deck, 'ppt/charts/chart1.xml')
 
 check('slide background emits <p:bg> with gradient', /<p:bg>/.test(slide1) && /<a:gradFill/.test(slide1))
 check('gradient stops + angle', /<a:gs pos="0"/.test(slide1) && /<a:gs pos="100000"/.test(slide1) && /<a:lin ang="2700000"/.test(slide1))

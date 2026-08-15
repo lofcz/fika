@@ -1,5 +1,6 @@
 .mermaid-editor {
   height: 560px;
+  min-height: 560px;
 }
 
 .container {
@@ -11,6 +12,12 @@
 .input-area {
   flex: 1;
   min-height: 0;
+
+  &:empty {
+    background: $surface;
+    border: 1px solid $borderColor;
+    border-radius: $borderRadius;
+  }
 
   textarea {
     height: 100% !important;

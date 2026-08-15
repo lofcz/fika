@@ -244,6 +244,23 @@ const CanvasTool = memo(function CanvasTool({ className, style }: { className?: 
   const symbolPoolContent = useMemo(() => (
     <SymbolPool onSelect={() => setSymbolPoolVisible(false)} />
   ), [])
+  const endCanvasEdit = useCallback(() => {
+    const main = useMainStore.getState()
+    if (main.editingElementId) main.setEditingElementId('')
+    if (main.disableHotkeys) main.setDisableHotkeysState(false)
+  }, [])
+  const openLatexEditor = useCallback(() => {
+    endCanvasEdit()
+    setLatexEditorVisible(true)
+  }, [endCanvasEdit])
+  const openCodeEditor = useCallback(() => {
+    endCanvasEdit()
+    setCodeEditorVisible(true)
+  }, [endCanvasEdit])
+  const openMermaidEditor = useCallback(() => {
+    endCanvasEdit()
+    setMermaidEditorVisible(true)
+  }, [endCanvasEdit])
   const closeLatexEditor = useCallback(() => setLatexEditorVisible(false), [])
   const updateLatexEditor = useCallback((data: LatexResult) => {
     createApiRef.current?.createLatexElement(data)
@@ -438,7 +455,7 @@ const CanvasTool = memo(function CanvasTool({ className, style }: { className?: 
                 offset={10}
                 content={textTypeContent}
               >
-                <span className={cx('arrow')}><Icon icon="chevron-down" /></span>
+                <span className={cx('arrow')} data-canvas-tool="insert-text-menu"><Icon icon="chevron-down" /></span>
               </Popover>
             </div>
           </OverlayTrigger>
@@ -516,7 +533,7 @@ const CanvasTool = memo(function CanvasTool({ className, style }: { className?: 
               data-canvas-tool="insert-formula"
               data-tooltip={LL.editor.canvasTool.insertFormula()}
               onPointerEnter={prefetchLaTeXEditor}
-              onClick={() => setLatexEditorVisible(true)}
+              onClick={openLatexEditor}
             >
               <Icon icon="radical" className={cx('icon')} />
               {' '}
@@ -539,7 +556,7 @@ const CanvasTool = memo(function CanvasTool({ className, style }: { className?: 
               data-canvas-tool="insert-mermaid"
               data-tooltip={LL.editor.canvasTool.insertMermaid()}
               onPointerEnter={prefetchMermaidEditor}
-              onClick={() => setMermaidEditorVisible(true)}
+              onClick={openMermaidEditor}
             >
               <Icon icon="git-branch" className={cx('icon')} />
               {' '}
@@ -558,7 +575,7 @@ const CanvasTool = memo(function CanvasTool({ className, style }: { className?: 
               data-canvas-tool="insert-code"
               data-tooltip={LL.editor.canvasTool.insertCode()}
               onPointerEnter={prefetchCodeEditor}
-              onClick={() => setCodeEditorVisible(true)}
+              onClick={openCodeEditor}
             >
               <Icon icon="code" className={cx('icon')} />
               {' '}

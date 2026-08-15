@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
 import { useSlidesStore, useMainStore, selectCurrentSlide } from '@/store'
 import type { PPTElement, Slide } from '@/types/slides'
+import { clonePlain } from '@/utils/clonePlain'
 import { createSlideIdMap, createElementIdMap, getElementRange } from '@/utils/element'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
@@ -10,8 +11,9 @@ export default () => {
   const addElementsFromData = (elements: PPTElement[]) => {
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
     if (!currentSlide) return
-    const { groupIdMap, elIdMap } = createElementIdMap(elements)
-    const firstElement = elements[0]
+    const cloned = clonePlain(elements)
+    const { groupIdMap, elIdMap } = createElementIdMap(cloned)
+    const firstElement = cloned[0]
     let offset = 0
     let lastSameElement: PPTElement | undefined
     do {
@@ -28,21 +30,23 @@ export default () => {
       })
       if (lastSameElement) offset += 10
     } while (lastSameElement)
-    for (const element of elements) {
+    for (const element of cloned) {
       element.id = elIdMap[element.id]
       element.left = element.left + offset
       element.top = element.top + offset
       if (element.groupId) element.groupId = groupIdMap[element.groupId]
     }
-    useSlidesStore.getState().addElement(elements)
+    useSlidesStore.getState().addElement(cloned)
     useMainStore.getState().setActiveElementIdList(Object.values(elIdMap))
     addHistorySnapshot()
   }
 
   const addSlidesFromData = (slides: Slide[]) => {
-    const slideIdMap = createSlideIdMap(slides)
-    const newSlides = slides.map(slide => {
+    const cloned = clonePlain(slides)
+    const slideIdMap = createSlideIdMap(cloned)
+    for (const slide of cloned) {
       const { groupIdMap, elIdMap } = createElementIdMap(slide.elements)
+      slide.id = slideIdMap[slide.id]
       for (const element of slide.elements) {
         element.id = elIdMap[element.id]
         if (element.groupId) element.groupId = groupIdMap[element.groupId]
@@ -59,12 +63,8 @@ export default () => {
           animation.elId = elIdMap[animation.elId]
         }
       }
-      return {
-        ...slide,
-        id: slideIdMap[slide.id],
-      }
-    })
-    useSlidesStore.getState().addSlide(newSlides)
+    }
+    useSlidesStore.getState().addSlide(cloned)
     addHistorySnapshot()
   }
 

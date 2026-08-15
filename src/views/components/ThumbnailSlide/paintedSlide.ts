@@ -1,12 +1,67 @@
 import { useSlidesStore } from '@/store'
 import type { Slide } from '@/types/slides'
-import { useToolbarStoreSelect } from '@/views/Editor/Toolbar/common/handleElement'
+import { diffPaintedSlide, type PaintedSlide, type PaintedSlideDiff } from '@/previewRaster/diffPaintedSlide'
 
-export type PaintedSlide = Pick<Slide, 'id' | 'elements' | 'background' | 'type'>
+export type { PaintedSlide, PaintedSlideDiff }
+export { diffPaintedSlide }
+
+export type RailSlideMeta = {
+  id: string
+  sectionTag: Slide['sectionTag']
+}
+
+let cachedSlides: Slide[] | null = null
+let railMetas: RailSlideMeta[] = []
+
+function syncRailMetas(slides: Slide[]) {
+  if (cachedSlides === slides) return
+  const nextMetas: RailSlideMeta[] = slides.map(slide => ({
+    id: slide.id,
+    sectionTag: slide.sectionTag,
+  }))
+  cachedSlides = slides
+  railMetas = areRailSlideMetasEqual(railMetas, nextMetas) ? railMetas : nextMetas
+}
 
 export function selectPaintedSlide<T extends { slides: Slide[] }>(state: T, slideId: string): Slide | undefined {
   return state.slides.find(slide => slide.id === slideId)
 }
+
+export const paintedSlideAuthoredKey = (slide: Slide | undefined) => {
+  if (!slide) return ''
+  return slide.elements.map(el => {
+    if (el.type === 'text') return el.content || ''
+    if (el.type === 'shape') return el.text?.content || ''
+    if (el.type === 'chart') return `${el.chartType}:${el.themeColors?.join(',')}:${el.options?.stack ? 1 : 0}:${JSON.stringify(el.data)}`
+    return ''
+  }).join('\0')
+}
+
+export const paintedSlidePaintKey = (slide: Slide | undefined) => {
+  if (!slide) return ''
+  return slide.elements.map(el => {
+    if (el.type === 'text') return `${el.content || ''}\x1f${el.fixedHeight ? 1 : 0}\x1f${el.width}x${el.height}`
+    if (el.type === 'shape') return `${el.text?.content || ''}\x1f${el.text?.fixedHeight === false ? 0 : 1}\x1f${el.width}x${el.height}`
+    if (el.type === 'chart') return `${el.chartType}\x1f${el.themeColors?.join(',')}\x1f${el.options?.stack ? 1 : 0}\x1f${JSON.stringify(el.data)}\x1f${el.width}x${el.height}`
+    return `${el.width}x${'height' in el ? el.height : ''}`
+  }).join('\0')
+}
+
+export const selectPaintedSlideAuthoredKey = <T extends { slides: Slide[] }>(
+  state: T,
+  slideId: string,
+) => paintedSlideAuthoredKey(selectPaintedSlide(state, slideId))
+
+export const selectPaintedSlidePaintKey = <T extends { slides: Slide[] }>(
+  state: T,
+  slideId: string,
+) => paintedSlidePaintKey(selectPaintedSlide(state, slideId))
+
+/** Slide object identity is stable across content writes (immer + autoFreeze: false). */
+export const paintedSlideContentEqual = (
+  a: Slide | undefined,
+  b: Slide | undefined,
+) => a === b && a?.elements === b?.elements && paintedSlideAuthoredKey(a) === paintedSlideAuthoredKey(b)
 
 export function arePaintedSlideIdentitiesEqual(a: PaintedSlide | undefined, b: PaintedSlide | undefined): boolean {
   if (a === b) return true
@@ -25,6 +80,17 @@ export function areRailItemSlidesEqual(a: Slide | undefined, b: Slide | undefine
     && a.notes === b.notes
 }
 
+export function areRailSlideMetasEqual(a: RailSlideMeta[], b: RailSlideMeta[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i]
+    const right = b[i]
+    if (left.id !== right.id || left.sectionTag !== right.sectionTag) return false
+  }
+  return true
+}
+
 export function areRailSlidesEqual(a: Slide[], b: Slide[]): boolean {
   if (a === b) return true
   if (a.length !== b.length) return false
@@ -35,19 +101,20 @@ export function areRailSlidesEqual(a: Slide[], b: Slide[]): boolean {
 }
 
 export function usePaintedSlide(slideId: string, fallback: Slide): Slide {
-  return useToolbarStoreSelect(
-    () => selectPaintedSlide(useSlidesStore.getState(), slideId) ?? fallback,
-    arePaintedSlideIdentitiesEqual,
-  )
+  return useSlidesStore(state => selectPaintedSlide(state, slideId) ?? fallback)
 }
 
 export function useRailItemSlide(slideId: string): Slide | undefined {
-  return useToolbarStoreSelect(
-    () => useSlidesStore.getState().slides.find(item => item.id === slideId),
-    areRailItemSlidesEqual,
-  )
+  return useSlidesStore(state => selectPaintedSlide(state, slideId))
+}
+
+export function useRailSlideMetas(): RailSlideMeta[] {
+  return useSlidesStore(state => {
+    syncRailMetas(state.slides)
+    return railMetas
+  })
 }
 
 export function useRailSlides(): Slide[] {
-  return useToolbarStoreSelect(() => useSlidesStore.getState().slides, areRailSlidesEqual)
+  return useSlidesStore(state => state.slides)
 }

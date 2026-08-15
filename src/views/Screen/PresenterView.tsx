@@ -12,12 +12,12 @@ import { enterFullscreen } from '@/utils/fullscreen'
 import { fillDigit } from '@/utils/common'
 import { parseText2Paragraphs } from '@/utils/textParser'
 import useScreening from '@/hooks/useScreening'
-import useLoadSlides from '@/hooks/useLoadSlides'
 import useExecPlay from './hooks/useExecPlay'
 import useSlideSize from './hooks/useSlideSize'
 import useFullscreen from './hooks/useFullscreen'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
 import ScreenSlideList from './ScreenSlideList'
+import { isInScreenWindow, SCREEN_THUMB_RADIUS } from './screenWindow'
 import LaserTrailOverlay from './LaserTrailOverlay'
 import WritingBoardTool from './WritingBoardTool'
 import CountdownTimer from './CountdownTimer'
@@ -66,7 +66,6 @@ export default function PresenterView({ changeViewMode }: { changeViewMode: (mod
 
   const { slideWidth, slideHeight } = useSlideSize(slideListWrapRef)
   const { exitScreening: _exitScreening } = useScreening()
-  const { slidesLoadLimit } = useLoadSlides()
   const { fullscreenState, manualExitFullscreen } = useFullscreen()
 
   const nextSlide = slides[slideIndex + 1] ?? null
@@ -345,7 +344,7 @@ export default function PresenterView({ changeViewMode }: { changeViewMode: (mod
                 key={slide.id}
                 onClick={() => turnSlideToIndex(index)}
               >
-                <ThumbnailSlide slide={slide} size={72 / viewportRatio} visible={index < slidesLoadLimit} />
+                <ThumbnailSlide slide={{ id: slide.id }} size={72 / viewportRatio} visible={isInScreenWindow(index, slideIndex, SCREEN_THUMB_RADIUS)} />
                 <span className={cx('thumb-index')}>{index + 1}</span>
               </button>
             ))}
@@ -368,7 +367,7 @@ export default function PresenterView({ changeViewMode }: { changeViewMode: (mod
                 className={cx('next-card')}
                 onClick={() => turnSlideToIndex(slideIndex + 1)}
               >
-                {nextPreviewSize > 0 ? <ThumbnailSlide slide={nextSlide} size={nextPreviewSize} /> : null}
+                {nextPreviewSize > 0 ? <ThumbnailSlide slide={{ id: nextSlide.id }} size={nextPreviewSize} /> : null}
               </button>
             ) : (
               <div className={cx('next-empty')}>{LL.screen.presenter.endOfSlides()}</div>

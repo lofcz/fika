@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { useRef, useCallback, memo, useState, useEffect, type CSSProperties, type ElementRef, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { useRef, useCallback, memo, useState, useEffect, useLayoutEffect, type CSSProperties, type ElementRef, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent } from 'react';
 
 import { openContextmenu } from '@/utils/openContextmenu';
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store';
@@ -18,6 +18,10 @@ import GradientDefs from './GradientDefs';
 import PatternDefs from './PatternDefs';
 import ProsemirrorEditor from '@/views/components/element/ProsemirrorEditor';
 import { areShapeElementPropsEqual, editingShapeIds } from './shapePaintEqual';
+import { useAutoShapeTextHeight } from '@/views/components/element/hooks/useAutoShapeTextHeight';
+import useTextFit from '@/views/components/element/hooks/useTextFit';
+import { shapeTextLocksSize } from '@/utils/textBoxLock';
+import { syncShapePaint } from '@/utils/liveElementSize';
 export type IShapeElementProps = {
   elementInfo: PPTShapeElement;
   selectElement: (e: MouseEvent | TouchEvent, element: PPTShapeElement, canMove?: boolean) => void;
@@ -96,9 +100,20 @@ const ShapeElement = memo((props: IShapeElementProps) => {
   if (!editable) editorValueRef.current = liveContentRef.current || text.content;
   const staticContent = serializeRichTextHtml(text.content);
   const inset = text.inset || [10, 10, 10, 10];
+  const lockedText = shapeTextLocksSize(text);
+  const textHostRef = useAutoShapeTextHeight(!lockedText, elementInfo.id, inset);
+  const textFitHostRef = useRef<HTMLDivElement | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  useLayoutEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    syncShapePaint(svg, elementInfo.width, elementInfo.height, elementInfo.viewBox);
+  }, [elementInfo.width, elementInfo.height, elementInfo.viewBox, elementInfo.path]);
+  const { textFitPaintStyle, setLiveContent } = useTextFit(elementInfo, liveContentRef, textFitHostRef);
   const updateText = useCallback((content: string, ignore = false) => {
     const info = elementInfoRef.current;
     liveContentRef.current = content;
+    setLiveContent(content);
     const storeText = readStoreShape(info.id)?.text;
     const _text = {
       ...(storeText || info.text || defaultShapeText(info, useSlidesStore.getState().theme)),
@@ -109,7 +124,7 @@ const ShapeElement = memo((props: IShapeElementProps) => {
       props: { text: _text }
     });
     if (!ignore) addHistorySnapshot();
-  }, [addHistorySnapshot]);
+  }, [addHistorySnapshot, setLiveContent]);
   const checkEmptyText = useCallback(() => {
     const info = elementInfoRef.current;
     const currentText = readStoreShape(info.id)?.text || info.text;
@@ -142,7 +157,7 @@ const ShapeElement = memo((props: IShapeElementProps) => {
   const startEditRef = useRef(startEdit);
   startEditRef.current = startEdit;
   const skipIsEditingWatch = useRef(true);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (skipIsEditingWatch.current) {
       skipIsEditingWatch.current = false;
       return;
@@ -160,7 +175,7 @@ const ShapeElement = memo((props: IShapeElementProps) => {
     height: elementInfo.height + 'px'
   }}><div className={cx('rotate-wrapper')} style={{
       transform: `rotate(${elementInfo.rotate}deg)`
-    }}><div className={cx('element-content')} style={{
+    }}><div className={cx('element-content')} data-live-box style={{
         opacity: elementInfo.opacity,
         filter: shadowStyle ? `drop-shadow(${shadowStyle})` : '',
         transform: flipStyle,
@@ -174,13 +189,14 @@ const ShapeElement = memo((props: IShapeElementProps) => {
         handleSelectElement($event);
       }} onDoubleClick={() => {
         startEdit();
-      }}><svg overflow='visible' width={elementInfo.width} height={elementInfo.height}><defs>{elementInfo.pattern ? <PatternDefs id={`editable-pattern-${elementInfo.id}`} src={elementInfo.pattern} /> : elementInfo.gradient ? <GradientDefs id={`editable-gradient-${elementInfo.id}`} type={elementInfo.gradient.type} colors={elementInfo.gradient.colors} rotate={elementInfo.gradient.rotate} /> : null}</defs><g transform={`scale(${elementInfo.width / elementInfo.viewBox[0]}, ${elementInfo.height / elementInfo.viewBox[1]}) translate(0,0) matrix(1,0,0,1,0,0)`}><path className={cx('shape-path')} vectorEffect='non-scaling-stroke' strokeLinecap='butt' strokeMiterlimit='8' d={elementInfo.path} fill={fill} stroke={outlineColor} strokeWidth={outlineWidth} strokeDasharray={strokeDashArray} /></g></svg><div className={cx('shape-text', [text.align, {
+      }}><svg ref={svgRef} overflow='visible' width={elementInfo.width} height={elementInfo.height}><defs>{elementInfo.pattern ? <PatternDefs id={`editable-pattern-${elementInfo.id}`} src={elementInfo.pattern} /> : elementInfo.gradient ? <GradientDefs id={`editable-gradient-${elementInfo.id}`} type={elementInfo.gradient.type} colors={elementInfo.gradient.colors} rotate={elementInfo.gradient.rotate} /> : null}</defs><g key={`${elementInfo.width}:${elementInfo.height}:${elementInfo.viewBox[0]}:${elementInfo.viewBox[1]}`} transform={`scale(${elementInfo.width / elementInfo.viewBox[0]}, ${elementInfo.height / elementInfo.viewBox[1]}) translate(0,0) matrix(1,0,0,1,0,0)`}><path className={cx('shape-path')} vectorEffect='non-scaling-stroke' strokeLinecap='butt' strokeMiterlimit='8' d={elementInfo.path} fill={fill} stroke={outlineColor} strokeWidth={outlineWidth} strokeDasharray={strokeDashArray} /></g></svg><div ref={textHostRef} className={cx('shape-text', [text.align, {
           'editable': editable || text.content
         }])} style={{
           lineHeight: text.lineHeight,
           letterSpacing: (text.wordSpace || 0) + 'px',
           padding: `${inset[0]}px ${inset[1]}px ${inset[2]}px ${inset[3]}px`,
+          overflow: lockedText ? 'hidden' : undefined,
           '--paragraphSpace': `${text.paragraphSpace === undefined ? 5 : text.paragraphSpace}px`
-        } as CSSProperties}>{!editable && text.content ? <div className={cx('prosemirror-editor')}><div className={cx('ProseMirror', 'ProseMirror-static')} dangerouslySetInnerHTML={{ __html: staticContent }} /></div> : editable ? <ProsemirrorEditor ref={prosemirrorEditorRef} elementId={elementInfo.id} defaultColor={text.defaultColor} defaultFontName={text.defaultFontName} editable={!elementInfo.lock} value={editorValueRef.current} autoFocus onUpdate={handleEditorUpdate} onBlur={checkEmptyText} onMouseDown={handleEditorMouseDown} /> : null}</div></div></div></div>;
+        } as CSSProperties}><div ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}>{!editable && text.content ? <div className={cx('prosemirror-editor')}><div className={cx('ProseMirror', 'ProseMirror-static')} dangerouslySetInnerHTML={{ __html: staticContent }} /></div> : editable ? <ProsemirrorEditor ref={prosemirrorEditorRef} elementId={elementInfo.id} defaultColor={text.defaultColor} defaultFontName={text.defaultFontName} editable={!elementInfo.lock} value={editorValueRef.current} autoFocus onUpdate={handleEditorUpdate} onBlur={checkEmptyText} onMouseDown={handleEditorMouseDown} /> : null}</div></div></div></div></div>;
 }, areShapeElementPropsEqual);
 export default ShapeElement;

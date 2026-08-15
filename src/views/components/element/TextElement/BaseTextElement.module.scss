@@ -1,5 +1,6 @@
 .base-element-text {
   position: absolute;
+  box-sizing: border-box;
 }
 .rotate-wrapper {
   width: 100%;
@@ -7,6 +8,7 @@
 }
   .element-content {
   position: relative;
+  box-sizing: border-box;
   line-height: 1.5;
   word-break: break-word;
   font-family: $textElementFont;
@@ -16,8 +18,14 @@
     min-width: 0;
   }
 
-  &.placeholder-element .text-fit-host {
-    height: 100%;
+  &.v-align-box {
+    .text-fit-host,
+    .text,
+    :global(.prosemirror-editor) {
+      flex: 0 0 auto;
+      width: 100%;
+      height: auto;
+    }
   }
 
   .text {

@@ -1,8 +1,45 @@
 import { create } from 'zustand'
-import type { IndexableTypeArray } from 'dexie'
+import { applyPatches, enablePatches, produceWithPatches, type Patch } from 'immer'
 import { db, type Snapshot } from '@/utils/database'
+import type { Slide } from '@/types/slides'
 import { useSlidesStore } from './slides'
 import { useMainStore } from './main'
+
+enablePatches()
+
+const SNAPSHOT_LIMIT = 20
+
+let cursorSlides: Slide[] | null = null
+
+function diffSlides(prev: Slide[], next: Slide[]): [Patch[], Patch[]] {
+  const [, patches, inversePatches] = produceWithPatches(prev, draft => {
+    draft.length = next.length
+    for (let i = 0; i < next.length; i++) {
+      if (!Object.is(draft[i], next[i])) draft[i] = next[i]
+    }
+  })
+  return [patches ?? [], inversePatches ?? []]
+}
+
+function materializeSlides(snapshots: Snapshot[], cursor: number): Slide[] {
+  const baseline = snapshots[0]?.slides
+  if (!baseline) return []
+  let slides = baseline
+  for (let i = 1; i <= cursor; i++) {
+    const patches = snapshots[i]?.patches
+    if (patches?.length) slides = applyPatches(slides, patches)
+  }
+  return slides
+}
+
+function restoreSlides(slides: Slide[], index: number) {
+  const slideIndex = index > slides.length - 1 ? slides.length - 1 : index
+  const slidesStore = useSlidesStore.getState()
+  slidesStore.setSlides(slides, undefined, { clone: false })
+  slidesStore.updateSlideIndex(slideIndex)
+  cursorSlides = slides
+  useMainStore.getState().setActiveElementIdList([])
+}
 
 export interface SnapshotState {
   snapshotCursor: number
@@ -36,12 +73,12 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
 
   async initSnapshotDatabase() {
     const slidesStore = useSlidesStore.getState()
-
-    const newFirstSnapshot = {
+    cursorSlides = slidesStore.slides
+    await db.snapshots.clear()
+    await db.snapshots.add({
       index: slidesStore.slideIndex,
-      slides: JSON.parse(JSON.stringify(slidesStore.slides)),
-    }
-    await db.snapshots.add(newFirstSnapshot)
+      slides: structuredClone(slidesStore.slides),
+    })
     set(state => (
       state.snapshotCursor === 0 && state.snapshotLength === 1
         ? state
@@ -50,35 +87,55 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
   },
 
   async addSnapshot() {
-    const allKeys = await db.snapshots.orderBy('id').keys()
-
-    let needDeleteKeys: IndexableTypeArray = []
-
-    if (get().snapshotCursor >= 0 && get().snapshotCursor < allKeys.length - 1) {
-      needDeleteKeys = allKeys.slice(get().snapshotCursor + 1)
-    }
-
     const slidesStore = useSlidesStore.getState()
-    const snapshot = {
-      index: slidesStore.slideIndex,
-      slides: JSON.parse(JSON.stringify(slidesStore.slides)),
+    const nextSlides = slidesStore.slides
+    const slideIndex = slidesStore.slideIndex
+    const cursor = get().snapshotCursor
+    const allKeys = await db.snapshots.orderBy('id').primaryKeys() as number[]
+
+    const redoKeys = cursor >= 0 && cursor < allKeys.length - 1
+      ? allKeys.slice(cursor + 1)
+      : []
+    const keptOldKeys = cursor >= 0 ? allKeys.slice(0, cursor + 1) : []
+
+    let entry: Omit<Snapshot, 'id'>
+    if (!cursorSlides || keptOldKeys.length === 0) {
+      entry = { index: slideIndex, slides: structuredClone(nextSlides) }
     }
-    await db.snapshots.add(snapshot)
-
-    let snapshotLength = allKeys.length - needDeleteKeys.length + 1
-
-    const snapshotLengthLimit = 20
-    if (snapshotLength > snapshotLengthLimit) {
-      needDeleteKeys.push(allKeys[0])
-      snapshotLength--
+    else {
+      const [patches, inversePatches] = diffSlides(cursorSlides, nextSlides)
+      entry = { index: slideIndex, patches, inversePatches }
     }
 
-    if (snapshotLength >= 2) {
-      db.snapshots.update(allKeys[snapshotLength - 2] as number, { index: useSlidesStore.getState().slideIndex })
-    }
+    await db.transaction('rw', db.snapshots, async () => {
+      if (redoKeys.length) await db.snapshots.bulkDelete(redoKeys)
 
-    await db.snapshots.bulkDelete(needDeleteKeys as number[])
+      if (keptOldKeys.length >= 1) {
+        await db.snapshots.update(keptOldKeys[keptOldKeys.length - 1], { index: slideIndex })
+      }
 
+      await db.snapshots.add(entry)
+
+      if (keptOldKeys.length + 1 > SNAPSHOT_LIMIT) {
+        const oldestKey = keptOldKeys[0]
+        const nextKey = keptOldKeys[1]
+        const oldest = await db.snapshots.get(oldestKey)
+        const next = await db.snapshots.get(nextKey)
+        if (oldest?.slides && next) {
+          const promoted = next.patches?.length
+            ? applyPatches(oldest.slides, next.patches)
+            : oldest.slides
+          delete next.patches
+          delete next.inversePatches
+          next.slides = structuredClone(promoted)
+          await db.snapshots.put(next)
+        }
+        await db.snapshots.delete(oldestKey)
+      }
+    })
+
+    cursorSlides = nextSlides
+    const snapshotLength = Math.min(keptOldKeys.length + 1, SNAPSHOT_LIMIT)
     const snapshotCursor = snapshotLength - 1
     set(state => (
       state.snapshotCursor === snapshotCursor && state.snapshotLength === snapshotLength
@@ -92,16 +149,17 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
 
     const snapshotCursor = get().snapshotCursor - 1
     const snapshots: Snapshot[] = await db.snapshots.orderBy('id').toArray()
-    const snapshot = snapshots[snapshotCursor]
-    const { index, slides } = snapshot
+    const leaving = snapshots[get().snapshotCursor]
+    const arriving = snapshots[snapshotCursor]
+    if (!arriving) return
 
-    const slideIndex = index > slides.length - 1 ? slides.length - 1 : index
+    const base = cursorSlides ?? materializeSlides(snapshots, get().snapshotCursor)
+    const slides = leaving?.inversePatches
+      ? applyPatches(base, leaving.inversePatches)
+      : materializeSlides(snapshots, snapshotCursor)
 
-    const slidesStore = useSlidesStore.getState()
-    slidesStore.setSlides(slides)
-    slidesStore.updateSlideIndex(slideIndex)
+    restoreSlides(slides, arriving.index)
     get().setSnapshotCursor(snapshotCursor)
-    useMainStore.getState().setActiveElementIdList([])
   },
 
   async reDo() {
@@ -109,15 +167,15 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
 
     const snapshotCursor = get().snapshotCursor + 1
     const snapshots: Snapshot[] = await db.snapshots.orderBy('id').toArray()
-    const snapshot = snapshots[snapshotCursor]
-    const { index, slides } = snapshot
+    const arriving = snapshots[snapshotCursor]
+    if (!arriving) return
 
-    const slideIndex = index > slides.length - 1 ? slides.length - 1 : index
+    const base = cursorSlides ?? materializeSlides(snapshots, get().snapshotCursor)
+    const slides = arriving.patches
+      ? applyPatches(base, arriving.patches)
+      : materializeSlides(snapshots, snapshotCursor)
 
-    const slidesStore = useSlidesStore.getState()
-    slidesStore.setSlides(slides)
-    slidesStore.updateSlideIndex(slideIndex)
+    restoreSlides(slides, arriving.index)
     get().setSnapshotCursor(snapshotCursor)
-    useMainStore.getState().setActiveElementIdList([])
   },
 }))

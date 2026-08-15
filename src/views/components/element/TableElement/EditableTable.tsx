@@ -16,12 +16,14 @@ import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/uti
 import emitter, { EmitterEvents, type TableCommand } from '@/utils/emitter';
 import message from '@/utils/message';
 import { getCellStyle, getTextStyle, formatText } from './utils';
+import { applyExcelPaste, insertColIntoGrid, replaceTableCellText, type TableCellDraft } from './cellEdit';
 import { areTableCellViewEqual, isTableCellHtmlEcho, numArrEqual, outlineEqual, tableGridStructureEqual, tableGridTextEqual, themeEqual } from './gridCompare';
 import useHideCells from './useHideCells';
 import useSubThemeColor from './useSubThemeColor';
 import useMathReady from './useMathReady';
 import CustomTextarea from './CustomTextarea';
 import { useI18nContext } from '@/i18n/useI18nContext';
+import { subscribeLiveBox } from '@/utils/liveElementSize';
 
 type TableCellViewProps = {
   cell: TableCell;
@@ -35,7 +37,8 @@ type TableCellViewProps = {
   onMouseDown: (e: MouseEvent, rowIndex: number, colIndex: number) => void;
   onMouseEnter: (rowIndex: number, colIndex: number) => void;
   onContextMenu: (event: ReactMouseEvent<HTMLTableCellElement>) => void;
-  onInput: (value: string, rowIndex: number, colIndex: number) => void;
+  onInput: (value: string, rowIndex: number, colIndex: number, cellId: string) => void;
+  onCommit: (value: string, rowIndex: number, colIndex: number, cellId: string) => void;
   onInsertExcel: (value: string[][], rowIndex: number, colIndex: number) => void;
 };
 
@@ -58,6 +61,7 @@ const TableCellView = memo((props: TableCellViewProps) => {
     onMouseEnter,
     onContextMenu,
     onInput,
+    onCommit,
     onInsertExcel
   } = props;
   return <td
@@ -72,6 +76,8 @@ const TableCellView = memo((props: TableCellViewProps) => {
     rowSpan={cell.rowspan}
     colSpan={cell.colspan}
     data-cell-index={`${rowIndex}_${colIndex}`}
+    data-cell-fill={cell.style?.backcolor || undefined}
+    data-cell-color={cell.style?.color || undefined}
     onMouseDown={$event => { onMouseDown($event.nativeEvent, rowIndex, colIndex); }}
     onMouseEnter={() => { onMouseEnter(rowIndex, colIndex); }}
     onContextMenu={onContextMenu}
@@ -80,7 +86,8 @@ const TableCellView = memo((props: TableCellViewProps) => {
       className={cx('cell-text', { active: isActive })}
       style={getTextStyle(cellMinHeight, cell.style)}
       value={cell.text}
-      onUpdateValue={value => onInput(value, rowIndex, colIndex)}
+      onUpdateValue={value => onInput(value, rowIndex, colIndex, cell.id)}
+      onCommitValue={value => onCommit(value, rowIndex, colIndex, cell.id)}
       onInsertExcelData={value => onInsertExcel(value, rowIndex, colIndex)}
     /> : <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style)} dangerouslySetInnerHTML={{ __html: formatText(cell.text) }} />}
   </td>;
@@ -124,21 +131,92 @@ const EditableTable = memo((props: IEditableTableProps) => {
   const [isStartSelect, setIsStartSelect] = useState(false);
   const [startCell, setStartCell] = useState<number[]>([]);
   const [endCell, setEndCell] = useState<number[]>([]);
-  const tableCells = data;
-  const setTableCells = (newData: TableCell[][]) => onChange?.(newData);
+  const lastPropsDataRef = useRef(data);
+  const dataRef = useRef(data);
+  const draftRef = useRef<TableCellDraft | null>(null);
+  if (lastPropsDataRef.current !== data) {
+    lastPropsDataRef.current = data;
+    const draft = draftRef.current;
+    dataRef.current = draft ? (replaceTableCellText(data, draft) ?? data) : data;
+  }
+  const tableCells = dataRef.current;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const createEmptyCell = () => ({
+    colspan: 1,
+    rowspan: 1,
+    text: '',
+    id: nanoid(10)
+  });
+  const writeGrid = (next: TableCell[][]) => {
+    dataRef.current = next;
+    onChangeRef.current?.(next);
+  };
+  const commitDraftNow = () => {
+    const draft = draftRef.current;
+    if (!draft) return;
+    draftRef.current = null;
+    const next = replaceTableCellText(dataRef.current, draft);
+    if (next) writeGrid(next);
+  };
+  const scheduleCommit = useMemo(() => debounce(() => { commitDraftNow(); }, 300, { trailing: true }), []);
+  const flushDraft = () => {
+    scheduleCommit.cancel();
+    commitDraftNow();
+  };
+  const flushDraftRef = useRef(flushDraft);
+  flushDraftRef.current = flushDraft;
+  const takeCommittedGrid = () => {
+    scheduleCommit.cancel();
+    const draft = draftRef.current;
+    draftRef.current = null;
+    if (!draft) return dataRef.current;
+    const next = replaceTableCellText(dataRef.current, draft);
+    if (!next) return dataRef.current;
+    dataRef.current = next;
+    return next;
+  };
+  const setTableCells = (newData: TableCell[][]) => {
+    writeGrid(newData);
+  };
+  const cloneCommittedGrid = () => JSON.parse(JSON.stringify(takeCommittedGrid())) as TableCell[][];
+  useEffect(() => () => {
+    scheduleCommit.cancel();
+    commitDraftNow();
+  }, [scheduleCommit]);
 
   const { themeColors } = useSubThemeColor(theme);
   useMathReady(tableCells);
 
   const [colSizeList, setColSizeList] = useState(() => colWidths.map(item => item * width));
+  const [liveRowHeight, setLiveRowHeight] = useState<number | null>(null);
   const colSizeListRef = useRef(colSizeList);
+  const colOriginRef = useRef<number[] | null>(null);
+  const rowCountRef = useRef(data.length);
   colSizeListRef.current = colSizeList;
+  rowCountRef.current = data.length;
   const totalWidth = colSizeList.reduce((a, b) => a + b, 0);
+  const paintRowHeight = liveRowHeight ?? cellMinHeight;
   useEffect(() => {
+    colOriginRef.current = null;
+    setLiveRowHeight(null);
     setColSizeList(colWidths.map(item => item * width));
   }, [colWidths, width]);
+  useEffect(() => subscribeLiveBox((id, size) => {
+    if (id !== elementId) return;
+    if (!colOriginRef.current) colOriginRef.current = colSizeListRef.current.slice();
+    const origin = colOriginRef.current;
+    const sum = origin.reduce((a, b) => a + b, 0) || size.width;
+    const next = origin.map(w => w * (size.width / sum));
+    const colsChanged = next.length !== colSizeListRef.current.length
+      || next.some((w, i) => Math.abs(w - colSizeListRef.current[i]) > 0.5);
+    if (colsChanged) setColSizeList(next);
+    const rows = Math.max(rowCountRef.current, 1);
+    setLiveRowHeight(size.height / rows);
+  }), [elementId]);
 
   const removeSelectedCells = useCallback(() => {
+    flushDraftRef.current();
     setStartCell([]);
     setEndCell([]);
   }, []);
@@ -193,6 +271,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
   isStartSelectRef.current = isStartSelect;
   const handleCellMousedown = useCallback((e: MouseEvent, rowIndex: number, colIndex: number) => {
     if (e.button === 0) {
+      flushDraftRef.current();
       setEndCell([]);
       setIsStartSelect(true);
       setStartCell([rowIndex, colIndex]);
@@ -232,7 +311,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const deleteRow = (rowIndex: number) => {
-    const _tableCells: TableCell[][] = JSON.parse(JSON.stringify(tableCells));
+    const _tableCells = cloneCommittedGrid();
     const targetCells = tableCells[rowIndex];
     const hideCellsPos = [];
     for (let i = 0; i < targetCells.length; i++) {
@@ -251,7 +330,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const deleteCol = (colIndex: number) => {
-    const _tableCells: TableCell[][] = JSON.parse(JSON.stringify(tableCells));
+    const _tableCells = cloneCommittedGrid();
     const hideCellsPos = [];
     for (let i = 0; i < tableCells.length; i++) {
       if (isHideCell(i, colIndex)) hideCellsPos.push(i);
@@ -276,77 +355,22 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const insertRow = (rowIndex: number) => {
-    const _tableCells: TableCell[][] = JSON.parse(JSON.stringify(tableCells));
+    const _tableCells = cloneCommittedGrid();
     const rowCells: TableCell[] = [];
     for (let i = 0; i < _tableCells[0].length; i++) {
-      rowCells.push({
-        colspan: 1,
-        rowspan: 1,
-        text: '',
-        id: nanoid(10)
-      });
+      rowCells.push(createEmptyCell());
     }
     _tableCells.splice(rowIndex, 0, rowCells);
     setTableCells(_tableCells);
   };
 
   const insertCol = (colIndex: number) => {
-    setTableCells(tableCells.map(item => {
-      const cell = {
-        colspan: 1,
-        rowspan: 1,
-        text: '',
-        id: nanoid(10)
-      };
-      item.splice(colIndex, 0, cell);
-      return item;
-    }));
+    setTableCells(insertColIntoGrid(takeCommittedGrid(), colIndex, createEmptyCell));
     const nextCols = [...colSizeListRef.current];
     nextCols.splice(colIndex, 0, 100);
     setColSizeList(nextCols);
     colSizeListRef.current = nextCols;
     onChangeColWidths?.(nextCols);
-  };
-
-  const fillTable = (rowCount: number, colCount: number) => {
-    let _tableCells: TableCell[][] = JSON.parse(JSON.stringify(tableCells));
-    const defaultCell = {
-      colspan: 1,
-      rowspan: 1,
-      text: ''
-    };
-    if (rowCount) {
-      const newRows = [];
-      for (let i = 0; i < rowCount; i++) {
-        const rowCells: TableCell[] = [];
-        for (let j = 0; j < _tableCells[0].length; j++) {
-          rowCells.push({
-            ...defaultCell,
-            id: nanoid(10)
-          });
-        }
-        newRows.push(rowCells);
-      }
-      _tableCells = [..._tableCells, ...newRows];
-    }
-    if (colCount) {
-      _tableCells = _tableCells.map(item => {
-        const cells: TableCell[] = [];
-        for (let i = 0; i < colCount; i++) {
-          const cell = {
-            ...defaultCell,
-            id: nanoid(10)
-          };
-          cells.push(cell);
-        }
-        return [...item, ...cells];
-      });
-      const nextCols = [...colSizeListRef.current, ...new Array(colCount).fill(100)];
-      setColSizeList(nextCols);
-      colSizeListRef.current = nextCols;
-      onChangeColWidths?.(nextCols);
-    }
-    setTableCells(_tableCells);
   };
 
   const mergeCells = () => {
@@ -356,7 +380,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
     const minY = Math.min(startY, endY);
     const maxX = Math.max(startX, endX);
     const maxY = Math.max(startY, endY);
-    const _tableCells: TableCell[][] = JSON.parse(JSON.stringify(tableCells));
+    const _tableCells = cloneCommittedGrid();
     _tableCells[minX][minY].rowspan = maxX - minX + 1;
     _tableCells[minX][minY].colspan = maxY - minY + 1;
     setTableCells(_tableCells);
@@ -364,7 +388,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const splitCells = (rowIndex: number, colIndex: number) => {
-    const _tableCells: TableCell[][] = JSON.parse(JSON.stringify(tableCells));
+    const _tableCells = cloneCommittedGrid();
     _tableCells[rowIndex][colIndex].rowspan = 1;
     _tableCells[rowIndex][colIndex].colspan = 1;
     setTableCells(_tableCells);
@@ -396,7 +420,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const clearSelectedCellText = () => {
-    const _tableCells: TableCell[][] = JSON.parse(JSON.stringify(tableCells));
+    const _tableCells = cloneCommittedGrid();
     for (let i = 0; i < _tableCells.length; i++) {
       for (let j = 0; j < _tableCells[i].length; j++) {
         if (selectedCells.includes(`${i}_${j}`)) {
@@ -415,6 +439,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const tabActiveCell = () => {
+    flushDraft();
     const getNextCell = (i: number, j: number): [number, number] | null => {
       if (!tableCells[i]) return null;
       if (!tableCells[i][j]) return getNextCell(i + 1, 0);
@@ -434,6 +459,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const moveActiveCell = (dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
+    flushDraft();
     const rowIndex = +selectedCells[0].split('_')[0];
     const colIndex = +selectedCells[0].split('_')[1];
     const rowLen = tableCells.length;
@@ -548,35 +574,32 @@ const EditableTable = memo((props: IEditableTableProps) => {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const dataRef = useRef(tableCells);
-  dataRef.current = tableCells;
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  const handleInput = useCallback((value: string, rowIndex: number, colIndex: number, cellId: string) => {
+    const prev = draftRef.current;
+    if (prev && prev.cellId !== cellId) {
+      scheduleCommit.cancel();
+      commitDraftNow();
+    }
+    draftRef.current = { cellId, row: rowIndex, col: colIndex, text: value };
+    scheduleCommit();
+  }, [scheduleCommit]);
 
-  const handleInput = useMemo(() => debounce(function (value: string, rowIndex: number, colIndex: number) {
-    dataRef.current[rowIndex][colIndex].text = value;
-    onChangeRef.current?.(dataRef.current);
-  }, 300, { trailing: true }), []);
-  useEffect(() => () => { handleInput.cancel(); }, [handleInput]);
+  const handleCommit = useCallback((value: string, rowIndex: number, colIndex: number, cellId: string) => {
+    draftRef.current = { cellId, row: rowIndex, col: colIndex, text: value };
+    flushDraftRef.current();
+  }, []);
 
   const insertExcelData = (excel: string[][], rowIndex: number, colIndex: number) => {
-    const maxRow = excel.length;
-    const maxCol = excel[0].length;
-    let fillRowCount = 0;
-    let fillColCount = 0;
-    if (rowIndex + maxRow > tableCells.length) fillRowCount = rowIndex + maxRow - tableCells.length;
-    if (colIndex + maxCol > tableCells[0].length) fillColCount = colIndex + maxCol - tableCells[0].length;
-    if (fillRowCount || fillColCount) fillTable(fillRowCount, fillColCount);
-    void Promise.resolve().then(() => {
-      for (let i = 0; i < maxRow; i++) {
-        for (let j = 0; j < maxCol; j++) {
-          if (dataRef.current[rowIndex + i][colIndex + j]) {
-            dataRef.current[rowIndex + i][colIndex + j].text = excel[i][j];
-          }
-        }
-      }
-      onChangeRef.current?.(dataRef.current);
-    });
+    const base = takeCommittedGrid();
+    const extraCols = Math.max(0, colIndex + (excel[0]?.length ?? 0) - (base[0]?.length ?? 0));
+    const next = applyExcelPaste(base, rowIndex, colIndex, excel, createEmptyCell);
+    if (extraCols) {
+      const nextCols = [...colSizeListRef.current, ...new Array(extraCols).fill(100)];
+      setColSizeList(nextCols);
+      colSizeListRef.current = nextCols;
+      onChangeColWidths?.(nextCols);
+    }
+    writeGrid(next);
   };
 
   const getEffectiveTableCells = () => {
@@ -657,6 +680,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
     const rowIndex = +cellIndex.split('_')[0];
     const colIndex = +cellIndex.split('_')[1];
     if (!selectedCells.includes(`${rowIndex}_${colIndex}`)) {
+      flushDraft();
       setStartCell([rowIndex, colIndex]);
       setEndCell([]);
     }
@@ -697,7 +721,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
     insertExcelDataRef.current(value, rowIndex, colIndex);
   }, []);
 
-  return <div className={cx('editable-table')} style={{ width: totalWidth + 'px' }} onMouseDown={onMouseDown}>
+  return <div className={cx('editable-table')} data-live-table style={{ width: totalWidth + 'px', height: paintRowHeight * data.length + 'px' }} onMouseDown={onMouseDown}>
     {editable ? <div className={cx('handler')}>{dragLinePosition.map((pos, index) => <div
       className={cx('drag-line')}
       key={index}
@@ -720,9 +744,9 @@ const EditableTable = memo((props: IEditableTableProps) => {
       } as CSSProperties}
     >
       <colgroup>{colSizeList.map((colWidth, index) => <col span={1} key={index} width={colWidth} />)}</colgroup>
-      <tbody>{tableCells.map((rowCells, rowIndex) => <tr key={rowIndex} style={{ height: cellMinHeight + 'px' }}>
+      <tbody>{tableCells.map((rowCells, rowIndex) => <tr key={rowIndex} style={{ height: paintRowHeight + 'px' }}>
         {rowCells.map((cell, colIndex) => <TableCellView
-          key={cell.id}
+          key={`${cell.id}:${rowIndex}_${colIndex}`}
           cell={cell}
           rowIndex={rowIndex}
           colIndex={colIndex}
@@ -730,11 +754,12 @@ const EditableTable = memo((props: IEditableTableProps) => {
           isSelected={selectedCells.includes(`${rowIndex}_${colIndex}`) && selectedCells.length > 1}
           hide={hideCells.includes(`${rowIndex}_${colIndex}`)}
           outline={outline}
-          cellMinHeight={cellMinHeight}
+          cellMinHeight={paintRowHeight}
           onMouseDown={handleCellMousedown}
           onMouseEnter={handleCellMouseenter}
           onContextMenu={handleCellContextMenu}
           onInput={handleInput}
+          onCommit={handleCommit}
           onInsertExcel={onInsertExcel}
         />)}
       </tr>)}</tbody>

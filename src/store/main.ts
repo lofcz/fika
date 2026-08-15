@@ -37,6 +37,7 @@ export interface MainState {
   toolbarState: ToolbarStates
   clipingImageElementId: string
   isScaling: boolean
+  isGesturing: boolean
   richTextAttrs: TextAttrs
   selectedTableCells: string[]
   selectedSlidesIndex: number[]
@@ -75,6 +76,7 @@ export interface MainActions {
   setRichtextAttrs: (attrs: TextAttrs) => void
   setSelectedTableCells: (cells: string[]) => void
   setScalingState: (isScaling: boolean) => void
+  setGesturingState: (isGesturing: boolean) => void
   updateSelectedSlidesIndex: (selectedSlidesIndex: number[]) => void
   setDialogForExport: (type: DialogForExportTypes) => void
   setTextFormatPainter: (textFormatPainter: TextFormatPainter | null) => void
@@ -152,6 +154,7 @@ export const useMainStore = create<MainStore>()((set, get) => ({
   richTextAttrs: defaultRichTextAttrs,
   selectedTableCells: [],
   isScaling: false,
+  isGesturing: false,
   selectedSlidesIndex: [],
   dialogForExport: '',
   databaseId,
@@ -252,9 +255,20 @@ export const useMainStore = create<MainStore>()((set, get) => ({
     set({ selectedTableCells: cells })
   },
   setScalingState(isScaling) {
-    set({ isScaling })
+    const prev = get()
+    if (prev.isScaling === isScaling && prev.isGesturing === isScaling) return
+    set({ isScaling, isGesturing: isScaling })
+  },
+  setGesturingState(isGesturing) {
+    if (get().isGesturing === isGesturing) return
+    set({ isGesturing })
   },
   updateSelectedSlidesIndex(selectedSlidesIndex) {
+    const prev = get().selectedSlidesIndex
+    if (
+      prev.length === selectedSlidesIndex.length
+      && prev.every((value, index) => value === selectedSlidesIndex[index])
+    ) return
     set({ selectedSlidesIndex })
   },
   setDialogForExport(type) {

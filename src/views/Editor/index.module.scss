@@ -1,4 +1,5 @@
 .fika-editor {
+  --right-pane-width: 260px;
   height: 100%;
   box-sizing: border-box;
   display: flex;
@@ -9,8 +10,8 @@
   container-type: inline-size;
 }
 .fika-editor > .layout-header,
-.layout-content > .layout-content-left,
-.layout-content > .layout-content-center,
+.layout-content-left,
+.layout-content-center,
 .layout-content-right {
   background: #fff;
   border: 1px solid $borderColor;
@@ -25,15 +26,69 @@
 .layout-content {
   position: relative;
   flex: 1;
+  min-width: 0;
   min-height: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   gap: 0;
 }
 .layout-content-left {
-  width: 168px;
-  flex-shrink: 0;
+  min-width: 0;
   min-height: 0;
-  margin-right: $paneGap;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+
+  > * {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+  }
+}
+.layout-separator {
+  position: relative;
+  z-index: 5;
+  width: $paneGap;
+  min-width: $paneGap;
+  flex: 0 0 $paneGap !important;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: transparent;
+  cursor: col-resize;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: calc($paneGap - 4px);
+    cursor: col-resize;
+  }
+
+  &:hover::after,
+  &:global([data-separator][data-active])::after {
+    content: '';
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 0;
+    width: 2px;
+    border-radius: 99px;
+    background: $ring;
+    pointer-events: none;
+  }
+}
+.layout-workspace {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  overflow: hidden !important;
 }
 .layout-content-center {
   position: relative;
@@ -72,8 +127,8 @@
     margin-left $inkMotion $inkEase;
 
   &.docked {
-    flex-basis: 260px;
-    width: 260px;
+    flex-basis: var(--right-pane-width);
+    width: var(--right-pane-width);
     margin-left: $paneGap;
   }
 
@@ -86,6 +141,31 @@
   }
 }
 
+.right-panel-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(-#{$paneGap} + 4px);
+  z-index: 5;
+  flex: none !important;
+  overflow: visible;
+  pointer-events: auto;
+  touch-action: none;
+
+  &::before {
+    left: 0;
+    width: calc($paneGap + 4px);
+  }
+
+  &:hover::after {
+    left: calc($paneGap / 2 - 1px);
+  }
+
+  .right-panel-slot:not(.docked) & {
+    display: none;
+  }
+}
+
 .right-panel-clip {
   width: 100%;
   height: 100%;
@@ -93,9 +173,9 @@
   pointer-events: none;
 
   :global(.layout-content-right) {
-    width: 260px;
-    min-width: 260px;
-    max-width: 260px;
+    width: var(--right-pane-width);
+    min-width: var(--right-pane-width);
+    max-width: var(--right-pane-width);
     height: 100%;
     pointer-events: auto;
     background: #fff;

@@ -8,6 +8,7 @@ import { markSourcePackageDirty } from '@/utils/pptxSourcePackage'
 import { collectSlidesFonts, loadGoogleFonts } from '@/utils/font'
 import { DEFAULT_THEME_COLORS } from '@/configs/theme'
 import { applySlideBackgroundWithContrast } from '@/utils/textContrast'
+import { reorderSlidesPreservingIdentity } from '@/utils/slideOrder'
 
 export function buildDefaultTemplates(): SlideTemplate[] {
   return []
@@ -61,6 +62,7 @@ export interface SlidesActions {
   updateSlide: (props: Partial<Slide>, slideId?: string) => void
   removeSlideProps: (data: RemovePropData) => void
   deleteSlide: (slideId: string | string[]) => void
+  reorderSlides: (oldIndex: number, newIndex: number) => void
   updateSlideIndex: (index: number) => void
   addElement: (element: PPTElement | PPTElement[]) => void
   deleteElement: (elementId: string | string[]) => void
@@ -268,8 +270,19 @@ export const useSlidesStore = create<SlidesStore>()(
       markSourcePackageDirty()
     },
 
+    reorderSlides(oldIndex, newIndex) {
+      if (oldIndex === newIndex) return
+      set((state) => {
+        const next = reorderSlidesPreservingIdentity(state.slides, oldIndex, newIndex)
+        if (next === state.slides) return
+        state.slides = next
+        state.slideIndex = newIndex
+      })
+    },
+
     updateSlideIndex(index) {
       set((state) => {
+        if (state.slideIndex === index) return
         state.slideIndex = index
       })
     },
@@ -309,8 +322,8 @@ export const useSlidesStore = create<SlidesStore>()(
         const nextSlide = state.slides[nextIndex]
         if (!nextSlide) return
         nextSlide.elements = nextSlide.elements.map(el => (
-          elIdList.includes(el.id) ? { ...el, ...props } : el
-        )) as PPTElement[]
+          elIdList.includes(el.id) ? { ...el, ...props } as PPTElement : el
+        ))
       })
       markSourcePackageDirty()
     },

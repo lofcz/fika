@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { useRef, useCallback, memo, useState, useEffect } from 'react';
+import { useRef, useCallback, memo, useEffect } from 'react';
 import { nativePointerEvent, type ReactPointerEvent } from '@/utils/canvasPointer';
 
 import { openContextmenu } from '@/utils/openContextmenu';
@@ -17,14 +17,14 @@ export type ITableElementProps = {
   elementInfo: PPTTableElement;
   selectElement: (e: MouseEvent | TouchEvent, element: PPTTableElement, canMove?: boolean) => void;
   contextmenus: () => ContextmenuItem[] | null;
+  isEditing?: boolean;
 };
 
 const TableElement = memo((props: ITableElementProps) => {
-  const { elementInfo, contextmenus } = props;
+  const { elementInfo, contextmenus, isEditing } = props;
   const { LL } = useI18nContext();
   const canvasScale = useMainStore(s => s.canvasScale);
   const handleElementId = useMainStore(s => s.handleElementId);
-  const isScaling = useMainStore(s => s.isScaling);
   const elementRef = useRef<HTMLDivElement | null>(null);
   const { addHistorySnapshot } = useHistorySnapshot();
   const selectElementRef = useRef(props.selectElement);
@@ -40,9 +40,11 @@ const TableElement = memo((props: ITableElementProps) => {
     selectElementRef.current(nativePointerEvent(e), elementInfoRef.current);
   }, []);
 
-  const [editable, setEditable] = useState(false);
+  const editable = !!(isEditing && !elementInfo.lock);
   useEffect(() => {
-    if (handleElementId !== props.elementInfo.id) setEditable(false);
+    if (handleElementId !== props.elementInfo.id && useMainStore.getState().editingElementId === props.elementInfo.id) {
+      useMainStore.getState().setEditingElementId('');
+    }
   }, [handleElementId, props.elementInfo.id]);
   useEffect(() => {
     useMainStore.getState().setDisableHotkeysState(editable);
@@ -50,46 +52,47 @@ const TableElement = memo((props: ITableElementProps) => {
   useEffect(() => () => { forgetTableCellWrite(elementInfoRef.current.id); }, []);
 
   const startEdit = useCallback(() => {
-    if (!elementInfoRef.current.lock) setEditable(true);
+    if (elementInfoRef.current.lock) return;
+    const main = useMainStore.getState();
+    main.setEditingElementId(elementInfoRef.current.id);
+    main.setDisableHotkeysState(true);
   }, []);
 
-  const [realHeightCache, setRealHeightCache] = useState(-1);
-  const isScalingRef = useRef(isScaling);
-  const realHeightCacheRef = useRef(realHeightCache);
+  const isScalingRef = useRef(useMainStore.getState().isScaling);
   const elementHeightRef = useRef(props.elementInfo.height);
   const elementIdRef = useRef(props.elementInfo.id);
-  isScalingRef.current = isScaling;
-  realHeightCacheRef.current = realHeightCache;
   elementHeightRef.current = props.elementInfo.height;
   elementIdRef.current = props.elementInfo.id;
 
   useEffect(() => {
-    if (handleElementId !== props.elementInfo.id) return;
-    if (isScaling) setEditable(false);
-    if (!isScaling && realHeightCacheRef.current !== -1) {
-      useSlidesStore.getState().updateElement({
-        id: props.elementInfo.id,
-        props: { height: realHeightCacheRef.current }
-      });
-      setRealHeightCache(-1);
-    }
-  }, [isScaling]);
+    let wasScaling = useMainStore.getState().isScaling;
+    isScalingRef.current = wasScaling;
+    return useMainStore.subscribe(state => {
+      const next = state.isScaling;
+      if (next && !wasScaling && state.editingElementId === elementIdRef.current) {
+        useMainStore.getState().setEditingElementId('');
+      }
+      if (wasScaling && !next && elementRef.current) {
+        const table = elementRef.current.querySelector('table');
+        if (table instanceof HTMLTableElement) delete table.dataset.liveColOrigin;
+      }
+      wasScaling = next;
+      isScalingRef.current = next;
+    });
+  }, []);
 
   useEffect(() => {
     const el = elementRef.current;
     if (!el) return;
     const observer = new ResizeObserver((entries: ResizeObserverEntry[]) => {
       const contentRect = entries[0].contentRect;
-      if (!elementRef.current) return;
+      if (!elementRef.current || isScalingRef.current) return;
       const realHeight = contentRect.height;
       if (elementHeightRef.current !== realHeight) {
-        if (!isScalingRef.current) {
-          useSlidesStore.getState().updateElement({
-            id: elementIdRef.current,
-            props: { height: realHeight }
-          });
-        }
-        else setRealHeightCache(realHeight);
+        useSlidesStore.getState().updateElement({
+          id: elementIdRef.current,
+          props: { height: realHeight }
+        });
       }
     });
     observer.observe(el);
@@ -116,7 +119,7 @@ const TableElement = memo((props: ITableElementProps) => {
   }, [addHistorySnapshot]);
 
   const updateSelectedCells = useCallback((cells: string[]) => {
-    void Promise.resolve().then(() => useMainStore.getState().setSelectedTableCells(cells));
+    useMainStore.getState().setSelectedTableCells(cells);
   }, []);
 
   const stopTableMouseDown = useCallback((event: { stopPropagation: () => void }) => {
@@ -129,12 +132,14 @@ const TableElement = memo((props: ITableElementProps) => {
     style={{
       top: elementInfo.top + 'px',
       left: elementInfo.left + 'px',
-      width: elementInfo.width + 'px'
+      width: elementInfo.width + 'px',
+      height: elementInfo.height + 'px'
     }}
   >
     <div className={cx('rotate-wrapper')} style={{ transform: `rotate(${elementInfo.rotate}deg)` }}>
       <div
         className={cx('element-content')}
+        data-live-box
         onContextMenu={event => { event.stopPropagation(); event.preventDefault(); openContextmenu(event, contextmenusRef.current); }}
       >
         <EditableTable
@@ -162,5 +167,5 @@ const TableElement = memo((props: ITableElementProps) => {
       </div>
     </div>
   </div>;
-}, (prev, next) => areTableElementInfosEqual(prev.elementInfo, next.elementInfo));
+}, (prev, next) => !!prev.isEditing === !!next.isEditing && areTableElementInfosEqual(prev.elementInfo, next.elementInfo));
 export default TableElement;

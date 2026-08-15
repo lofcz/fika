@@ -1,20 +1,23 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './EmbedRoot.module.scss'
 const cx = bindStyles(styles)
-import { useEffect, useRef } from 'react'
+import { Activity, lazy, Suspense, useEffect, useRef } from 'react'
 import { useMainStore, useScreenStore, useSnapshotStore, useSlidesStore } from '@/store'
 import { deleteDiscardedDB } from '@/utils/database'
 import { isPC } from '@/utils/common'
+import { importScreen, prefetchScreen } from '@/views/Screen/lazy'
 import Editor from '@/views/Editor/index'
-import Screen from '@/views/Screen/index'
 import Mobile from '@/views/Mobile/index'
 import FullscreenSpin from '@/components/FullscreenSpin'
+import ScreenShell from '@/views/Screen/ScreenShell'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { buildStarterPresentation } from '@/configs/starterPresentation'
 import { registerLocaleSync, unregisterLocaleSync } from './localeBridge'
 import type { FikaDocument, FikaMountOptions } from './types'
 import type { FikaDeckViewport } from './agentic/types'
 import { inferViewportFromSlides } from './inferViewport'
+
+const Screen = lazy(importScreen)
 
 export type IEmbedRootProps = {
   init: FikaMountOptions
@@ -79,7 +82,16 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
       initSnapshotDatabase()
       if (presentationOnly && useSlidesStore.getState().slides.length) setScreening(true)
     })()
+    if (typeof requestIdleCallback === 'function') {
+      const idle = requestIdleCallback(() => prefetchScreen(), { timeout: 1500 })
+      return () => {
+        cancelIdleCallback(idle)
+        unregisterLocaleSync()
+      }
+    }
+    const timeout = window.setTimeout(() => prefetchScreen(), 400)
     return () => {
+      clearTimeout(timeout)
       unregisterLocaleSync()
     }
   }, [])
@@ -94,10 +106,25 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
   }, [screening, presentationOnly, slides.length, updateSlideIndex, setScreening])
 
   if (slides.length) {
-    if (screening) return <Screen />
-    if (!presentationOnly && _isPC) return <Editor />
-    if (!presentationOnly) return <Mobile />
-    return null
+    if (presentationOnly) {
+      return (
+        <Suspense fallback={<ScreenShell />}>
+          <Screen />
+        </Suspense>
+      )
+    }
+    return (
+      <>
+        <Activity mode={screening ? 'hidden' : 'visible'}>
+          {_isPC ? <Editor /> : <Mobile />}
+        </Activity>
+        {screening ? (
+          <Suspense fallback={<ScreenShell />}>
+            <Screen />
+          </Suspense>
+        ) : null}
+      </>
+    )
   }
   if (init.showLoadingData !== false) {
     return <FullscreenSpin tip={LL.common.loadingData()} loading mask={false} />

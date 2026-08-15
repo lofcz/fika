@@ -32,6 +32,7 @@ const ResizeHandler = memo(({ type, rotate = 0, className, style, onMouseDown }:
   return (
     <div
       className={cx('resize-handler', rotateClassName, type, className)}
+      data-resize-handle={type || undefined}
       style={style}
       onMouseDown={e => {
         stopHandleEvent(e)

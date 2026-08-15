@@ -86,6 +86,7 @@ const AudioElement = memo((props: IAudioElementProps) => {
       <div className={cx('rotate-wrapper')} style={{ transform: `rotate(${elementInfo.rotate}deg)` }}>
         <div
           className={cx('element-content')}
+          data-live-box
           onContextMenu={event => {
             event.stopPropagation()
             event.preventDefault()

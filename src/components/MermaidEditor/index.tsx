@@ -3,7 +3,7 @@ import styles from './index.module.scss'
 const cx = bindStyles(styles)
 import { useRef, useCallback, memo, useState, useEffect, type KeyboardEvent } from 'react'
 
-import { renderMermaid } from '@/utils/mermaid'
+import { isMermaidReady, isMermaidRenderSuperseded, prefetchMermaid, renderMermaid, whenMermaidReady } from '@/utils/mermaid'
 import message from '@/utils/message'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import Button from '@/components/Button'
@@ -22,10 +22,18 @@ const MermaidEditor = memo((props: IMermaidEditorProps) => {
   const [svg, setSvg] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [engineReady, setEngineReady] = useState(isMermaidReady)
   const textAreaRef = useRef<{ focus: () => void } | null>(null)
   const renderVersionRef = useRef(0)
   const LLRef = useRef(LL)
+  const onUpdateRef = useRef(props.onUpdate)
   LLRef.current = LL
+  onUpdateRef.current = props.onUpdate
+
+  useEffect(() => {
+    prefetchMermaid()
+    void whenMermaidReady().then(() => setEngineReady(true))
+  }, [])
 
   useEffect(() => {
     const version = ++renderVersionRef.current
@@ -34,6 +42,7 @@ const MermaidEditor = memo((props: IMermaidEditorProps) => {
       setError('')
       return
     }
+    if (!engineReady) return
 
     void (async () => {
       try {
@@ -43,12 +52,12 @@ const MermaidEditor = memo((props: IMermaidEditorProps) => {
         setError('')
       }
       catch (err) {
-        if (version !== renderVersionRef.current) return
+        if (version !== renderVersionRef.current || isMermaidRenderSuperseded(err)) return
         setSvg('')
         setError(err instanceof Error ? err.message : LLRef.current.components.mermaidEditor.syntaxError())
       }
     })()
-  }, [code])
+  }, [code, engineReady])
 
   useEffect(() => {
     setCode(value)
@@ -56,20 +65,21 @@ const MermaidEditor = memo((props: IMermaidEditorProps) => {
   }, [])
 
   const update = useCallback(async () => {
-    if (!code.trim()) return message.error(LL.components.mermaidEditor.codeEmpty())
+    if (!code.trim()) return message.error(LLRef.current.components.mermaidEditor.codeEmpty())
 
     setSaving(true)
     try {
       await renderMermaid(code, 'editor-submit')
-      props.onUpdate?.(code)
+      onUpdateRef.current?.(code)
     }
     catch (err) {
-      message.error(err instanceof Error ? err.message : LL.components.mermaidEditor.syntaxError())
+      if (isMermaidRenderSuperseded(err)) return
+      message.error(err instanceof Error ? err.message : LLRef.current.components.mermaidEditor.syntaxError())
     }
     finally {
       setSaving(false)
     }
-  }, [code, LL, props.onUpdate])
+  }, [code])
 
   const handleKeydown = useCallback((e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -90,18 +100,18 @@ const MermaidEditor = memo((props: IMermaidEditorProps) => {
           />
         </div>
         <div className={cx('preview')}>
-          {!code ? (
-            <div className={cx('placeholder')}>{LL.components.mermaidEditor.previewPlaceholder()}</div>
-          ) : svg ? (
+          {svg ? (
             <div className={cx('preview-content')} dangerouslySetInnerHTML={{ __html: svg }} />
           ) : error ? (
             <div className={cx('error')}>{error}</div>
-          ) : null}
+          ) : (
+            <div className={cx('placeholder')}>{LL.components.mermaidEditor.previewPlaceholder()}</div>
+          )}
         </div>
       </div>
       <div className={cx('footer')}>
         <Button className={cx('btn')} onClick={() => props.onClose?.()}>{LL.common.cancel()}</Button>
-        <Button className={cx('btn')} type="primary" disabled={saving} onClick={() => { void update() }}>{LL.common.ok()}</Button>
+        <Button className={cx('btn')} type="primary" data-editor-insert="mermaid" disabled={saving} onClick={() => { void update() }}>{LL.common.ok()}</Button>
       </div>
     </div>
   )

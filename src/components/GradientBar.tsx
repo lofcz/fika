@@ -1,14 +1,21 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './GradientBar.module.scss'
 const cx = bindStyles(styles)
-import { useRef, useCallback, memo, useState, useEffect, type MouseEvent as ReactMouseEvent } from 'react';
+import { useRef, useCallback, memo, useState, useEffect, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
 
 import type { GradientColor } from '@/types/slides';
+import { throttle } from '@/utils/debounce';
+
+const LIVE_INPUT_MS = 32
+
+const sortStops = (colors: GradientColor[]) => [...colors].toSorted((a, b) => a.pos - b.pos)
+
 export type IGradientBarProps = {
   value: GradientColor[];
   index: number;
   className?: string;
 } & {
+  onInput?: (payload: GradientColor[]) => void;
   onUpdateValue?: (payload: GradientColor[]) => void;
   onUpdateIndex?: (payload: number) => void;
 };
@@ -16,9 +23,24 @@ const GradientBar = memo((props: IGradientBarProps) => {
   const { index } = props;
   const [points, setPoints] = useState<GradientColor[]>([]);
   const barRef = useRef<HTMLDivElement | null>(null);
+  const draggingRef = useRef(false);
+  const onInputRef = useRef(props.onInput);
+  const onUpdateValueRef = useRef(props.onUpdateValue);
+  const onUpdateIndexRef = useRef(props.onUpdateIndex);
+  onInputRef.current = props.onInput;
+  onUpdateValueRef.current = props.onUpdateValue;
+  onUpdateIndexRef.current = props.onUpdateIndex;
+
+  const emitInput = useMemo(() => throttle((next: GradientColor[]) => {
+    onInputRef.current?.(next);
+  }, LIVE_INPUT_MS), []);
+
+  useEffect(() => () => emitInput.cancel(), [emitInput]);
+
   useEffect(() => {
+    if (draggingRef.current) return;
     setPoints(props.value);
-    if (props.index > props.value.length - 1) props.onUpdateIndex?.(0);
+    if (props.index > props.value.length - 1) onUpdateIndexRef.current?.(0);
   }, [props.value, props.index]);
   const gradientStyle = (() => {
     const list = points.map(item => `${item.color} ${item.pos}%`);
@@ -33,12 +55,13 @@ const GradientBar = memo((props: IGradientBarProps) => {
       targetIndex = props.value.length - 2;
     }
     const values = props.value.filter((item, _index) => _index !== index);
-    props.onUpdateIndex?.(targetIndex);
-    props.onUpdateValue?.(values);
-  }, [props.value?.length, props.index, props.value?.filter, props.onUpdateIndex, props.onUpdateValue]);
+    onUpdateIndexRef.current?.(targetIndex);
+    onUpdateValueRef.current?.(values);
+  }, [props.value, props.index]);
   const movePoint = useCallback((index: number) => {
     let isMouseDown = true;
     let current = points;
+    draggingRef.current = true;
     document.onmousemove = e => {
       if (!isMouseDown) return;
       if (!barRef.current) return;
@@ -53,9 +76,12 @@ const GradientBar = memo((props: IGradientBarProps) => {
         return item;
       });
       setPoints(current);
+      emitInput(sortStops(current));
     };
     document.onmouseup = () => {
       isMouseDown = false;
+      draggingRef.current = false;
+      emitInput.flush();
       const point = current[index];
       const _points = [...current];
       _points.splice(index, 1);
@@ -64,12 +90,12 @@ const GradientBar = memo((props: IGradientBarProps) => {
         if (point.pos > _points[i].pos) targetIndex = i + 1;
       }
       _points.splice(targetIndex, 0, point);
-      props.onUpdateIndex?.(targetIndex);
-      props.onUpdateValue?.(_points);
+      onUpdateIndexRef.current?.(targetIndex);
+      onUpdateValueRef.current?.(_points);
       document.onmousemove = null;
       document.onmouseup = null;
     };
-  }, [points, props.onUpdateIndex, props.onUpdateValue]);
+  }, [points, emitInput]);
   const addPoint = useCallback((e: ReactMouseEvent) => {
     if (props.value.length >= 6) return;
     if (!barRef.current) return;

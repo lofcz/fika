@@ -197,7 +197,19 @@ export default function LaTeXEditor({
     const latex = readLatex()
     if (!latex) return message.error(LL.components.latexEditor.formulaEmpty())
 
-    const { width, height } = await measureLatexElement(latex)
+    let width = 160
+    let height = 64
+    try {
+      const measured = await Promise.race([
+        measureLatexElement(latex),
+        new Promise<{ width: number; height: number }>(resolve => {
+          setTimeout(() => resolve({ width, height }), 280)
+        }),
+      ])
+      width = measured.width
+      height = measured.height
+    }
+    catch { /* fallback box */ }
     onUpdate?.({
       latex,
       path: '',
@@ -268,7 +280,7 @@ export default function LaTeXEditor({
 
       <div className={cx('footer')}>
         <Button className={cx('btn')} onClick={() => onClose?.()}>{LL.common.cancel()}</Button>
-        <Button className={cx('btn')} type="primary" onClick={() => { void update() }}>
+        <Button className={cx('btn')} type="primary" data-editor-insert="latex" onClick={() => { void update() }}>
           {editing ? LL.common.save() : LL.components.latexEditor.insert()}
         </Button>
       </div>

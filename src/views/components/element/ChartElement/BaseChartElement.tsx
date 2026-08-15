@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useSlidesStore, selectCurrentSlide } from '@/store';
 import type { PPTChartElement, SlideBackground } from '@/types/slides';
 import { DEFAULT_CHART_LINE_COLOR } from '@/configs/chart';
-import { resolveChartLabelColor } from '@/utils/textContrast';
+import { resolveChartElementSeriesColors, resolveChartLabelColor } from '@/utils/textContrast';
 import { useOutlineRadiusCss } from '@/views/components/element/hooks/useElementOutline';
 import ElementOutline from '@/views/components/element/ElementOutline';
 import Chart from './Chart';
@@ -61,7 +61,10 @@ const BaseChartElement = memo((props: IBaseChartElementProps) => {
           height={elementInfo.height}
           type={elementInfo.chartType}
           data={elementInfo.data}
-          themeColors={elementInfo.themeColors}
+          themeColors={resolveChartElementSeriesColors(elementInfo, {
+            background: props.background ?? currentSlide?.background,
+            fallbackSurface: props.themeBackgroundColor ?? theme?.backgroundColor,
+          })}
           textColor={labelColor}
           lineColor={gridColor}
           options={elementInfo.options}

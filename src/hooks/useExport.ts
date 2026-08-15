@@ -10,12 +10,13 @@ import { outlineRadiusToPptxRectRadius } from '@/utils/elementOutline';
 import { getElementRange, getLineElementPath, getTableThemeColors } from '@/utils/element';
 import { type AST, toAST } from '@/utils/htmlParser';
 import { type SvgPoints, toPoints } from '@/utils/svgPathParser';
-import { MATH_CLASS } from '@/utils/math';
+import { LATEX_ELEMENT_FONT_SIZE, MATH_CLASS } from '@/utils/math';
+import { latexPaintScale } from '@/utils/latex';
 import { applyOmmlRunStyle, prepareLatexToOmml, tryLatexToOmmlSync } from '@/utils/latexToOmml';
 import { collectEmbeddedFonts } from '@/utils/exportFonts';
 import { svg2Base64 } from '@/utils/svg2Base64';
 import { renderMermaid } from '@/utils/mermaid';
-import { renderCodeElementPng } from '@/utils/codeHighlight';
+import { codeElementPptxBox, codeElementToPptxText } from '@/utils/codePptxExport';
 import { getPPTXImageCrop } from '@/utils/pptxUnit';
 import { encrypt } from '@/utils/crypto';
 import { tryGetCleanRetainedPackage } from '@/utils/pptxSourcePackage';
@@ -1847,10 +1848,11 @@ export default () => {
               pptxSlide.addTable(tableData, options);
             } else if (el.type === 'latex') {
               const color = formatColor(el.color || '#000000').color;
-              const fontSizePt = defaultFontSize / ratioPx2Pt;
+              const fontSizePt = LATEX_ELEMENT_FONT_SIZE * latexPaintScale(el) / ratioPx2Pt;
               const ommlRaw = tryLatexToOmmlSync(el.latex);
               const omml = ommlRaw ? applyOmmlRunStyle(ommlRaw, {
-                color
+                color,
+                fontSizePt
               }) : null;
               const options: pptxgen.TextPropsOptions = {
                 x: el.left / ratioPx2Inch,
@@ -1905,30 +1907,15 @@ export default () => {
                 pptxSlide.addImage(options);
               }
             } else if (el.type === 'code') {
-              let imageData = '';
-              try {
-                imageData = await renderCodeElementPng(el);
-              } catch (error) {
-                console.error('Code export failed:', error);
-                imageData = '';
+              const painted = await codeElementToPptxText(el);
+              const options: pptxgen.TextPropsOptions = codeElementPptxBox(el, painted, ratioPx2Inch, ratioPx2Pt);
+              if (el.link) {
+                const linkOption = getLinkOption(el.link);
+                if (linkOption) options.hyperlink = linkOption;
               }
-              if (imageData) {
-                const options: pptxgen.ImageProps = {
-                  data: imageData,
-                  x: el.left / ratioPx2Inch,
-                  y: el.top / ratioPx2Inch,
-                  w: el.width / ratioPx2Inch,
-                  h: el.height / ratioPx2Inch
-                };
-                if (el.rotate) options.rotate = el.rotate;
-                if (el.link) {
-                  const linkOption = getLinkOption(el.link);
-                  if (linkOption) options.hyperlink = linkOption;
-                }
-                const animation = animationForElement(el.id, slide.animations);
-                if (animation) options.animation = animation;
-                pptxSlide.addImage(options);
-              }
+              const animation = animationForElement(el.id, slide.animations);
+              if (animation) options.animation = animation;
+              pptxSlide.addText(painted.runs, options);
             } else if (!ignoreMedia && (el.type === 'video' || el.type === 'audio')) {
               const mediaSrc = sources.get(el.src) ?? el.src;
               const isInline = isInlineDataUrl(mediaSrc);

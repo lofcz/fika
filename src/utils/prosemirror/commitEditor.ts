@@ -1,34 +1,57 @@
-import { selectCurrentSlide, useSlidesStore } from '@/store'
+import { useMainStore, useSlidesStore } from '@/store'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
-import type { ShapeText } from '@/types/slides'
+import type { PPTElement, ShapeText } from '@/types/slides'
+import { repairFilledPlaceholderHtml } from '@/utils/placeholderPaint'
 import { getEditorView } from './caret'
+import { editorHtmlLooksEmpty, shouldWriteEditorHtml } from './commitPolicy'
 
-export const richTextHtmlLooksEmpty = (html: string) => (
-  !html.replace(/<br\s*\/?>/gi, '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim()
-)
+export { editorHtmlLooksEmpty, shouldWriteEditorHtml } from './commitPolicy'
 
-/** Persist the live ProseMirror HTML before the canvas clone / idle paint. */
-export function commitLiveEditorToStore(elementId: string) {
+export const richTextHtmlLooksEmpty = editorHtmlLooksEmpty
+
+const findElementInPresentation = (elementId: string): { slideId: string; el: PPTElement } | null => {
+  for (const slide of useSlidesStore.getState().slides) {
+    const el = slide.elements.find(item => item.id === elementId)
+    if (el) return { slideId: slide.id, el }
+  }
+  return null
+}
+
+/** Persist the live ProseMirror HTML. History is for explicit flushes, not every key. */
+export function commitLiveEditorToStore(elementId: string, options?: { history?: boolean }) {
   const view = getEditorView(elementId)
   if (!view) return
   const empty = view.state.doc.textContent.trim().length === 0 && richTextHtmlLooksEmpty(view.dom.innerHTML)
   const html = empty ? '' : view.dom.innerHTML
-  const el = selectCurrentSlide(useSlidesStore.getState())?.elements.find(item => item.id === elementId)
-  if (!el) return
+  const found = findElementInPresentation(elementId)
+  if (!found) return
+  const { slideId, el } = found
+  const isAuthoritative = view.hasFocus() || useMainStore.getState().editingElementId === elementId
+  const history = options?.history !== false
   if (el.type === 'text') {
-    if (el.content === html) return
-    useSlidesStore.getState().updateElement({ id: elementId, props: { content: html } })
-    useHistorySnapshot().addHistorySnapshot()
+    const next = el.placeholder ? repairFilledPlaceholderHtml(el, html) : html
+    if (!shouldWriteEditorHtml({
+      nextHtml: next,
+      storeHtml: el.content || '',
+      isAuthoritative,
+    })) return
+    useSlidesStore.getState().updateElement({ id: elementId, slideId, props: { content: next } })
+    if (history) useHistorySnapshot().addHistorySnapshot()
     return
   }
   if (el.type !== 'shape') return
   if (!html) {
     if (!el.text) return
+    if (!isAuthoritative) return
     useSlidesStore.getState().removeElementProps({ id: elementId, propName: 'text' })
-    useHistorySnapshot().addHistorySnapshot()
+    if (history) useHistorySnapshot().addHistorySnapshot()
     return
   }
-  if (el.text?.content === html) return
+  if (!shouldWriteEditorHtml({
+    nextHtml: html,
+    storeHtml: el.text?.content || '',
+    isAuthoritative,
+  })) return
   const text: ShapeText = {
     align: 'middle',
     defaultFontName: '',
@@ -36,6 +59,6 @@ export function commitLiveEditorToStore(elementId: string) {
     ...(el.text || {}),
     content: html,
   }
-  useSlidesStore.getState().updateElement({ id: elementId, props: { text } })
-  useHistorySnapshot().addHistorySnapshot()
+  useSlidesStore.getState().updateElement({ id: elementId, slideId, props: { text } })
+  if (history) useHistorySnapshot().addHistorySnapshot()
 }

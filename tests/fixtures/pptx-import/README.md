@@ -1,6 +1,6 @@
 # PPTX import fidelity fixtures
 
-Real Office packages used by `npm run test:import-fidelity:e2e`.
+Real Office packages used by `bun run test` (import-fidelity + sb1).
 
 | File | Origin |
 | --- | --- |

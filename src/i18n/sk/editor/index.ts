@@ -524,6 +524,13 @@ const sk_editor: NamespaceEditorTranslation = {
     proprietaryFormat: '(vlastný formát)',
     exportFiles: 'Exportovať súbor',
     resetSlides: 'Nová prezentácia',
+    resetConfirm: {
+      kicker: 'Nová prezentácia',
+      title: 'Začať s prázdnou prezentáciou?',
+      description: 'Táto prezentácia má {count} snímok. Nová ich nahradí.',
+      actionTitle: 'Začať novú',
+      actionHint: 'Nahradiť aktuálne snímky prázdnou titulnou snímkou.',
+    },
     markupSlides: 'Označenie typu snímky',
     hotkeys: 'Klávesové skratky',
     feedback: 'Spätná väzba',

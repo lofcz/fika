@@ -3,6 +3,7 @@ import { useCallback, memo, useState, useEffect, useRef } from 'react'
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 import type { PPTElement, PPTLatexElement } from '@/types/slides'
 import emitter, { EmitterEvents } from '@/utils/emitter'
+import { latexPropsAfterEdit } from '@/utils/latex'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { useHeldSlideElement } from '@/hooks/useHeldSlideElement'
 import { LazyLaTeXEditor } from '@/components/LaTeXEditor/lazy'
@@ -32,21 +33,15 @@ const LatexEditorDialog = memo(() => {
   }, [handleElementId])
 
   const updateLatexData = useCallback((data: { path: string; latex: string; w: number; h: number }) => {
-    const id = editingElementId
-    if (!id) return
+    const current = editingLatexElement
+    if (!current) return
     slidesStore.updateElement({
-      id,
-      props: {
-        path: data.path,
-        latex: data.latex,
-        width: data.w,
-        height: data.h,
-        viewBox: [data.w, data.h],
-      },
+      id: current.id,
+      props: latexPropsAfterEdit(current, data),
     })
     addHistorySnapshot()
     setVisible(false)
-  }, [editingElementId, slidesStore, addHistorySnapshot])
+  }, [editingLatexElement, slidesStore, addHistorySnapshot])
 
   const close = useCallback(() => setVisible(false), [])
 

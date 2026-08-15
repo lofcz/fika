@@ -9,14 +9,14 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { RIZIKA_PPTX } from '../tests/fixtures/paths.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 const DEV_URL = 'http://127.0.0.1:5173/'
-const SAMPLE = join(homedir(), 'Desktop', 'Rizika použití EF s ohledem na výkonnost.pptx')
+const SAMPLE = RIZIKA_PPTX
 const CLIP_TOL = 1.5
 const JUMP_TOL = 2
 
@@ -355,7 +355,10 @@ async function runApp(browser) {
   assert(Math.abs(afterClick.overflow - before.overflow) <= 4, `editor click changed overflow ${before.overflow.toFixed(2)} → ${afterClick.overflow.toFixed(2)}`)
   assert(afterClick.overflow <= 2, `editor still clipped after click by ${afterClick.overflow.toFixed(2)}px`)
 
-  if (existsSync(SAMPLE)) {
+  if (!existsSync(SAMPLE)) {
+    throw new Error(`Missing fixture: ${SAMPLE}`)
+  }
+  {
     const { copyFileSync, unlinkSync, mkdirSync } = await import('node:fs')
     const publicCopy = join(root, 'public', '_e2e-text-fit.pptx')
     copyFileSync(SAMPLE, publicCopy)
@@ -443,9 +446,6 @@ async function runApp(browser) {
     finally {
       try { unlinkSync(publicCopy) } catch {  }
     }
-  }
-  else {
-    console.warn('skipping Rizika PPTX cases: sample not on Desktop')
   }
 
   await page.close()

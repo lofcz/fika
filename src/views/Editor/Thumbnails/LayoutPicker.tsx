@@ -70,7 +70,7 @@ const LayoutPicker = memo((props: ILayoutPickerProps) => {
           onMouseDown={event => event.preventDefault()}
           onClick={() => pick(item.slide)}
         >
-          <ThumbnailSlide className={cx('thumbnail')} slide={item.slide} size={168} showPlaceholders />
+          <ThumbnailSlide className={cx('thumbnail')} slide={item.slide} size={168} />
           <span className={cx('layout-name')}>{item.name}</span>
         </button>
       ))}

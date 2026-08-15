@@ -42,6 +42,8 @@ const LatexElement = memo((props: ILatexElementProps) => {
     <div className={cx('rotate-wrapper')} style={{ transform: `rotate(${elementInfo.rotate}deg)` }}>
       <div
         className={cx('element-content')}
+        data-live-box
+        style={{ width: elementInfo.width + 'px', height: elementInfo.height + 'px' }}
         onContextMenu={event => { event.stopPropagation(); event.preventDefault(); openContextmenu(event, contextmenus); }}
         onMouseDown={$event => { handleSelectElement($event); }}
         onTouchStart={$event => { handleSelectElement($event); }}

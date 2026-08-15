@@ -5,7 +5,7 @@ const cx = bindStyles(styles)
 import { useEffect, useRef, useState } from 'react'
 import { useSlidesStore } from '@/store'
 import type { Mode } from '@/types/mobile'
-import useSlidesWithTurningMode from '../Screen/hooks/useSlidesWithTurningMode'
+import { resolveTurningMode, screenWindowRange } from '../Screen/screenWindow'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
 import MobileThumbnails from './MobileThumbnails'
 import { useI18nContext } from '@/i18n/useI18nContext'
@@ -20,7 +20,8 @@ export default function MobilePlayer({ changeMode }: IMobilePlayerProps) {
   const slideIndex = useSlidesStore(s => s.slideIndex)
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const updateSlideIndex = useSlidesStore(s => s.updateSlideIndex)
-  const { slidesWithTurningMode } = useSlidesWithTurningMode()
+  const { start, end } = screenWindowRange(slideIndex, slides.length, 1)
+  const currentTurningMode = resolveTurningMode(slides[slideIndex]?.id ?? '', slides[slideIndex]?.turningMode)
   const [toolVisible, setToolVisible] = useState(false)
   const [playerSize, setPlayerSize] = useState({ width: 0, height: 0 })
   const touchInfoRef = useRef<{ x: number; y: number } | null>(null)
@@ -86,19 +87,21 @@ export default function MobilePlayer({ changeMode }: IMobilePlayerProps) {
         onTouchStart={touchStartListener}
         onTouchEnd={touchEndListener}
       >
-        {slidesWithTurningMode.map((slide, index) => (
-          <div
-            className={cx('slide-item', `turning-mode-${slide.turningMode || 'slideY'}`, {
-              current: index === slideIndex,
-              before: index < slideIndex,
-              after: index > slideIndex,
-              hide: (index === slideIndex - 1 || index === slideIndex + 1) && slide.turningMode !== slidesWithTurningMode[slideIndex].turningMode,
-              last: index === slideIndex - 1,
-              next: index === slideIndex + 1,
-            })}
-            key={slide.id}
-          >
-            {Math.abs(slideIndex - index) < 2 ? (
+        {slides.slice(start, end + 1).map((slide, offset) => {
+          const index = start + offset
+          const turningMode = resolveTurningMode(slide.id, slide.turningMode)
+          return (
+            <div
+              className={cx('slide-item', `turning-mode-${turningMode}`, {
+                current: index === slideIndex,
+                before: index < slideIndex,
+                after: index > slideIndex,
+                hide: (index === slideIndex - 1 || index === slideIndex + 1) && turningMode !== currentTurningMode,
+                last: index === slideIndex - 1,
+                next: index === slideIndex + 1,
+              })}
+              key={slide.id}
+            >
               <div
                 className={cx('slide-content')}
                 style={{
@@ -106,11 +109,11 @@ export default function MobilePlayer({ changeMode }: IMobilePlayerProps) {
                   height: slideSize.height + 'px',
                 }}
               >
-                <ThumbnailSlide slide={slide} size={slideSize.width} />
+                <ThumbnailSlide slide={{ id: slide.id }} size={slideSize.width} />
               </div>
-            ) : null}
-          </div>
-        ))}
+            </div>
+          )
+        })}
       </div>
 
       {toolVisible ? (

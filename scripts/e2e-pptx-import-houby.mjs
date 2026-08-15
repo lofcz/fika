@@ -10,13 +10,13 @@
 import { spawn } from 'node:child_process'
 import { copyFileSync, existsSync, unlinkSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { HOUBY_PPTX } from '../tests/fixtures/paths.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const DEV_URL = 'http://127.0.0.1:5173/'
-const SAMPLE = join(homedir(), 'Desktop', 'Houby-Skryty-svet-nasich-lesu.pptx')
+const SAMPLE = HOUBY_PPTX
 const PUBLIC_COPY = join(root, 'public', '_e2e-houby.pptx')
 
 const failures = []
@@ -40,7 +40,7 @@ async function waitForDev(timeoutMs = 60000) {
 }
 
 if (!existsSync(SAMPLE)) {
-  console.error('Missing Desktop fixture:', SAMPLE)
+  console.error('Missing fixture:', SAMPLE)
   process.exit(1)
 }
 

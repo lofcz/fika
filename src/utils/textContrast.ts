@@ -691,6 +691,72 @@ export const resolveChartLabelColor = (chart: {
   fallbackSurface: options.fallbackSurface
 });
 
+/** Lift only series that disappear into the slide (Ink #171717 is ~1.1:1). */
+export const CHART_SERIES_CONTRAST = 2;
+
+const seriesReadability = (color: string, surfaces: string[]) => (
+  Math.min(...surfaces.map(bg => tinycolor.readability(color, bg)))
+);
+
+const seriesHueDelta = (a: string, b: string) => {
+  const ha = tinycolor(a).toHsv().h;
+  const hb = tinycolor(b).toHsv().h;
+  return Math.min(Math.abs(ha - hb), 360 - Math.abs(ha - hb));
+};
+
+const seriesDistinct = (color: string, used: string[]) => used.every(other => {
+  const luma = Math.abs(tinycolor(color).getLuminance() - tinycolor(other).getLuminance());
+  return seriesHueDelta(color, other) >= 18 || luma >= 0.16;
+});
+
+const liftSeriesColor = (raw: string, surfaces: string[], used: string[], darkSurface: boolean) => {
+  let next = tinycolor(raw);
+  if (!next.isValid()) next = tinycolor(darkSurface ? '#7dd3fc' : '#2563eb');
+  const readable = (hex: string) => !surfaces.length || seriesReadability(hex, surfaces) >= CHART_SERIES_CONTRAST;
+  if (readable(next.toHexString())) return next.toHexString();
+  if (darkSurface && next.toHsv().s < 0.22) {
+    next = tinycolor.mix(next, '#38bdf8', 58);
+  }
+  for (let step = 0; step < 16; step++) {
+    const hex = next.toHexString();
+    if (readable(hex) && seriesDistinct(hex, used)) return hex;
+    if (readable(hex)) {
+      next = next.spin(32);
+      continue;
+    }
+    next = darkSurface ? next.lighten(6).saturate(8) : next.darken(6).saturate(4);
+  }
+  return tinycolor.mix(next, darkSurface ? '#e2e8f0' : '#1e293b', 72).toHexString();
+};
+
+/**
+ * Series fills/strokes must clear the slide (or chart fill). Ink's #171717
+ * on #0c0d10 is ~1:1 — lift it instead of painting invisible bars/lines.
+ */
+export const resolveChartSeriesColors = (
+  colors: string[] | undefined,
+  surfaces: string | string[] | null | undefined,
+): string[] => {
+  const bgs = opaqueSurfaces(surfaces);
+  const source = colors?.length ? colors : ['#3b5bdb', '#1c7ed6'];
+  const darkSurface = preferredInk(bgs.length ? bgs : ['#ffffff']) === '#ffffff';
+  const out: string[] = [];
+  for (const color of source) out.push(liftSeriesColor(color, bgs, out, darkSurface));
+  return out;
+};
+
+export const resolveChartElementSeriesColors = (
+  chart: { themeColors?: string[]; fill?: string },
+  options: { background?: SlideBackground; fallbackSurface?: string } = {},
+) => resolveChartSeriesColors(
+  chart.themeColors,
+  resolveElementSurfaces({
+    fill: chart.fill,
+    background: options.background,
+    fallbackSurface: options.fallbackSurface,
+  }),
+);
+
 /**
  * Placeholder ink is the same binary polarity as body text — never a mixed grey.
  */

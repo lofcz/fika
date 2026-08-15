@@ -1,37 +1,32 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSlidesStore } from '@/store'
 
+export const measureSlideSize = (viewportRatio: number, wrap?: HTMLElement | null) => {
+  const slideWrap = wrap || (typeof document === 'undefined' ? null : document.body)
+  if (!slideWrap) return { slideWidth: 0, slideHeight: 0 }
+  const winWidth = slideWrap.clientWidth
+  const winHeight = slideWrap.clientHeight
+  if (!winWidth || !winHeight) return { slideWidth: 0, slideHeight: 0 }
+
+  if (winHeight / winWidth === viewportRatio) {
+    return { slideWidth: winWidth, slideHeight: winHeight }
+  }
+  if (winHeight / winWidth > viewportRatio) {
+    return { slideWidth: winWidth, slideHeight: winWidth * viewportRatio }
+  }
+  return { slideWidth: winHeight / viewportRatio, slideHeight: winHeight }
+}
+
 export default (wrapRef?: { current: HTMLElement | null }) => {
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const viewportRatioRef = useRef(viewportRatio)
   viewportRatioRef.current = viewportRatio
 
-  const [slideWidth, setSlideWidth] = useState(0)
-  const [slideHeight, setSlideHeight] = useState(0)
+  const [size, setSize] = useState(() => measureSlideSize(viewportRatio, wrapRef?.current))
 
   useEffect(() => {
     const setSlideContentSize = () => {
-      const slideWrapRef = wrapRef?.current || document.body
-      const winWidth = slideWrapRef.clientWidth
-      const winHeight = slideWrapRef.clientHeight
-      const ratio = viewportRatioRef.current
-      let width: number
-      let height: number
-
-      if (winHeight / winWidth === ratio) {
-        width = winWidth
-        height = winHeight
-      }
-      else if (winHeight / winWidth > ratio) {
-        width = winWidth
-        height = winWidth * ratio
-      }
-      else {
-        width = winHeight / ratio
-        height = winHeight
-      }
-      setSlideWidth(width)
-      setSlideHeight(height)
+      setSize(measureSlideSize(viewportRatioRef.current, wrapRef?.current || document.body))
     }
 
     setSlideContentSize()
@@ -50,8 +45,5 @@ export default (wrapRef?: { current: HTMLElement | null }) => {
     }
   }, [wrapRef, viewportRatio])
 
-  return {
-    slideWidth,
-    slideHeight,
-  }
+  return size
 }

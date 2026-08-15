@@ -646,6 +646,13 @@ const pl_editor: NamespaceEditorTranslation = {
     proprietaryFormat: '(format własny)',
     exportFiles: 'Eksportuj plik',
     resetSlides: 'Nowa prezentacja',
+    resetConfirm: {
+      kicker: 'Nowa prezentacja',
+      title: 'Zacząć od pustej prezentacji?',
+      description: 'Ta prezentacja ma {count} slajdów. Nowa je zastąpi.',
+      actionTitle: 'Zacznij nową',
+      actionHint: 'Zastąp bieżące slajdy pustym slajdem tytułowym.',
+    },
     markupSlides: 'Oznaczenie typu slajdu',
     hotkeys: 'Skróty klawiszowe',
     feedback: 'Opinie',

@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useRef, type CSSProperties, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, type CSSProperties, type RefObject } from 'react'
 import { setLocale as setPretextLocale } from '@chenglou/pretext'
-import type { PPTTextElement, TextInset } from '@/types/slides'
+import type { PPTShapeElement, PPTTextElement, TextInset } from '@/types/slides'
+import { authoredTextFitSize, elementLocksTextBox } from '@/utils/placeholderLayout'
+import { subscribeLiveBox } from '@/utils/liveElementSize'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import {
-  DEFAULT_TEXT_FONT_SIZE,
-  extractFitBlocksFromHtml,
-  fitClipPadding,
-  fitFontScaleForBlocks,
-  fitScaleFromContentHeight,
-  measureUnzoomedScrollHeight,
-  MIN_FIT_SCALE,
-  scaleHtmlFontSizes,
+  contentBoxOfHost,
+  createFitMeasureSession,
+  fitSessionKey,
+  fitZoomScaleFromSession,
+  innerBoxFromLiveStyles,
+  type FitMeasureSession,
 } from '@/utils/textFit'
 
 const DEFAULT_INSET: TextInset = [10, 10, 10, 10]
@@ -18,20 +18,33 @@ const DEFAULT_LINE_HEIGHT = 1.5
 const DEFAULT_PARAGRAPH_SPACE = 5
 const DEFAULT_TEXT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
 
+type FitSource = PPTTextElement | PPTShapeElement
+
+const fitContentOf = (el: FitSource) => (
+  el.type === 'shape' ? (el.text?.content || '') : el.content
+)
+const fitLineHeightOf = (el: FitSource) => (
+  (el.type === 'shape' ? el.text?.lineHeight : el.lineHeight) ?? DEFAULT_LINE_HEIGHT
+)
+const fitParagraphSpaceOf = (el: FitSource) => (
+  el.type === 'shape'
+    ? (el.text?.paragraphSpace === undefined ? DEFAULT_PARAGRAPH_SPACE : el.text.paragraphSpace)
+    : (el.paragraphSpace ?? DEFAULT_PARAGRAPH_SPACE)
+)
+const fitFontNameOf = (el: FitSource) => (
+  (el.type === 'shape' ? el.text?.defaultFontName : el.defaultFontName) || DEFAULT_TEXT_FONT_FAMILY
+)
+const fitWordSpaceOf = (el: FitSource) => (
+  (el.type === 'shape' ? el.text?.wordSpace : el.wordSpace) || 0
+)
+const fitInsetOf = (el: FitSource): TextInset => (
+  (el.type === 'shape' ? el.text?.inset : el.inset) || DEFAULT_INSET
+)
+const fitAuthoredSizeOf = (el: FitSource) => (
+  el.type === 'text' ? authoredTextFitSize(el) : 16
+)
+
 type LiveContentInput = string | null | undefined | RefObject<string | null | undefined>
-
-function roundTo(value: number, decimals = 1): number {
-  const factor = 10 ** decimals
-  return Math.round(value * factor) / factor
-}
-
-function innerBox(el: PPTTextElement) {
-  const inset = el.inset || DEFAULT_INSET
-  return {
-    innerWidth: el.width - inset[1] - inset[3],
-    innerHeight: el.height - inset[0] - inset[2],
-  }
-}
 
 function isLiveRef(live: LiveContentInput): live is RefObject<string | null | undefined> {
   return !!live && typeof live === 'object' && 'current' in live
@@ -43,27 +56,25 @@ function readLive(live: LiveContentInput): string | null | undefined {
 }
 
 /**
- * Auto-fit a fixed-size text box so its content never overflows.
+ * Auto-fit a locked text box (fixed height or placeholder/title slot) so
+ * its content never overflows.
  *
- * The painted scale is always a uniform CSS `zoom` of the *same* authored HTML
- * (editor and thumbnails). That is the Excel shrink-to-fit contract: one layout,
- * one scale, no overlay swap on click. The scale comes from the real laid-out
- * height (`measureUnzoomedScrollHeight`) once the host is mounted; pretext is
- * only the pre-mount guess so the first frame is close.
- *
- * `fitScale` / `liveContent` stay off the React state path: assigning them
- * patches the host style without writing the store or rerendering Canvas /
- * siblings. Zoom is committed on the host DOM; input frames never call setState.
+ * Resize is a pretext hot path: `prepare()` once per content/font, then only
+ * `layout(prepared, width, lineHeight)` when the box size changes. No DOM
+ * layout reads, no binary search. CSS `zoom` is written on the host so Canvas
+ * / siblings do not re-render.
  */
 export default (
-  elementInfo: PPTTextElement,
+  elementInfo: FitSource,
   liveContent?: LiveContentInput,
   hostEl?: { readonly current: HTMLElement | null },
   options?: { observeResize?: boolean },
 ) => {
   const { locale } = useI18nContext()
   const fitScaleRef = useRef(1)
-  const measuringRef = useRef(false)
+  const sessionRef = useRef<FitMeasureSession | null>(null)
+  const lastInnerRef = useRef({ width: 0, height: 0 })
+  const rafRef = useRef(0)
   const elementInfoRef = useRef(elementInfo)
   elementInfoRef.current = elementInfo
   const localeRef = useRef(locale)
@@ -77,12 +88,14 @@ export default (
 
   const measuredContent = () => {
     const live = readLive(liveContentRef.current)
-    return live !== null && live !== undefined ? live : elementInfoRef.current.content
+    return live !== null && live !== undefined ? live : fitContentOf(elementInfoRef.current)
   }
+
+  const authoredSize = () => fitAuthoredSizeOf(elementInfoRef.current)
 
   const enabledNow = () => {
     const el = elementInfoRef.current
-    return !!el.fixedHeight && !el.vertical && !!measuredContent()
+    return elementLocksTextBox(el) && !!measuredContent()
   }
 
   const paintStyleFor = (scale: number): CSSProperties | undefined => {
@@ -102,75 +115,80 @@ export default (
     if (host.style.zoom !== style.zoom) host.style.zoom = String(style.zoom)
   }
 
-  const pretextGuess = () => {
+  const ensureSession = () => {
     const el = elementInfoRef.current
     const content = measuredContent()
-    if (!el.fixedHeight || el.vertical || !content) return 1
-    const { innerWidth, innerHeight } = innerBox(el)
-    try {
-      setPretextLocale(localeRef.current)
-      const { blocks } = extractFitBlocksFromHtml(content, {
-        defaultFontFamily: el.defaultFontName || DEFAULT_TEXT_FONT_FAMILY,
-      })
-      const maxFont = blocks.reduce((max, block) => Math.max(max, block.size), DEFAULT_TEXT_FONT_SIZE)
-      const lineHeight = el.lineHeight ?? DEFAULT_LINE_HEIGHT
-      return fitFontScaleForBlocks(blocks, {
-        innerWidth,
-        innerHeight: Math.max(1, innerHeight - fitClipPadding(maxFont, lineHeight)),
-        lineHeight,
-        blockSpace: el.paragraphSpace ?? DEFAULT_PARAGRAPH_SPACE,
-        letterSpacing: el.wordSpace || undefined,
-        minScale: MIN_FIT_SCALE,
-      })
+    if (!elementLocksTextBox(el) || !content) {
+      sessionRef.current = null
+      return null
     }
-    catch {
-      return 1
-    }
+    const fontFamily = fitFontNameOf(el)
+    const lineHeight = fitLineHeightOf(el)
+    const letterSpacing = fitWordSpaceOf(el)
+    const defaultSize = authoredSize()
+    const key = fitSessionKey(content, fontFamily, lineHeight, letterSpacing, localeRef.current, defaultSize)
+    if (sessionRef.current?.key === key) return sessionRef.current
+    setPretextLocale(localeRef.current)
+    sessionRef.current = createFitMeasureSession(content, {
+      key,
+      defaultFontFamily: fontFamily,
+      defaultSize,
+      lineHeight,
+      letterSpacing: letterSpacing || undefined,
+    })
+    return sessionRef.current
   }
 
-  const applyDomScale = () => {
+  const applyScale = () => {
     const el = elementInfoRef.current
-    if (!el.fixedHeight || el.vertical || !measuredContent()) {
+    if (!elementLocksTextBox(el) || !measuredContent()) {
+      lastInnerRef.current = { width: 0, height: 0 }
       commitScale(1)
       return
     }
     const host = hostElRef.current?.current
-    if (!host) {
-      commitScale(pretextGuess())
+    const box = contentBoxOfHost(host)
+    const { innerWidth, innerHeight } = innerBoxFromLiveStyles(box, {
+      width: el.width,
+      height: el.height,
+      inset: fitInsetOf(el),
+    })
+    const width = Math.round(innerWidth)
+    const height = Math.round(innerHeight)
+    const session = ensureSession()
+    if (
+      host
+      && lastInnerRef.current.width === width
+      && lastInnerRef.current.height === height
+      && sessionRef.current?.key === session?.key
+    ) {
+      // React `style={textFitPaintStyle}` can wipe a DOM zoom written last frame.
+      commitScale(fitScaleRef.current)
       return
     }
-    const hasLiveEditor = !!host.querySelector('.ProseMirror:not(.ProseMirror-static)')
-    if (!hasLiveEditor || readLive(liveContentRef.current) == null) {
-      commitScale(pretextGuess())
+    if (!session || !session.items.length) {
+      if (host) lastInnerRef.current = { width, height }
+      commitScale(1)
       return
     }
-    if (measuringRef.current) return
-    measuringRef.current = true
-    try {
-      const { innerWidth, innerHeight } = innerBox(el)
-      const height = measureUnzoomedScrollHeight(host, innerWidth)
-      const maxFont = extractFitBlocksFromHtml(measuredContent(), {
-        defaultFontFamily: el.defaultFontName || DEFAULT_TEXT_FONT_FAMILY,
-      }).blocks.reduce((max, block) => Math.max(max, block.size), DEFAULT_TEXT_FONT_SIZE)
-      const pad = fitClipPadding(maxFont, el.lineHeight ?? DEFAULT_LINE_HEIGHT)
-      const next = fitScaleFromContentHeight(height, Math.max(1, innerHeight - pad))
-      if (Math.abs(next - fitScaleRef.current) >= 0.0005) commitScale(next)
-    }
-    catch {
-      commitScale(pretextGuess())
-    }
-    finally {
-      measuringRef.current = false
-    }
+    if (host) lastInnerRef.current = { width, height }
+    commitScale(fitZoomScaleFromSession(
+      session,
+      innerWidth,
+      innerHeight,
+      fitParagraphSpaceOf(el),
+    ))
   }
 
   const schedule = () => {
-    Promise.resolve().then(() => {
-      if (typeof requestAnimationFrame === 'undefined') {
-        applyDomScale()
-        return
-      }
-      requestAnimationFrame(applyDomScale)
+    if (typeof requestAnimationFrame === 'undefined') {
+      applyScale()
+      return
+    }
+    if (rafRef.current) return
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0
+      applyScale()
     })
   }
   scheduleRef.current = schedule
@@ -178,64 +196,80 @@ export default (
   const setLiveContent = useCallback((html: string | null) => {
     const passed = liveContentRef.current
     if (isLiveRef(passed)) passed.current = html
+    lastInnerRef.current = { width: 0, height: 0 }
     scheduleRef.current()
   }, [])
 
+  const resync = useCallback(() => {
+    lastInnerRef.current = { width: 0, height: 0 }
+    applyScale()
+  }, [])
+
   const liveValue = isLiveRef(liveContent) ? undefined : liveContent
+  const lockMode = elementLocksTextBox(elementInfo)
+
+  useLayoutEffect(() => {
+    lastInnerRef.current = { width: 0, height: 0 }
+    applyScale()
+  }, [lockMode])
 
   useEffect(() => {
+    lastInnerRef.current = { width: 0, height: 0 }
     scheduleRef.current()
   }, [
-    elementInfo.content,
+    fitContentOf(elementInfo),
     liveValue,
     elementInfo.width,
     elementInfo.height,
-    elementInfo.fixedHeight,
-    elementInfo.vertical,
-    elementInfo.lineHeight,
-    elementInfo.paragraphSpace,
-    elementInfo.defaultFontName,
-    elementInfo.wordSpace,
-    elementInfo.inset,
+    fitLineHeightOf(elementInfo),
+    fitParagraphSpaceOf(elementInfo),
+    fitFontNameOf(elementInfo),
+    elementInfo.type === 'text' ? elementInfo.placeholderFontSize : undefined,
+    elementInfo.type === 'text' ? elementInfo.placeholder : undefined,
+    fitWordSpaceOf(elementInfo),
+    fitInsetOf(elementInfo),
     hostEl,
     locale,
   ])
 
+  useEffect(() => subscribeLiveBox((id) => {
+    if (id !== elementInfoRef.current.id) return
+    lastInnerRef.current = { width: 0, height: 0 }
+    scheduleRef.current()
+  }), [])
+
   useEffect(() => {
     if (typeof document !== 'undefined' && document.fonts?.ready) {
-      document.fonts.ready.then(() => scheduleRef.current()).catch(() => {})
+      document.fonts.ready.then(() => {
+        lastInnerRef.current = { width: 0, height: 0 }
+        scheduleRef.current()
+      }).catch(() => {})
     }
     scheduleRef.current()
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = 0
+    }
   }, [])
 
   useEffect(() => {
     if (!observeResize || typeof ResizeObserver === 'undefined' || !hostEl) return
+    const host = hostEl.current
+    const box = contentBoxOfHost(host) ?? host
+    if (!box) return
     const observer = new ResizeObserver(() => scheduleRef.current())
-    const node = hostEl.current
-    if (node) observer.observe(node)
-    return () => {
-      observer.disconnect()
-    }
-  }, [hostEl, observeResize])
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [hostEl, observeResize, elementInfo.id])
 
   const fitScale = fitScaleRef.current
-  const enabled = enabledNow()
-  const fittedContent = (() => {
-    const content = measuredContent()
-    if (!enabled || fitScale >= 1) return content
-    return scaleHtmlFontSizes(content, fitScale)
-  })()
-  const fitVars = (() => {
-    if (!enabled || fitScale >= 1) return {}
-    return { '--text-fit-base-size': `${roundTo(DEFAULT_TEXT_FONT_SIZE * fitScale)}px` }
-  })()
-  const textFitPaintStyle = paintStyleFor(fitScale)
 
   return {
     fitScale,
-    fittedContent,
-    fitVars,
-    textFitPaintStyle,
+    fittedContent: measuredContent(),
+    fitVars: {},
+    textFitPaintStyle: paintStyleFor(fitScale),
     setLiveContent,
+    resync,
   }
 }

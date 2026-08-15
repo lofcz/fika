@@ -1,24 +1,32 @@
-import { useScreenStore, useSlidesStore } from '@/store';
-import { enterFullscreen, exitFullscreen, isFullscreen } from '@/utils/fullscreen';
-export default () => {
+import { useScreenStore, useSlidesStore } from '@/store'
+import { enterFullscreen, exitFullscreen, isFullscreen } from '@/utils/fullscreen'
+import { prefetchScreen } from '@/views/Screen/lazy'
 
+const requestFullscreenSoon = () => {
+  requestAnimationFrame(() => enterFullscreen())
+}
+
+export default () => {
   const enterScreening = () => {
-    enterFullscreen();
-    useScreenStore.getState().setScreening(true);
-  };
+    useScreenStore.getState().setScreening(true)
+    requestFullscreenSoon()
+  }
 
   const enterScreeningFromStart = () => {
-    useSlidesStore.getState().updateSlideIndex(0);
-    enterScreening();
-  };
+    useScreenStore.getState().setScreening(true)
+    useSlidesStore.getState().updateSlideIndex(0)
+    requestFullscreenSoon()
+  }
 
   const exitScreening = () => {
-    useScreenStore.getState().setScreening(false);
-    if (isFullscreen()) exitFullscreen();
-  };
+    useScreenStore.getState().setScreening(false)
+    if (isFullscreen()) exitFullscreen()
+  }
+
   return {
     enterScreening,
     enterScreeningFromStart,
-    exitScreening
-  };
-};
+    exitScreening,
+    prefetchScreen,
+  }
+}

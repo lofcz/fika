@@ -1,3 +1,5 @@
+import { boxesNear, buildSnapIndex, queryLinesX, queryLinesY, type SnapIndex, type SnapLine } from '@/utils/spatial'
+
 export const SNAP_THRESHOLD = 8
 export const FINE_GRID_SIZE = 8
 export const GUIDE_PAD = 14
@@ -35,6 +37,46 @@ export interface SnapOptions {
   canvas: SnapCanvas
   gridSize: number
   threshold?: number
+  index?: SnapIndex
+}
+
+/** Search pad for the per-move Flatbush query: snap threshold or related-object reach. */
+export const snapQueryPad = (threshold = SNAP_THRESHOLD) => Math.max(threshold, RELATED_GAP)
+
+const resolveIndex = (others: SnapBox[], index?: SnapIndex) => index ?? buildSnapIndex(others)
+
+const neighborsForMove = (
+  moving: SnapBox,
+  others: SnapBox[],
+  index: SnapIndex | undefined,
+  threshold: number,
+): { nearby: SnapBox[]; index: SnapIndex } => {
+  const resolved = resolveIndex(others, index)
+  return { nearby: boxesNear(resolved, moving, snapQueryPad(threshold)), index: resolved }
+}
+
+export const sameSnapGuides = (a: SnapGuide[], b: SnapGuide[]) => {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i]
+    const right = b[i]
+    if (
+      left.type !== right.type
+      || left.kind !== right.kind
+      || left.label !== right.label
+      || left.length !== right.length
+      || left.axis.x !== right.axis.x
+      || left.axis.y !== right.axis.y
+    ) return false
+    const lm = left.marks
+    const rm = right.marks
+    if (lm === rm) continue
+    if (!lm || !rm || lm.length !== rm.length) return false
+    for (let j = 0; j < lm.length; j++) {
+      if (lm[j] !== rm[j]) return false
+    }
+  }
+  return true
 }
 
 export interface SnapResult {
@@ -284,7 +326,55 @@ const isRelatedRange = (movingStart: number, movingEnd: number, range: [number, 
   return !!gap && gap.distance < RELATED_GAP
 }
 
-const collectAlignCandidates = (moving: SnapBox, others: SnapBox[], canvas: SnapCanvas): SnapCandidate[] => {
+type AlignTarget = { value: number; range: [number, number]; kind: SnapKind }
+
+const canvasTargetsY = (canvas: SnapCanvas): AlignTarget[] => [
+  { value: 0, range: [0, canvas.width], kind: 'canvas' },
+  { value: SLIDE_MARGIN, range: [0, canvas.width], kind: 'canvas' },
+  { value: canvas.height / 2, range: [0, canvas.width], kind: 'center' },
+  { value: canvas.height - SLIDE_MARGIN, range: [0, canvas.width], kind: 'canvas' },
+  { value: canvas.height, range: [0, canvas.width], kind: 'canvas' },
+]
+
+const canvasTargetsX = (canvas: SnapCanvas): AlignTarget[] => [
+  { value: 0, range: [0, canvas.height], kind: 'canvas' },
+  { value: SLIDE_MARGIN, range: [0, canvas.height], kind: 'canvas' },
+  { value: canvas.width / 2, range: [0, canvas.height], kind: 'center' },
+  { value: canvas.width - SLIDE_MARGIN, range: [0, canvas.height], kind: 'canvas' },
+  { value: canvas.width, range: [0, canvas.height], kind: 'canvas' },
+]
+
+const lineToTarget = (line: SnapLine): AlignTarget => ({
+  value: line.value,
+  range: [line.min, line.max],
+  kind: line.kind,
+})
+
+const objectTargetsFromNearby = (nearby: SnapBox[]) => {
+  const targetsY: AlignTarget[] = []
+  const targetsX: AlignTarget[] = []
+  for (const other of nearby) {
+    targetsY.push(
+      { value: other.minY, range: [other.minX, other.maxX], kind: 'edge' },
+      { value: boxCenterY(other), range: [other.minX, other.maxX], kind: 'center' },
+      { value: other.maxY, range: [other.minX, other.maxX], kind: 'edge' },
+    )
+    targetsX.push(
+      { value: other.minX, range: [other.minY, other.maxY], kind: 'edge' },
+      { value: boxCenterX(other), range: [other.minY, other.maxY], kind: 'center' },
+      { value: other.maxX, range: [other.minY, other.maxY], kind: 'edge' },
+    )
+  }
+  return { targetsY, targetsX }
+}
+
+const collectAlignCandidates = (
+  moving: SnapBox,
+  nearby: SnapBox[],
+  canvas: SnapCanvas,
+  index: SnapIndex,
+  threshold: number,
+): SnapCandidate[] => {
   const candidates: SnapCandidate[] = []
   const movingY = [
     { value: moving.minY, kind: 'edge' as const },
@@ -297,33 +387,20 @@ const collectAlignCandidates = (moving: SnapBox, others: SnapBox[], canvas: Snap
     { value: moving.maxX, kind: 'edge' as const },
   ]
 
-  const targetsY: { value: number; range: [number, number]; kind: SnapKind }[] = [
-    { value: 0, range: [0, canvas.width], kind: 'canvas' },
-    { value: SLIDE_MARGIN, range: [0, canvas.width], kind: 'canvas' },
-    { value: canvas.height / 2, range: [0, canvas.width], kind: 'center' },
-    { value: canvas.height - SLIDE_MARGIN, range: [0, canvas.width], kind: 'canvas' },
-    { value: canvas.height, range: [0, canvas.width], kind: 'canvas' },
+  const pad = snapQueryPad(threshold)
+  const fromIndex = index.metaX.length > 0
+  const targetsY: AlignTarget[] = [
+    ...canvasTargetsY(canvas),
+    ...(fromIndex
+      ? movingY.flatMap(source => queryLinesY(index, source.value, threshold, moving.minX - pad, moving.maxX + pad).map(lineToTarget))
+      : objectTargetsFromNearby(nearby).targetsY),
   ]
-  const targetsX: { value: number; range: [number, number]; kind: SnapKind }[] = [
-    { value: 0, range: [0, canvas.height], kind: 'canvas' },
-    { value: SLIDE_MARGIN, range: [0, canvas.height], kind: 'canvas' },
-    { value: canvas.width / 2, range: [0, canvas.height], kind: 'center' },
-    { value: canvas.width - SLIDE_MARGIN, range: [0, canvas.height], kind: 'canvas' },
-    { value: canvas.width, range: [0, canvas.height], kind: 'canvas' },
+  const targetsX: AlignTarget[] = [
+    ...canvasTargetsX(canvas),
+    ...(fromIndex
+      ? movingX.flatMap(source => queryLinesX(index, source.value, threshold, moving.minY - pad, moving.maxY + pad).map(lineToTarget))
+      : objectTargetsFromNearby(nearby).targetsX),
   ]
-
-  for (const other of others) {
-    targetsY.push(
-      { value: other.minY, range: [other.minX, other.maxX], kind: 'edge' },
-      { value: boxCenterY(other), range: [other.minX, other.maxX], kind: 'center' },
-      { value: other.maxY, range: [other.minX, other.maxX], kind: 'edge' },
-    )
-    targetsX.push(
-      { value: other.minX, range: [other.minY, other.maxY], kind: 'edge' },
-      { value: boxCenterX(other), range: [other.minY, other.maxY], kind: 'center' },
-      { value: other.maxX, range: [other.minY, other.maxY], kind: 'edge' },
-    )
-  }
 
   for (const target of targetsY) {
     for (const source of movingY) {
@@ -376,13 +453,14 @@ const collectAlignCandidates = (moving: SnapBox, others: SnapBox[], canvas: Snap
   return candidates
 }
 
-const collectGaps = (boxes: SnapBox[], axis: Axis) => {
+/** Pairwise gaps among the nearby k-set only — never the full others list. */
+const collectGaps = (nearby: SnapBox[], axis: Axis) => {
   const gaps: number[] = []
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = 0; j < boxes.length; j++) {
+  for (let i = 0; i < nearby.length; i++) {
+    for (let j = 0; j < nearby.length; j++) {
       if (i === j) continue
-      const a = boxes[i]
-      const b = boxes[j]
+      const a = nearby[i]
+      const b = nearby[j]
       if (axis === 'x') {
         if (!overlaps1D(a.minY, a.maxY, b.minY, b.maxY)) continue
         const gap = b.minX - a.maxX
@@ -398,12 +476,12 @@ const collectGaps = (boxes: SnapBox[], axis: Axis) => {
   return uniqueSorted(gaps)
 }
 
-const collectSpacingCandidates = (moving: SnapBox, others: SnapBox[]): SnapCandidate[] => {
+const collectSpacingCandidates = (moving: SnapBox, nearby: SnapBox[]): SnapCandidate[] => {
   const candidates: SnapCandidate[] = []
-  const gapsX = collectGaps(others, 'x')
-  const gapsY = collectGaps(others, 'y')
+  const gapsX = collectGaps(nearby, 'x')
+  const gapsY = collectGaps(nearby, 'y')
 
-  for (const other of others) {
+  for (const other of nearby) {
     if (overlaps1D(moving.minY, moving.maxY, other.minY, other.maxY)) {
       const midY = (Math.max(moving.minY, other.minY) + Math.min(moving.maxY, other.maxY)) / 2
       for (const gap of gapsX) {
@@ -448,11 +526,11 @@ const collectSpacingCandidates = (moving: SnapBox, others: SnapBox[]): SnapCandi
     }
   }
 
-  for (let i = 0; i < others.length; i++) {
-    for (let j = 0; j < others.length; j++) {
+  for (let i = 0; i < nearby.length; i++) {
+    for (let j = 0; j < nearby.length; j++) {
       if (i === j) continue
-      const left = others[i]
-      const right = others[j]
+      const left = nearby[i]
+      const right = nearby[j]
       if (right.minX > left.maxX && overlaps1D(left.minY, left.maxY, right.minY, right.maxY)) {
         const inner = right.minX - left.maxX
         const width = boxWidth(moving)
@@ -472,8 +550,8 @@ const collectSpacingCandidates = (moving: SnapBox, others: SnapBox[]): SnapCandi
           })
         }
       }
-      const top = others[i]
-      const bottom = others[j]
+      const top = nearby[i]
+      const bottom = nearby[j]
       if (bottom.minY > top.maxY && overlaps1D(top.minX, top.maxX, bottom.minX, bottom.maxX)) {
         const inner = bottom.minY - top.maxY
         const height = boxHeight(moving)
@@ -520,7 +598,12 @@ const collectGridCandidates = (moving: SnapBox, gridSize: number): SnapCandidate
   ]
 }
 
-const collectAlignmentGuides = (snapped: SnapBox, others: SnapBox[], canvas: SnapCanvas): SnapGuide[] => {
+const collectAlignmentGuides = (
+  snapped: SnapBox,
+  nearby: SnapBox[],
+  canvas: SnapCanvas,
+  index: SnapIndex,
+): SnapGuide[] => {
   const guides: SnapGuide[] = []
   const movingY = [
     { value: snapped.minY, kind: 'edge' as const },
@@ -532,32 +615,21 @@ const collectAlignmentGuides = (snapped: SnapBox, others: SnapBox[], canvas: Sna
     { value: boxCenterX(snapped), kind: 'center' as const },
     { value: snapped.maxX, kind: 'edge' as const },
   ]
-  const targetsY: { value: number; range: [number, number]; kind: SnapKind }[] = [
-    { value: 0, range: [0, canvas.width], kind: 'canvas' },
-    { value: SLIDE_MARGIN, range: [0, canvas.width], kind: 'canvas' },
-    { value: canvas.height / 2, range: [0, canvas.width], kind: 'center' },
-    { value: canvas.height - SLIDE_MARGIN, range: [0, canvas.width], kind: 'canvas' },
-    { value: canvas.height, range: [0, canvas.width], kind: 'canvas' },
+  const pad = snapQueryPad()
+  const fromIndex = index.metaX.length > 0
+  const nearbyTargets = fromIndex ? null : objectTargetsFromNearby(nearby)
+  const targetsY: AlignTarget[] = [
+    ...canvasTargetsY(canvas),
+    ...(fromIndex
+      ? movingY.flatMap(source => queryLinesY(index, source.value, SNAP_MATCH, snapped.minX - pad, snapped.maxX + pad).map(lineToTarget))
+      : nearbyTargets!.targetsY),
   ]
-  const targetsX: { value: number; range: [number, number]; kind: SnapKind }[] = [
-    { value: 0, range: [0, canvas.height], kind: 'canvas' },
-    { value: SLIDE_MARGIN, range: [0, canvas.height], kind: 'canvas' },
-    { value: canvas.width / 2, range: [0, canvas.height], kind: 'center' },
-    { value: canvas.width - SLIDE_MARGIN, range: [0, canvas.height], kind: 'canvas' },
-    { value: canvas.width, range: [0, canvas.height], kind: 'canvas' },
+  const targetsX: AlignTarget[] = [
+    ...canvasTargetsX(canvas),
+    ...(fromIndex
+      ? movingX.flatMap(source => queryLinesX(index, source.value, SNAP_MATCH, snapped.minY - pad, snapped.maxY + pad).map(lineToTarget))
+      : nearbyTargets!.targetsX),
   ]
-  for (const other of others) {
-    targetsY.push(
-      { value: other.minY, range: [other.minX, other.maxX], kind: 'edge' },
-      { value: boxCenterY(other), range: [other.minX, other.maxX], kind: 'center' },
-      { value: other.maxY, range: [other.minX, other.maxX], kind: 'edge' },
-    )
-    targetsX.push(
-      { value: other.minX, range: [other.minY, other.maxY], kind: 'edge' },
-      { value: boxCenterX(other), range: [other.minY, other.maxY], kind: 'center' },
-      { value: other.maxX, range: [other.minY, other.maxY], kind: 'edge' },
-    )
-  }
 
   const pickMatches = (
     matched: { value: number; range: [number, number]; kind: SnapKind }[],
@@ -662,6 +734,7 @@ const mergeGuides = (guides: SnapGuide[]) => {
 export const snapMovingBox = (moving: SnapBox, others: SnapBox[], options: SnapOptions): SnapResult => {
   const threshold = options.threshold ?? SNAP_THRESHOLD
   const { mode, canvas, gridSize } = options
+  const { nearby, index } = neighborsForMove(moving, others, options.index, threshold)
 
   if (mode === 'grid') {
     const size = gridSize > 0 ? gridSize : FINE_GRID_SIZE
@@ -672,7 +745,7 @@ export const snapMovingBox = (moving: SnapBox, others: SnapBox[], options: SnapO
       offsetX,
       offsetY,
       guides: mergeGuides([
-        ...collectAlignmentGuides(snapped, others, canvas),
+        ...collectAlignmentGuides(snapped, nearby, canvas, index),
         ...(offsetX ? [makeGridGuide('vertical', snapped.minX, snapped)] : []),
         ...(offsetY ? [makeGridGuide('horizontal', snapped.minY, snapped)] : []),
       ]),
@@ -680,8 +753,8 @@ export const snapMovingBox = (moving: SnapBox, others: SnapBox[], options: SnapO
   }
 
   const candidates = [
-    ...collectAlignCandidates(moving, others, canvas),
-    ...collectSpacingCandidates(moving, others),
+    ...collectAlignCandidates(moving, nearby, canvas, index, threshold),
+    ...collectSpacingCandidates(moving, nearby),
     ...collectGridCandidates(moving, gridSize),
   ]
   const xWin = pickBest(candidates.filter(candidate => candidate.axis === 'x'), threshold)
@@ -690,7 +763,7 @@ export const snapMovingBox = (moving: SnapBox, others: SnapBox[], options: SnapO
   const offsetY = yWin?.delta ?? 0
   const snapped = translateBox(moving, offsetX, offsetY)
   const guides = mergeGuides([
-    ...collectAlignmentGuides(snapped, others, canvas),
+    ...collectAlignmentGuides(snapped, nearby, canvas, index),
     ...(xWin && (xWin.kind === 'spacing' || xWin.kind === 'size' || xWin.kind === 'grid') ? xWin.guides : []),
     ...(yWin && (yWin.kind === 'spacing' || yWin.kind === 'size' || yWin.kind === 'grid') ? yWin.guides : []),
   ])
@@ -707,14 +780,14 @@ const collectSizeCandidates = (
   currentX: number | null,
   currentY: number | null,
   moving: SnapBox,
-  others: SnapBox[],
+  nearby: SnapBox[],
   resizeWidth: boolean,
   resizeHeight: boolean,
 ): SnapCandidate[] => {
   const candidates: SnapCandidate[] = []
   if (resizeWidth && currentX !== null) {
     const fromLeft = Math.abs(currentX - moving.maxX) <= Math.abs(currentX - moving.minX)
-    for (const other of others) {
+    for (const other of nearby) {
       const width = boxWidth(other)
       const targetX = fromLeft ? moving.minX + width : moving.maxX - width
       const cross = Math.min(moving.maxY, other.maxY) - 8
@@ -729,7 +802,7 @@ const collectSizeCandidates = (
   }
   if (resizeHeight && currentY !== null) {
     const fromTop = Math.abs(currentY - moving.maxY) <= Math.abs(currentY - moving.minY)
-    for (const other of others) {
+    for (const other of nearby) {
       const height = boxHeight(other)
       const targetY = fromTop ? moving.minY + height : moving.maxY - height
       const cross = Math.min(moving.maxX, other.maxX) - 8
@@ -748,7 +821,7 @@ const collectSizeCandidates = (
 const collectPointAlignCandidates = (
   currentX: number | null,
   currentY: number | null,
-  others: SnapBox[],
+  nearby: SnapBox[],
   canvas: SnapCanvas,
   moving?: SnapBox,
 ): SnapCandidate[] => {
@@ -763,7 +836,7 @@ const collectPointAlignCandidates = (
     const targets = [0, SLIDE_MARGIN, canvas.height / 2, canvas.height - SLIDE_MARGIN, canvas.height]
     const ranges: [number, number][] = Array.from({ length: 5 }, () => [0, canvas.width] as [number, number])
     const kinds: SnapKind[] = ['canvas', 'canvas', 'center', 'canvas', 'canvas']
-    for (const other of others) {
+    for (const other of nearby) {
       targets.push(other.minY, boxCenterY(other), other.maxY)
       ranges.push([other.minX, other.maxX], [other.minX, other.maxX], [other.minX, other.maxX])
       kinds.push('edge', 'center', 'edge')
@@ -784,7 +857,7 @@ const collectPointAlignCandidates = (
     const targets = [0, SLIDE_MARGIN, canvas.width / 2, canvas.width - SLIDE_MARGIN, canvas.width]
     const ranges: [number, number][] = Array.from({ length: 5 }, () => [0, canvas.height] as [number, number])
     const kinds: SnapKind[] = ['canvas', 'canvas', 'center', 'canvas', 'canvas']
-    for (const other of others) {
+    for (const other of nearby) {
       targets.push(other.minX, boxCenterX(other), other.maxX)
       ranges.push([other.minY, other.maxY], [other.minY, other.maxY], [other.minY, other.maxY])
       kinds.push('edge', 'center', 'edge')
@@ -812,23 +885,25 @@ export const snapResizePoint = (
 ): SnapResult => {
   const threshold = options.threshold ?? SNAP_THRESHOLD
   const { mode, canvas, gridSize } = options
+  const movingBox = options.moving || {
+    minX: currentX ?? 0,
+    maxX: currentX ?? 0,
+    minY: currentY ?? 0,
+    maxY: currentY ?? 0,
+  }
+  const { nearby, index } = neighborsForMove(movingBox, others, options.index, threshold)
 
   if (mode === 'grid') {
     const size = gridSize > 0 ? gridSize : FINE_GRID_SIZE
     const offsetX = currentX === null ? 0 : currentX - snapToGrid(currentX, size)
     const offsetY = currentY === null ? 0 : currentY - snapToGrid(currentY, size)
-    const box = options.moving || {
-      minX: currentX ?? 0,
-      maxX: currentX ?? 0,
-      minY: currentY ?? 0,
-      maxY: currentY ?? 0,
-    }
+    const box = movingBox
     const snapped = translateBox(box, -offsetX, -offsetY)
     return {
       offsetX,
       offsetY,
       guides: mergeGuides([
-        ...collectAlignmentGuides(snapped, others, canvas),
+        ...collectAlignmentGuides(snapped, nearby, canvas, index),
         ...(currentX !== null && offsetX ? [makeGridGuide('vertical', currentX - offsetX, snapped)] : []),
         ...(currentY !== null && offsetY ? [makeGridGuide('horizontal', currentY - offsetY, snapped)] : []),
       ]),
@@ -836,9 +911,9 @@ export const snapResizePoint = (
   }
 
   const candidates = [
-    ...collectPointAlignCandidates(currentX, currentY, others, canvas, options.moving),
+    ...collectPointAlignCandidates(currentX, currentY, nearby, canvas, options.moving),
     ...(options.moving
-      ? collectSizeCandidates(currentX, currentY, options.moving, others, !!options.resizeWidth, !!options.resizeHeight)
+      ? collectSizeCandidates(currentX, currentY, options.moving, nearby, !!options.resizeWidth, !!options.resizeHeight)
       : []),
   ]
   const xWin = currentX === null ? null : pickBest(candidates.filter(candidate => candidate.axis === 'x'), threshold)

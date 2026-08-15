@@ -17,9 +17,11 @@ const toPercent = (progress: number) => {
 }
 
 const InkProgress = memo((props: IInkProgressProps) => {
-  const [displayed, setDisplayed] = useState(0)
+  const startPct = toPercent(props.progress)
+  const [displayed, setDisplayed] = useState(startPct)
   const rafRef = useRef(0)
-  const displayedRef = useRef(0)
+  const displayedRef = useRef(startPct)
+  const peakRef = useRef(startPct)
 
   const percent = Math.round(displayed)
   const ringOffset = RING * (1 - displayed / 100)
@@ -29,20 +31,28 @@ const InkProgress = memo((props: IInkProgressProps) => {
   }
 
   const animateTo = useCallback((targetPct: number) => {
-    const to = Math.max(0, Math.min(100, targetPct))
+    const to = Math.max(peakRef.current, Math.max(0, Math.min(100, targetPct)))
+    peakRef.current = to
     cancelAnimationFrame(rafRef.current)
-    if (prefersReducedMotion() || Math.abs(to - displayedRef.current) < 0.2) {
+    if (to <= displayedRef.current) {
+      displayedRef.current = to
+      setDisplayed(to)
+      return
+    }
+    if (prefersReducedMotion() || to - displayedRef.current < 0.2 || (to >= 100 && displayedRef.current >= 97)) {
       displayedRef.current = to
       setDisplayed(to)
       return
     }
     const from = displayedRef.current
     const start = performance.now()
-    const duration = Math.min(720, Math.max(320, Math.abs(to - from) * 14))
+    const duration = to >= 100
+      ? Math.min(280, Math.max(160, (to - from) * 10))
+      : Math.min(720, Math.max(320, (to - from) * 14))
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration)
       const eased = 1 - (1 - t) ** 3
-      const next = Math.max(0, Math.min(100, from + (to - from) * eased))
+      const next = Math.max(from, Math.min(to, from + (to - from) * eased))
       displayedRef.current = next
       setDisplayed(next)
       if (t < 1) rafRef.current = requestAnimationFrame(tick)

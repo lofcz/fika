@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { registerHooks } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -10,12 +10,12 @@ registerHooks({
     if (!specifier.startsWith('@/')) return nextResolve(specifier, context)
     const without = specifier.slice(2)
     const candidates = [
-      join(srcDir, without),
       join(srcDir, without + '.ts'),
       join(srcDir, without + '.js'),
       join(srcDir, without, 'index.ts'),
+      join(srcDir, without),
     ]
-    const file = candidates.find(path => existsSync(path))
+    const file = candidates.find(path => existsSync(path) && statSync(path).isFile())
     if (!file) return nextResolve(specifier, context)
     return { url: pathToFileURL(file).href, shortCircuit: true }
   },
@@ -32,6 +32,7 @@ const {
   elementVisualHitRect,
   pointInVisualHitRect,
   hitTestVisualRects,
+  elementIdsIntersectingSelection,
   isPointOnVisualBorder,
   isPointOnResizeHandle,
   hitTestOperateTarget,
@@ -41,6 +42,9 @@ const {
   hasInteractiveSurface,
   hitRectClipPath,
   visualHitRectsOverlap,
+  collectVisualHitPlan,
+  pointInAnyVisualHitRect,
+  occludersAboveRect,
 } = await import(pathToFileURL(join(root, 'src/utils/canvasHitTest.ts')).href)
 
 const failures = []
@@ -73,6 +77,21 @@ const overlapHigh = { ...visual, id: 'high', left: 350, zIndex: 5 }
 const topmost = hitTestVisualRects([overlapLow, overlapHigh], 400, 180)
 assert(topmost && topmost.id === 'high', 'overlapping rects: highest zIndex wins')
 
+const stackedHigh = { id: 'stacked-high', left: 0, top: 0, width: 100, height: 100, rotate: 0, zIndex: 8 }
+const stackedLow = { id: 'stacked-low', left: 0, top: 0, width: 100, height: 100, rotate: 0, zIndex: 2 }
+assert(
+  hitTestVisualRects([stackedHigh, stackedLow], 50, 50)?.id === 'stacked-high',
+  'index z-order: highest zIndex wins when the high rect is listed first',
+)
+assert(
+  hitTestVisualRects([stackedLow, stackedHigh], 50, 50)?.id === 'stacked-high',
+  'index z-order: highest zIndex wins when the high rect is listed last',
+)
+assert(
+  hitTestVisualRects([{ ...stackedHigh }, { ...stackedLow }], 50, 50)?.id === 'stacked-high',
+  'index z-order still wins after a geometry-identity sync (new array, same fields)',
+)
+
 const miss = hitTestVisualRects([visual], 0, 0)
 assert(miss === null, 'empty space hits nothing')
 
@@ -91,6 +110,13 @@ assert(lineRect.height >= MIN_HIT_PX, 'thin lines get a minimum hit size')
 const rotated = elementVisualHitRect({ ...box, rotate: 90 }, 1, 1)
 assert(pointInVisualHitRect(200, 90, rotated), 'rotated box still contains its visual center')
 assert(!pointInVisualHitRect(100, 50, rotated), 'rotated box does not keep the unrotated top-left')
+assert(hitTestVisualRects([rotated], 200, 90)?.id === rotated.id, 'rotated center hits via AABB search + refine')
+assert(hitTestVisualRects([rotated], 100, 50) === null, 'unrotated corner misses after pointInVisualHitRect refine')
+
+const diamond = { id: 'diamond', left: 0, top: 0, width: 100, height: 100, rotate: 45, zIndex: 1 }
+assert(hitTestVisualRects([diamond], 50, 50)?.id === 'diamond', '45° rect center hits via rotated AABB')
+assert(hitTestVisualRects([diamond], 50, -15)?.id === 'diamond', 'point outside the unrotated box still hits the rotated AABB')
+assert(hitTestVisualRects([diamond], 0, 0) === null, 'AABB candidate outside the OBB is rejected by refine')
 
 assert(isPointOnVisualBorder(200, 100, visual), 'top edge is a drag border')
 assert(isPointOnVisualBorder(200 + MAX_INNER_DRAG_PX, 180, visual), 'left edge is a drag border')
@@ -153,6 +179,11 @@ assert(
 
 assert(resizeHandleDirectionsFor({ type: 'text' }).join() === 'left,right', 'text boxes only have left/right handles')
 assert(
+  resizeHandleDirectionsFor({ type: 'shape', text: { fixedHeight: false } }).join() === 'left,right',
+  'auto-height shape text only has left/right handles',
+)
+assert(resizeHandleDirectionsFor({ type: 'shape', text: { content: 'Hi' } }).length === 8, 'fixed shape text keeps all eight handles')
+assert(
   hitTestOperateTarget(200, 100, visual, { interactive: true, handles: ['left', 'right'] }) === 'move',
   'text corners stay move because those handles are not rendered',
 )
@@ -174,20 +205,80 @@ assert(!hasInteractiveSurface({ type: 'image' }), 'images do not keep an interac
 const underText = { id: 'text', left: 0, top: 0, width: 400, height: 200, rotate: 0, zIndex: 1 }
 const overVideo = { id: 'video', left: 80, top: 40, width: 200, height: 100, rotate: 0, zIndex: 4 }
 assert(visualHitRectsOverlap(underText, overVideo), 'overlapping text and video are detected')
+const marqueeHit = elementIdsIntersectingSelection(
+  [box, { ...box, id: 'far', left: 800 }],
+  { left: 200, top: 100, width: 50, height: 50 },
+  2,
+)
+assert(marqueeHit.includes('a') && !marqueeHit.includes('far'), 'marquee search hits only overlapping elements')
+const marqueeMiss = elementIdsIntersectingSelection([box], { left: 0, top: 0, width: 10, height: 10 }, 2)
+assert(marqueeMiss.length === 0, 'marquee search misses a distant box')
 const clip = hitRectClipPath(underText, [overVideo])
 assert(typeof clip === 'string' && clip.startsWith('path(evenodd,'), 'selected media punches a hole in lower hit rects')
 assert(clip.includes('M80 40'), 'hole starts at the video origin in local coordinates')
 assert(typeof hitRectClipPath(underText, [{ ...overVideo, zIndex: 1 }]) === 'string', 'overlapping media clips even at the same stack level')
 assert(hitRectClipPath(underText, [{ ...overVideo, left: 900, top: 900 }]) === undefined, 'non-overlapping media does not clip')
 
+const selectedBody = { id: 'body', left: 20, top: 40, width: 200, height: 80, rotate: 0, zIndex: 4 }
+const belowCard = { id: 'card', left: 0, top: 0, width: 280, height: 200, rotate: 0, zIndex: 1 }
+const aboveTitle = { id: 'title', left: 20, top: 20, width: 200, height: 50, rotate: 0, zIndex: 6 }
+assert(typeof hitRectClipPath(belowCard, [selectedBody]) === 'string', 'lower cards are punched by a higher selected text')
+assert(hitRectClipPath(aboveTitle, [selectedBody]) === undefined, 'higher text stays solid over a lower selected occluder')
+assert(occludersAboveRect(belowCard, [selectedBody, aboveTitle]).map(r => r.id).join() === 'body,title', 'occludersAboveRect keeps equal-or-higher stack')
+assert(occludersAboveRect(aboveTitle, [selectedBody]).length === 0, 'a lower selected box is not an occluder for a higher hit rect')
+
+const cardEl = { id: 'card', type: 'shape', left: 0, top: 0, width: 280, height: 200, rotate: 0 }
+const bodyEl = { id: 'body', type: 'text', left: 20, top: 60, width: 200, height: 80, rotate: 0, content: '<p>Body</p>' }
+const titleEl = { id: 'title', type: 'text', left: 20, top: 20, width: 200, height: 60, rotate: 0, content: '<p>Title</p>' }
+const stacked = [cardEl, bodyEl, titleEl]
+const editingPlan = collectVisualHitPlan({
+  elementList: stacked,
+  canvasScale: 1,
+  hiddenElementIdList: [],
+  activeElementIdList: ['body'],
+  editingElementId: 'body',
+  clipingImageElementId: '',
+})
+assert(editingPlan.occluderRects.map(r => r.id).join() === 'body', 'editing text is an occluder, not a hit target')
+assert(editingPlan.hitRects.map(r => r.id).join() === 'card,title', 'unselected siblings stay hittable')
+assert(typeof hitRectClipPath(editingPlan.hitRects[0], editingPlan.occluderRects) === 'string', 'the card under editing text is clipped')
+assert(hitRectClipPath(editingPlan.hitRects[1], editingPlan.occluderRects) === undefined, 'the title above editing text is not clipped')
+assert(pointInAnyVisualHitRect(120, 100, editingPlan.occluderRects), 'a point on the editing text is inside the occluder')
+assert(!pointInAnyVisualHitRect(120, 40, editingPlan.occluderRects), 'a point on the higher title is not inside the body occluder')
+
+const idlePlan = collectVisualHitPlan({
+  elementList: stacked,
+  canvasScale: 1,
+  hiddenElementIdList: [],
+  activeElementIdList: [],
+  editingElementId: '',
+  clipingImageElementId: '',
+})
+assert(idlePlan.occluderRects.length === 0, 'nothing is an occluder before selection')
+assert(idlePlan.hitRects.map(r => r.id).join() === 'card,body,title', 'every box is hittable before selection')
+
+const canvasHitSrc = readFileSync(join(root, 'src/utils/canvasHitTest.ts'), 'utf8')
+const hitFnStart = canvasHitSrc.indexOf('export function hitTestVisualRects')
+const hitFnEnd = canvasHitSrc.indexOf('export const TEXT_EDITABLE_TYPES')
+const hitFn = hitFnStart >= 0 && hitFnEnd > hitFnStart ? canvasHitSrc.slice(hitFnStart, hitFnEnd) : ''
+assert(hitFn.includes('search'), 'hitTestVisualRects queries the spatial index')
+assert(!hitFn.includes('.find('), 'hitTestVisualRects does not use .find in the candidate loop')
+assert(canvasHitSrc.includes('searchIndexedVisualHitRects'), 'marquee and hit-test share an index search helper')
+const marqueeFnStart = canvasHitSrc.indexOf('export function elementIdsIntersectingSelection')
+const marqueeFnEnd = canvasHitSrc.indexOf('export function visualHitAabb')
+const marqueeFn = marqueeFnStart >= 0 && marqueeFnEnd > marqueeFnStart ? canvasHitSrc.slice(marqueeFnStart, marqueeFnEnd) : ''
+assert(marqueeFn.includes('searchIndexedVisualHitRects'), 'marquee intersection uses the spatial index')
+assert(!marqueeFn.includes('.find('), 'marquee intersection does not use .find in the candidate loop')
+
 const hitLayerSrc = readFileSync(join(root, 'src/views/Editor/Canvas/HitLayer.tsx'), 'utf8')
 const operateSrc = readFileSync(join(root, 'src/views/Editor/Canvas/Operate/index.tsx'), 'utf8')
 const canvasSrc = readFileSync(join(root, 'src/views/Editor/Canvas/index.tsx'), 'utf8')
 const multiSrc = readFileSync(join(root, 'src/views/Editor/Canvas/Operate/MultiSelectOperate.tsx'), 'utf8')
-assert(hitLayerSrc.includes('selectElement(native, element, true)'), 'HitLayer border/body starts a move')
-assert(hitLayerSrc.includes('selectElement(native, element, false)'), 'HitLayer interior selects without move')
-assert(hitLayerSrc.includes('if (clicksToEditText(element)) props.beginEdit'), 'HitLayer interior begins text edit')
-assert(hitLayerSrc.includes('selectedIdSet.has(element.id) && element.type !== \'line\''), 'HitLayer skips selected boxes so operate owns them')
+assert(hitLayerSrc.includes('selectElement(e.nativeEvent, element, true)'), 'HitLayer border/body starts a move')
+assert(hitLayerSrc.includes('selectElement(e.nativeEvent, element, false, edit)'), 'HitLayer interior selects without move')
+assert(hitLayerSrc.includes('clicksToEditText(element)') && hitLayerSrc.includes('props.beginEdit'), 'HitLayer interior begins text edit')
+assert(hitLayerSrc.includes('collectVisualHitPlan'), 'HitLayer builds rects from collectVisualHitPlan')
+assert(hitLayerSrc.includes('occludersAboveRect'), 'HitLayer only absorbs hits under a higher selected box')
 assert(hitLayerSrc.includes('hasInteractiveSurface(element)'), 'HitLayer ring vs body follows hasInteractiveSurface')
 assert(operateSrc.includes('hasInteractiveSurface(props.elementInfo)'), 'Operate border drag is the interactive ring')
 assert(operateSrc.includes('clicksToEditText(props.elementInfo)'), 'Operate edit surface follows clicksToEditText')
@@ -198,6 +289,9 @@ assert(multiSrc.includes('scaleMultiElement'), 'MultiSelectOperate wires group r
 assert(multiSrc.includes('rotateGroupElement'), 'MultiSelectOperate wires group rotate')
 assert(multiSrc.includes('dragElement'), 'MultiSelectOperate wires group move')
 assert(canvasSrc.includes('.hit-rect, .hit-border, .hit-edit'), 'canvas capture defers to HitLayer edit-vs-move')
+assert(canvasSrc.includes('collectVisualHitPlan'), 'canvas capture uses the same hit plan as HitLayer')
+assert(canvasSrc.includes('pointInAnyVisualHitRect'), 'canvas capture ignores points on selected/editing occluders')
+assert(canvasHitSrc.includes('export function collectVisualHitPlan'), 'hit plan helper is exported')
 assert(canvasSrc.includes('<MultiSelectOperate'), 'canvas mounts MultiSelectOperate')
 assert(canvasSrc.includes('<Operate'), 'canvas mounts Operate')
 assert(canvasSrc.includes('<HitLayer'), 'canvas mounts HitLayer')

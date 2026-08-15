@@ -1,10 +1,41 @@
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { registerHooks } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const srcDir = join(root, 'src')
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const candidates = []
+    if (specifier.startsWith('@/')) {
+      const without = specifier.slice(2)
+      candidates.push(
+        join(srcDir, without + '.ts'),
+        join(srcDir, without + '.js'),
+        join(srcDir, without, 'index.ts'),
+        join(srcDir, without),
+      )
+    }
+    else if (specifier.startsWith('.') && context.parentURL) {
+      const parentDir = dirname(fileURLToPath(context.parentURL))
+      candidates.push(
+        join(parentDir, specifier + '.ts'),
+        join(parentDir, specifier + '.js'),
+        join(parentDir, specifier, 'index.ts'),
+      )
+    }
+    const file = candidates.find(path => existsSync(path) && statSync(path).isFile())
+    if (file) return { url: pathToFileURL(file).href, shortCircuit: true }
+    return nextResolve(specifier, context)
+  },
+})
+
 const {
   FINE_GRID_SIZE,
   GUIDE_PAD,
+  RELATED_GAP,
+  SNAP_THRESHOLD,
   boxCenterX,
   boxCenterY,
   formatMeasureLabel,
@@ -12,11 +43,13 @@ const {
   collectCtrlMeasures,
   resolveGridSize,
   snapMovingBox,
+  snapQueryPad,
   snapResizePoint,
   snapToGrid,
   translateBox,
   unionBoxes,
 } = await import(pathToFileURL(join(root, 'src/utils/snap.ts')).href)
+const { boxesNear, buildSnapIndex, querySnap } = await import(pathToFileURL(join(root, 'src/utils/spatial/index.ts')).href)
 
 const failures = []
 function assert(condition, message) {
@@ -215,6 +248,92 @@ const farChain = collectCtrlMeasures(
   [{ type: 'vertical', kind: 'edge', axis: { x: 40, y: 26 }, length: 428 }],
 )
 assert(!farChain.some(guide => guide.label === '320px'), 'ctrl does not measure a distant object that only shares an X')
+
+const snapSrc = readFileSync(join(root, 'src/utils/snap.ts'), 'utf8')
+assert(/collectGaps\(nearby/.test(snapSrc), 'collectGaps is invoked on the nearby k-set')
+assert(!/collectGaps\(\s*others/.test(snapSrc), 'collectGaps is not called on the full others list')
+assert(/boxesNear\(/.test(snapSrc), 'per-move snap queries boxesNear on the spatial index')
+assert(/queryLinesX\(/.test(snapSrc) && /queryLinesY\(/.test(snapSrc), 'alignment queries 1D Flatbush line indexes')
+assert(/snapQueryPad\(/.test(snapSrc), 'per-move search pad is threshold / RELATED_GAP')
+assert(snapQueryPad(SNAP_THRESHOLD) === Math.max(SNAP_THRESHOLD, RELATED_GAP), 'snapQueryPad is max(threshold, RELATED_GAP)')
+assert(snapQueryPad(400) === 400, 'snapQueryPad grows when the threshold exceeds RELATED_GAP')
+
+const indexedSpacing = snapMovingBox(moving, [a, b], {
+  mode: 'smart',
+  canvas,
+  gridSize: 0,
+  index: buildSnapIndex([a, b]),
+})
+assert(Math.abs(indexedSpacing.offsetX - spacing.offsetX) < 0.01, 'prebuilt index matches a rebuilt index for spacing')
+assert(indexedSpacing.guides.some(guide => guide.kind === 'spacing' && guide.label === '20'), 'prebuilt index still emits spacing guides')
+
+const densityN = 120
+const cell = RELATED_GAP + 160
+const densityOthers = []
+for (let i = 0; i < densityN; i++) {
+  const col = i % 12
+  const row = Math.floor(i / 12)
+  densityOthers.push(box(col * cell, row * cell, 48, 24))
+}
+const densityMoving = box(6, 6, 48, 24)
+const densityIndex = buildSnapIndex(densityOthers)
+const densityPad = snapQueryPad(SNAP_THRESHOLD)
+const densityIds = querySnap(densityIndex, densityMoving, densityPad)
+const densityNearby = boxesNear(densityIndex, densityMoving, densityPad)
+assert(densityOthers.length === 120, 'density fixture uses 120 boxes')
+assert(densityNearby.length === densityIds.length, 'boxesNear matches querySnap ids')
+assert(densityNearby.length < densityN / 8, `nearby count ${densityNearby.length} is far below n=${densityN}`)
+assert(densityNearby.length * densityNearby.length < (densityN * densityN) / 16, 'k² is far below n²')
+assert(densityNearby.some(item => item.minX === 0 && item.minY === 0), 'the one nearby cell is in the k-set')
+
+const densitySnap = snapMovingBox(densityMoving, densityOthers, {
+  mode: 'smart',
+  canvas: { width: 12 * cell, height: 10 * cell },
+  gridSize: 0,
+  index: densityIndex,
+})
+assert(densitySnap.offsetX === -6, 'dense deck still snaps to the nearby box, not all pairs')
+assert(densitySnap.guides.some(guide => guide.type === 'vertical' && guide.kind === 'edge'), 'dense deck still emits an edge guide')
+
+const clustered = []
+for (let i = 0; i < 80; i++) {
+  clustered.push(box(20 + (i % 8) * 28, 20 + Math.floor(i / 8) * 22, 20, 16))
+}
+const clusteredMoving = box(700, 400, 20, 16)
+const clusteredNearby = boxesNear(buildSnapIndex(clustered), clusteredMoving, densityPad)
+assert(clustered.length === 80, 'clustered fixture uses 80 boxes')
+assert(clusteredNearby.length === 0, 'a far mover sees none of an 80-box cluster outside the pad')
+
+const t0 = performance.now()
+for (let i = 0; i < 80; i++) {
+  snapMovingBox(densityMoving, densityOthers, {
+    mode: 'smart',
+    canvas: { width: 12 * cell, height: 10 * cell },
+    gridSize: 0,
+    index: densityIndex,
+  })
+}
+const elapsed = performance.now() - t0
+assert(elapsed < 250, `80 indexed snaps over 120 boxes stay cheap (${elapsed.toFixed(1)}ms)`)
+
+const mapOthers = []
+for (let i = 0; i < 200; i++) {
+  mapOthers.push(box(40 + (i % 20) * 16, 40 + Math.floor(i / 20) * 12, 20, 14))
+}
+const mapMoving = box(80, 48, 48, 24)
+const mapIndex = buildSnapIndex(mapOthers)
+assert(mapIndex.boxes.length < 8, `200 touching map shards segment to ${mapIndex.boxes.length} cluster(s)`)
+const mapT0 = performance.now()
+for (let i = 0; i < 80; i++) {
+  snapMovingBox(mapMoving, mapOthers, {
+    mode: 'smart',
+    canvas,
+    gridSize: 0,
+    index: mapIndex,
+  })
+}
+const mapElapsed = performance.now() - mapT0
+assert(mapElapsed < 80, `80 snaps over a 200-shard map stay cheap (${mapElapsed.toFixed(1)}ms)`)
 
 if (failures.length) {
   console.error('snap checks failed:\n' + failures.map(f => ` - ${f}`).join('\n'))

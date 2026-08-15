@@ -16,6 +16,8 @@ function ShapeItemThumbnail({ shape, className, style, onClick, onSelect }: ISha
   return (
     <div
       className={cx('shape-item-thumbnail', className)}
+      data-shape-item=""
+      data-shape-formula={shape.pathFormula || 'static'}
       style={style}
       onClick={event => {
         onSelect?.(shape)

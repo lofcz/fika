@@ -5,8 +5,9 @@ import { useRef, useMemo, memo } from 'react'
 
 import { openContextmenu } from '@/utils/openContextmenu'
 import type { PPTElement } from '@/types/slides'
-import { clicksToEditText, DEBUG_HIT_AREAS, elementVisualHitRect, focusElementEditor, hasInteractiveSurface, HIT_RING_SIDES, hitLayerSkipRebuild, hitRectClipPath, hitRingLayout, pointInVisualHitRect, type VisualHitRect } from '@/utils/canvasHitTest'
+import { clicksToEditText, collectVisualHitPlan, DEBUG_HIT_AREAS, focusElementEditor, hasInteractiveSurface, HIT_RING_SIDES, hitLayerSkipRebuild, hitRectClipPath, hitRingLayout, occludersAboveRect, pointInAnyVisualHitRect, pointInVisualHitRect, type VisualHitRect } from '@/utils/canvasHitTest'
 import { queryFika } from '@/utils/portal'
+import { useMainStore } from '@/store'
 import useElementContextmenu from '@/hooks/useElementContextmenu'
 
 export type IHitLayerProps = {
@@ -23,13 +24,17 @@ export type IHitLayerProps = {
   className?: string
 }
 
+const EMPTY_HIT_RECTS: VisualHitRect[] = []
+
 function areHitLayerPropsEqual(prev: IHitLayerProps, next: IHitLayerProps) {
   if (prev.className !== next.className) return false
+  if (useMainStore.getState().isGesturing) return true
   return hitLayerSkipRebuild(prev, next)
 }
 
 const HitLayer = memo((props: IHitLayerProps) => {
   const { disabled, className } = props
+  const isGesturing = useMainStore(s => s.isGesturing)
   const hitSourceRef = useRef({
     elementList: props.elementList,
     canvasScale: props.canvasScale,
@@ -48,41 +53,18 @@ const HitLayer = memo((props: IHitLayerProps) => {
     clipingImageElementId: props.clipingImageElementId,
     disabled: props.disabled,
   }
-  if (!hitLayerSkipRebuild(hitSourceRef.current, hitInput)) hitSourceRef.current = hitInput
+  if (!isGesturing && !hitLayerSkipRebuild(hitSourceRef.current, hitInput)) hitSourceRef.current = hitInput
   const hitSource = hitSourceRef.current
 
-  const hiddenSet = useMemo(() => new Set(hitSource.hiddenElementIdList), [hitSource.hiddenElementIdList])
   const selectedIdSet = useMemo(() => new Set(hitSource.activeElementIdList), [hitSource.activeElementIdList])
   const debugHitAreas = DEBUG_HIT_AREAS
   const hitRingSides = HIT_RING_SIDES
   const hitLayerRef = useRef<HTMLDivElement | null>(null)
 
-  const hitRects = useMemo(() => {
-    if (hitSource.disabled) return []
-    const rects = []
-    for (let i = 0; i < hitSource.elementList.length; i++) {
-      const element = hitSource.elementList[i]
-      if (hiddenSet.has(element.id)) continue
-      if (element.id === hitSource.editingElementId) continue
-      if (element.id === hitSource.clipingImageElementId) continue
-      if (selectedIdSet.has(element.id) && element.type !== 'line') continue
-      rects.push(elementVisualHitRect(element, hitSource.canvasScale, i + 1))
-    }
-    return rects
-  }, [hitSource, hiddenSet, selectedIdSet])
-
-  const occluderRects = useMemo(() => {
-    if (hitSource.disabled || hitSource.activeElementIdList.length !== 1) return []
-    const rects: VisualHitRect[] = []
-    for (let i = 0; i < hitSource.elementList.length; i++) {
-      const element = hitSource.elementList[i]
-      if (!selectedIdSet.has(element.id)) continue
-      if (element.type !== 'video' && element.type !== 'audio') continue
-      if (hiddenSet.has(element.id)) continue
-      rects.push(elementVisualHitRect(element, hitSource.canvasScale, i + 1))
-    }
-    return rects
-  }, [hitSource, selectedIdSet, hiddenSet])
+  const { hitRects, occluderRects } = useMemo(() => {
+    if (hitSource.disabled || isGesturing) return { hitRects: EMPTY_HIT_RECTS, occluderRects: EMPTY_HIT_RECTS }
+    return collectVisualHitPlan(hitSource)
+  }, [hitSource, isGesturing])
 
   const elementById = (id: string) => props.elementList.find(el => el.id === id)
   const { contextmenus: contextmenusFor } = useElementContextmenu(props.openLinkDialog)
@@ -121,21 +103,23 @@ const HitLayer = memo((props: IHitLayerProps) => {
 
   const ringFor = (rect: VisualHitRect) => hitRingLayout(rect.width, rect.height)
 
-  const isOccludedBySelectedMedia = (e: MouseEvent) => {
+  const occludersOverRect = (rect: VisualHitRect) => occludersAboveRect(rect, occluderRects)
+
+  const isOccludedByHigherSelected = (e: MouseEvent, rect: VisualHitRect) => {
     const layer = hitLayerRef.current
     if (!layer) return false
     const bounds = layer.getBoundingClientRect()
     const x = e.clientX - bounds.left
     const y = e.clientY - bounds.top
-    return occluderRects.some(hole => pointInVisualHitRect(x, y, hole))
+    return pointInAnyVisualHitRect(x, y, occludersOverRect(rect))
   }
 
-  const retargetToSelectedMedia = (e: MouseEvent) => {
+  const retargetToSelectedMedia = (e: MouseEvent, rect: VisualHitRect) => {
     const layer = hitLayerRef.current
     if (!layer) return
     const bounds = layer.getBoundingClientRect()
-    const occluder = occluderRects.find(hole => pointInVisualHitRect(e.clientX - bounds.left, e.clientY - bounds.top, hole))
-    if (!occluder) return
+    const occluder = occludersOverRect(rect).find(hole => pointInVisualHitRect(e.clientX - bounds.left, e.clientY - bounds.top, hole))
+    if (!occluder || !isMedia(occluder.id)) return
     const root = queryFika(`#editable-element-${occluder.id}`)
     if (!(root instanceof HTMLElement)) return
     const retargetingTokens = cx('retargeting').split(/\s+/).filter(Boolean)
@@ -173,35 +157,30 @@ const HitLayer = memo((props: IHitLayerProps) => {
     e.nativeEvent.stopPropagation()
   }
 
+  const absorbOccludedHit = (e: React.MouseEvent, rect?: VisualHitRect) => {
+    if (!rect || !isOccludedByHigherSelected(e.nativeEvent, rect)) return false
+    stopHitEvent(e)
+    retargetToSelectedMedia(e.nativeEvent, rect)
+    return true
+  }
+
   const onBorderMouseDown = (e: React.MouseEvent, id: string) => {
     if (e.button !== 0) return
     const element = elementById(id)
     if (!element || element.lock) return
-    const native = e.nativeEvent
-    const rect = hitRects.find(item => item.id === id)
-    if (rect && isOccludedBySelectedMedia(native)) {
-      stopHitEvent(e)
-      retargetToSelectedMedia(native)
-      return
-    }
+    if (absorbOccludedHit(e, hitRects.find(item => item.id === id))) return
     stopHitEvent(e)
-    props.selectElement(native, element, true)
+    props.selectElement(e.nativeEvent, element, true)
   }
 
   const onInteriorMouseDown = (e: React.MouseEvent, id: string) => {
     if (e.button !== 0) return
     const element = elementById(id)
     if (!element || element.lock) return
-    const native = e.nativeEvent
-    const rect = hitRects.find(item => item.id === id)
-    if (rect && isOccludedBySelectedMedia(native)) {
-      stopHitEvent(e)
-      retargetToSelectedMedia(native)
-      return
-    }
+    if (absorbOccludedHit(e, hitRects.find(item => item.id === id))) return
     stopHitEvent(e)
     const edit = clicksToEditText(element)
-    props.selectElement(native, element, false, edit)
+    props.selectElement(e.nativeEvent, element, false, edit)
     if (edit) props.beginEdit(id, { left: e.clientX, top: e.clientY })
   }
 
@@ -209,27 +188,15 @@ const HitLayer = memo((props: IHitLayerProps) => {
     if (e.button !== 0) return
     const element = elementById(id)
     if (!element || element.lock) return
-    const native = e.nativeEvent
-    const rect = hitRects.find(item => item.id === id)
-    if (rect && isOccludedBySelectedMedia(native)) {
-      stopHitEvent(e)
-      retargetToSelectedMedia(native)
-      return
-    }
+    if (absorbOccludedHit(e, hitRects.find(item => item.id === id))) return
     stopHitEvent(e)
-    props.selectElement(native, element, true)
+    props.selectElement(e.nativeEvent, element, true)
   }
 
   const onBodyDblclick = (e: React.MouseEvent, id: string) => {
     const element = elementById(id)
     if (!element || element.lock) return
-    const native = e.nativeEvent
-    const rect = hitRects.find(item => item.id === id)
-    if (rect && isOccludedBySelectedMedia(native)) {
-      stopHitEvent(e)
-      retargetToSelectedMedia(native)
-      return
-    }
+    if (absorbOccludedHit(e, hitRects.find(item => item.id === id))) return
     stopHitEvent(e)
     if (clicksToEditText(element)) {
       props.beginEdit(id, { left: e.clientX, top: e.clientY })

@@ -5,7 +5,6 @@ import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo,
 import { useSlidesStore } from '@/store'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { Icon } from '@/components/Icon'
-import useLoadSlides from '@/hooks/useLoadSlides'
 import Popover from '@/components/Popover'
 import PopoverMenuItem from '@/components/PopoverMenuItem'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
@@ -42,7 +41,6 @@ const JumpPanel = memo(function JumpPanel({ onJump, open }: { onJump: (index: nu
   const { LL } = useI18nContext()
   const slides = useSlidesStore(s => s.slides)
   const slideIndex = useSlidesStore(s => s.slideIndex)
-  const { slidesLoadLimit } = useLoadSlides()
   const jumpGridRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -64,7 +62,7 @@ const JumpPanel = memo(function JumpPanel({ onJump, open }: { onJump: (index: nu
             key={slide.id}
             onClick={() => onJump(index)}
           >
-            <ThumbnailSlide slide={slide} size={108} visible={index < slidesLoadLimit} />
+            <ThumbnailSlide slide={{ id: slide.id }} size={108} />
             <span className={cx('jump-index')}>{index + 1}</span>
           </button>
         ))}

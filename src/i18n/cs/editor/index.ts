@@ -646,6 +646,13 @@ const cs_editor: NamespaceEditorTranslation = {
     proprietaryFormat: '(vlastní formát)',
     exportFiles: 'Exportovat soubor',
     resetSlides: 'Nová prezentace',
+    resetConfirm: {
+      kicker: 'Nová prezentace',
+      title: 'Začít s prázdnou prezentací?',
+      description: 'Tato prezentace má {count} snímků. Nová je nahradí.',
+      actionTitle: 'Začít novou',
+      actionHint: 'Nahradit aktuální snímky prázdným titulním snímkem.',
+    },
     markupSlides: 'Označení typu snímku',
     hotkeys: 'Klávesové zkratky',
     feedback: 'Zpětná vazba',

@@ -1,7 +1,35 @@
 .thumbnail-slide {
+  position: relative;
   background-color: #fff;
   overflow: hidden;
   user-select: none;
+}
+
+.thumbnail-slide[data-raster-pending] {
+  background-color: $surface;
+}
+
+.thumbnail-slide[data-raster-pending]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient($surfaceActive, $surfaceActive) 10% 16% / 56% 11% no-repeat,
+    linear-gradient($surfaceHover, $surfaceHover) 10% 34% / 40% 6% no-repeat,
+    linear-gradient($surfaceHover, $surfaceHover) 10% 46% / 48% 6% no-repeat;
+  animation: thumb-raster-skel 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes thumb-raster-skel {
+  to { opacity: 0.42; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumbnail-slide[data-raster-pending]::after {
+    animation: none;
+    opacity: 0.7;
+  }
 }
 .elements {
   position: relative;

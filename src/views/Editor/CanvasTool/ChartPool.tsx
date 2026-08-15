@@ -40,7 +40,7 @@ export default function ChartPool(props: IChartPoolProps) {
     <ul className={cx('chart-pool', props.className)} style={props.style}>
       {chartList.map((chart, index) => (
         <li className={cx('chart-item')} key={index}>
-          <div className={cx('chart-content')} onClick={() => selectChart(chart)}>
+          <div className={cx('chart-content')} data-chart-type={chart} onClick={() => selectChart(chart)}>
             {chart === 'line' ? <Icon icon="chart-line" style={{ fontSize: '24px' }} />
               : chart === 'bar' ? <Icon icon="chart-column" style={{ fontSize: '24px' }} />
                 : chart === 'pie' ? <Icon icon="chart-pie" style={{ fontSize: '24px' }} />

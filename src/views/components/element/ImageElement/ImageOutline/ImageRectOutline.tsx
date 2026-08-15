@@ -28,7 +28,7 @@ const ImageRectOutline = memo((props: IImageRectOutlineProps) => {
   if (!outline) return null
 
   return (
-    <svg className={cx('image-rect-outline')} overflow="visible" width={width} height={height}>
+    <svg className={cx('image-rect-outline')} overflow="visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" width="100%" height="100%">
       <rect
         vectorEffect="non-scaling-stroke"
         strokeLinecap="butt"

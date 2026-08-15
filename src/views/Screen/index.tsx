@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom'
 import { getFikaPortalTarget } from '@/utils/portal'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { KEYS } from '@/configs/hotkey'
 import useScreening from '@/hooks/useScreening'
 import './screen-portal.scss'
-import AudienceView from './AudienceView'
 import BaseView from './BaseView'
-import PresenterView from './PresenterView'
+
+const AudienceView = lazy(() => import('./AudienceView'))
+const PresenterView = lazy(() => import('./PresenterView'))
 
 export default function Screen() {
   const isAudienceMode = new URLSearchParams(window.location.search).get('mode') === 'audience'
@@ -39,8 +40,18 @@ export default function Screen() {
 
   return createPortal(
     <div className="fika-embed-root" style={{ position: 'fixed', inset: 0, zIndex: 2147483000 }}>
-      <div className={cx('fika-screen')}>
-        {isAudienceMode ? <AudienceView /> : viewMode === 'base' ? <BaseView changeViewMode={changeViewMode} /> : viewMode === 'presenter' ? <PresenterView changeViewMode={changeViewMode} /> : null}
+      <div className={cx('fika-screen')} data-fika-screen>
+        {isAudienceMode ? (
+          <Suspense fallback={null}>
+            <AudienceView />
+          </Suspense>
+        ) : viewMode === 'presenter' ? (
+          <Suspense fallback={null}>
+            <PresenterView changeViewMode={changeViewMode} />
+          </Suspense>
+        ) : (
+          <BaseView changeViewMode={changeViewMode} />
+        )}
       </div>
       <div className={cx('fika-embed-portal')} />
     </div>,

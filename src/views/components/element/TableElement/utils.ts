@@ -17,9 +17,11 @@ export const getCellStyle = (outline: PPTElementOutline, style?: TableCellStyle)
 /**
  * Compute table cell text layout styles from optional cell style.
  */
+const cellTextMinHeight = (cellMinHeight: number) => `${Math.max(0, cellMinHeight - 20)}px`
+
 export const getTextStyle = (cellMinHeight: number, style?: TableCellStyle): any => {
   if (!style) return {
-    minHeight: cellMinHeight - 16 + 'px'
+    minHeight: cellTextMinHeight(cellMinHeight)
   };
   const {
     bold,
@@ -50,7 +52,7 @@ export const getTextStyle = (cellMinHeight: number, style?: TableCellStyle): any
     fontFamily: fontname || '',
     justifyContent: vAlignMap[vAlign || 'top'],
     textAlign: align || 'left',
-    minHeight: cellMinHeight - 16 + 'px'
+    minHeight: cellTextMinHeight(cellMinHeight)
   };
 };
 const escapeCellText = (text: string) => text.replace(/\n/g, '</br>').replace(/ /g, '&nbsp;');

@@ -2,12 +2,12 @@
  * E2E: LaTeX → MathML → OMML → PPTX contains native m:oMath (no math PNGs).
  * Also verifies mixed plain-text + math in the same paragraph.
  *
- * Run: npm run test:omml-export
+ * Run: node scripts/e2e-math-export/omml-export.mjs
  */
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import JSZip from 'jszip'
+import { loadPptx } from '../lib/pptx-inspect.mjs'
 import { convertLatexToMathMl } from 'mathlive'
 import { mml2omml } from 'mathml2omml'
 import pptxgen from '@lofcz/pptxgenjs'
@@ -75,32 +75,23 @@ const buf = await pptx.write({ outputType: 'nodebuffer' })
 const outFile = join(OUT, 'omml-export.pptx')
 writeFileSync(outFile, buf)
 
-const zip = await JSZip.loadAsync(buf)
-const slideXml = await zip.file('ppt/slides/slide1.xml').async('string')
-const mediaFiles = Object.keys(zip.files).filter(n => n.startsWith('ppt/media/') && !n.endsWith('/'))
-
+const deck = await loadPptx(buf)
+const firstSlide = deck.slides[0]
+const slideXml = firstSlide.xml
 const mixedPara = /<a:p>[\s\S]*?<a:t>Konstantní rychlost: <\/a:t>[\s\S]*?<m:oMath[\s>][\s\S]*?<\/m:oMath>[\s\S]*?<a:t> a také <\/a:t>[\s\S]*?<m:oMath[\s>][\s\S]*?<\/m:oMath>[\s\S]*?<\/a:p>/
 
-const pPrViolations = []
-for (const para of slideXml.split(/<a:p>/).slice(1)) {
-  const body = para.split('</a:p>')[0]
-  const count = (body.match(/<a:pPr[\s>]/g) || []).length
-  if (count > 1) pPrViolations.push(`paragraph has ${count} pPr blocks`)
-  else if (count === 1 && !body.startsWith('<a:pPr')) pPrViolations.push('pPr is not the first child of a:p')
-}
-
 const checks = {
-  hasMathNs: slideXml.includes('xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"'),
-  oMathCount: (slideXml.match(/<m:oMath[\s/>]/g) || []).length,
-  hasFraction: slideXml.includes('<m:f'),
+  hasMathNs: firstSlide.hasMathNs,
+  oMathCount: firstSlide.oMath,
+  hasFraction: firstSlide.hasFraction,
   hasNum: slideXml.includes('<m:num'),
   hasDen: slideXml.includes('<m:den'),
   hasPlainText: slideXml.includes('Konstantní rychlost'),
   hasMixedMidText: slideXml.includes(' a také '),
   mixedInSameParagraph: mixedPara.test(slideXml),
-  pPrViolations,
-  mediaCount: mediaFiles.length,
-  mediaFiles,
+  pPrViolations: firstSlide.pPrViolations,
+  mediaCount: deck.mediaCount,
+  mediaFiles: deck.mediaNames,
   outFile,
   unit,
 }
@@ -111,7 +102,7 @@ assert(checks.hasFraction && checks.hasNum && checks.hasDen, 'missing fraction s
 assert(checks.hasPlainText, 'missing surrounding Czech text')
 assert(checks.hasMixedMidText, 'missing mid-sentence plain text')
 assert(checks.mixedInSameParagraph, 'plain text + OMML not interleaved in same <a:p>')
-assert(checks.mediaCount === 0, `unexpected media files: ${mediaFiles.join(', ')}`)
+assert(checks.mediaCount === 0, `unexpected media files: ${checks.mediaFiles.join(', ')}`)
 
 writeFileSync(join(OUT, 'omml-summary.json'), JSON.stringify({ checks, failures }, null, 2))
 console.log(JSON.stringify({ checks, failures }, null, 2))

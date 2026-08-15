@@ -1,9 +1,7 @@
-import { nanoid } from 'nanoid'
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 import type { Slide } from '@/types/slides'
 import { copyText, readClipboard } from '@/utils/clipboard'
 import { encrypt } from '@/utils/crypto'
-import { createElementIdMap } from '@/utils/element'
 import { KEYS } from '@/configs/hotkey'
 import message from '@/utils/message'
 import usePasteTextClipboardData from '@/hooks/usePasteTextClipboardData'
@@ -97,19 +95,8 @@ export default () => {
   }
 
   const createSlideByTemplate = (slide: Slide) => {
-    const { groupIdMap, elIdMap } = createElementIdMap(slide.elements)
-
-    for (const element of slide.elements) {
-      element.id = elIdMap[element.id]
-      if (element.groupId) element.groupId = groupIdMap[element.groupId]
-    }
-    const newSlide = {
-      ...slide,
-      id: nanoid(10),
-    }
     useMainStore.getState().setActiveElementIdList([])
-    useSlidesStore.getState().addSlide(newSlide)
-    addHistorySnapshot()
+    addSlidesFromData([slide])
   }
 
   const copyAndPasteSlide = () => {
@@ -142,32 +129,7 @@ export default () => {
   }
 
   const sortSlides = (newIndex: number, oldIndex: number) => {
-    if (oldIndex === newIndex) return
-
-    const _slides: Slide[] = JSON.parse(JSON.stringify(useSlidesStore.getState().slides))
-
-    const movingSlide = _slides[oldIndex]
-    const movingSlideSection = movingSlide.sectionTag
-    if (movingSlideSection) {
-      const movingSlideSectionNext = _slides[oldIndex + 1]
-      delete movingSlide.sectionTag
-      if (movingSlideSectionNext && !movingSlideSectionNext.sectionTag) {
-        movingSlideSectionNext.sectionTag = movingSlideSection
-      }
-    }
-    if (newIndex === 0) {
-      const firstSection = _slides[0].sectionTag
-      if (firstSection) {
-        delete _slides[0].sectionTag
-        movingSlide.sectionTag = firstSection
-      }
-    }
-
-    const _slide = _slides[oldIndex]
-    _slides.splice(oldIndex, 1)
-    _slides.splice(newIndex, 0, _slide)
-    useSlidesStore.getState().setSlides(_slides)
-    useSlidesStore.getState().updateSlideIndex(newIndex)
+    useSlidesStore.getState().reorderSlides(oldIndex, newIndex)
   }
 
   const isEmptySlide = getIsEmptySlide()

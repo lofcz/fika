@@ -50,6 +50,14 @@ assert(boxGeometryChanged(baseText, { ...baseText, top: 21 } as PPTTextElement),
 assert(boxGeometryChanged(baseText, { ...baseText, width: 201 } as PPTTextElement), 'box size updates on width')
 assert(boxGeometryChanged(baseText, tallerText), 'box size updates on height')
 assert(boxGeometryChanged(baseText, rotatedText), 'box size updates on rotate')
+assert(
+  boxGeometryChanged(baseText, { ...baseText, fixedHeight: true } as PPTTextElement),
+  'auto↔fixed rebuilds operate chrome so leftover live height is not kept',
+)
+assert(
+  !elementChromeEqual(baseText, { ...baseText, fixedHeight: true } as PPTTextElement),
+  'operate memo sees the auto↔fixed lock change',
+)
 
 const flags = {
   isSelected: true,

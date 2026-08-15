@@ -7,6 +7,7 @@ import { getHandleElement, useHandleElementId, useHandleElementShallow } from '.
 import type { PPTElement } from '@/types/slides'
 import { ElementAlignCommands, ElementOrderCommands } from '@/types/edit'
 import { MIN_SIZE } from '@/configs/element'
+import { textElementLocksSize } from '@/utils/placeholderLayout'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import useOrderElement from '@/hooks/useOrderElement'
 import useAlignElementToCanvas from '@/hooks/useAlignElementToCanvas'
@@ -66,8 +67,9 @@ const ElementPositionPanel = memo(function ElementPositionPanel() {
   if (!handleElement) return null
 
   const minSize = MIN_SIZE[handleElement.type] || 20
-  const isAutoHeightText = handleElement.type === 'text' && !handleElement.vertical && !handleElement.fixedHeight
-  const isAutoWidthText = handleElement.type === 'text' && handleElement.vertical && !handleElement.fixedHeight
+  const textLocked = handleElement.type === 'text' && textElementLocksSize(handleElement)
+  const isAutoHeightText = handleElement.type === 'text' && !handleElement.vertical && !textLocked
+  const isAutoWidthText = handleElement.type === 'text' && handleElement.vertical && !textLocked
 
   const commit = (props: Partial<PPTElement>) => {
     useSlidesStore.getState().updateElement({ id: handleElementId, props })

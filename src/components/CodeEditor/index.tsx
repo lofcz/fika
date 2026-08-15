@@ -137,8 +137,8 @@ const CodeEditor = memo((vrProps: ICodeEditorProps) => {
   }, [showLineNumbers])
 
   const submit = useCallback(() => {
-    const code = editorRef.current?.getDoc() ?? ''
-    if (!code.trim()) {
+    const code = (editorRef.current?.getDoc() || props.code || '').trim()
+    if (!code) {
       message.error(LL.components.codeEditor.codeEmpty())
       return
     }
@@ -149,12 +149,12 @@ const CodeEditor = memo((vrProps: ICodeEditorProps) => {
       fontSize,
       showLineNumbers,
     })
-  }, [LL.components.codeEditor, language, theme, fontSize, showLineNumbers])
+  }, [LL.components.codeEditor, language, theme, fontSize, showLineNumbers, props.code])
 
   return (
     <div className={cx('code-editor-host', vrProps.className)}>
       {!ready ? <CodeEditorSkeleton className={cx('boot-skeleton')} /> : null}
-      <div className={cx('code-editor', { pending: !ready })} inert={!ready}>
+      <div className={cx('code-editor', { pending: !ready })}>
         <div className={cx('toolbar')}>
           <div className={cx('field')}>
             <span className={cx('label')}>{LL.components.codeEditor.language()}</span>
@@ -184,14 +184,14 @@ const CodeEditor = memo((vrProps: ICodeEditorProps) => {
           </label>
         </div>
 
-        <div className={cx('editor-wrap')}>
+        <div className={cx('editor-wrap')} inert={!ready}>
           <div ref={editorHostRef} className={cx('editor-host')} />
           {loadError ? <div className={cx('load-error')}>{loadError}</div> : null}
         </div>
 
         <div className={cx('footer')}>
           <Button className={cx('btn')} onClick={() => onCloseRef.current?.()}>{LL.common.cancel()}</Button>
-          <Button className={cx('btn')} type="primary" onClick={() => submit()}>{LL.common.ok()}</Button>
+          <Button className={cx('btn')} type="primary" data-editor-insert="code" onClick={() => submit()}>{LL.common.ok()}</Button>
         </div>
       </div>
     </div>

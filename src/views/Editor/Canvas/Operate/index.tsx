@@ -143,7 +143,7 @@ const OperateChrome = memo((props: OperateChromeProps) => {
   }
 
   return (
-    <div className={cx('operate', { 'multi-select': isMultiSelect && !isActive }, className)} style={operateStyle} onContextMenu={onContext}>
+    <div id={`operate-element-${props.elementInfo.id}`} className={cx('operate', { 'multi-select': isMultiSelect && !isActive }, className)} style={operateStyle} onContextMenu={onContext}>
       {showBorderDrag ? (
         <>
           <div className={cx('operate-drag-border top', { 'debug-hit': debugHitAreas })} style={borderStyle('top')} onContextMenu={onContext} onMouseDown={e => { e.stopPropagation(); e.nativeEvent.stopPropagation(); onBorderDrag(e) }} />

@@ -1,13 +1,15 @@
-import { bindStyles } from '@/utils/cssm'
-import { Icon } from '@/components/Icon'
-import styles from './ImportReplaceDialog.module.scss'
-const cx = bindStyles(styles)
 import { useRef, useCallback, memo, useEffect } from 'react'
 
 import { useMainStore, useImportConfirmStore } from '@/store'
 import type { ImportConfirmChoice } from '@/store/importConfirm'
 import { useI18nContext } from '@/i18n/useI18nContext'
-import Modal from '@/components/Modal'
+import {
+  InkDialog,
+  InkDialogChoice,
+  InkDialogChoices,
+  InkDialogFooter,
+  InkDialogIntro,
+} from '@/components/InkDialog'
 import Button from '@/components/Button'
 
 const ImportReplaceDialog = memo(() => {
@@ -46,57 +48,35 @@ const ImportReplaceDialog = memo(() => {
     useImportConfirmStore.getState().settle(choice)
   }, [])
 
-  const onVisibleChange = useCallback((open: boolean) => {
-    if (!open) useImportConfirmStore.getState().settle(null)
-  }, [])
-
   return (
-    <Modal visible={visible} width={440} closeButton onUpdateVisible={onVisibleChange}>
-      <div className={cx('import-replace-dialog')}>
-        <div className={cx('intro')}>
-          <div className={cx('kicker')}>{LL.editor.header.importConflict.kicker()}</div>
-          <div className={cx('title')}>{LL.editor.header.importConflict.title()}</div>
-          <div className={cx('subtitle')}>
-            {LL.editor.header.importConflict.description({ count: slideCount })}
-          </div>
-        </div>
+    <InkDialog visible={visible} width={440} onClose={() => choose(null)}>
+      <InkDialogIntro
+        kicker={LL.editor.header.importConflict.kicker()}
+        title={LL.editor.header.importConflict.title()}
+        subtitle={LL.editor.header.importConflict.description({ count: slideCount })}
+      />
 
-        <div className={cx('choices')} role="group">
-          <button
-            ref={replaceBtnRef}
-            type="button"
-            className={cx('choice', 'choice-replace')}
-            onClick={() => choose('replace')}
-          >
-            <span className={cx('glyph')} aria-hidden={true}>
-              <Icon icon="arrow-left-right" />
-            </span>
-            <span className={cx('copy')}>
-              <span className={cx('name')}>{LL.editor.header.importConflict.replaceTitle()}</span>
-              <span className={cx('hint')}>{LL.editor.header.importConflict.replaceHint()}</span>
-            </span>
-          </button>
+      <InkDialogChoices>
+        <InkDialogChoice
+          buttonRef={replaceBtnRef}
+          icon="arrow-left-right"
+          name={LL.editor.header.importConflict.replaceTitle()}
+          hint={LL.editor.header.importConflict.replaceHint()}
+          emphasis
+          onClick={() => choose('replace')}
+        />
+        <InkDialogChoice
+          icon="plus"
+          name={LL.editor.header.importConflict.appendTitle()}
+          hint={LL.editor.header.importConflict.appendHint()}
+          onClick={() => choose('append')}
+        />
+      </InkDialogChoices>
 
-          <button
-            type="button"
-            className={cx('choice')}
-            onClick={() => choose('append')}
-          >
-            <span className={cx('glyph', 'glyph-quiet')} aria-hidden={true}>
-              <Icon icon="plus" />
-            </span>
-            <span className={cx('copy')}>
-              <span className={cx('name')}>{LL.editor.header.importConflict.appendTitle()}</span>
-              <span className={cx('hint')}>{LL.editor.header.importConflict.appendHint()}</span>
-            </span>
-          </button>
-        </div>
-
-        <div className={cx('footer')}>
-          <Button onClick={() => choose(null)}>{LL.common.cancel()}</Button>
-        </div>
-      </div>
-    </Modal>
+      <InkDialogFooter>
+        <Button onClick={() => choose(null)}>{LL.common.cancel()}</Button>
+      </InkDialogFooter>
+    </InkDialog>
   )
 })
 

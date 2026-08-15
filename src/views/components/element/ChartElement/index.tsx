@@ -10,7 +10,7 @@ import type { PPTChartElement } from '@/types/slides';
 import type { ContextmenuItem } from '@/components/Contextmenu/types';
 import emitter, { EmitterEvents } from '@/utils/emitter';
 import { DEFAULT_CHART_LINE_COLOR } from '@/configs/chart';
-import { resolveChartLabelColor } from '@/utils/textContrast';
+import { resolveChartElementSeriesColors, resolveChartLabelColor } from '@/utils/textContrast';
 import { useOutlineRadiusCss } from '@/views/components/element/hooks/useElementOutline';
 import ElementOutline from '@/views/components/element/ElementOutline';
 import Chart from './Chart';
@@ -58,7 +58,11 @@ const ChartElement = memo((props: IChartElementProps) => {
     <div className={cx('rotate-wrapper')} style={{ transform: `rotate(${elementInfo.rotate}deg)` }}>
       <div
         className={cx('element-content')}
+        data-live-box
+        data-chart-type={elementInfo.chartType}
         style={{
+          width: elementInfo.width + 'px',
+          height: elementInfo.height + 'px',
           backgroundColor: elementInfo.fill,
           borderRadius: outlineBorderRadius,
           overflow: outlineBorderRadius ? 'hidden' : undefined
@@ -78,7 +82,10 @@ const ChartElement = memo((props: IChartElementProps) => {
           height={elementInfo.height}
           type={elementInfo.chartType}
           data={elementInfo.data}
-          themeColors={elementInfo.themeColors}
+          themeColors={resolveChartElementSeriesColors(elementInfo, {
+            background: currentSlide?.background,
+            fallbackSurface: theme?.backgroundColor,
+          })}
           textColor={labelColor}
           lineColor={gridColor}
           options={elementInfo.options}

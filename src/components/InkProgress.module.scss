@@ -32,12 +32,14 @@
 .value {
   display: flex;
   align-items: baseline;
+  gap: 4px;
   line-height: 1;
 }
 .num {
   font-size: 36px;
   font-weight: 600;
   letter-spacing: -0.05em;
+  padding-inline-end: 0.05em;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }

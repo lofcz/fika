@@ -2,7 +2,6 @@ import { bindStyles } from '@/utils/cssm'
 const cx = bindStyles({})
 import { memo } from 'react'
 
-import { useMainStore } from '@/store'
 import type { PPTTableElement } from '@/types/slides'
 import type { OperateResizeHandlers } from '@/types/edit'
 import useCommonOperate from '../hooks/useCommonOperate'
@@ -22,16 +21,12 @@ export type ITableElementOperateProps = {
 const TableElementOperate = memo((props: ITableElementOperateProps) => {
   const propsRef = useLatest(props)
   const { elementInfo, handlerVisible } = props
-  const canvasScale = useMainStore(s => s.canvasScale)
-  const outlineWidth = props.elementInfo.outline.width || 1
-  const scaleWidth = (props.elementInfo.width + outlineWidth) * canvasScale
-  const scaleHeight = props.elementInfo.height * canvasScale
-  const { resizeHandlers, borderLines } = useCommonOperate(scaleWidth, scaleHeight)
+  const { resizeHandlers, borderLines } = useCommonOperate()
 
   return (
     <div className={cx('table-element-operate')}>
       {borderLines.map(line => (
-        <BorderLine className={cx('operate-border-line')} key={line.type} type={line.type} style={line.style} />
+        <BorderLine className={cx('operate-border-line')} key={line.type} type={line.type} />
       ))}
       {handlerVisible ? (
         <>
@@ -41,7 +36,6 @@ const TableElementOperate = memo((props: ITableElementOperateProps) => {
               key={point.direction}
               type={point.direction}
               rotate={elementInfo.rotate}
-              style={point.style}
               onMouseDown={e => {
                 const { scaleElement, elementInfo: el } = propsRef.current
                 scaleElement(e.nativeEvent, el, point.direction)
@@ -50,7 +44,6 @@ const TableElementOperate = memo((props: ITableElementOperateProps) => {
           ))}
           <RotateHandler
             className={cx('operate-rotate-handler')}
-            style={{ left: scaleWidth / 2 + 'px' }}
             onMouseDown={e => {
               const { rotateElement, elementInfo: el } = propsRef.current
               rotateElement(e.nativeEvent, el)

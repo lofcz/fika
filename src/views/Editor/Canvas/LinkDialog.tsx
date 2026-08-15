@@ -97,7 +97,7 @@ const LinkDialog = memo((props: ILinkDialogProps) => {
       {type === 'slide' && selectedSlide ? (
         <div className={cx('preview')}>
           <div>{LL.canvas.link.preview()}</div>
-          <ThumbnailSlide className={cx('thumbnail')} slide={selectedSlide} size={500} />
+          <ThumbnailSlide className={cx('thumbnail')} slide={{ id: selectedSlide.id }} size={500} />
         </div>
       ) : null}
       <div className={cx('btns')}>

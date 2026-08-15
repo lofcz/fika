@@ -1,5 +1,5 @@
 /**
- * E2E: importing Desktop/fixture sb1.pptx must not crash the editor.
+ * E2E: importing tests/fixtures sb1.pptx must not crash the editor.
  *
  *   node scripts/e2e-sb1-import.mjs
  *
@@ -7,16 +7,14 @@
  */
 import { spawn } from 'node:child_process'
 import { copyFileSync, existsSync, unlinkSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
+import { SB1_PPTX } from '../tests/fixtures/paths.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const DEV_URL = 'http://127.0.0.1:5173/'
-const desktopSb1 = join(homedir(), 'Desktop', 'sb1.pptx')
-const fixtureSb1 = join(root, 'tests/fixtures/pptx-import/sb1.pptx')
-const sb1Path = existsSync(fixtureSb1) ? fixtureSb1 : desktopSb1
+const sb1Path = SB1_PPTX
 
 const failures = []
 function assert(condition, message) {
@@ -42,7 +40,7 @@ async function waitForDev(timeoutMs = 60000) {
 }
 
 if (!existsSync(sb1Path)) {
-  console.error(`sb1.pptx not found at ${fixtureSb1} or ${desktopSb1}`)
+  console.error(`sb1.pptx not found at ${sb1Path}`)
   process.exit(1)
 }
 

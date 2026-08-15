@@ -61,7 +61,7 @@ export type IProsemirrorEditorProps = {
 
 export type ProsemirrorEditorHandle = {
   focus: () => void;
-  seedPlaceholderStyles: (options: PlaceholderStyleOptions) => void;
+  seedPlaceholderStyles: (options: PlaceholderStyleOptions, phase?: 'empty' | 'filled') => void;
   ensureBulletList: () => void;
 };
 
@@ -345,11 +345,12 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     editorView.current.focus();
     consumePendingCaret(elementIdRef.current, editorView.current);
   }, []);
-  const seedPlaceholderStyles = useCallback((options: PlaceholderStyleOptions) => {
+  const seedPlaceholderStyles = useCallback((options: PlaceholderStyleOptions, phase?: 'empty' | 'filled') => {
     if (!editorView.current) return;
     try {
       const empty = isEmptyEditorDoc(editorView.current);
-      applyPlaceholderStyles(editorView.current, options);
+      if (phase === 'empty' && !empty) return;
+      applyPlaceholderStyles(editorView.current, options, phase);
       if (!empty) handleInput();
       handleClick();
     }
@@ -752,7 +753,11 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
           callbacksRef.current.onPlaceholderFill?.();
         }
         emitEmptyStateRef.current();
-        if (tr.docChanged) emitDocChangeRef.current();
+        if (tr.docChanged) {
+          emitDocChangeRef.current();
+          commitLiveEditorToStore(elementIdRef.current, { history: false });
+          handleInputRef.current();
+        }
         if (!newState.selection.empty && !pointerSelecting.current) maybeRevealForTextRangeRef.current(current);
       }
     }, {
@@ -775,9 +780,13 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       const current = editorView.current;
       if (current) {
         commitLiveEditorToStore(elementIdRef.current);
+        handleInputRef.current.cancel();
         unregisterEditorView(elementIdRef.current, current);
         current.destroy();
         editorView.current = null;
+      }
+      else {
+        handleInputRef.current.cancel();
       }
       hideLinkTooltipStableRef.current();
       clearPointerSelectReleaseRef.current();

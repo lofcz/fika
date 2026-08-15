@@ -123,7 +123,7 @@ const TableStylePanel = memo(() => {
       }
     }
     updateElement({ data })
-    updateTextAttrState()
+    setTextAttrs(prev => ({ ...prev, ...textAttrProp }))
   }
 
   const updateTheme = (themeProp: Partial<TableTheme>) => {

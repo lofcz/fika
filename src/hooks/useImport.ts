@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { parse, type Shape, type Element, type ChartItem, type BaseElement } from 'pptxtojson';
 import { nanoid } from 'nanoid';
 import tinycolor from 'tinycolor2';
-import { useSlidesStore, useImportConfirmStore } from '@/store';
+import { useSlidesStore, useMainStore, useImportConfirmStore } from '@/store';
 import { decrypt } from '@/utils/crypto';
 import { isFloatEqual } from '@/utils/common';
 import { type ShapePoolItem, SHAPE_LIST, SHAPE_PATH_FORMULAS } from '@/configs/shapes';
@@ -255,12 +255,24 @@ export function getImportApi() {
     console.error('[pptx-import]', error);
     message.error(fallback);
   };
+  const resetEditorSelection = () => {
+    const main = useMainStore.getState();
+    main.setActiveElementIdList([]);
+    main.setActiveGroupElementId('');
+    main.setEditingElementId('');
+    main.setClipingImageElementId('');
+    main.updateSelectedSlidesIndex([]);
+    if (main.creatingElement) main.setCreatingElement(null);
+    if (main.creatingCustomShape) main.setCreatingCustomShapeState(null);
+    if (main.disableHotkeys) main.setDisableHotkeysState(false);
+  };
   const applyImportedSlides = (slides: Slide[], apply: ImportApplyMode, extras?: {
     theme?: Partial<SlideTheme>;
     title?: string;
     aspectRatio?: number;
     width?: number;
   }) => {
+    resetEditorSelection();
     if (apply === 'replace') {
       const store = slidesState();
       store.updateSlideIndex(0);

@@ -9,7 +9,8 @@ import emitter, { EmitterEvents } from '@/utils/emitter'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { CHART_PRESET_THEMES, DEFAULT_CHART_LINE_COLOR } from '@/configs/chart'
 import { useI18nContext } from '@/i18n/useI18nContext'
-import { resolveChartLabelColor } from '@/utils/textContrast'
+import { matchPresetTheme, themeChartColors } from '@/configs/theme'
+import { resolveChartLabelColor, resolveChartSeriesColors, resolveElementSurfaces } from '@/utils/textContrast'
 import ElementOutline from '../../common/ElementOutline'
 import PanelSection from '../../common/PanelSection'
 import ThemeColorsSetting from './ThemeColorsSetting'
@@ -151,23 +152,26 @@ const ChartStylePanel = memo(function ChartStylePanel() {
       <PanelSection label={LL.editor.panel.type()}>
         <div className={cx('type-grid')}>
           {chartList.map(item => (
-            <FormatChip
-              key={item}
-              compact
-              active={chartType === item}
-              data-tooltip={chartTypeLabels[item]}
-              onClick={() => changeChartType(item)}
-            >
-              <Icon icon={chartIcon[item]} />
-            </FormatChip>
+            <span key={item} data-chart-style-type={item}>
+              <FormatChip
+                compact
+                active={chartType === item}
+                data-tooltip={chartTypeLabels[item]}
+                onClick={() => changeChartType(item)}
+              >
+                <Icon icon={chartIcon[item]} />
+              </FormatChip>
+            </span>
           ))}
         </div>
         {supportsStack || supportsSmooth ? (
           <div className="chip-row">
             {supportsStack ? (
-              <FormatChip active={stack} onClick={() => updateOptions({ stack: !stack })}>
-                {LL.editor.stylePanel.chart.stackedStyle()}
-              </FormatChip>
+              <span data-chart-stack>
+                <FormatChip active={stack} onClick={() => updateOptions({ stack: !stack })}>
+                  {LL.editor.stylePanel.chart.stackedStyle()}
+                </FormatChip>
+              </span>
             ) : null}
             {supportsSmooth ? (
               <FormatChip active={lineSmooth} onClick={() => updateOptions({ lineSmooth: !lineSmooth })}>
@@ -206,7 +210,17 @@ const ChartStylePanel = memo(function ChartStylePanel() {
                 <button
                   type="button"
                   className={cx('preset-theme slide-theme', { on: sameColors(theme.themeColors, themeColors) })}
-                  onClick={() => applyThemeColors(theme.themeColors)}
+                  onClick={() => {
+                    const preset = matchPresetTheme(theme.themeColors)
+                    applyThemeColors(resolveChartSeriesColors(
+                      preset ? themeChartColors(preset) : theme.themeColors,
+                      resolveElementSurfaces({
+                        fill: chartStyle?.fill,
+                        background: slideBackground,
+                        fallbackSurface: theme.backgroundColor,
+                      }),
+                    ))
+                  }}
                 >
                   {theme.themeColors.map(color => (
                     <span key={color} className={cx('preset-theme-color')} style={{ backgroundColor: color }} />

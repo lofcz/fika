@@ -3,9 +3,14 @@ import { useMainStore, useSlidesStore, useKeyboardStore, syncPointerModifiers } 
 import type { PPTElement } from '@/types/slides'
 import type { AlignmentLineProps } from '@/types/edit'
 import { createElementIdMap, getElementRange, getRectRotatedRange } from '@/utils/element'
-import { resolveGridSize, snapMovingBox, type SnapBox } from '@/utils/snap'
+import { clonePlain } from '@/utils/clonePlain'
+import { bindDocumentDrag, rafCoalesce } from '@/utils/gestureBind'
+import { clearLiveElementOffset, readLiveMultiOrigin, setLiveElementOffset, settleLiveElementOffset } from '@/utils/liveElementOffset'
+import { buildSnapIndex } from '@/utils/spatial'
+import { resolveGridSize, sameSnapGuides, snapMovingBox, type SnapBox } from '@/utils/snap'
 import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import { commitSlideElements } from '@/utils/commitSlideElements'
 
 export default (
   elementList: PPTElement[],
@@ -59,22 +64,28 @@ export default (
     
     const sorptionRange = 5
 
-    const originElementList: PPTElement[] = JSON.parse(JSON.stringify(elementListRef.current))
-    let originActiveElementList = originElementList.filter(el => activeElementIdList.includes(el.id))
+    const activeIds = new Set(activeElementIdList)
+    const originElementList: PPTElement[] = elementListRef.current.map(el => (
+      activeIds.has(el.id) ? clonePlain(el) : el
+    ))
+    useMainStore.getState().setGesturingState(true)
+    const originActiveElementList = originElementList.filter(el => activeElementIdList.includes(el.id))
 
-    let dragTargetElement = element
-    let elOriginLeft = element.left
-    let elOriginTop = element.top
-    let elOriginWidth = element.width
-    let elOriginHeight = ('height' in element && element.height) ? element.height : 0
-    let elOriginRotate = ('rotate' in element && element.rotate) ? element.rotate : 0
+    const elOriginLeft = element.left
+    const elOriginTop = element.top
+    const elOriginWidth = element.width
+    const elOriginHeight = ('height' in element && element.height) ? element.height : 0
+    const elOriginRotate = ('rotate' in element && element.rotate) ? element.rotate : 0
   
     const viewport = findSlideViewport(e.target)
     const startPointer = getPointerClient(e)
     const copyOnDrag = !isTouchEvent && (e.ctrlKey || e.metaKey)
 
     let isMisoperation: boolean | null = null
-    let duplicateTriggered = false 
+    let duplicateTriggered = false
+    let lastLeft = elOriginLeft
+    let lastTop = elOriginTop
+    let stopGesture: (() => void) | null = null 
 
     const isActiveGroupElement = element.id === activeGroupElementId
 
@@ -86,49 +97,46 @@ export default (
       if (!isActiveGroupElement && activeElementIdList.includes(el.id)) continue
       others.push(getElementRange(el))
     }
+    const snapIndex = buildSnapIndex(others)
+    const movingIds = isActiveGroupElement ? [element.id] : [...activeElementIdList]
+    const liveOrigins = (isActiveGroupElement ? [element] : originActiveElementList).map(el => ({
+      id: el.id,
+      left: el.left,
+      top: el.top,
+    }))
+    const multiOrigin = readLiveMultiOrigin(canvasScaleRef.current)
+    let lastGuides: AlignmentLineProps[] = []
+    const endGesture = () => {
+      requestAnimationFrame(() => {
+        useMainStore.getState().setGesturingState(false)
+      })
+    }
 
     const commitLiveList = (next: PPTElement[]) => {
       elementListRef.current = next
       setElementList(next)
     }
 
-    const duplicateElement = () => {
-      const sourceElements = JSON.parse(JSON.stringify(dragSingleElement ? [dragTargetElement] : originActiveElementList)) as PPTElement[]
-
+    const commitCopiedElements = (dx: number, dy: number) => {
+      const sourceElements = clonePlain(dragSingleElement ? [element] : originActiveElementList)
       const { groupIdMap, elIdMap } = createElementIdMap(sourceElements)
-
       const duplicatedElements = sourceElements.map(item => {
         item.id = elIdMap[item.id]
         if (isActiveGroupElement && item.groupId) delete item.groupId
         else if (item.groupId) item.groupId = groupIdMap[item.groupId]
+        item.left += dx
+        item.top += dy
         return item
       })
-
-      commitLiveList([...elementListRef.current, ...duplicatedElements])
-      useSlidesStore.getState().updateSlide({ elements: elementListRef.current })
-
-      const duplicatedActiveElementIdList = duplicatedElements.map(item => item.id)
-      const duplicatedHandleElementId = elIdMap[dragTargetElement.id]
-      const duplicatedHandleElement = duplicatedElements.find(item => item.id === duplicatedHandleElementId)
-      if (!duplicatedHandleElement) return
-
+      const next = [...elementListRef.current, ...duplicatedElements]
+      const duplicatedHandleElementId = elIdMap[element.id]
       const mainStore = useMainStore.getState()
-      mainStore.setActiveElementIdList(duplicatedActiveElementIdList)
+      mainStore.setActiveElementIdList(duplicatedElements.map(item => item.id))
       mainStore.setHandleElementId(duplicatedHandleElementId)
       mainStore.setActiveGroupElementId('')
-      activeElementIdListRef.current = duplicatedActiveElementIdList
+      activeElementIdListRef.current = duplicatedElements.map(item => item.id)
       activeGroupElementIdRef.current = ''
-
-      dragTargetElement = duplicatedHandleElement
-      originActiveElementList = duplicatedElements
-
-      elOriginLeft = duplicatedHandleElement.left
-      elOriginTop = duplicatedHandleElement.top
-      elOriginWidth = duplicatedHandleElement.width
-      elOriginHeight = ('height' in duplicatedHandleElement && duplicatedHandleElement.height) ? duplicatedHandleElement.height : 0
-      elOriginRotate = ('rotate' in duplicatedHandleElement && duplicatedHandleElement.rotate) ? duplicatedHandleElement.rotate : 0
-
-      duplicateTriggered = true
+      return next
     }
 
     const handleMousemove = (e: MouseEvent | TouchEvent) => {
@@ -140,7 +148,7 @@ export default (
       }
       if (!isMouseDown || isMisoperation) return
 
-      if (!duplicateTriggered && copyOnDrag) duplicateElement()
+      if (!duplicateTriggered && copyOnDrag) duplicateTriggered = true
       
       let { x: moveX, y: moveY } = pointerDeltaToCanvas(startPointer, e, viewport, canvasScaleRef.current)
 
@@ -168,11 +176,11 @@ export default (
           targetMinY = yRange[0]
           targetMaxY = yRange[1]
         }
-        else if (dragTargetElement.type === 'line') {
+        else if (element.type === 'line') {
           targetMinX = targetLeft
-          targetMaxX = targetLeft + Math.max(dragTargetElement.start[0], dragTargetElement.end[0])
+          targetMaxX = targetLeft + Math.max(element.start[0], element.end[0])
           targetMinY = targetTop
-          targetMaxY = targetTop + Math.max(dragTargetElement.start[1], dragTargetElement.end[1])
+          targetMaxY = targetTop + Math.max(element.start[1], element.end[1])
         }
         else {
           targetMinX = targetLeft
@@ -231,69 +239,103 @@ export default (
           mode: altGrid ? 'grid' : 'smart',
           canvas: { width: edgeWidth, height: edgeHeight },
           gridSize: resolveGridSize(gridLineSizeRef.current, altGrid),
+          index: snapIndex,
         },
       )
       targetLeft += offsetX
       targetTop += offsetY
-      setAlignmentLines(guides)
-       
-      if (dragSingleElement) {
-        commitLiveList(elementListRef.current.map(el => {
-          return el.id === dragTargetElement.id ? { ...el, left: targetLeft, top: targetTop } : el
-        }))
+      if (!sameSnapGuides(lastGuides, guides)) {
+        lastGuides = guides
+        setAlignmentLines(guides)
       }
-
-      else {
-        const handleElement = elementListRef.current.find(el => el.id === dragTargetElement.id)
-        if (!handleElement) return
-
-        commitLiveList(elementListRef.current.map(el => {
-          if (activeElementIdListRef.current.includes(el.id)) {
-            if (el.id === dragTargetElement.id) {
-              return {
-                ...el,
-                left: targetLeft,
-                top: targetTop,
-              }
-            }
-            return {
-              ...el,
-              left: el.left + (targetLeft - handleElement.left),
-              top: el.top + (targetTop - handleElement.top),
-            }
-          }
-          return el
-        }))
-      }
+      setLiveElementOffset(liveOrigins, targetLeft - elOriginLeft, targetTop - elOriginTop, canvasScaleRef.current, multiOrigin)
+      lastLeft = targetLeft
+      lastTop = targetTop
     }
 
     const handleMouseup = (e: MouseEvent | TouchEvent) => {
+      if (!isMouseDown) return
       isMouseDown = false
-      
-      document.ontouchmove = null
-      document.ontouchend = null
-      document.onmousemove = null
-      document.onmouseup = null
+      stopGesture?.()
+      stopGesture = null
 
       setAlignmentLines([])
 
       const currentPointer = getPointerClient(e)
-      const liveList = elementListRef.current
       draggingRef.current = false
 
-      if (startPointer.x === currentPointer.x && startPointer.y === currentPointer.y) return
+      if (startPointer.x === currentPointer.x && startPointer.y === currentPointer.y) {
+        clearLiveElementOffset(liveOrigins, canvasScaleRef.current, multiOrigin)
+        endGesture()
+        return
+      }
 
-      useSlidesStore.getState().updateSlide({ elements: liveList })
+      const dx = lastLeft - elOriginLeft
+      const dy = lastTop - elOriginTop
+      const next = duplicateTriggered
+        ? commitCopiedElements(dx, dy)
+        : elementListRef.current.map(el => {
+          if (!movingIds.includes(el.id)) return el
+          if (el.id === element.id) return { ...el, left: lastLeft, top: lastTop }
+          return { ...el, left: el.left + dx, top: el.top + dy }
+        })
+      if (duplicateTriggered) clearLiveElementOffset(liveOrigins, canvasScaleRef.current, multiOrigin)
+      else {
+        settleLiveElementOffset(
+          next.filter(el => movingIds.includes(el.id)).map(el => ({
+            id: el.id,
+            left: el.left,
+            top: el.top,
+          })),
+          canvasScaleRef.current,
+        )
+      }
+      commitLiveList(commitSlideElements(next))
       addHistorySnapshot()
+      endGesture()
     }
 
+    const onMove = rafCoalesce(handleMousemove)
+    const unbind = bindDocumentDrag({
+      onDrag: state => {
+        const event = state.event
+        if (event instanceof KeyboardEvent) return
+        onMove(event as MouseEvent | TouchEvent)
+      },
+      onDragEnd: state => {
+        const event = state.event
+        if (event instanceof KeyboardEvent) return
+        handleMouseup(event as MouseEvent | TouchEvent)
+      },
+    })
+    stopGesture = () => {
+      onMove.cancel()
+      unbind()
+      document.ontouchmove = null
+      document.ontouchend = null
+    }
     if (isTouchEvent) {
-      document.ontouchmove = handleMousemove
+      document.ontouchmove = onMove
       document.ontouchend = handleMouseup
     }
-    else {
-      document.onmousemove = handleMousemove
-      document.onmouseup = handleMouseup
+    else if (e instanceof MouseEvent) {
+      document.documentElement.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: false,
+        cancelable: true,
+        view: window,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        screenX: e.screenX,
+        screenY: e.screenY,
+        buttons: 1,
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey,
+      }))
     }
   }, [setElementList, setAlignmentLines, addHistorySnapshot])
 

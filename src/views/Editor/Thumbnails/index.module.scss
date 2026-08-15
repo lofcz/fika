@@ -52,7 +52,8 @@
 .thumbnail-list {
   padding: 4px 8px 10px 4px;
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  @include overflow-overlay();
 }
 .thumbnail-item {
   display: flex;

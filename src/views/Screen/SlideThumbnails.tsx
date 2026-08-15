@@ -5,7 +5,6 @@ const cx = bindStyles(styles)
 import { useCallback, memo } from 'react';
 
 import { useSlidesStore } from '@/store';
-import useLoadSlides from '@/hooks/useLoadSlides';
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index';
 export type ISlideThumbnailsProps = {
   turnSlideToIndex: (index: number) => void;
@@ -15,9 +14,6 @@ export type ISlideThumbnailsProps = {
 const SlideThumbnails = memo((props: ISlideThumbnailsProps) => {
   const slides = useSlidesStore(s => s.slides);
   const slideIndex = useSlidesStore(s => s.slideIndex);;
-  const {
-    slidesLoadLimit
-  } = useLoadSlides();
   const turnSlide = useCallback((index: number) => {
     props.turnSlideToIndex(index);
     props.onClose?.();
@@ -28,6 +24,6 @@ const SlideThumbnails = memo((props: ISlideThumbnailsProps) => {
           'active': index === slideIndex
         })} key={slide.id} onClick={() => {
           turnSlide(index);
-        }}><ThumbnailSlide slide={slide} size={150} visible={index < slidesLoadLimit} /></div>)}</div></div></>;
+        }}><ThumbnailSlide slide={{ id: slide.id }} size={150} /></div>)}</div></div></>;
 });
 export default SlideThumbnails;

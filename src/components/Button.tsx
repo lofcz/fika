@@ -16,6 +16,7 @@ export type IButtonProps = {
   className?: string
   'data-tooltip'?: string
   'data-export-format'?: string
+  'data-editor-insert'?: string
 }
 
 export default function Button({
@@ -31,6 +32,7 @@ export default function Button({
   className,
   'data-tooltip': dataTooltip,
   'data-export-format': dataExportFormat,
+  'data-editor-insert': dataEditorInsert,
 }: IButtonProps) {
   const classes = cx(
     'button',
@@ -49,6 +51,7 @@ export default function Button({
       style={style}
       data-tooltip={dataTooltip}
       data-export-format={dataExportFormat}
+      data-editor-insert={dataEditorInsert}
       disabled={disabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => {

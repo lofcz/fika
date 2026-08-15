@@ -4,7 +4,7 @@ const cx = bindStyles(styles)
 import { useCallback, memo, lazy, createElement, Suspense, type ComponentType } from 'react';
 
 import { useSlidesStore, useFormatedAnimations } from '@/store';
-import { ElementTypes, type PPTElement, type Slide } from '@/types/slides';
+import { ElementTypes, type PPTElement, type Slide, type SlideBackground } from '@/types/slides';
 import BaseImageElement from '@/views/components/element/ImageElement/BaseImageElement';
 import BaseTextElement from '@/views/components/element/TextElement/BaseTextElement';
 import BaseShapeElement from '@/views/components/element/ShapeElement/BaseShapeElement';
@@ -22,11 +22,12 @@ export type IScreenElementProps = {
   elementIndex: number;
   animationIndex: number;
   slideType?: Slide['type'];
+  background?: SlideBackground;
   turnSlideToId: (id: string) => void;
   manualExitFullscreen: () => void;
 };
 const ScreenElement = memo((props: IScreenElementProps) => {
-  const { elementInfo, elementIndex, animationIndex, slideType, turnSlideToId, manualExitFullscreen } = props
+  const { elementInfo, elementIndex, animationIndex, slideType, background, turnSlideToId, manualExitFullscreen } = props
   const currentElementComponent = (() => {
     const elementTypeMap = {
       [ElementTypes.IMAGE]: BaseImageElement,
@@ -77,9 +78,16 @@ const ScreenElement = memo((props: IScreenElementProps) => {
       props.turnSlideToId(link.target);
     }
   }, [props.manualExitFullscreen, props.elementInfo?.link, props.turnSlideToId]);
+  const paintProps = {
+    elementInfo,
+    slideType,
+    background,
+    themeBackgroundColor: theme.backgroundColor,
+    themeFontColor: theme.fontColor,
+  };
   return <><div className={cx('screen-element', {
       'link': elementInfo.link
-    })} id={`screen-element-${elementInfo.id}`} style={{
+    })} id={`screen-element-${elementInfo.id}`} data-screen-element={elementInfo.id} style={{
       zIndex: elementIndex,
       fontFamily: theme.fontName,
       visibility: needWaitAnimation ? 'hidden' : 'visible'
@@ -88,9 +96,9 @@ const ScreenElement = memo((props: IScreenElementProps) => {
     }}>{currentElementComponent ? (
       elementInfo.type === ElementTypes.CODE || elementInfo.type === ElementTypes.MERMAID ? (
         <Suspense fallback={elementInfo.type === ElementTypes.CODE ? <CodeElementPlaceholder elementInfo={elementInfo} /> : null}>
-          {createElement(currentElementComponent as ComponentType<{ elementInfo: PPTElement; slideType?: Slide['type'] }>, { elementInfo, slideType })}
+          {createElement(currentElementComponent as ComponentType<Record<string, unknown>>, paintProps)}
         </Suspense>
-      ) : createElement(currentElementComponent as ComponentType<{ elementInfo: PPTElement; slideType?: Slide['type'] }>, { elementInfo, slideType })
+      ) : createElement(currentElementComponent as ComponentType<Record<string, unknown>>, paintProps)
     ) : null}</div></>;
 });
 export default ScreenElement;

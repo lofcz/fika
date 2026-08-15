@@ -1,8 +1,8 @@
 import tinycolor from 'tinycolor2';
 import { useSlidesStore } from '@/store';
 import type { Slide, SlideBackground } from '@/types/slides';
-import { DEFAULT_PRESET_THEME, inferThemeSlideType, resolvePresetBackground, type PresetTheme } from '@/configs/theme';
-import { applySlideBackgroundWithContrast, preferredInk, resolveSlideSurfaceColors } from '@/utils/textContrast';
+import { DEFAULT_PRESET_THEME, inferThemeSlideType, resolvePresetBackground, themeChartColors, type PresetTheme } from '@/configs/theme';
+import { applySlideBackgroundWithContrast, preferredInk, resolveChartSeriesColors, resolveSlideSurfaceColors } from '@/utils/textContrast';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 import { getLineElementLength } from '@/utils/element';
 interface ThemeValueWithArea {
@@ -317,7 +317,10 @@ export default () => {
         }
       }
       if (el.type === 'chart') {
-        el.themeColors = [...theme.colors];
+        el.themeColors = resolveChartSeriesColors(
+          themeChartColors(theme),
+          resolveSlideSurfaceColors(slide.background, theme.background),
+        );
         el.textColor = ink;
       }
       if (el.type === 'line') el.color = getColor(el.color);

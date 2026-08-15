@@ -6,18 +6,16 @@
  * Run: node scripts/check-sb1-import.mjs
  */
 import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import JSZip from 'jszip'
 import pptxgen from '@lofcz/pptxgenjs'
 import { parse } from 'pptxtojson/dist/index.js'
+import { SB1_PPTX } from '../tests/fixtures/paths.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SLIDE_CT = 'application/vnd.openxmlformats-officedocument.presentationml.slide+xml'
-const desktopSb1 = join(homedir(), 'Desktop', 'sb1.pptx')
-const fixtureSb1 = join(root, 'tests/fixtures/pptx-import/sb1.pptx')
-const sb1Path = existsSync(fixtureSb1) ? fixtureSb1 : desktopSb1
+const sb1Path = SB1_PPTX
 
 const failures = []
 function assert(condition, message) {
@@ -37,7 +35,7 @@ function slideOverrideCount(contentTypesXml) {
 }
 
 if (!existsSync(sb1Path)) {
-  console.error(`sb1.pptx not found at ${fixtureSb1} or ${desktopSb1}`)
+  console.error(`sb1.pptx not found at ${sb1Path}`)
   process.exit(1)
 }
 

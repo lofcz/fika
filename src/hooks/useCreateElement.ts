@@ -3,7 +3,7 @@ import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store';
 import { getImageSize } from '@/utils/image';
 import { queryFika } from '@/utils/portal';
 import { focusElementEditor } from '@/utils/canvasHitTest';
-import { resolveElementDefaultFontColor } from '@/utils/textContrast';
+import { resolveChartSeriesColors, resolveElementDefaultFontColor, resolveSlideSurfaceColors } from '@/utils/textContrast';
 import type { PPTLineElement, PPTElement, PPTImageElement, PPTLatexElement, PPTCodeElement, TableCell, TableCellStyle, PPTShapeElement, ChartType, PPTVideoElement, PPTAudioElement } from '@/types/slides';
 import type { FikaMediaKind, FikaMediaUploadResult } from '@/configs/mediaUpload';
 import { layoutMediaBoxes, DEFAULT_VIDEO_SIZE, DEFAULT_AUDIO_SIZE, type MediaBox } from '@/utils/mediaLayout';
@@ -211,7 +211,7 @@ export default () => {
    * @param chartType Chart type
    */
   const createChartElement = (type: ChartType) => {
-    const { theme } = getSlideEnv();
+    const { theme, currentSlide } = getSlideEnv();
     createElement({
       type: 'chart',
       id: nanoid(10),
@@ -221,7 +221,10 @@ export default () => {
       width: 400,
       height: 400,
       rotate: 0,
-      themeColors: theme.themeColors,
+      themeColors: resolveChartSeriesColors(
+        theme.themeColors,
+        resolveSlideSurfaceColors(currentSlide?.background, theme.backgroundColor),
+      ),
       textColor: defaultFontColor(),
       data: getChartDefaultData()[type]
     });

@@ -19,7 +19,7 @@ const ImageEllipseOutline = memo((props: IImageEllipseOutlineProps) => {
   if (!outline) return null
 
   return (
-    <svg className={cx('image-ellipse-outline')} overflow="visible" width={width} height={height}>
+    <svg className={cx('image-ellipse-outline')} overflow="visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" width="100%" height="100%">
       <ellipse
         vectorEffect="non-scaling-stroke"
         strokeLinecap="butt"

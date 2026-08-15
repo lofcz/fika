@@ -67,6 +67,7 @@ const VideoElement = memo((props: IVideoElementProps) => {
       <div className={cx('rotate-wrapper')} style={{ transform: `rotate(${elementInfo.rotate}deg)` }}>
         <div
           className={cx('element-content')}
+          data-live-box
           onContextMenu={event => {
             event.stopPropagation()
             event.preventDefault()
