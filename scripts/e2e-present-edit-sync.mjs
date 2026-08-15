@@ -99,17 +99,22 @@ async function typeInto(page, i, text) {
 }
 
 async function deselect(page) {
-  const vp = page.locator('[class*=viewport-wrapper]')
-  const box = await vp.boundingBox()
-  if (box) await page.mouse.click(box.x + 16, box.y + box.height - 16)
+  await page.keyboard.press('Escape').catch(() => {})
+  await page.evaluate(() => {
+    const main = window.__FIKA_MAIN__
+    if (!main) return
+    main.getState().setEditingElementId('')
+    main.getState().setActiveElementIdList([])
+    main.getState().setToolbarState('slideDesign')
+  })
   await sleep(150)
 }
 
 async function openDesign(page) {
   await deselect(page)
-  const tab = page.getByText('Design', { exact: true }).first()
-  await tab.click({ timeout: 8000 })
-  await page.locator('[data-theme-id]').first().waitFor({ timeout: 8000 })
+  const tab = page.locator('[data-toolbar-tab=slideDesign]')
+  if (await tab.count()) await tab.click({ timeout: 8000 }).catch(() => {})
+  await page.locator('[data-theme-id]').first().waitFor({ state: 'visible', timeout: 8000 })
   await sleep(120)
 }
 

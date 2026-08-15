@@ -28,6 +28,13 @@ assert(subscribe.includes('patchSlide'), 'a single-element write patches the scr
 assert(subscribe.includes('prepareScratch'), 'full rebuilds still wipe the scratch compositor')
 assert(subscribe.includes('__FIKA_RASTER__'), 'dev hook exposes raster stats for e2e')
 
+const livePaint = readFileSync(join(root, 'src/utils/liveElementPaint.ts'), 'utf8')
+assert(livePaint.includes('export const syncGradientDef'), 'stop nodes have a single imperative writer')
+
+const gradientDefs = readFileSync(join(root, 'src/views/components/element/ShapeElement/GradientDefs.tsx'), 'utf8')
+assert(gradientDefs.includes('syncGradientDef'), 'GradientDefs writes stops through the live-paint helper')
+assert(!gradientDefs.includes('<stop'), 'GradientDefs must not render React-owned stop children')
+
 const viewport = readFileSync(join(root, 'src/views/Editor/Canvas/ViewportBackground.tsx'), 'utf8')
 assert(viewport.includes('data-live-background'), 'slide background is a live paint target')
 assert(viewport.includes('selectCurrentSlide(s)?.background'), 'viewport background does not rerender on element writes')
@@ -37,4 +44,4 @@ if (failures.length) {
   for (const item of failures) console.error(`  - ${item}`)
   process.exit(1)
 }
-console.log('PASS 11 live-paint source checks')
+console.log('PASS 14 live-paint source checks')

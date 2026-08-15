@@ -255,7 +255,7 @@ export default function MediaPicker(props: IMediaPickerProps) {
         <span className={cx('hint')}>{readyHint}</span>
         <div className={cx('footer-actions')}>
           <Button onClick={() => close()}>{LL.common.cancel()}</Button>
-          <Button type="primary" disabled={!canInsert || inserting} onClick={() => insert()}>
+          <Button type="primary" data-editor-insert="media" disabled={!canInsert || inserting} onClick={() => insert()}>
             {insertLabel}
           </Button>
         </div>

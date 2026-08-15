@@ -280,7 +280,7 @@ export default function LaTeXEditor({
 
       <div className={cx('footer')}>
         <Button className={cx('btn')} onClick={() => onClose?.()}>{LL.common.cancel()}</Button>
-        <Button className={cx('btn')} type="primary" data-editor-insert="latex" onClick={() => { void update() }}>
+        <Button className={cx('btn')} type="primary" data-editor-insert="latex" disabled={!fieldReady} onClick={() => { void update() }}>
           {editing ? LL.common.save() : LL.components.latexEditor.insert()}
         </Button>
       </div>

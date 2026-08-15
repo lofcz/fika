@@ -23,14 +23,8 @@ const ensureStop = (def: Element, index: number): SVGStopElement => {
   return stop
 }
 
-export const applyLiveGradient = (
-  elementId: string,
-  gradient: Gradient,
-  source = 'editable',
-): boolean => {
-  if (typeof document === 'undefined') return false
-  const def = document.getElementById(liveGradientId(elementId, source))
-  if (!def) return false
+/** Single writer for SVG gradient stops. React must not also own these children. */
+export const syncGradientDef = (def: Element, gradient: Pick<Gradient, 'colors' | 'rotate'>): void => {
   if (def.tagName.toLowerCase() === 'lineargradient') {
     def.setAttribute('gradientTransform', liveGradientTransform(gradient.rotate || 0))
   }
@@ -42,6 +36,17 @@ export const applyLiveGradient = (
   }
   const extras = def.querySelectorAll('stop')
   for (let i = colors.length; i < extras.length; i++) extras[i].remove()
+}
+
+export const applyLiveGradient = (
+  elementId: string,
+  gradient: Gradient,
+  source = 'editable',
+): boolean => {
+  if (typeof document === 'undefined') return false
+  const def = document.getElementById(liveGradientId(elementId, source))
+  if (!def) return false
+  syncGradientDef(def, gradient)
   return true
 }
 

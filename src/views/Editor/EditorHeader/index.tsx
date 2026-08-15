@@ -332,7 +332,7 @@ const EditorHeader = memo(({ className, style }: { className?: string; style?: C
             <div className={cx('arrow-btn')}><Icon icon="chevron-down" className={cx('arrow')} /></div>
           </Popover>
         </div>
-        <div className={cx('menu-item')} data-tooltip={LL.editor.header.exportTooltip()} onClick={() => setDialogForExport('pptx')}>
+        <div className={cx('menu-item')} data-editor-tool="export" data-tooltip={LL.editor.header.exportTooltip()} onClick={() => setDialogForExport('pptx')}>
           <Icon icon="download" className={cx('icon')} />
         </div>
         {EXTRAS_ENABLED ? (

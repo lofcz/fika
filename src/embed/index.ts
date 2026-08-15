@@ -2,6 +2,7 @@ export { mountFika, unmountFika } from './mount'
 export type {
   FikaController,
   FikaDocument,
+  FikaHeaderMenuItem,
   FikaMountOptions,
   FikaMountResult,
   FikaDocumentLoader,
@@ -10,6 +11,7 @@ export type {
   FikaTemplatePayload,
   FikaImportPptxOptions,
   FikaImportApplyMode,
+  FikaViewMode,
 } from './types'
 export type { ExportTabId, FikaExportTabsConfig } from '@/configs/exportTabs'
 export type { FikaExportMediaResolver } from '@/configs/exportMediaResolver'

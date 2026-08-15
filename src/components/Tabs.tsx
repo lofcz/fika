@@ -197,6 +197,7 @@ export default function Tabs({
             })}
             key={tab.key}
             ref={node => setTabEl(tab.key, node)}
+            data-toolbar-tab={tab.key}
             data-tab-color={tab.color}
             style={{
               ...(tabStyle || {}),

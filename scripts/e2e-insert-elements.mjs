@@ -133,6 +133,25 @@ async function pressEscape(page) {
   await sleep(120)
 }
 
+async function closeOpenEditor(page) {
+  await pressEscape(page)
+  const cancel = page.getByRole('button', { name: 'Cancel' })
+  if (await cancel.count() && await cancel.first().isVisible().catch(() => false)) {
+    await cancel.first().click().catch(() => {})
+    await sleep(120)
+  }
+}
+
+async function waitInsert(page, kind, timeout = 30000) {
+  const btn = page.locator(`[data-editor-insert=${kind}]`)
+  await btn.waitFor({ state: 'visible', timeout })
+  await page.waitForFunction((name) => {
+    const el = document.querySelector(`[data-editor-insert="${name}"]`)
+    return !!el && !el.disabled
+  }, kind, { timeout })
+  return btn.last()
+}
+
 const results = []
 function rec(id, name, pass, measured) {
   results.push({ id, name, pass: !!pass, measured: measured ?? null })
@@ -271,45 +290,37 @@ try {
   rec(36, 'Inserting a pie chart adds a second chart', (afterPie.byType.chart || 0) >= 2, afterPie)
   rec(37, 'Both charts remain on the slide', (afterPie.byType.chart || 0) >= 2 && afterPie.total >= afterBar.total, afterPie)
 
+  await closeOpenEditor(page)
   await clickTool(page, 'insert-formula')
-  await sleep(400)
-  const formulaOpen = await page.getByText('Insert', { exact: true }).count() > 0 || await page.locator('[class*=latex-editor]').count() > 0
-  rec(38, 'Formula modal opens from the toolbar', formulaOpen)
+  const insertFormula = await waitInsert(page, 'latex').catch(() => null)
+  rec(38, 'Formula modal opens from the toolbar', !!insertFormula || await page.locator('[class*=latex-editor]').count() > 0)
   const tip = page.locator('kbd', { hasText: 'frac' })
+  await tip.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {})
   if (await tip.count()) await tip.first().click()
-  await sleep(150)
-  const insertFormula = page.locator('[data-editor-insert=latex]').or(page.getByRole('button', { name: 'Insert' }))
-  rec(39, 'Formula editor can insert a snippet', await insertFormula.count() > 0)
+  await sleep(200)
+  rec(39, 'Formula editor can insert a snippet', !!insertFormula || await page.locator('[data-editor-insert=latex]').count() > 0)
   const beforeLatex = await counts(page)
-  if (await insertFormula.count()) {
-    await insertFormula.first().click()
-    await page.locator('[data-element-type=latex]').first().waitFor({ timeout: 8000 }).catch(() => {})
+  if (insertFormula) {
+    await insertFormula.click()
+    await page.locator('[data-element-type=latex]').first().waitFor({ timeout: 15000 }).catch(() => {})
     await sleep(200)
   }
   const afterLatex = await counts(page)
   rec(40, 'Inserted formula is a latex element', (afterLatex.byType.latex || 0) > (beforeLatex.byType.latex || 0), afterLatex)
-  if (await page.locator('[class*=latex-editor]').count()) {
-    await page.getByText('Cancel', { exact: true }).first().click().catch(() => pressEscape(page))
-    await sleep(150)
-  }
+  await closeOpenEditor(page)
 
   await clickTool(page, 'insert-code')
-  await page.locator('[class*=code-editor], [class*=code-editor-host]').waitFor({ timeout: 20000 }).catch(() => {})
-  rec(41, 'Code modal opens from the toolbar', await page.locator('[class*=code-editor], [class*=code-editor-host]').count() > 0)
+  const okBtn = await waitInsert(page, 'code').catch(() => null)
+  rec(41, 'Code modal opens from the toolbar', !!okBtn || await page.locator('[class*=code-editor], [class*=code-editor-host]').count() > 0)
   const beforeCode = await counts(page)
-  const okBtn = page.locator('[data-editor-insert=code]')
-  await okBtn.waitFor({ state: 'visible', timeout: 20000 }).catch(() => {})
-  if (await okBtn.count()) {
-    await okBtn.last().click()
-    await page.locator('[data-element-type=code]').first().waitFor({ timeout: 8000 }).catch(() => {})
+  if (okBtn) {
+    await okBtn.click()
+    await page.locator('[data-element-type=code]').first().waitFor({ timeout: 15000 }).catch(() => {})
     await sleep(200)
   }
   const afterCode = await counts(page)
   rec(42, 'Code editor inserts a code element', (afterCode.byType.code || 0) > (beforeCode.byType.code || 0), afterCode)
-  if (await page.locator('[class*=code-editor]').count()) {
-    await page.getByText('Cancel', { exact: true }).first().click().catch(() => pressEscape(page))
-    await sleep(150)
-  }
+  await closeOpenEditor(page)
 
   await clickTool(page, 'insert-symbol')
   await sleep(400)
@@ -323,48 +334,44 @@ try {
   const afterSymbol = await counts(page)
   rec(44, 'Clicking a symbol inserts it', afterSymbol.total >= beforeSymbol.total && (afterSymbol.byType.text || 0) >= (beforeSymbol.byType.text || 0), afterSymbol)
 
+  await closeOpenEditor(page)
   await clickTool(page, 'insert-mermaid')
-  await page.locator('textarea, [class*=mermaid]').first().waitFor({ timeout: 15000 }).catch(() => {})
-  rec(45, 'Mermaid modal opens from the toolbar', await page.locator('[class*=mermaid-editor], [class*=mermaid]').count() > 0 || await page.getByRole('button', { name: 'OK' }).count() > 0)
+  const mermaidBtn = await waitInsert(page, 'mermaid').catch(() => null)
+  rec(45, 'Mermaid modal opens from the toolbar', !!mermaidBtn || await page.locator('[class*=mermaid-editor] textarea').count() > 0)
   const beforeMermaid = await counts(page)
-  const mermaidArea = page.locator('textarea').last()
+  const mermaidArea = page.locator('[class*=mermaid-editor] textarea').last()
   if (await mermaidArea.count()) {
     await mermaidArea.click()
     await mermaidArea.fill('graph TD; A-->B')
     await sleep(400)
-    if (await page.getByRole('button', { name: 'OK' }).count()) {
-      await page.getByRole('button', { name: 'OK' }).last().click()
-      await sleep(800)
-    }
+  }
+  if (mermaidBtn) {
+    await mermaidBtn.click()
+    await page.locator('[data-element-type=mermaid]').first().waitFor({ timeout: 15000 }).catch(() => {})
+    await sleep(200)
   }
   const afterMermaid = await counts(page)
   rec(46, 'Mermaid editor inserts a mermaid element', (afterMermaid.byType.mermaid || 0) > (beforeMermaid.byType.mermaid || 0), afterMermaid)
-  if (await page.getByText('Cancel', { exact: true }).count() && await page.locator('[class*=mermaid]').count()) {
-    await page.getByText('Cancel', { exact: true }).first().click().catch(() => {})
-    await sleep(150)
-  }
+  await closeOpenEditor(page)
 
   await clickTool(page, 'insert-media')
   await sleep(300)
   rec(47, 'Media picker opens from the toolbar', await page.getByText('Browse', { exact: false }).count() > 0 || await page.locator('input[type=file]').count() > 0)
   rec(48, 'Media picker exposes a file input', await page.locator('input[type=file]').count() > 0)
   const beforeImage = await counts(page)
-  const fileInput = page.locator('input[type=file]').last()
+  const fileInput = page.locator('[class*=media-picker] input[type=file], input[type=file]').last()
   if (await fileInput.count()) {
     await fileInput.setInputFiles(pngPath)
-    await sleep(1500)
-    const insertMedia = page.getByRole('button', { name: /Insert/i })
-    if (await insertMedia.count() && await insertMedia.last().isEnabled().catch(() => false)) {
-      await insertMedia.last().click()
-      await sleep(800)
+    const mediaBtn = await waitInsert(page, 'media', 20000).catch(() => null)
+    if (mediaBtn) {
+      await mediaBtn.click()
+      await page.locator('[data-element-type=image]').first().waitFor({ timeout: 15000 }).catch(() => {})
+      await sleep(200)
     }
   }
   const afterImage = await counts(page)
   rec(49, 'Choosing a PNG queues or inserts an image', (afterImage.byType.image || 0) > (beforeImage.byType.image || 0) || await page.locator('[class*=media-picker] img, [class*=card] img').count() > 0, afterImage)
-  if (await page.getByText('Cancel', { exact: true }).count()) {
-    await page.getByText('Cancel', { exact: true }).first().click().catch(() => pressEscape(page))
-    await sleep(150)
-  }
+  await closeOpenEditor(page)
 
   const finalCounts = await counts(page)
   rec(50, 'Slide still has toolbar-created elements after the session',
