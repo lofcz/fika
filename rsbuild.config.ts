@@ -21,7 +21,7 @@ export default defineConfig(({ command }) => {
     source: {
       tsconfigPath: sharedTsconfigPath,
       entry: {
-        index: isDev
+        index: isDev && process.env.CI !== 'true' && process.env.CI !== '1'
           ? ['./src/react-scan.dev.ts', './src/main.tsx']
           : './src/main.tsx',
       },

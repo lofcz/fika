@@ -79,7 +79,7 @@ describe.sequential('unit', () => {
     it(script, async () => {
       await runScript(script)
       expect(true).toBe(true)
-    }, 30_000)
+    }, script.includes('check-css-modules') ? 180_000 : 30_000)
   }
 })
 

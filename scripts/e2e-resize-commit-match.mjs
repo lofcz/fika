@@ -292,7 +292,7 @@ try {
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(devUrl, { waitUntil: 'networkidle' })
-  await page.getByText('Add slide').waitFor({ timeout: 15000 })
+  await page.getByText('Add slide').waitFor({ timeout: 90000 })
   await stripScan(page)
   await waitForStoreHook(page)
 

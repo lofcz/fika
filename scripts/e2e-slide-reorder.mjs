@@ -140,7 +140,7 @@ async function liveTitleOf(page, thumbIndex) {
 
 async function run(page) {
   await page.goto(DEV_URL, { waitUntil: 'networkidle' })
-  await page.getByText('Add slide').waitFor({ timeout: 15000 })
+  await page.getByText('Add slide').waitFor({ timeout: 90000 })
   await stripScan(page)
   await addSlides(page, 4)
   await page.waitForFunction(() => document.querySelectorAll('[data-sortable-id]').length >= 5, null, { timeout: 8000 })

@@ -412,7 +412,7 @@ try {
   }
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(DEV_URL, { waitUntil: 'networkidle' })
-  await page.getByText('Add slide').waitFor({ timeout: 15000 })
+  await page.getByText('Add slide').waitFor({ timeout: 90000 })
   const results = await runPreviewSync(page)
   console.log(`preview-sync e2e passed (${results.length} cases)`)
   await page.close()

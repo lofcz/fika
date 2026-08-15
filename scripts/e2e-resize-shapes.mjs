@@ -152,7 +152,7 @@ async function loadElement(page, element) {
   const appeared = await page.waitForSelector(`#editable-element-${element.id}`, { state: 'attached', timeout: 4000 }).then(() => true).catch(() => false)
   if (!appeared) {
     await page.reload({ waitUntil: 'networkidle' })
-    await page.getByText('Add slide').waitFor({ timeout: 15000 })
+    await page.getByText('Add slide').waitFor({ timeout: 90000 })
     await stripScan(page)
     await waitForStoreHook(page)
     if (!await injectElement(page, element)) throw new Error('fika store hook missing after reload')
@@ -215,7 +215,7 @@ try {
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(devUrl, { waitUntil: 'networkidle' })
-  await page.getByText('Add slide').waitFor({ timeout: 15000 })
+  await page.getByText('Add slide').waitFor({ timeout: 90000 })
   await stripScan(page)
   await waitForStoreHook(page)
 

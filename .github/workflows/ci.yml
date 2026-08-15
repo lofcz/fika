@@ -40,5 +40,19 @@ jobs:
       - name: Typecheck
         run: bun --canary run type-check
 
+      - name: Start dev server
+        run: |
+          bun --canary run dev &
+          echo $! > /tmp/fika-dev.pid
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:5173/src/main.tsx | grep -q bootstrap; then
+              echo "dev server compiled"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "dev server did not compile"
+          exit 1
+
       - name: Tests
         run: bun --canary run test

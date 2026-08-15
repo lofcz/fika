@@ -133,7 +133,7 @@ async function dragHandle(page, kind, dx, dy) {
 
 async function run(page) {
   await page.goto(DEV_URL, { waitUntil: 'networkidle' })
-  await page.getByText('Add slide').waitFor({ timeout: 15000 })
+  await page.getByText('Add slide').waitFor({ timeout: 90000 })
   await stripScan(page)
   const t0 = Date.now()
   await importHouby(page)

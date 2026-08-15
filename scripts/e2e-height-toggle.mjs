@@ -177,7 +177,7 @@ try {
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(DEV_URL, { waitUntil: 'networkidle' })
-  await page.getByText('Add slide').waitFor({ timeout: 15000 })
+  await page.getByText('Add slide').waitFor({ timeout: 90000 })
   await stripScan(page)
 
   rec(1, 'Cover title box is on the canvas', await page.locator('[class*=viewport-wrapper] [data-live-box]').count() >= 1)

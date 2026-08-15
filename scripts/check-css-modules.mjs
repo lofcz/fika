@@ -1,8 +1,10 @@
 import { readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { ensureDevServer } from './lib/dev-server.mjs'
 
 const srcRoot = join(process.cwd(), 'src')
-const base = process.argv[2] || 'http://127.0.0.1:5174'
+const started = await ensureDevServer()
+const base = (process.argv[2] || started.url).replace(/\/$/, '')
 
 function walk(dir, acc = []) {
   for (const name of readdirSync(dir)) {
@@ -33,5 +35,6 @@ for (const abs of files) {
     console.log('ERR', rel, err.message)
   }
 }
-console.log(`checked ${files.length}, failed ${errors.length}`)
+console.log(`checked ${files.length}, failed ${errors.length} @ ${base}`)
+if (started.child) started.child.kill()
 process.exit(errors.length ? 1 : 0)
