@@ -44,14 +44,14 @@ jobs:
         run: |
           bun --canary run dev &
           echo $! > /tmp/fika-dev.pid
-          for i in $(seq 1 90); do
-            if curl -sf http://127.0.0.1:5173/src/main.tsx | grep -q bootstrap; then
-              echo "dev server compiled"
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:5173/ | grep -q fika-shell; then
+              echo "dev server ready"
               exit 0
             fi
-            sleep 2
+            sleep 0.25
           done
-          echo "dev server did not compile"
+          echo "dev server did not become ready"
           exit 1
 
       - name: Tests

@@ -6,23 +6,18 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '../..')
 export const DEV_PORTS = [5173, 5174, 5175, 5176]
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-async function probe(url) {
+/** True when Rsbuild is serving the app shell. */
+export async function isDevCompiled(base) {
+  const origin = base.replace(/\/$/, '')
   try {
-    const res = await fetch(url, { redirect: 'follow' })
+    const res = await fetch(`${origin}/`, { redirect: 'follow' })
     if (!res.ok) return false
     const text = await res.text()
-    return !text.includes('Internal server error')
+    return text.includes('fika-shell') && !text.includes('Internal server error')
   }
   catch {
     return false
   }
-}
-
-/** True when the HTML shell is up and the main module has compiled. */
-export async function isDevCompiled(base) {
-  const origin = base.replace(/\/$/, '')
-  if (!(await probe(`${origin}/`))) return false
-  return probe(`${origin}/src/main.tsx`)
 }
 
 export async function findDevServer(timeoutMs = 1500) {
