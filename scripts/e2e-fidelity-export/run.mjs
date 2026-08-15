@@ -1,6 +1,6 @@
 /**
  * Headless verification of the Fika export-fidelity upgrades against the real
- * @lofcz/pptxgenjs API. Replicates the exact option objects built in
+ * pptxgenjs-plus API. Replicates the exact option objects built in
  * src/hooks/useExport.ts and asserts the emitted PPTX XML contains native
  * gradients, theme colors, animations, font embedding, and image polish.
  *
@@ -18,7 +18,7 @@ import { writeFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import process from 'node:process'
-import pptxgen from '@lofcz/pptxgenjs'
+import pptxgen from 'pptxgenjs-plus'
 import tinycolor from 'tinycolor2'
 import { loadPptx, readPptxPart } from '../lib/pptx-inspect.mjs'
 

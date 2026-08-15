@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import JSZip from 'jszip'
-import pptxgen from '@lofcz/pptxgenjs'
+import pptxgen from 'pptxgenjs-plus'
 import { parse } from 'pptxtojson/dist/index.js'
 import { SB1_PPTX } from '../tests/fixtures/paths.mjs'
 
@@ -91,7 +91,7 @@ const freshParsed = await parse(toArrayBuffer(freshBuf), {
   videoMode: 'blob',
   audioMode: 'blob',
 })
-console.log(`current @lofcz/pptxgenjs ${fresh.version || '?'} overrides=${freshOverrides} parsedSlides=${freshParsed.slides.length}`)
+console.log(`current pptxgenjs-plus ${fresh.version || '?'} overrides=${freshOverrides} parsedSlides=${freshParsed.slides.length}`)
 assert(freshOverrides === 2, `current PptxGenJS must emit 2 slide Overrides, got ${freshOverrides}`)
 assert(freshParsed.slides.length === 2, `current PptxGenJS output must parse to 2 slides, got ${freshParsed.slides.length}`)
 

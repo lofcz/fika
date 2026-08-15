@@ -1,7 +1,7 @@
 
 import { createElement, useEffect, useState } from 'react'
 import { saveAs } from 'file-saver';
-import pptxgen from '@lofcz/pptxgenjs';
+import pptxgen from 'pptxgenjs-plus';
 import tinycolor from 'tinycolor2';
 import { toPng, toJpeg } from 'html-to-image';
 import { useSlidesStore } from '@/store';

@@ -88,7 +88,7 @@ async function parsePptx(path) {
 async function parseGeneratedEmbeddedFontDeck() {
   const fontPath = plex
   if (!existsSync(fontPath)) return null
-  const pptxgen = (await import('@lofcz/pptxgenjs')).default
+  const pptxgen = (await import('pptxgenjs-plus')).default
   const pptx = new pptxgen()
   const fontBuf = readFileSync(fontPath)
   await pptx.addFont({

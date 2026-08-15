@@ -7,7 +7,7 @@
  * PPTX embeds fonts as EOT-wrapped data and pptxgenjs handles TTF/OTF directly,
  * so the only required step is woff2 → TTF decompression.
  */
-import type pptxgen from '@lofcz/pptxgenjs';
+import type pptxgen from 'pptxgenjs-plus';
 import { isSystemFont } from '@/utils/font';
 type AddFontOptions = Parameters<pptxgen['addFont']>[0];
 
