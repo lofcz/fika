@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useSlidesStore } from '@/store'
-import { getCachedImageBitmap, loadImageBitmap, syncImageBitmapsToSlides } from '@/utils/imageBitmapCache'
+import {
+  getCachedImageBitmap,
+  getCachedPreviewImageBitmap,
+  loadImageBitmap,
+  loadPreviewImageBitmap,
+  syncImageBitmapsToSlides,
+} from '@/utils/imageBitmapCache'
+
+const cachedBitmap = (src: string) => (
+  getCachedImageBitmap(src) ?? getCachedPreviewImageBitmap(src) ?? null
+)
 
 export const useImageBitmap = (src: string): ImageBitmap | null => {
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(() => (
-    src ? getCachedImageBitmap(src) ?? null : null
+    src ? cachedBitmap(src) : null
   ))
 
   useEffect(() => {
@@ -12,16 +22,24 @@ export const useImageBitmap = (src: string): ImageBitmap | null => {
       setBitmap(null)
       return
     }
-    const hit = getCachedImageBitmap(src)
-    if (hit) {
-      setBitmap(hit)
+    const full = getCachedImageBitmap(src)
+    if (full) {
+      setBitmap(full)
       return
     }
-    setBitmap(null)
+    const thumb = getCachedPreviewImageBitmap(src)
+    if (thumb) setBitmap(thumb)
+    else setBitmap(null)
+
     let cancelled = false
-    loadImageBitmap(src).then(result => {
-      if (!cancelled) setBitmap(result)
-    })
+    const run = async () => {
+      const preview = thumb ?? await loadPreviewImageBitmap(src)
+      if (cancelled) return
+      if (preview && !getCachedImageBitmap(src)) setBitmap(preview)
+      const next = await loadImageBitmap(src)
+      if (!cancelled && next) setBitmap(next)
+    }
+    void run()
     return () => {
       cancelled = true
     }

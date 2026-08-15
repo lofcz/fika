@@ -1,49 +1,68 @@
 import type { PPTElement } from '@/types/slides'
 import { isUnfilledPlaceholder } from '@/utils/placeholderPaint'
-import { previewWorkingWidth } from '@/views/Editor/Thumbnails/paneSize'
+import { previewWorkingWidth, type PreviewWorkingQuality } from '@/views/Editor/Thumbnails/paneSize'
 import { paintImage } from './image'
-import { paintShape } from './shape'
+import { paintShape, paintSimpleShape } from './shape'
+import { isAxisAlignedRectPath, isSimpleShape } from '../simpleShape'
 import { paintLine } from './line'
 import { paintText } from './text'
 import { paintTable } from './table'
 import { paintChart } from './chart'
 import { paintMedia } from './media'
-import { latexToBoothHtml, mermaidToBoothHtml, rasterHtml } from './booth'
+import { paintLatex, paintMermaid } from './booth'
 import { paintCode } from './code'
+import type { RasterPaintContext } from './contrast'
+import { paintLqElement } from './lq'
+import { timePhase, timePhaseSync, type RasterPhase } from '../stats'
 
-export const paintElement = async (
+const phaseOf = (type: PPTElement['type']): RasterPhase => {
+  if (type === 'text') return 'text'
+  if (type === 'shape') return 'shape'
+  if (type === 'image') return 'image'
+  return 'other'
+}
+
+export const paintElement = (
   element: PPTElement,
   destWidth: number,
   slideWidth: number,
   pixelRatio = 1,
+  quality: PreviewWorkingQuality = 'full',
+  paintContext?: RasterPaintContext,
 ) => {
   if (element.type === 'text' && isUnfilledPlaceholder(element)) return null
-  const captureScale = previewWorkingWidth(destWidth, pixelRatio) / Math.max(1, slideWidth)
-  switch (element.type) {
-    case 'image':
-      return paintImage(element)
-    case 'shape':
-      return paintShape(element, captureScale)
-    case 'line':
-      return paintLine(element)
-    case 'text':
-      return paintText(element, captureScale)
-    case 'table':
-      return paintTable(element, captureScale)
-    case 'chart':
-      return paintChart(element, captureScale)
-    case 'video':
-    case 'audio':
-      return paintMedia(element)
-    case 'latex':
-      return rasterHtml(latexToBoothHtml(element), element.width, element.height, captureScale)
-    case 'mermaid':
-      return rasterHtml(mermaidToBoothHtml(element), element.width, element.height, captureScale)
-    case 'code':
-      return paintCode(element, captureScale)
-    default:
-      return null
+  if (quality === 'lq') return timePhaseSync(phaseOf(element.type), () => paintLqElement(element, paintContext))
+  if (element.type === 'shape' && isSimpleShape(element) && isAxisAlignedRectPath(element.path, element.viewBox)) {
+    return timePhaseSync('shape', () => paintSimpleShape(element))
   }
+  const captureScale = previewWorkingWidth(destWidth, pixelRatio, quality) / Math.max(1, slideWidth)
+  return timePhase(phaseOf(element.type), () => {
+    switch (element.type) {
+      case 'image':
+        return paintImage(element)
+      case 'shape':
+        return paintShape(element, captureScale, paintContext)
+      case 'line':
+        return paintLine(element)
+      case 'text':
+        return paintText(element, captureScale, paintContext)
+      case 'table':
+        return paintTable(element, captureScale)
+      case 'chart':
+        return paintChart(element, captureScale)
+      case 'video':
+      case 'audio':
+        return paintMedia(element)
+      case 'latex':
+        return paintLatex(element, captureScale)
+      case 'mermaid':
+        return paintMermaid(element)
+      case 'code':
+        return paintCode(element, captureScale)
+      default:
+        return null
+    }
+  })
 }
 
 export { paintBackground } from './background'

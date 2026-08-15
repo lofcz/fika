@@ -152,7 +152,8 @@ const Select = memo((vrProps: ISelectProps) => {
   useEffect(() => {
     if (popoverVisible) {
       Promise.resolve().then(() => {
-        searchInputRef.current?.focus()
+        const active = document.activeElement
+        if (!(active instanceof HTMLElement && active.isContentEditable)) searchInputRef.current?.focus()
         if (optionsRef.current) revealOptions(optionsRef.current)
       })
     }
@@ -191,8 +192,12 @@ const Select = memo((vrProps: ISelectProps) => {
     setPopoverVisible(false)
   }
 
+  const keepEditorFocus = (event: { preventDefault: () => void }) => {
+    event.preventDefault()
+  }
+
   const trigger = (
-    <div className={cx('select', disabled && 'disabled')} ref={selectRef} data-tooltip={dataTooltip}>
+    <div className={cx('select', disabled && 'disabled')} ref={selectRef} data-tooltip={dataTooltip} onMouseDown={keepEditorFocus}>
       <div className={cx('selector')} style={previewStyle(value, false)}>
         {previewFonts
           ? <span className={cx('option-label')}>{showLabel}</span>
@@ -245,6 +250,7 @@ const Select = memo((vrProps: ISelectProps) => {
                 key={option.value}
                 data-font={previewFonts ? String(option.value) : undefined}
                 style={previewStyle(option.value)}
+                onMouseDown={keepEditorFocus}
                 onClick={() => handleSelect(option)}
               >
                 {previewFonts

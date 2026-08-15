@@ -12,13 +12,17 @@ const layouts = readFileSync(join(root, 'src/embed/agentic/layouts.ts'), 'utf8')
 const styles = readFileSync(join(root, 'src/embed/agentic/styles.ts'), 'utf8')
 const composition = readFileSync(join(root, 'src/embed/agentic/composition.ts'), 'utf8')
 const qa = readFileSync(join(root, 'src/embed/agentic/qa.ts'), 'utf8')
+const e2eCommands = readFileSync(join(root, 'scripts/e2e-agentic-commands.mjs'), 'utf8')
 
 const expectedCommands = [
   'deck.get',
   'deck.set',
   'deck.patch',
   'deck.setTitle',
+  'deck.getTheme',
   'deck.setTheme',
+  'deck.applyTheme',
+  'deck.extractTheme',
   'deck.applyTemplate',
   'deck.applyStyle',
   'deck.planComposition',
@@ -48,6 +52,7 @@ const expectedCommands = [
   'slides.select',
   'slides.setBackground',
   'slides.applyBackground',
+  'slides.applyBackgroundToAll',
   'slides.getTransition',
   'slides.setTransition',
   'slides.getRemark',
@@ -105,6 +110,15 @@ const expectedCommands = [
   'lines.setStyle',
   'lines.setArrowheads',
   'lines.setDirection',
+  'shapes.presets',
+  'shapes.create',
+  'shapes.patch',
+  'shapes.update',
+  'shapes.setPath',
+  'shapes.setFormula',
+  'shapes.setFill',
+  'shapes.setOutline',
+  'shapes.setText',
   'latex.get',
   'latex.create',
   'latex.update',
@@ -170,10 +184,15 @@ const expectedCommands = [
   'videos.setPoster',
   'videos.setSize',
   'videos.setPosition',
+  'links.set',
+  'links.remove',
   'notes.create',
   'notes.update',
   'notes.delete',
   'notes.reply',
+  'notes.listReplies',
+  'notes.updateReply',
+  'notes.deleteReply',
   'sections.list',
   'sections.set',
   'sections.clear',
@@ -208,8 +227,10 @@ const expectedCommandDomains = [
   'latex',
   'layouts',
   'lines',
+  'links',
   'media',
   'notes',
+  'shapes',
   'richText',
   'search',
   'sections',
@@ -444,6 +465,14 @@ test('images carry optional sourceUrl → web link', () => {
   assertIncludes(source, 'mediaSourceUrl', 'setImageSource must read sourceUrl from media assets')
   assertIncludes(layouts, 'resolveImageSlot', 'Layouts must accept { src, sourceUrl } image slots')
   assertIncludes(layouts, 'sourceUrl: image.sourceUrl', 'imageText/imageFull must pass sourceUrl into imageElement')
+})
+
+test('browser e2e executes every registered command type', () => {
+  for (const command of expectedCommands) {
+    assertIncludes(e2eCommands, `agent('${command}'`, `e2e-agentic-commands.mjs never calls agent('${command}')`)
+  }
+  assertIncludes(e2eCommands, 'okSeen.add(type)', 'e2e must record successful command executions')
+  assertIncludes(e2eCommands, 'every registered command succeeded at least once', 'e2e must require a successful execute per command')
 })
 
 test('deck.setup can build the title slide in the same call', () => {

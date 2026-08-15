@@ -1,5 +1,6 @@
 import { describe, expect, it } from '@rstest/core'
 import { isEmptyPaintedDiff, planSlideRaster } from '../src/previewRaster/planSlideRaster'
+import { elementStackIds } from '../src/previewRaster/elementStack'
 import { liveGradientId, liveGradientTransform } from '../src/utils/liveElementPaint'
 
 const shapeA = {
@@ -73,6 +74,17 @@ describe('planSlideRaster', () => {
     expect(plan.diff.contentChanged).toEqual([])
   })
 
+  it('a resize is contentChanged and does not flip zOrderChanged', () => {
+    const resized = slide([{ ...shapeA, width: 140 }, shapeB, text])
+    const plan = planSlideRaster(prev, resized, { destCovers: true, scratchHasSlide: true })
+    expect(plan.kind).toBe('patch')
+    if (plan.kind !== 'patch') return
+    expect(plan.diff.contentChanged).toEqual(['a'])
+    expect(plan.diff.zOrderChanged).toBe(false)
+    expect(plan.diff.added).toEqual([])
+    expect(plan.diff.removed).toEqual([])
+  })
+
   it('treats an empty diff as skippable', () => {
     expect(isEmptyPaintedDiff({
       added: [],
@@ -82,6 +94,12 @@ describe('planSlideRaster', () => {
       zOrderChanged: false,
       backgroundChanged: false,
     })).toBe(true)
+  })
+})
+
+describe('elementStackIds', () => {
+  it('is the authored back-to-front order', () => {
+    expect(elementStackIds([{ id: 'beige' }, { id: 'title' }])).toEqual(['beige', 'title'])
   })
 })
 

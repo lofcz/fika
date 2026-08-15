@@ -349,6 +349,7 @@ export default (
 
     const handleMouseup = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
+      handleMousemove(e)
       isMouseDown = false
       stopGesture?.()
       stopGesture = null
@@ -478,6 +479,7 @@ export default (
 
     const handleMouseup = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
+      handleMousemove(e)
       isMouseDown = false
       stopGesture?.()
       stopGesture = null

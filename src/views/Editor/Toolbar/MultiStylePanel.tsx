@@ -4,7 +4,8 @@ const cx = bindStyles(styles)
 import { memo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useMainStore, useSlidesStore, selectActiveElementList } from '@/store'
-import type { LineStyleType, PPTElement, PPTElementOutline, TableCell } from '@/types/slides'
+import type { LineStyleType, PPTElement, PPTElementOutline } from '@/types/slides'
+import { applyTableCellStyles } from '@/utils/tableCellStyle'
 import emitter, { EmitterEvents } from '@/utils/emitter'
 import { useFonts, fontSizeToPx, parseFontSize } from '@/configs/font'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
@@ -45,16 +46,7 @@ const MultiStylePanel = memo(function MultiStylePanel() {
       if (el.type === 'text' || el.type === 'shape' || el.type === 'chart') {
         updateElement(el.id, { fill: value })
       }
-      if (el.type === 'table') {
-        const data: TableCell[][] = JSON.parse(JSON.stringify(el.data))
-        for (let i = 0; i < data.length; i++) {
-          for (let j = 0; j < data[i].length; j++) {
-            const style = data[i][j].style || {}
-            data[i][j].style = { ...style, backcolor: value }
-          }
-        }
-        updateElement(el.id, { data })
-      }
+      if (el.type === 'table') applyTableCellStyles({ backcolor: value }, { elementId: el.id, allCells: true })
       if (el.type === 'audio') updateElement(el.id, { color: value })
     }
     setFill(value)
@@ -82,16 +74,7 @@ const MultiStylePanel = memo(function MultiStylePanel() {
       if (el.type === 'text' || (el.type === 'shape' && el.text?.content)) {
         emitter.emit(EmitterEvents.RICH_TEXT_COMMAND, { target: el.id, action: { command, value } })
       }
-      if (el.type === 'table') {
-        const data: TableCell[][] = JSON.parse(JSON.stringify(el.data))
-        for (let i = 0; i < data.length; i++) {
-          for (let j = 0; j < data[i].length; j++) {
-            const style = data[i][j].style || {}
-            data[i][j].style = { ...style, [command]: value }
-          }
-        }
-        updateElement(el.id, { data })
-      }
+      if (el.type === 'table') applyTableCellStyles({ [command]: value }, { elementId: el.id, allCells: true })
       if (el.type === 'latex' && command === 'color') {
         updateElement(el.id, { color: value })
       }

@@ -6,6 +6,8 @@ import { nativePointerEvent, type ReactPointerEvent } from '@/utils/canvasPointe
 
 import { openContextmenu } from '@/utils/openContextmenu';
 import { useMainStore, useSlidesStore } from '@/store';
+import { drainCommitQueue } from '@/utils/commitQueue';
+import { rememberTableStyleTarget } from '@/utils/tableStyleTarget';
 import type { PPTTableElement, TableCell } from '@/types/slides';
 import type { ContextmenuItem } from '@/components/Contextmenu/types';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
@@ -42,9 +44,9 @@ const TableElement = memo((props: ITableElementProps) => {
 
   const editable = !!(isEditing && !elementInfo.lock);
   useEffect(() => {
-    if (handleElementId !== props.elementInfo.id && useMainStore.getState().editingElementId === props.elementInfo.id) {
-      useMainStore.getState().setEditingElementId('');
-    }
+    if (handleElementId === props.elementInfo.id) return
+    if (useMainStore.getState().editingElementId === props.elementInfo.id) drainCommitQueue()
+    if (useMainStore.getState().selectedTableCells.length) useMainStore.getState().setSelectedTableCells([])
   }, [handleElementId, props.elementInfo.id]);
   useEffect(() => {
     useMainStore.getState().setDisableHotkeysState(editable);
@@ -70,7 +72,7 @@ const TableElement = memo((props: ITableElementProps) => {
     return useMainStore.subscribe(state => {
       const next = state.isScaling;
       if (next && !wasScaling && state.editingElementId === elementIdRef.current) {
-        useMainStore.getState().setEditingElementId('');
+        drainCommitQueue()
       }
       if (wasScaling && !next && elementRef.current) {
         const table = elementRef.current.querySelector('table');
@@ -119,6 +121,7 @@ const TableElement = memo((props: ITableElementProps) => {
   }, [addHistorySnapshot]);
 
   const updateSelectedCells = useCallback((cells: string[]) => {
+    rememberTableStyleTarget(elementIdRef.current, cells);
     useMainStore.getState().setSelectedTableCells(cells);
   }, []);
 

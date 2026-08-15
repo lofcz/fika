@@ -2,16 +2,36 @@ import { bindStyles } from '@/utils/cssm'
 import styles from './SlideAnimationPanel.module.scss'
 const cx = bindStyles(styles)
 import { memo, useMemo } from 'react'
+import { DEFAULT_TURNING_MODE } from '@/configs/animation'
 import { useSlidesStore, selectCurrentSlide } from '@/store'
 import type { TurningMode } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
-import message from '@/utils/message'
 import FitText from '@/components/FitText'
 import { useI18nContext } from '@/i18n/useI18nContext'
 
+const resolveTurningMode = (mode: TurningMode | undefined) => mode ?? DEFAULT_TURNING_MODE
+
+const StackMark = () => (
+  <svg className={cx('apply-all-mark')} viewBox="0 0 16 14" aria-hidden="true">
+    <rect x="4.2" y="0.7" width="10.6" height="7.6" rx="1.3" />
+    <rect x="2.3" y="2.5" width="10.6" height="7.6" rx="1.3" />
+    <rect x="0.5" y="4.4" width="10.8" height="8.1" rx="1.4" className={cx('apply-all-mark-front')} />
+  </svg>
+)
+
+const CheckMark = () => (
+  <svg className={cx('apply-all-mark')} viewBox="0 0 16 14" aria-hidden="true">
+    <path d="M2.4 7.1 L6.2 10.8 L13.6 3.2" />
+  </svg>
+)
+
 const SlideAnimationPanel = memo(function SlideAnimationPanel() {
   const { LL } = useI18nContext()
-  const currentTurningMode = useSlidesStore(s => selectCurrentSlide(s)?.turningMode || 'slideY')
+  const currentTurningMode = useSlidesStore(s => resolveTurningMode(selectCurrentSlide(s)?.turningMode))
+  const appliedToAll = useSlidesStore(s => {
+    const mode = resolveTurningMode(selectCurrentSlide(s)?.turningMode)
+    return s.slides.every(slide => resolveTurningMode(slide.turningMode) === mode)
+  })
   const { addHistorySnapshot } = useHistorySnapshot()
 
   const animations = useMemo(() => {
@@ -32,6 +52,11 @@ const SlideAnimationPanel = memo(function SlideAnimationPanel() {
     ]
   }, [LL])
 
+  const currentLabel = animations.find(item => item.value === currentTurningMode)?.label ?? ''
+  const applyLabel = appliedToAll
+    ? LL.editor.slideAnimation.appliedToAll()
+    : LL.editor.slideAnimation.applyToAll()
+
   const updateTurningMode = (mode: TurningMode) => {
     if (mode === currentTurningMode) return
     useSlidesStore.getState().updateSlide({ turningMode: mode })
@@ -40,9 +65,15 @@ const SlideAnimationPanel = memo(function SlideAnimationPanel() {
 
   const applyAllSlide = () => {
     const { slides } = useSlidesStore.getState()
-    const turningMode = selectCurrentSlide(useSlidesStore.getState())?.turningMode
-    useSlidesStore.getState().setSlides(slides.map(slide => ({ ...slide, turningMode })))
-    message.success(LL.editor.slideAnimation.appliedToAll())
+    const turningMode = resolveTurningMode(selectCurrentSlide(useSlidesStore.getState())?.turningMode)
+    let changed = false
+    const next = slides.map(slide => {
+      if (resolveTurningMode(slide.turningMode) === turningMode) return slide
+      changed = true
+      return { ...slide, turningMode }
+    })
+    if (!changed) return
+    useSlidesStore.getState().setSlides(next, undefined, { clone: false })
     addHistorySnapshot()
   }
 
@@ -77,8 +108,19 @@ const SlideAnimationPanel = memo(function SlideAnimationPanel() {
           </button>
         ))}
       </div>
-      <button type="button" className={cx('apply-all')} onMouseDown={event => { event.preventDefault() }} onClick={() => applyAllSlide()}>
-        {LL.editor.slideAnimation.applyToAll()}
+      <button
+        type="button"
+        className={cx('apply-all', { done: appliedToAll })}
+        disabled={appliedToAll}
+        aria-label={`${applyLabel}: ${currentLabel}`}
+        onMouseDown={event => { event.preventDefault() }}
+        onClick={applyAllSlide}
+      >
+        {appliedToAll ? <CheckMark /> : <StackMark />}
+        <span className={cx('apply-all-copy')}>
+          <span className={cx('apply-all-title')}>{applyLabel}</span>
+          <span className={cx('apply-all-name')}>{currentLabel}</span>
+        </span>
       </button>
     </div>
   )

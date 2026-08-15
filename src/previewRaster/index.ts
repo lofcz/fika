@@ -9,7 +9,7 @@ export {
   invalidateBackground,
   moveElement,
   removeElement,
-  setZOrder,
+  applyElementStack,
   getStageEntry,
   mountPreview,
   snapshotStage,
@@ -24,8 +24,8 @@ export {
   paintDetachedSlide,
   releaseDetachedSlide,
 } from './subscribeSlides'
-export { enqueueRaster } from './scheduler'
-export { planSlideRaster, isEmptyPaintedDiff } from './planSlideRaster'
+export { enqueueRaster, MAX_CONCURRENT_RASTERS } from './scheduler'
+export { planSlideRaster, isEmptyPaintedDiff, qualityCovers } from './planSlideRaster'
 export { diffPaintedSlide } from './diffPaintedSlide'
 export { rasterStats, resetRasterStats, readRasterStats } from './stats'
 export type { RasterJob } from './scheduler'

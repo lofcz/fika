@@ -7,6 +7,8 @@ export const SNAP_MATCH = 0.51
 export const SLIDE_MARGIN = 40
 export const RELATED_GAP = 240
 export const MAX_CTRL_MEASURES = 8
+/** Same-row/column objects beat a slightly closer distant line. */
+export const RELATION_WEIGHT = 4
 
 export type SnapKind = 'edge' | 'center' | 'canvas' | 'spacing' | 'size' | 'grid' | 'measure'
 export type SnapMode = 'smart' | 'grid'
@@ -38,6 +40,8 @@ export interface SnapOptions {
   gridSize: number
   threshold?: number
   index?: SnapIndex
+  /** When set, append Ctrl distance badges for the already-queried k-set. */
+  ctrlMeasures?: boolean
 }
 
 /** Search pad for the per-move Flatbush query: snap threshold or related-object reach. */
@@ -277,7 +281,7 @@ const makeGridGuide = (type: SnapGuide['type'], value: number, box: SnapBox): Sn
 }
 
 const relationScore = (candidate: SnapCandidate) => (
-  Math.abs(candidate.delta) + (candidate.relation ?? 2) * 1.25
+  Math.abs(candidate.delta) + (candidate.relation ?? 2) * RELATION_WEIGHT
 )
 
 const pickBest = (candidates: SnapCandidate[], threshold: number): SnapCandidate | null => {
@@ -736,6 +740,12 @@ export const snapMovingBox = (moving: SnapBox, others: SnapBox[], options: SnapO
   const { mode, canvas, gridSize } = options
   const { nearby, index } = neighborsForMove(moving, others, options.index, threshold)
 
+  const withCtrlMeasures = (guides: SnapGuide[], snapped: SnapBox) => {
+    if (!options.ctrlMeasures) return guides
+    const measures = collectCtrlMeasures(snapped, nearby, canvas, guides)
+    return measures.length ? [...guides, ...measures] : guides
+  }
+
   if (mode === 'grid') {
     const size = gridSize > 0 ? gridSize : FINE_GRID_SIZE
     const offsetX = snapToGrid(moving.minX, size) - moving.minX
@@ -744,11 +754,11 @@ export const snapMovingBox = (moving: SnapBox, others: SnapBox[], options: SnapO
     return {
       offsetX,
       offsetY,
-      guides: mergeGuides([
+      guides: withCtrlMeasures(mergeGuides([
         ...collectAlignmentGuides(snapped, nearby, canvas, index),
         ...(offsetX ? [makeGridGuide('vertical', snapped.minX, snapped)] : []),
         ...(offsetY ? [makeGridGuide('horizontal', snapped.minY, snapped)] : []),
-      ]),
+      ]), snapped),
     }
   }
 
@@ -767,7 +777,7 @@ export const snapMovingBox = (moving: SnapBox, others: SnapBox[], options: SnapO
     ...(xWin && (xWin.kind === 'spacing' || xWin.kind === 'size' || xWin.kind === 'grid') ? xWin.guides : []),
     ...(yWin && (yWin.kind === 'spacing' || yWin.kind === 'size' || yWin.kind === 'grid') ? yWin.guides : []),
   ])
-  return { offsetX, offsetY, guides }
+  return { offsetX, offsetY, guides: withCtrlMeasures(guides, snapped) }
 }
 
 export interface ResizeSnapOptions extends SnapOptions {
@@ -944,8 +954,19 @@ const overlapCenter = (a0: number, a1: number, b0: number, b1: number) => {
   const start = Math.max(a0, b0)
   const end = Math.min(a1, b1)
   if (end > start) return (start + end) / 2
-  return (a0 + a1 + b0 + b1) / 4
+  return (a0 + a1) / 2
 }
+
+/**
+ * Cross-axis for a distance badge: stay on the moving box.
+ * Shared row/column uses the overlap; otherwise project onto the moving center.
+ */
+export const projectMeasureCross = (
+  moving0: number,
+  moving1: number,
+  other0: number,
+  other1: number,
+) => overlapCenter(moving0, moving1, other0, other1)
 
 const measureKey = (guide: SnapGuide) => {
   const start = guide.type === 'vertical' ? guide.axis.y : guide.axis.x
@@ -1032,12 +1053,16 @@ const emitGapChain = (
   cross: number,
   measures: SnapGuide[],
   seen: Set<string>,
+  moving: SnapBox,
 ) => {
+  const pinned = type === 'vertical'
+    ? (cross >= moving.minX - SNAP_MATCH && cross <= moving.maxX + SNAP_MATCH ? cross : boxCenterX(moving))
+    : (cross >= moving.minY - SNAP_MATCH && cross <= moving.maxY + SNAP_MATCH ? cross : boxCenterY(moving))
   const sorted = [...boxes].sort((a, b) => (type === 'vertical' ? a.minY - b.minY : a.minX - b.minX))
   for (let i = 0; i < sorted.length - 1; i++) {
     const measure = type === 'vertical'
-      ? measureVerticalGap(sorted[i], sorted[i + 1], cross)
-      : measureHorizontalGap(sorted[i], sorted[i + 1], cross)
+      ? measureVerticalGap(sorted[i], sorted[i + 1], pinned)
+      : measureHorizontalGap(sorted[i], sorted[i + 1], pinned)
     if (measure && measure.length <= RELATED_GAP) pushUniqueMeasure(measures, measure, seen)
   }
 }
@@ -1070,20 +1095,30 @@ export const collectCtrlMeasures = (
   for (const guide of alignGuides) {
     if (guide.type === 'vertical') {
       const x = guide.axis.x
-      emitGapChain([moving, ...others.filter(other => onVerticalLine(other, x))], 'vertical', x, measures, seen)
+      emitGapChain([moving, ...others.filter(other => onVerticalLine(other, x))], 'vertical', x, measures, seen, moving)
     }
     else {
       const y = guide.axis.y
-      emitGapChain([moving, ...others.filter(other => onHorizontalLine(other, y))], 'horizontal', y, measures, seen)
+      emitGapChain([moving, ...others.filter(other => onHorizontalLine(other, y))], 'horizontal', y, measures, seen, moving)
     }
   }
 
   const counterpart = primaryCounterpart(moving, others)
   if (counterpart) {
-    const xMeasure = measureHorizontalGap(moving, counterpart, overlapCenter(moving.minY, moving.maxY, counterpart.minY, counterpart.maxY))
-    const yMeasure = measureVerticalGap(moving, counterpart, overlapCenter(moving.minX, moving.maxX, counterpart.minX, counterpart.maxX))
-    if (xMeasure && xMeasure.length <= RELATED_GAP) pushUniqueMeasure(measures, xMeasure, seen)
-    if (yMeasure && yMeasure.length <= RELATED_GAP) pushUniqueMeasure(measures, yMeasure, seen)
+    const xRel = crossRelation(moving, counterpart, 'x')
+    const yRel = crossRelation(moving, counterpart, 'y')
+    const xMeasure = measureHorizontalGap(moving, counterpart, projectMeasureCross(moving.minY, moving.maxY, counterpart.minY, counterpart.maxY))
+    const yMeasure = measureVerticalGap(moving, counterpart, projectMeasureCross(moving.minX, moving.maxX, counterpart.minX, counterpart.maxX))
+    const xOk = xMeasure && xMeasure.length <= RELATED_GAP
+    const yOk = yMeasure && yMeasure.length <= RELATED_GAP
+    if (xOk && yOk && xRel !== yRel) {
+      if (xRel < yRel) pushUniqueMeasure(measures, xMeasure, seen)
+      else pushUniqueMeasure(measures, yMeasure, seen)
+    }
+    else {
+      if (xOk) pushUniqueMeasure(measures, xMeasure, seen)
+      if (yOk) pushUniqueMeasure(measures, yMeasure, seen)
+    }
   }
 
   const left = nearestInDirection(moving, others, 'left')
@@ -1091,19 +1126,19 @@ export const collectCtrlMeasures = (
   const up = nearestInDirection(moving, others, 'up')
   const down = nearestInDirection(moving, others, 'down')
   if (left) {
-    const measure = measureHorizontalGap(moving, left, overlapCenter(moving.minY, moving.maxY, left.minY, left.maxY))
+    const measure = measureHorizontalGap(moving, left, projectMeasureCross(moving.minY, moving.maxY, left.minY, left.maxY))
     if (measure && measure.length <= RELATED_GAP) pushUniqueMeasure(measures, measure, seen)
   }
   if (right) {
-    const measure = measureHorizontalGap(moving, right, overlapCenter(moving.minY, moving.maxY, right.minY, right.maxY))
+    const measure = measureHorizontalGap(moving, right, projectMeasureCross(moving.minY, moving.maxY, right.minY, right.maxY))
     if (measure && measure.length <= RELATED_GAP) pushUniqueMeasure(measures, measure, seen)
   }
   if (up) {
-    const measure = measureVerticalGap(moving, up, overlapCenter(moving.minX, moving.maxX, up.minX, up.maxX))
+    const measure = measureVerticalGap(moving, up, projectMeasureCross(moving.minX, moving.maxX, up.minX, up.maxX))
     if (measure && measure.length <= RELATED_GAP) pushUniqueMeasure(measures, measure, seen)
   }
   if (down) {
-    const measure = measureVerticalGap(moving, down, overlapCenter(moving.minX, moving.maxX, down.minX, down.maxX))
+    const measure = measureVerticalGap(moving, down, projectMeasureCross(moving.minX, moving.maxX, down.minX, down.maxX))
     if (measure && measure.length <= RELATED_GAP) pushUniqueMeasure(measures, measure, seen)
   }
 
@@ -1132,7 +1167,28 @@ export const collectCtrlMeasures = (
     pushUniqueMeasure(measures, makeMeasureGuide('vertical', moving.maxY, canvas.height, midX, canvas.height - moving.maxY), seen)
   }
 
-  return measures
-    .sort((a, b) => a.length - b.length)
+  const attached = measures.filter(guide => {
+    if (guide.type === 'vertical') {
+      return guide.axis.x >= moving.minX - SNAP_MATCH && guide.axis.x <= moving.maxX + SNAP_MATCH
+    }
+    return guide.axis.y >= moving.minY - SNAP_MATCH && guide.axis.y <= moving.maxY + SNAP_MATCH
+  })
+  const alignedLengths = new Set<number>()
+  for (const other of others) {
+    if (overlaps1D(moving.minX, moving.maxX, other.minX, other.maxX)) {
+      const gap = gap1D(moving.minY, moving.maxY, other.minY, other.maxY)
+      if (gap) alignedLengths.add(Math.round(gap.distance * 10))
+    }
+    if (overlaps1D(moving.minY, moving.maxY, other.minY, other.maxY)) {
+      const gap = gap1D(moving.minX, moving.maxX, other.minX, other.maxX)
+      if (gap) alignedLengths.add(Math.round(gap.distance * 10))
+    }
+  }
+  return attached
+    .sort((a, b) => {
+      const aRank = (alignedLengths.has(Math.round(a.length * 10)) ? 0 : 80) + a.length
+      const bRank = (alignedLengths.has(Math.round(b.length * 10)) ? 0 : 80) + b.length
+      return aRank - bRank
+    })
     .slice(0, MAX_CTRL_MEASURES)
 }

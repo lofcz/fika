@@ -12,7 +12,7 @@ import useElementShadow from '@/views/components/element/hooks/useElementShadow'
 import useElementFlip from '@/views/components/element/hooks/useElementFlip';
 import useElementFill from '@/views/components/element/hooks/useElementFill';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
-import { resolveElementDefaultFontColor } from '@/utils/textContrast';
+import { resolveElementDefaultFontColor, resolveLiveTextPaint } from '@/utils/textContrast';
 import { serializeRichTextHtml } from '@/utils/prosemirror';
 import GradientDefs from './GradientDefs';
 import PatternDefs from './PatternDefs';
@@ -89,7 +89,22 @@ const ShapeElement = memo((props: IShapeElementProps) => {
   useEffect(() => {
     if (handleElementId !== elementInfo.id) stopEdit();
   }, [handleElementId, elementInfo.id, stopEdit]);
-  const text: ShapeText = elementInfo.text || defaultShapeText(elementInfo, theme);
+  const slide = selectCurrentSlide(useSlidesStore.getState());
+  const painted = resolveLiveTextPaint(
+    (elementInfo.text?.defaultColor || theme.fontColor),
+    (elementInfo.text?.content || ''),
+    {
+      element: elementInfo,
+      elements: slide?.elements,
+      fill: elementInfo.fill,
+      background: slide?.background,
+      fallbackSurface: theme.backgroundColor,
+      themeFontColor: theme.fontColor,
+    },
+  );
+  const text: ShapeText = elementInfo.text
+    ? { ...elementInfo.text, defaultColor: painted.ink }
+    : defaultShapeText(elementInfo, theme);
   const liveContentRef = useRef(text.content);
   const prevContentRef = useRef(text.content);
   if (!editable && text.content !== prevContentRef.current) {
@@ -98,7 +113,7 @@ const ShapeElement = memo((props: IShapeElementProps) => {
   prevContentRef.current = text.content;
   const editorValueRef = useRef(text.content);
   if (!editable) editorValueRef.current = liveContentRef.current || text.content;
-  const staticContent = serializeRichTextHtml(text.content);
+  const staticContent = serializeRichTextHtml(painted.html);
   const inset = text.inset || [10, 10, 10, 10];
   const lockedText = shapeTextLocksSize(text);
   const textHostRef = useAutoShapeTextHeight(!lockedText, elementInfo.id, inset);

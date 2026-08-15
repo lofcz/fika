@@ -9,6 +9,21 @@ export { editorHtmlLooksEmpty, shouldWriteEditorHtml } from './commitPolicy'
 
 export const richTextHtmlLooksEmpty = editorHtmlLooksEmpty
 
+export const storeHtmlForElement = (elementId: string): string => {
+  const found = findElementInPresentation(elementId)
+  if (!found) return ''
+  if (found.el.type === 'text') return found.el.content || ''
+  if (found.el.type === 'shape') return found.el.text?.content || ''
+  return ''
+}
+
+/** Activity remounts must not rebuild an empty view over store-owned text. */
+export const resolveEditorMountHtml = (elementId: string, value: string): string => {
+  if (!editorHtmlLooksEmpty(value)) return value
+  const storeHtml = storeHtmlForElement(elementId)
+  return editorHtmlLooksEmpty(storeHtml) ? value : storeHtml
+}
+
 const findElementInPresentation = (elementId: string): { slideId: string; el: PPTElement } | null => {
   for (const slide of useSlidesStore.getState().slides) {
     const el = slide.elements.find(item => item.id === elementId)

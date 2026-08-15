@@ -84,7 +84,6 @@ export const areTableCellViewEqual = (
   const b = next.cell
   if (a.id !== b.id || a.rowspan !== b.rowspan || a.colspan !== b.colspan) return false
   if (a.style !== b.style && !styleEqual(a.style, b.style)) return false
-  if (next.isActive) return true
   return a.text === b.text
 }
 

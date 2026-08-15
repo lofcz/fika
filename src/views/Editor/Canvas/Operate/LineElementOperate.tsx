@@ -78,6 +78,7 @@ const LineElementOperate = memo((props: ILineElementOperateProps) => {
             <ResizeHandler
               className={cx('operate-resize-handler')}
               key={point.handler}
+              data-line-handle={point.handler}
               style={point.style}
               onMouseDown={e => {
                 const { dragLineElement, elementInfo: el } = propsRef.current

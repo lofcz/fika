@@ -264,6 +264,9 @@ interface SlideAnimation {
   value: TurningMode;
 }
 
+/** Default slide-to-slide transition when a slide has no turningMode (PowerPoint-style: none). */
+export const DEFAULT_TURNING_MODE: TurningMode = 'no'
+
 /** Locale-free slide transition values. Resolve labels via getSlideAnimations(). */
 export const SLIDE_ANIMATIONS: {
   value: TurningMode;

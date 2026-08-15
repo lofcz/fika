@@ -1,5 +1,5 @@
 import { getLL } from '@/i18n/getLL';
-import { isKnownTemplateId, listCustomTemplateIds, loadConfiguredTemplate, normalizeTemplatePayload, type TemplatePayload } from '@/configs/templates';
+import { isKnownTemplateId, listCustomTemplateIds, loadConfiguredTemplate, normalizeTemplatePayload, setCustomTemplateLoaders, type TemplatePayload, type TemplatePayloadLoader } from '@/configs/templates';
 import { useSlidesStore } from '@/store/slides';
 import type { PPTElement, Slide, SlideTheme, SlideType } from '@/types/slides';
 
@@ -30,6 +30,11 @@ export interface FikaTemplateSlidesCatalogResult {
 }
 
 const templatePayloadCache = new Map<string, Promise<TemplatePayload>>();
+
+export function registerTemplateLoaders(loaders?: Record<string, TemplatePayloadLoader>) {
+  setCustomTemplateLoaders(loaders);
+  templatePayloadCache.clear();
+}
 
 function stripHtml(html: string): string {
   return html.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
@@ -64,7 +69,7 @@ function slugForType(type: SlideType, indexWithinType: number): string {
 }
 
 export function listTemplateCatalog(): FikaTemplateSummary[] {
-  const storeTemplates = useSlidesStore.getState().templates;
+  const storeTemplates = useSlidesStore.getState().templates.filter(item => isKnownTemplateId(item.id));
   const seen = new Set(storeTemplates.map(item => item.id));
   const fromStore = storeTemplates.map(item => ({
     id: item.id,
@@ -154,8 +159,7 @@ export function resolveTemplateSlide(payload: TemplatePayload, slug: string): {
 }
 
 export function assertKnownTemplateId(templateId: string): void {
-  const inStore = useSlidesStore.getState().templates.some(item => item.id === templateId);
-  if (!inStore && !isKnownTemplateId(templateId)) {
+  if (!isKnownTemplateId(templateId)) {
     throw new Error(`Unknown template "${templateId}". Hosts register templates via mount options (templates + templateLoaders).`);
   }
 }

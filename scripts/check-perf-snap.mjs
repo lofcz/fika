@@ -76,12 +76,18 @@ assert(
   /\bsetElementList\b/.test(handleMouseup) || /\bcommitLiveList\b/.test(handleMouseup),
   'setElementList is allowed only on pointerup/commit',
 )
+assert(/\bctrlMeasures\b/.test(handleMousemove), 'ctrl measures ride the existing snap query, not a second index build')
+assert(!/buildSnapIndex\s*\(/.test(handleMousemove), 'mousemove must not rebuild the snap index')
 assert(/\bsetLiveElementOffset\b/.test(handleMousemove), 'mousemove applies a live DOM write instead of React state')
 assert(
   /setLiveElementOffset\(\s*liveOrigins,\s*targetLeft - elOriginLeft,\s*targetTop - elOriginTop,\s*canvasScaleRef\.current/.test(handleMousemove),
   'live offset is origin + slide delta; canvasScale is only applied to the operate layer',
 )
 assert(/\bsettleLiveElementOffset\b/.test(handleMouseup), 'pointerup settles geometry before setElementList')
+
+const canvas = read('src/views/Editor/Canvas/index.tsx')
+assert(/if\s*\(\s*gesturingState\s*\)\s*return alignmentLines/.test(canvas), 'idle ctrl measures do not recompute from stale store boxes during a gesture')
+assert(/buildSnapIndex\(others\)/.test(canvas), 'idle ctrl still uses the spatial index')
 
 if (failures.length) {
   console.error('perf snap checks failed:\n' + failures.map(f => ` - ${f}`).join('\n'))

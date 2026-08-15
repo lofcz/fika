@@ -11,6 +11,7 @@
  * callers wrap usage so a non-DOM context falls back gracefully.
  */
 import { layout as pretextLayout, prepare as pretextPrepare } from '@chenglou/pretext';
+import { cssLengthParts, cssLengthToPx } from './cssLength';
 
 /** ProseMirror's default text size (assets/styles/prosemirror.scss). */
 export const DEFAULT_TEXT_FONT_SIZE = 16;
@@ -404,17 +405,8 @@ export function textFitScaleForHtml(
     options.blockSpace ?? 0,
   )
 }
-const FONT_SIZE_RE = /(\d+(?:\.\d+)?)\s*(px|pt|em)?/i;
 function parseFontSizePx(value: string | null | undefined): number {
-  if (!value) return 0;
-  const match = FONT_SIZE_RE.exec(value);
-  if (!match) return 0;
-  const n = parseFloat(match[1]);
-  if (!Number.isFinite(n) || n <= 0) return 0;
-  const unit = (match[2] || 'px').toLowerCase();
-  if (unit === 'pt') return n * (96 / 72);
-  if (unit === 'em') return n * DEFAULT_TEXT_FONT_SIZE;
-  return n;
+  return cssLengthToPx(value, DEFAULT_TEXT_FONT_SIZE) ?? 0;
 }
 
 /** Largest inline px font size declared on `block` or any descendant. */
@@ -445,17 +437,7 @@ function cssLength(value: string | undefined | null): {
   px?: number;
   em?: number;
 } {
-  if (!value) return {};
-  const trimmed = value.trim();
-  const px = /^(-?[\d.]+)px$/i.exec(trimmed);
-  if (px) return {
-    px: parseFloat(px[1])
-  };
-  const em = /^(-?[\d.]+)em$/i.exec(trimmed);
-  if (em) return {
-    em: parseFloat(em[1])
-  };
-  return {};
+  return cssLengthParts(value, DEFAULT_TEXT_FONT_SIZE);
 }
 function listIndentFrom(el: Element): Pick<TextFitBlock, 'listIndentPx' | 'listIndentEm'> {
   if (el.tagName !== 'LI') return {};

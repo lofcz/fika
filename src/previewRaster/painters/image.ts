@@ -1,6 +1,6 @@
 import Konva from 'konva'
 import type { PPTImageElement } from '@/types/slides'
-import { loadImageBitmap } from '@/utils/imageBitmapCache'
+import { loadPreviewImageBitmap } from '@/utils/imageBitmapCache'
 import {
   drawImageClip,
   imageClipKind,
@@ -90,7 +90,7 @@ export const paintImage = async (element: PPTImageElement) => {
     element.shadow,
     imageOpacity(element.filters),
   )
-  const bitmap = await loadImageBitmap(element.src)
+  const bitmap = await loadPreviewImageBitmap(element.src)
   const kind = imageClipKind(element)
   const radius = imageCornerRadius(element)
   const needsClip = kind !== 'rect' || radius > 0

@@ -27,24 +27,37 @@ export function selectPaintedSlide<T extends { slides: Slide[] }>(state: T, slid
   return state.slides.find(slide => slide.id === slideId)
 }
 
+const backgroundMediaKey = (slide: Slide) => (
+  slide.background?.type === 'image' ? slide.background.image?.src || '' : ''
+)
+
+const elementAuthoredKey = (el: Slide['elements'][number]) => {
+  if (el.type === 'text') return el.content || ''
+  if (el.type === 'shape') return `${el.text?.content || ''}\x1f${el.pattern || ''}`
+  if (el.type === 'chart') return `${el.chartType}:${el.themeColors?.join(',')}:${el.options?.stack ? 1 : 0}:${JSON.stringify(el.data)}`
+  if (el.type === 'image') return el.src || ''
+  if (el.type === 'video' || el.type === 'audio') return el.poster || ''
+  return ''
+}
+
+const elementPaintKey = (el: Slide['elements'][number]) => {
+  const box = `${el.width}x${'height' in el ? el.height : ''}`
+  if (el.type === 'text') return `${el.content || ''}\x1f${el.fixedHeight ? 1 : 0}\x1f${box}`
+  if (el.type === 'shape') return `${el.text?.content || ''}\x1f${el.pattern || ''}\x1f${el.text?.fixedHeight === false ? 0 : 1}\x1f${box}`
+  if (el.type === 'chart') return `${el.chartType}\x1f${el.themeColors?.join(',')}\x1f${el.options?.stack ? 1 : 0}\x1f${JSON.stringify(el.data)}\x1f${box}`
+  if (el.type === 'image') return `${el.src || ''}\x1f${box}`
+  if (el.type === 'video' || el.type === 'audio') return `${el.poster || ''}\x1f${box}`
+  return box
+}
+
 export const paintedSlideAuthoredKey = (slide: Slide | undefined) => {
   if (!slide) return ''
-  return slide.elements.map(el => {
-    if (el.type === 'text') return el.content || ''
-    if (el.type === 'shape') return el.text?.content || ''
-    if (el.type === 'chart') return `${el.chartType}:${el.themeColors?.join(',')}:${el.options?.stack ? 1 : 0}:${JSON.stringify(el.data)}`
-    return ''
-  }).join('\0')
+  return `${backgroundMediaKey(slide)}\0${slide.elements.map(elementAuthoredKey).join('\0')}`
 }
 
 export const paintedSlidePaintKey = (slide: Slide | undefined) => {
   if (!slide) return ''
-  return slide.elements.map(el => {
-    if (el.type === 'text') return `${el.content || ''}\x1f${el.fixedHeight ? 1 : 0}\x1f${el.width}x${el.height}`
-    if (el.type === 'shape') return `${el.text?.content || ''}\x1f${el.text?.fixedHeight === false ? 0 : 1}\x1f${el.width}x${el.height}`
-    if (el.type === 'chart') return `${el.chartType}\x1f${el.themeColors?.join(',')}\x1f${el.options?.stack ? 1 : 0}\x1f${JSON.stringify(el.data)}\x1f${el.width}x${el.height}`
-    return `${el.width}x${'height' in el ? el.height : ''}`
-  }).join('\0')
+  return `${backgroundMediaKey(slide)}\0${slide.elements.map(elementPaintKey).join('\0')}`
 }
 
 export const selectPaintedSlideAuthoredKey = <T extends { slides: Slide[] }>(

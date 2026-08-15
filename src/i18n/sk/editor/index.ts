@@ -593,7 +593,7 @@ const sk_editor: NamespaceEditorTranslation = {
   },
   slideAnimation: {
     applyToAll: 'Použiť na všetky snímky',
-    appliedToAll: 'Použité na všetky snímky',
+    appliedToAll: 'Na všetkých snímkach',
   },
   slideDesign: {
     themeColorsSetting: {

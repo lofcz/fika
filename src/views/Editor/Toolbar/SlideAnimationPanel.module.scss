@@ -183,22 +183,83 @@ $motion: 0.62s cubic-bezier(0.22, 1, 0.36, 1);
 
 .apply-all {
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   min-width: 0;
-  height: 34px;
+  min-height: 46px;
   margin-top: 12px;
+  padding: 8px 12px;
   border: 0;
-  border-radius: 8px;
-  background: $surface;
-  color: $ink;
+  border-radius: 10px;
+  background: $ink;
+  color: #fff;
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  text-align: left;
   cursor: pointer;
 
-  &:hover {
-    background: $surfaceHover;
+  &:hover:not(:disabled) {
+    background: #27272a;
   }
+
+  &:disabled,
+  &.done {
+    background: #fff;
+    color: $ink;
+    box-shadow: inset 0 0 0 1.5px $ink;
+    cursor: default;
+  }
+}
+.apply-all-mark {
+  flex: 0 0 auto;
+  display: block;
+  width: 16px;
+  height: 14px;
+  overflow: visible;
+
+  rect {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.15;
+  }
+  path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+.apply-all-mark-front {
+  fill: currentColor;
+  stroke: none;
+}
+.apply-all-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.apply-all-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.apply-all-name {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  opacity: 0.58;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.apply-all.done .apply-all-name {
+  color: $inkMuted;
+  opacity: 1;
 }
 
 @keyframes trans-fade {

@@ -19,6 +19,7 @@ coverage
 /public/_e2e-houby.pptx
 /public/_e2e-text-fit.pptx
 /public/_e2e-sb1.pptx
+/public/_bench-sciobot.pptx
 
 /cypress/videos/
 /cypress/screenshots/
@@ -32,3 +33,4 @@ coverage
 *.njsproj
 *.sln
 *.sw?
+tsconfig.app.tsbuildinfo

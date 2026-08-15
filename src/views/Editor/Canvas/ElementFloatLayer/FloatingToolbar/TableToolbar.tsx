@@ -5,9 +5,10 @@ const cx = bindStyles(styles)
 import { useCallback, memo } from 'react'
 
 import { useMainStore, useSlidesStore } from '@/store'
-import type { PPTTableElement, TableCell, TableCellStyle } from '@/types/slides'
+import type { PPTTableElement } from '@/types/slides'
+import { applyTableCellStyles } from '@/utils/tableCellStyle'
+import { tableStyleTarget } from '@/utils/tableStyleTarget'
 import emitter, { EmitterEvents, type TableCommand } from '@/utils/emitter'
-import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import BorderPanel from './BorderPanel'
 import Popover from '@/components/Popover'
 import PopoverMenuItem from '@/components/PopoverMenuItem'
@@ -27,17 +28,11 @@ const TableToolbar = memo((props: ITableToolbarProps) => {
   const cellBackcolor = useSlidesStore(s => {
     const el = findSlideElement(s, handleElementId)
     if (!el || el.type !== 'table') return ''
-    let rowIndex = 0
-    let colIndex = 0
-    if (selectedTableCells.length) {
-      const selected = selectedTableCells[0]
-      rowIndex = +selected.split('_')[0]
-      colIndex = +selected.split('_')[1]
-    }
+    const selected = tableStyleTarget(handleElementId, selectedTableCells)[0]
+    const rowIndex = selected ? +selected.split('_')[0] : 0
+    const colIndex = selected ? +selected.split('_')[1] : 0
     return el.data[rowIndex]?.[colIndex]?.style?.backcolor || ''
   })
-
-  const { addHistorySnapshot } = useHistorySnapshot()
 
   const emitTableCommand = useCallback((command: TableCommand['command'], position?: TableCommand['position']) => {
     emitter.emit(EmitterEvents.TABLE_COMMAND, {
@@ -48,26 +43,8 @@ const TableToolbar = memo((props: ITableToolbarProps) => {
   }, [props.elementInfo.id])
 
   const updateCellBackcolor = useCallback((backcolor: string) => {
-    const main = useMainStore.getState()
-    const slides = useSlidesStore.getState()
-    const el = findSlideElement(slides, main.handleElementId)
-    if (!el || el.type !== 'table') return
-    const data: TableCell[][] = JSON.parse(JSON.stringify(el.data))
-    const selected = main.selectedTableCells
-    for (let i = 0; i < data.length; i++) {
-      for (let j = 0; j < data[i].length; j++) {
-        if (!selected.length || selected.includes(`${i}_${j}`)) {
-          const style: TableCellStyle = data[i][j].style || {}
-          data[i][j].style = { ...style, backcolor }
-        }
-      }
-    }
-    slides.updateElement({
-      id: main.handleElementId,
-      props: { data },
-    })
-    addHistorySnapshot()
-  }, [addHistorySnapshot])
+    applyTableCellStyles({ backcolor })
+  }, [])
 
   return (
     <div className={cx('toolbar-content')}>

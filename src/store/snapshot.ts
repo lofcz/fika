@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { applyPatches, enablePatches, produceWithPatches, type Patch } from 'immer'
 import { db, type Snapshot } from '@/utils/database'
-import type { Slide } from '@/types/slides'
+import type { Slide, SlideTemplate, SlideTheme } from '@/types/slides'
 import { useSlidesStore } from './slides'
 import { useMainStore } from './main'
 
@@ -32,11 +32,21 @@ function materializeSlides(snapshots: Snapshot[], cursor: number): Slide[] {
   return slides
 }
 
-function restoreSlides(slides: Slide[], index: number) {
+function restoreSlides(slides: Slide[], index: number, extras?: {
+  title?: string
+  theme?: SlideTheme
+  viewportSize?: number
+  viewportRatio?: number
+  templates?: SlideTemplate[]
+}) {
   const slideIndex = index > slides.length - 1 ? slides.length - 1 : index
   const slidesStore = useSlidesStore.getState()
-  slidesStore.setSlides(slides, undefined, { clone: false })
+  slidesStore.setSlides(slides, extras?.theme, { clone: false })
   slidesStore.updateSlideIndex(slideIndex)
+  if (extras?.title !== undefined) slidesStore.setTitle(extras.title)
+  if (extras?.viewportSize !== undefined) slidesStore.setViewportSize(extras.viewportSize)
+  if (extras?.viewportRatio !== undefined) slidesStore.setViewportRatio(extras.viewportRatio)
+  if (extras?.templates) slidesStore.setTemplates(extras.templates)
   cursorSlides = slides
   useMainStore.getState().setActiveElementIdList([])
 }
@@ -77,6 +87,11 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
     await db.snapshots.clear()
     await db.snapshots.add({
       index: slidesStore.slideIndex,
+      title: slidesStore.title,
+      theme: structuredClone(slidesStore.theme),
+      viewportSize: slidesStore.viewportSize,
+      viewportRatio: slidesStore.viewportRatio,
+      templates: structuredClone(slidesStore.templates),
       slides: structuredClone(slidesStore.slides),
     })
     set(state => (
@@ -98,13 +113,18 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
       : []
     const keptOldKeys = cursor >= 0 ? allKeys.slice(0, cursor + 1) : []
 
+    const title = slidesStore.title
+    const theme = structuredClone(slidesStore.theme)
+    const viewportSize = slidesStore.viewportSize
+    const viewportRatio = slidesStore.viewportRatio
+    const templates = structuredClone(slidesStore.templates)
     let entry: Omit<Snapshot, 'id'>
     if (!cursorSlides || keptOldKeys.length === 0) {
-      entry = { index: slideIndex, slides: structuredClone(nextSlides) }
+      entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, templates, slides: structuredClone(nextSlides) }
     }
     else {
       const [patches, inversePatches] = diffSlides(cursorSlides, nextSlides)
-      entry = { index: slideIndex, patches, inversePatches }
+      entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, templates, patches, inversePatches }
     }
 
     await db.transaction('rw', db.snapshots, async () => {
@@ -158,7 +178,7 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
       ? applyPatches(base, leaving.inversePatches)
       : materializeSlides(snapshots, snapshotCursor)
 
-    restoreSlides(slides, arriving.index)
+    restoreSlides(slides, arriving.index, arriving)
     get().setSnapshotCursor(snapshotCursor)
   },
 
@@ -175,7 +195,7 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
       ? applyPatches(base, arriving.patches)
       : materializeSlides(snapshots, snapshotCursor)
 
-    restoreSlides(slides, arriving.index)
+    restoreSlides(slides, arriving.index, arriving)
     get().setSnapshotCursor(snapshotCursor)
   },
 }))

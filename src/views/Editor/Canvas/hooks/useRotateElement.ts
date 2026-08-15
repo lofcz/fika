@@ -85,8 +85,9 @@ export default (
       applyLiveRotateDelta(element.id, angle - elOriginRotate)
     }
 
-    const handleMouseup = () => {
+    const handleMouseup = (e?: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
+      if (e) handleMousemove(e)
       isMouseDown = false
       stopGesture?.()
       stopGesture = null
@@ -106,7 +107,7 @@ export default (
     const onMove = rafCoalesce(handleMousemove)
     const unbind = bindDocumentDrag({
       onDrag: state => onMove(state.event as MouseEvent | TouchEvent),
-      onDragEnd: () => handleMouseup(),
+      onDragEnd: state => handleMouseup(state.event as MouseEvent | TouchEvent),
     })
     stopGesture = () => {
       onMove.cancel()

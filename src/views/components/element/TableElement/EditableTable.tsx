@@ -5,6 +5,8 @@ import { type CSSProperties, type MouseEvent as ReactMouseEvent, useMemo, useCal
 
 import { openContextmenu } from '@/utils/openContextmenu';
 import { debounce } from '@/utils/debounce';
+import { registerCommitFlusher } from '@/utils/commitQueue';
+import { shouldWriteEditorHtml } from '@/utils/prosemirror/commitPolicy';
 import { arraysEqual } from '@/utils/object';
 import { nanoid } from 'nanoid';
 import { useMainStore } from '@/store';
@@ -16,12 +18,12 @@ import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/uti
 import emitter, { EmitterEvents, type TableCommand } from '@/utils/emitter';
 import message from '@/utils/message';
 import { getCellStyle, getTextStyle, formatText } from './utils';
-import { applyExcelPaste, insertColIntoGrid, replaceTableCellText, type TableCellDraft } from './cellEdit';
+import { applyExcelPaste, insertColIntoGrid, locateTableCell, replaceTableCellText, type TableCellDraft } from './cellEdit';
 import { areTableCellViewEqual, isTableCellHtmlEcho, numArrEqual, outlineEqual, tableGridStructureEqual, tableGridTextEqual, themeEqual } from './gridCompare';
 import useHideCells from './useHideCells';
 import useSubThemeColor from './useSubThemeColor';
 import useMathReady from './useMathReady';
-import CustomTextarea from './CustomTextarea';
+import CustomTextarea, { type TableCellCommitSource } from './CustomTextarea';
 import { useI18nContext } from '@/i18n/useI18nContext';
 import { subscribeLiveBox } from '@/utils/liveElementSize';
 
@@ -38,7 +40,7 @@ type TableCellViewProps = {
   onMouseEnter: (rowIndex: number, colIndex: number) => void;
   onContextMenu: (event: ReactMouseEvent<HTMLTableCellElement>) => void;
   onInput: (value: string, rowIndex: number, colIndex: number, cellId: string) => void;
-  onCommit: (value: string, rowIndex: number, colIndex: number, cellId: string) => void;
+  onCommit: (value: string, rowIndex: number, colIndex: number, cellId: string, source?: TableCellCommitSource) => void;
   onInsertExcel: (value: string[][], rowIndex: number, colIndex: number) => void;
 };
 
@@ -87,7 +89,7 @@ const TableCellView = memo((props: TableCellViewProps) => {
       style={getTextStyle(cellMinHeight, cell.style)}
       value={cell.text}
       onUpdateValue={value => onInput(value, rowIndex, colIndex, cell.id)}
-      onCommitValue={value => onCommit(value, rowIndex, colIndex, cell.id)}
+      onCommitValue={(value, source) => onCommit(value, rowIndex, colIndex, cell.id, source)}
       onInsertExcelData={value => onInsertExcel(value, rowIndex, colIndex)}
     /> : <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style)} dangerouslySetInnerHTML={{ __html: formatText(cell.text) }} />}
   </td>;
@@ -134,6 +136,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
   const lastPropsDataRef = useRef(data);
   const dataRef = useRef(data);
   const draftRef = useRef<TableCellDraft | null>(null);
+  const [gridRev, setGridRev] = useState(0);
   if (lastPropsDataRef.current !== data) {
     lastPropsDataRef.current = data;
     const draft = draftRef.current;
@@ -151,6 +154,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
   const writeGrid = (next: TableCell[][]) => {
     dataRef.current = next;
     onChangeRef.current?.(next);
+    setGridRev(n => n + 1);
   };
   const commitDraftNow = () => {
     const draft = draftRef.current;
@@ -166,6 +170,9 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
   const flushDraftRef = useRef(flushDraft);
   flushDraftRef.current = flushDraft;
+  const persistDraft = () => {
+    flushDraftRef.current();
+  };
   const takeCommittedGrid = () => {
     scheduleCommit.cancel();
     const draft = draftRef.current;
@@ -180,10 +187,13 @@ const EditableTable = memo((props: IEditableTableProps) => {
     writeGrid(newData);
   };
   const cloneCommittedGrid = () => JSON.parse(JSON.stringify(takeCommittedGrid())) as TableCell[][];
-  useEffect(() => () => {
-    scheduleCommit.cancel();
-    commitDraftNow();
-  }, [scheduleCommit]);
+  useEffect(() => {
+    const unreg = registerCommitFlusher(persistDraft);
+    return () => {
+      persistDraft();
+      unreg();
+    };
+  }, []);
 
   const { themeColors } = useSubThemeColor(theme);
   useMathReady(tableCells);
@@ -215,8 +225,10 @@ const EditableTable = memo((props: IEditableTableProps) => {
     setLiveRowHeight(size.height / rows);
   }), [elementId]);
 
-  const removeSelectedCells = useCallback(() => {
+  const skipStyleTargetSyncRef = useRef(false);
+  const removeSelectedCells = useCallback((forgetStyleTarget = false) => {
     flushDraftRef.current();
+    if (!forgetStyleTarget) skipStyleTargetSyncRef.current = true;
     setStartCell([]);
     setEndCell([]);
   }, []);
@@ -261,6 +273,10 @@ const EditableTable = memo((props: IEditableTableProps) => {
     const isFirst = prevSelectedCells.current === undefined;
     prevSelectedCells.current = selectedCells;
     if (isFirst) return;
+    if (skipStyleTargetSyncRef.current) {
+      skipStyleTargetSyncRef.current = false;
+      return;
+    }
     onChangeSelectedCells?.(selectedCells);
   }, [selectedCells, onChangeSelectedCells]);
 
@@ -384,7 +400,8 @@ const EditableTable = memo((props: IEditableTableProps) => {
     _tableCells[minX][minY].rowspan = maxX - minX + 1;
     _tableCells[minX][minY].colspan = maxY - minY + 1;
     setTableCells(_tableCells);
-    removeSelectedCells();
+    setStartCell([minX, minY]);
+    setEndCell([]);
   };
 
   const splitCells = (rowIndex: number, colIndex: number) => {
@@ -392,7 +409,8 @@ const EditableTable = memo((props: IEditableTableProps) => {
     _tableCells[rowIndex][colIndex].rowspan = 1;
     _tableCells[rowIndex][colIndex].colspan = 1;
     setTableCells(_tableCells);
-    removeSelectedCells();
+    setStartCell([rowIndex, colIndex]);
+    setEndCell([]);
   };
 
   const handleMousedownColHandler = (e: MouseEvent, colIndex: number) => {
@@ -584,10 +602,21 @@ const EditableTable = memo((props: IEditableTableProps) => {
     scheduleCommit();
   }, [scheduleCommit]);
 
-  const handleCommit = useCallback((value: string, rowIndex: number, colIndex: number, cellId: string) => {
+  const handleCommit = useCallback((value: string, rowIndex: number, colIndex: number, cellId: string, source: TableCellCommitSource = 'blur') => {
+    const pos = locateTableCell(dataRef.current, { cellId, row: rowIndex, col: colIndex });
+    const current = pos ? dataRef.current[pos.row][pos.col].text : '';
+    if (!shouldWriteEditorHtml({
+      nextHtml: value,
+      storeHtml: current,
+      isAuthoritative: source === 'blur',
+    })) {
+      draftRef.current = null;
+      scheduleCommit.cancel();
+      return;
+    }
     draftRef.current = { cellId, row: rowIndex, col: colIndex, text: value };
     flushDraftRef.current();
-  }, []);
+  }, [scheduleCommit]);
 
   const insertExcelData = (excel: string[][], rowIndex: number, colIndex: number) => {
     const base = takeCommittedGrid();
@@ -721,7 +750,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
     insertExcelDataRef.current(value, rowIndex, colIndex);
   }, []);
 
-  return <div className={cx('editable-table')} data-live-table style={{ width: totalWidth + 'px', height: paintRowHeight * data.length + 'px' }} onMouseDown={onMouseDown}>
+  return <div className={cx('editable-table')} data-live-table data-grid-rev={gridRev} style={{ width: totalWidth + 'px', height: paintRowHeight * data.length + 'px' }} onMouseDown={onMouseDown}>
     {editable ? <div className={cx('handler')}>{dragLinePosition.map((pos, index) => <div
       className={cx('drag-line')}
       key={index}

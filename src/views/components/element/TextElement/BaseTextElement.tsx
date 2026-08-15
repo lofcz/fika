@@ -11,8 +11,9 @@ import useTextFit from '@/views/components/element/hooks/useTextFit';
 import { useOutlineRadiusCss } from '@/views/components/element/hooks/useElementOutline';
 import { resolveTextBoxLayout, textBoxFlexColumn, textBoxJustify, textBoxLiveMode, textBoxPaintSize } from '@/utils/placeholderLayout';
 import { emptyPlaceholderHtml, isEmptyRichText, placeholderBoxVars } from '@/utils/placeholderPaint';
-import { resolveElementDefaultFontColor, resolveElementSurfaces, resolvePlaceholderColor, rewriteDefaultInksInHtml } from '@/utils/textContrast';
+import { resolveElementSurfaces, resolveLiveTextPaint, resolvePlaceholderColor } from '@/utils/textContrast';
 import { serializeRichTextHtml } from '@/utils/prosemirror';
+import { selectCurrentSlide, useSlidesStore } from '@/store';
 export type IBaseTextElementProps = {
   elementInfo: PPTTextElement;
   target?: string;
@@ -38,11 +39,19 @@ const BaseTextElement = memo((vrProps: IBaseTextElementProps) => {
   } = vrProps;
   const isEmptyContent = isEmptyRichText(elementInfo.content);
   const showPlaceholderPreview = showPlaceholders && isEmptyContent && !!elementInfo.placeholder;
-  const defaultInkColor = resolveElementDefaultFontColor(elementInfo.defaultColor || themeFontColor || '#333', {
-    fill: elementInfo.fill,
-    background,
-    fallbackSurface: themeBackgroundColor
-  });
+  const slideElements = selectCurrentSlide(useSlidesStore.getState())?.elements;
+  const { ink: defaultInkColor, html: contrastedHtml } = resolveLiveTextPaint(
+    elementInfo.defaultColor || themeFontColor || '#333',
+    elementInfo.content,
+    {
+      element: elementInfo,
+      elements: slideElements,
+      fill: elementInfo.fill,
+      background,
+      fallbackSurface: themeBackgroundColor,
+      themeFontColor,
+    },
+  );
   const placeholderColor = resolvePlaceholderColor({
     author: elementInfo.placeholderColor,
     surfaces: resolveElementSurfaces({
@@ -58,7 +67,7 @@ const BaseTextElement = memo((vrProps: IBaseTextElementProps) => {
   })();
   const paintedHtml = showPlaceholderPreview
     ? emptyPlaceholderHtml(elementInfo)
-    : serializeRichTextHtml(rewriteDefaultInksInHtml(elementInfo.content, defaultInkColor));
+    : serializeRichTextHtml(contrastedHtml);
   const { shadowStyle } = useElementShadow(elementInfo.shadow);
   const inset = elementInfo.inset || [10, 10, 10, 10];
   const textFitHostRef = useRef<HTMLDivElement | null>(null);

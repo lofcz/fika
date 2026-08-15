@@ -8,7 +8,19 @@ import { markSourcePackageDirty } from '@/utils/pptxSourcePackage'
 import { collectSlidesFonts, loadGoogleFonts } from '@/utils/font'
 import { DEFAULT_THEME_COLORS } from '@/configs/theme'
 import { applySlideBackgroundWithContrast } from '@/utils/textContrast'
-import { reorderSlidesPreservingIdentity } from '@/utils/slideOrder'
+import {
+  deleteSlidesPreservingIdentity,
+  insertSlidesPreservingIdentity,
+  moveSlidePreservingIdentity,
+  reorderSlidesPreservingIdentity,
+  slideIndexAfterDelete,
+} from '@/utils/slideOrder'
+
+export type AddSlideOptions = {
+  index?: number
+  select?: boolean
+  keepSectionTag?: boolean
+}
 
 export function buildDefaultTemplates(): SlideTemplate[] {
   return []
@@ -58,10 +70,11 @@ export interface SlidesActions {
   setTemplates: (templates: SlideTemplate[]) => void
   addImportedTemplate: (template: ImportedSlideTemplate) => void
   replaceSlide: (slide: Slide, slideId?: string) => void
-  addSlide: (slide: Slide | Slide[]) => void
+  addSlide: (slide: Slide | Slide[], options?: AddSlideOptions) => void
   updateSlide: (props: Partial<Slide>, slideId?: string) => void
   removeSlideProps: (data: RemovePropData) => void
   deleteSlide: (slideId: string | string[]) => void
+  moveSlide: (fromIndex: number, toIndex: number) => void
   reorderSlides: (oldIndex: number, newIndex: number) => void
   updateSlideIndex: (index: number) => void
   addElement: (element: PPTElement | PPTElement[]) => void
@@ -206,18 +219,26 @@ export const useSlidesStore = create<SlidesStore>()(
       markSourcePackageDirty()
     },
 
-    addSlide(slide) {
-      const slides = Array.isArray(slide) ? slide : [slide]
-      for (const item of slides) {
-        if (item.sectionTag) delete item.sectionTag
+    addSlide(slide, options) {
+      const incoming = Array.isArray(slide) ? slide : [slide]
+      if (!incoming.length) return
+      if (!options?.keepSectionTag) {
+        for (const item of incoming) {
+          if (item.sectionTag) delete item.sectionTag
+        }
       }
+      const current = get()
+      const addIndex = Math.max(0, Math.min(options?.index ?? current.slideIndex + 1, current.slides.length))
+      const slides = insertSlidesPreservingIdentity(current.slides, addIndex, incoming)
+      const slideIndex = options?.select === false
+        ? (addIndex <= current.slideIndex ? current.slideIndex + incoming.length : current.slideIndex)
+        : addIndex
       set((state) => {
-        const addIndex = state.slideIndex + 1
-        state.slides.splice(addIndex, 0, ...slides)
-        state.slideIndex = addIndex
+        state.slides = slides
+        state.slideIndex = slideIndex
       })
       markSourcePackageDirty()
-      loadGoogleFonts(collectSlidesFonts(slides))
+      loadGoogleFonts(collectSlidesFonts(incoming))
     },
 
     updateSlide(props, slideId) {
@@ -237,37 +258,38 @@ export const useSlidesStore = create<SlidesStore>()(
 
     removeSlideProps(data) {
       set((state) => {
-        state.slides = state.slides.map(slide => (
-          slide.id === data.id ? omit(slide, data.propName) : slide
-        )) as Slide[]
+        const index = state.slides.findIndex(slide => slide.id === data.id)
+        if (index < 0) return
+        state.slides[index] = omit(state.slides[index], data.propName) as Slide
       })
     },
 
     deleteSlide(slideId) {
+      const slidesId = Array.isArray(slideId) ? slideId : [slideId]
+      const current = get()
+      const { slides, deletedIndexes } = deleteSlidesPreservingIdentity(current.slides, slidesId)
+      if (!deletedIndexes.length) return
+      const slideIndex = slideIndexAfterDelete(
+        current.slideIndex,
+        current.slides,
+        new Set(slidesId),
+        slides.length,
+        deletedIndexes,
+      )
       set((state) => {
-        const slidesId = Array.isArray(slideId) ? slideId : [slideId]
-        const slides: Slide[] = JSON.parse(JSON.stringify(state.slides))
-        const deleteSlidesIndex = []
-        for (const deletedId of slidesId) {
-          const index = slides.findIndex(item => item.id === deletedId)
-          deleteSlidesIndex.push(index)
-          const deletedSlideSection = slides[index].sectionTag
-          if (deletedSlideSection) {
-            const handleSlideNext = slides[index + 1]
-            if (handleSlideNext && !handleSlideNext.sectionTag) {
-              delete slides[index].sectionTag
-              slides[index + 1].sectionTag = deletedSlideSection
-            }
-          }
-          slides.splice(index, 1)
-        }
-        let newIndex = Math.min(...deleteSlidesIndex)
-        const maxIndex = slides.length - 1
-        if (newIndex > maxIndex) newIndex = maxIndex
-        state.slideIndex = newIndex
         state.slides = slides
+        state.slideIndex = slideIndex
       })
       markSourcePackageDirty()
+    },
+
+    moveSlide(fromIndex, toIndex) {
+      const { slides, index } = moveSlidePreservingIdentity(get().slides, fromIndex, toIndex)
+      if (slides === get().slides) return
+      set((state) => {
+        state.slides = slides
+        state.slideIndex = index
+      })
     },
 
     reorderSlides(oldIndex, newIndex) {

@@ -1,6 +1,7 @@
 import { useMainStore, useSlidesStore, selectHandleElement } from '@/store';
 import type { PPTImageElement } from '@/types/slides';
 import { getImageDataURL, getImageSize } from '@/utils/image';
+import { internMediaSrc } from '@/utils/mediaIntern';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 export default () => {
   const handleElement = useMainStore(selectHandleElement);
@@ -16,7 +17,7 @@ export default () => {
     const imageElement = handleImageElement;
     const imageElementId = handleElementId;
     if (!imageFile || !imageElement || imageElement.type !== 'image' || !imageElementId) return;
-    getImageDataURL(imageFile).then(dataURL => {
+    getImageDataURL(imageFile).then(dataURL => internMediaSrc(dataURL)).then(dataURL => {
       const originWidth = imageElement.width;
       const originHeight = imageElement.height;
       const originLeft = imageElement.left;

@@ -20,6 +20,7 @@ import { getStylePreset, listStylePresets, resolveStylePreset, styleThemePatch }
 import { AGENTIC_DOCS, describeAgenticCommand, listAgenticDomains } from './manifestDocs';
 import type { FikaAgentApi, FikaAgentCapability, FikaAgentCommand, FikaAudioElementPatch, FikaAudioSourceInput, FikaAudioTransformPatch, FikaAnimationCatalog, FikaAnimationSequenceStep, FikaBatchOptions, FikaBridgeEvent, FikaBridgeListener, FikaBridgeState, FikaChartElementPatch, FikaCommandIssue, FikaCommandMeta, FikaCommandResult, FikaCommandType, FikaCreateChartInput, FikaCreateAudioInput, FikaCreateLatexElementInput, FikaCreateShapeInput, FikaCreateTableInput, FikaCreateLineElementInput, FikaDeckDocument, FikaDeckInput, FikaDeckPatch, FikaDeckViewport, FikaApplyThemeOptions, FikaElementFlipInput, FikaInsertElementsInput, FikaInsertSlidesInput, FikaElementMoveInput, FikaElementResizeInput, FikaElementTransformPatch, FikaLatexElementPatch, FikaLineDirectionInput, FikaLineElementPatch, FikaLineStyleInput, FikaMediaAssetInput, FikaMediaAssetKind, FikaNoteInput, FikaNotePatch, FikaNoteReplyInput, FikaReplaceOptions, FikaSearchOptions, FikaSearchResult, FikaSearchResults, FikaSectionRange, FikaShapeFillInput, FikaShapePatch, FikaShapePreset, FikaSlideReference, FikaTableElementPatch, FikaSlideThemePatch, FikaRichTextElement, FikaRichTextParagraphAttrs, FikaRichTextStylePatch, FikaThemeExtractionOptions, FikaVideoPatch, FikaVideoPlaybackPatch, FikaVideoPositionPatch, FikaVideoSizePatch, FikaVideoSourcePatch } from './types';
 import { assertColorFields, assertElementPatch, assertIndexInRange, assertPositiveNumber, fromApiInsertSlideIndex, fromApiSlideIndex, toApiSlideIndex } from './validators';
+import { beginScreening, exitScreening } from '@/utils/screening';
 type Stores = ReturnType<typeof createStores>;
 type Handler = (payload: unknown, command: FikaAgentCommand) => unknown | Promise<unknown>;
 type ElementOrderCommand = 'forward' | 'backward' | 'front' | 'back';
@@ -39,7 +40,12 @@ interface CommandDescriptor {
   mutates: boolean;
 }
 interface RuntimeState {
-  document: FikaDeckDocument;
+  title: string;
+  slides: Slide[];
+  theme: SlideTheme;
+  templates: SlideTemplate[];
+  viewportSize: number;
+  viewportRatio: number;
   slideIndex: number;
   activeElementIdList: string[];
   handleElementId: string;
@@ -253,7 +259,12 @@ function restoreDocument(stores: Stores, document: FikaDeckInput, slideIndex = 0
 }
 function captureRuntimeState(stores: Stores): RuntimeState {
   return {
-    document: documentFromStores(stores),
+    title: stores.slides.title,
+    slides: stores.slides.slides,
+    theme: stores.slides.theme,
+    templates: stores.slides.templates,
+    viewportSize: stores.slides.viewportSize,
+    viewportRatio: stores.slides.viewportRatio,
     slideIndex: stores.slides.slideIndex,
     activeElementIdList: [...stores.main.activeElementIdList],
     handleElementId: stores.main.handleElementId,
@@ -268,7 +279,12 @@ function captureRuntimeState(stores: Stores): RuntimeState {
   };
 }
 function restoreRuntimeState(stores: Stores, state: RuntimeState) {
-  restoreDocument(stores, state.document, state.slideIndex);
+  stores.slides.setTitle(state.title);
+  stores.slides.setSlides(state.slides, state.theme, { clone: false });
+  stores.slides.setTemplates(state.templates);
+  stores.slides.setViewportSize(state.viewportSize);
+  stores.slides.setViewportRatio(state.viewportRatio);
+  stores.slides.updateSlideIndex(state.slideIndex);
   stores.main.updateSelectedSlidesIndex([...state.selectedSlidesIndex]);
   stores.main.setActiveElementIdList([...state.activeElementIdList]);
   stores.main.setHandleElementId(state.handleElementId);
@@ -483,29 +499,20 @@ function updateSlideAt(stores: Stores, slideIndex: number, patch: Partial<Slide>
   const slide = stores.slides.slides[slideIndex];
   if (!slide) throw new Error(`Slide index not found: ${slideIndex}`);
   assertColorFields(patch, 'slide');
-  let nextSlide = clonePlain({
-    ...slide,
-    ...patch
-  }) as Slide;
-  if (patch.background) nextSlide = applySlideBackgroundWithContrast(nextSlide, contrastTheme(stores));
-  const slides = clonePlain(stores.slides.slides);
-  slides[slideIndex] = nextSlide;
-  stores.slides.setSlides(slides);
-  return clonePlain(nextSlide);
+  stores.slides.updateSlide(clonePlain(patch), slide.id);
+  return clonePlain(stores.slides.slides[slideIndex]);
 }
 function updateElementAt(stores: Stores, slideIndex: number, elementIndex: number, patch: Partial<PPTElement>): PPTElement {
-  const slides = clonePlain(stores.slides.slides);
-  const slide = slides[slideIndex];
+  const slide = stores.slides.slides[slideIndex];
   const element = slide?.elements[elementIndex];
   if (!slide || !element) throw new Error('Element location is invalid');
   assertElementPatch(patch, element);
-  const nextElement = {
-    ...element,
-    ...clonePatch(patch)
-  } as PPTElement;
-  slide.elements[elementIndex] = nextElement;
-  stores.slides.setSlides(slides);
-  return clonePlain(nextElement);
+  stores.slides.updateElement({
+    id: element.id,
+    props: clonePatch(patch),
+    slideId: slide.id
+  });
+  return clonePlain(stores.slides.slides[slideIndex].elements[elementIndex]);
 }
 type ImageFilterKey = keyof NonNullable<PPTImageElement['filters']>;
 const fullImageRange: NonNullable<PPTImageElement['clip']>['range'] = [[0, 0], [100, 100]];
@@ -517,8 +524,7 @@ function imageElement(stores: Stores, elementId: string, slideId?: string) {
   };
 }
 function updateImageElementAt(stores: Stores, slideIndex: number, elementIndex: number, patch: Partial<PPTImageElement>, removeProps: Array<keyof PPTImageElement> = []): PPTImageElement {
-  const slides = clonePlain(stores.slides.slides);
-  const slide = slides[slideIndex];
+  const slide = stores.slides.slides[slideIndex];
   const element = slide?.elements[elementIndex];
   if (!slide || !element || element.type !== 'image') throw new Error('Image element location is invalid');
   const nextElement = {
@@ -527,8 +533,9 @@ function updateImageElementAt(stores: Stores, slideIndex: number, elementIndex: 
     type: 'image'
   } as PPTImageElement;
   for (const prop of removeProps) delete (nextElement as Partial<PPTImageElement>)[prop];
-  slide.elements[elementIndex] = nextElement;
-  stores.slides.setSlides(slides);
+  const elements = slide.elements.slice();
+  elements[elementIndex] = nextElement;
+  stores.slides.updateSlide({ elements }, slide.id);
   return clonePlain(nextElement);
 }
 function imageFilterValue(key: ImageFilterKey, value: string | number) {
@@ -540,12 +547,12 @@ function imageFilterValue(key: ImageFilterKey, value: string | number) {
   return `${percent}%`;
 }
 function replaceElementAt(stores: Stores, slideIndex: number, elementIndex: number, element: PPTElement): PPTElement {
-  const slides = clonePlain(stores.slides.slides);
-  const slide = slides[slideIndex];
+  const slide = stores.slides.slides[slideIndex];
   if (!slide || !slide.elements[elementIndex]) throw new Error('Element location is invalid');
-  slide.elements[elementIndex] = clonePlain(element);
-  stores.slides.setSlides(slides);
-  return clonePlain(slide.elements[elementIndex]);
+  const elements = slide.elements.slice();
+  elements[elementIndex] = clonePlain(element);
+  stores.slides.updateSlide({ elements }, slide.id);
+  return clonePlain(elements[elementIndex]);
 }
 function updateElementsWithPatch(stores: Stores, payload: {
   elementId: string | string[];
@@ -667,8 +674,22 @@ function cloneSlideBackground(background?: SlideBackground): SlideBackground | u
   assertColorFields(background, 'background');
   return clonePlain(background);
 }
-function listShapePresets(categoryKey?: FikaShapePreset['categoryKey']): FikaShapePreset[] {
-  return SHAPE_LIST.filter(category => !categoryKey || category.categoryKey === categoryKey).flatMap(category => category.children.map((preset, index) => ({
+function resolveBackgroundTargetIds(payload: {
+  slideIds?: string[];
+  slideId?: string | string[];
+}): Set<string> | null {
+  if (payload.slideIds?.length) return new Set(payload.slideIds);
+  if (payload.slideId === undefined) return null;
+  const ids = toIdList(payload.slideId);
+  return ids.length ? new Set(ids) : null;
+}
+const SHAPE_CATEGORY_ALIASES: Record<string, FikaShapePreset['categoryKey']> = {
+  rect: 'rectangle',
+  rectangle: 'rectangle'
+};
+function listShapePresets(categoryKey?: string): FikaShapePreset[] {
+  const resolved = categoryKey ? SHAPE_CATEGORY_ALIASES[categoryKey] ?? categoryKey : undefined;
+  return SHAPE_LIST.filter(category => !resolved || category.categoryKey === resolved).flatMap(category => category.children.map((preset, index) => ({
     ...clonePlain(preset),
     id: `${category.categoryKey}.${index}`,
     categoryKey: category.categoryKey,
@@ -1165,6 +1186,7 @@ export function createAgenticApi(options: {
     return snapshotId;
   };
   const emitDocumentChanged = (command: FikaAgentCommand) => {
+    if (!listeners.size) return;
     emit({
       type: 'documentChanged',
       command,
@@ -1312,7 +1334,7 @@ export function createAgenticApi(options: {
       currentWarnings = previousWarnings;
     }
   };
-  const readOnlyCommands = new Set<FikaCommandType>(['deck.get', 'deck.getTheme', 'deck.extractTheme', 'animations.list', 'animations.catalog', 'animations.sequence', 'templates.catalog', 'templates.slidesCatalog', 'styles.catalog', 'layouts.catalog', 'slides.current', 'slides.read', 'slides.getTransition', 'slides.getRemark', 'notes.listReplies', 'sections.list', 'search.find', 'text.getContent', 'media.resolveAsset', 'export.json']);
+  const readOnlyCommands = new Set<FikaCommandType>(['deck.get', 'deck.getTheme', 'deck.extractTheme', 'animations.list', 'animations.catalog', 'animations.sequence', 'templates.catalog', 'templates.slidesCatalog', 'styles.catalog', 'layouts.catalog', 'slides.current', 'slides.read', 'slides.getTransition', 'slides.getRemark', 'notes.listReplies', 'sections.list', 'search.find', 'text.getContent', 'media.resolveAsset', 'export.json', 'shapes.presets']);
   const stateOnlyCommands = new Set<FikaCommandType>(['slides.select', 'elements.select', 'elements.selectGroup', 'elements.clearSelection', 'elements.setHandle', 'elements.hide', 'elements.show', 'history.commit', 'view.goToSlide', 'view.nextSlide', 'view.previousSlide', 'view.setZoom', 'view.enterPresentation', 'view.exitPresentation', 'view.setLocale']);
   const isReadOnlyCommandType = (type: FikaCommandType) => type.endsWith('.get') || type.endsWith('.list') || readOnlyCommands.has(type);
   const changesDocument = (command: FikaAgentCommand) => !stateOnlyCommands.has(command.type);
@@ -1486,6 +1508,19 @@ export function createAgenticApi(options: {
     stores.slides.setTheme(mergeDeckTheme(stores.slides.theme, theme));
     return clonePlain(stores.slides.theme);
   });
+  register('deck.getTheme', () => clonePlain(stores.slides.theme));
+  register('deck.applyTheme', (payload: {
+    theme: FikaSlideThemePatch;
+    options?: FikaApplyThemeOptions;
+  }) => {
+    const theme = normalizeDocumentTheme(payload.theme, 'payload.theme') || {};
+    stores.slides.setTheme(mergeDeckTheme(stores.slides.theme, theme));
+    applyThemeToSlideContent(stores, stores.slides.theme, payload.options);
+    return clonePlain(stores.slides.theme);
+  });
+  register('deck.extractTheme', (payload: {
+    options?: FikaThemeExtractionOptions;
+  } = {}) => extractThemeFromDeck(stores, payload?.options));
   register('deck.applyTemplate', async (payload: {
     templateId: string;
   } = {
@@ -1635,17 +1670,16 @@ export function createAgenticApi(options: {
         addWarning(createIssue('LayoutContent', warning, undefined, true));
       }
       const slide = normalizeSlideForInsert(built.slide);
-      const currentSlides = clonePlain(stores.slides.slides);
+      const currentSlides = stores.slides.slides;
       const replaceStarter = currentSlides.length === 1 && isPristineStarterSlide(currentSlides[0]);
       ensureSlideIdAvailable(currentSlides, slide.id);
-      if (replaceStarter || currentSlides.length === 0) {
-        if (currentSlides.length === 0) currentSlides.push(slide);else currentSlides.splice(0, 1, slide);
-      } else if (currentSlides.length === 1) {
-        currentSlides.splice(0, 1, slide);
+      if (currentSlides.length === 0) {
+        stores.slides.addSlide(slide, { index: 0, select: false, keepSectionTag: true });
+      } else if (replaceStarter || currentSlides.length === 1) {
+        stores.slides.replaceSlide(slide, currentSlides[0].id);
       } else {
-        currentSlides.splice(0, 0, slide);
+        stores.slides.addSlide(slide, { index: 0, select: false, keepSectionTag: true });
       }
-      stores.slides.setSlides(currentSlides);
       applySlideSelection(stores, 0);
       lastAnchor = built.anchor;
       titleSlideId = slide.id;
@@ -1701,12 +1735,10 @@ export function createAgenticApi(options: {
     select?: boolean;
   } = {}) => {
     const slide = normalizeSlideForInsert(payload.slide);
-    const slides = clonePlain(stores.slides.slides);
-    ensureSlideIdAvailable(slides, slide.id);
-    const index = fromApiInsertSlideIndex(payload.index, slides.length);
-    slides.splice(index, 0, slide);
+    ensureSlideIdAvailable(stores.slides.slides, slide.id);
+    const index = fromApiInsertSlideIndex(payload.index, stores.slides.slides.length);
     syncPlanOnInsert(index, 1);
-    stores.slides.setSlides(slides);
+    stores.slides.addSlide(slide, { index, select: false, keepSectionTag: true });
     if (payload.select !== false) applySlideSelection(stores, index);
     return clonePlain(slide);
   });
@@ -1727,7 +1759,7 @@ export function createAgenticApi(options: {
     const preset = resolveStylePreset(stores.slides.theme.styleId);
     const viewport = viewportFromStores(stores);
 
-    const currentSlides = clonePlain(stores.slides.slides);
+    const currentSlides = stores.slides.slides;
     const replaceStarter = payload.index === undefined && currentSlides.length === 1 && isPristineStarterSlide(currentSlides[0]);
     const replaceDuplicateTitle = !replaceStarter && payload.index === undefined && payload.layoutId === 'title' && currentSlides.length === 1 && !isPristineStarterSlide(currentSlides[0]);
     const requestedIndex = payload.index;
@@ -1783,14 +1815,12 @@ export function createAgenticApi(options: {
       addWarning(createIssue(issue.severity === 'error' ? 'SlideQualityError' : 'SlideQuality', `[${issue.code}] ${issue.message}`, issue.elementIds?.length ? `elements.${issue.elementIds.join(',')}` : undefined, issue.severity !== 'error'));
     }
     lastAnchor = built.anchor;
-    const slides = currentSlides;
-    ensureSlideIdAvailable(slides, slide.id);
-    if (replacing) {
-      slides.splice(index, 1, slide);
+    ensureSlideIdAvailable(currentSlides, slide.id, replacing ? currentSlides[index]?.id : undefined);
+    if (replacing && currentSlides[index]) {
+      stores.slides.replaceSlide(slide, currentSlides[index].id);
     } else {
-      slides.splice(index, 0, slide);
+      stores.slides.addSlide(slide, { index, select: false, keepSectionTag: true });
     }
-    stores.slides.setSlides(slides);
     if (payload.select !== false) applySlideSelection(stores, index);
 
     if (plannedAnchor && plannedAnchor !== built.anchor && !usedNearestAnchor && !keptAgentVariantDespiteDrift) {
@@ -1838,11 +1868,9 @@ export function createAgenticApi(options: {
       slide: sourceSlide
     } = resolveTemplateSlide(data, payload.slug);
     const slide = normalizeSlideForInsert(sourceSlide);
-    const slides = clonePlain(stores.slides.slides);
-    const index = fromApiInsertSlideIndex(payload.index, slides.length);
-    slides.splice(index, 0, slide);
+    const index = fromApiInsertSlideIndex(payload.index, stores.slides.slides.length);
     syncPlanOnInsert(index, 1);
-    stores.slides.setSlides(slides);
+    stores.slides.addSlide(slide, { index, select: false, keepSectionTag: true });
     if (payload.select !== false) applySlideSelection(stores, index);
     const textElementIds = slide.elements.filter((element): element is PPTTextElement => element.type === 'text').map(element => element.id);
     const placeholderElementIds = slide.elements.filter((element): element is PPTTextElement => element.type === 'text' && !!element.placeholder).map(element => element.id);
@@ -1862,11 +1890,9 @@ export function createAgenticApi(options: {
     const cloned = cloneSlidesWithRemappedIds(sourceSlides, {
       preserveExternalSlideLinks: payload.preserveExternalSlideLinks
     });
-    const slides = clonePlain(stores.slides.slides);
-    const index = fromApiInsertSlideIndex(payload.index, slides.length);
-    slides.splice(index, 0, ...cloned.slides);
+    const index = fromApiInsertSlideIndex(payload.index, stores.slides.slides.length);
     syncPlanOnInsert(index, cloned.slides.length);
-    stores.slides.setSlides(slides);
+    stores.slides.addSlide(cloned.slides, { index, select: false, keepSectionTag: true });
     if (payload.select !== false) applySlideSelection(stores, index);
     return {
       slides: cloned.slides,
@@ -1929,27 +1955,22 @@ export function createAgenticApi(options: {
       index
     } = found;
     const duplicated = duplicateSlideData(slide);
-    const slides = clonePlain(stores.slides.slides);
-    const toIndex = insertIndex(index + 1, slides.length);
-    slides.splice(toIndex, 0, duplicated);
+    const toIndex = insertIndex(index + 1, stores.slides.slides.length);
     syncPlanOnInsert(toIndex, 1);
-    stores.slides.setSlides(slides);
+    stores.slides.addSlide(duplicated, { index: toIndex, select: false, keepSectionTag: true });
     if (payload.select !== false) applySlideSelection(stores, toIndex);
     return duplicated;
   });
   register('slides.move', (payload: SlideSelectorPayload & {
     toIndex: number;
   }) => {
-    const slides = clonePlain(stores.slides.slides);
     const fromIndex = resolveSlideIndex(stores, payload);
-    const [slide] = slides.splice(fromIndex, 1);
-    if (!slide) throw new Error(`Slide index not found: ${fromIndex}`);
-    const toIndex = fromApiInsertSlideIndex(payload.toIndex, slides.length, 'toIndex');
-    slides.splice(toIndex, 0, slide);
+    if (!stores.slides.slides[fromIndex]) throw new Error(`Slide index not found: ${fromIndex}`);
+    const toIndex = fromApiInsertSlideIndex(payload.toIndex, stores.slides.slides.length - 1, 'toIndex');
     syncPlanOnMove(fromIndex, toIndex);
-    stores.slides.setSlides(slides);
+    stores.slides.moveSlide(fromIndex, toIndex);
     applySlideSelection(stores, toIndex);
-    return clonePlain(slides);
+    return clonePlain(stores.slides.slides);
   });
   register('slides.select', (payload: SlideSelectorPayload) => {
     selectSlide(stores, payload);
@@ -1969,18 +1990,28 @@ export function createAgenticApi(options: {
   register('slides.applyBackground', (payload: {
     background: Slide['background'];
     slideIds?: string[];
+    slideId?: string | string[];
   }) => {
-    const slides = clonePlain(stores.slides.slides);
-    const targetIds = payload.slideIds?.length ? new Set(payload.slideIds) : null;
-    const theme = contrastTheme(stores);
-    const updated = slides.map(slide => {
-      if (targetIds && !targetIds.has(slide.id)) return slide;
-      return applySlideBackgroundWithContrast({
-        ...slide,
+    const targetIds = resolveBackgroundTargetIds(payload);
+    const updated: Slide[] = [];
+    for (let index = 0; index < stores.slides.slides.length; index++) {
+      const slide = stores.slides.slides[index];
+      if (targetIds && !targetIds.has(slide.id)) continue;
+      updated.push(updateSlideAt(stores, index, {
         background: cloneSlideBackground(payload.background)
-      }, theme);
-    });
-    stores.slides.setSlides(updated);
+      }));
+    }
+    return updated;
+  });
+  register('slides.applyBackgroundToAll', (payload: {
+    background: Slide['background'];
+  }) => {
+    const updated: Slide[] = [];
+    for (let index = 0; index < stores.slides.slides.length; index++) {
+      updated.push(updateSlideAt(stores, index, {
+        background: cloneSlideBackground(payload.background)
+      }));
+    }
     return updated;
   });
   register('slides.getTransition', (payload: {
@@ -2155,13 +2186,13 @@ export function createAgenticApi(options: {
       removals.add(id);
       removalsBySlide.set(found.slideIndex, removals);
     }
-    const slides = clonePlain(stores.slides.slides);
     for (const [slideIndex, removals] of removalsBySlide) {
-      const slide = slides[slideIndex];
+      const slide = stores.slides.slides[slideIndex];
       if (!slide) throw new Error(`Slide index not found: ${slideIndex}`);
-      slide.elements = slide.elements.filter(element => !removals.has(element.id));
+      updateSlideAt(stores, slideIndex, {
+        elements: slide.elements.filter(element => !removals.has(element.id))
+      });
     }
-    stores.slides.setSlides(slides);
     stores.main.setActiveElementIdList(stores.main.activeElementIdList.filter(id => !ids.includes(id)));
     if (ids.includes(stores.main.activeGroupElementId)) stores.main.setActiveGroupElementId('');
     return {
@@ -2267,10 +2298,11 @@ export function createAgenticApi(options: {
   });
   const setElementLock = (payload: {
     elementId: string | string[];
+    slideId?: string;
     locked: boolean;
   }) => {
     return toIdList(payload.elementId).map(id => {
-      const found = findElement(stores.slides.slides, id, undefined, stores.slides.slideIndex);
+      const found = findElement(stores.slides.slides, id, payload.slideId, stores.slides.slideIndex);
       return updateElementAt(stores, found.slideIndex, found.elementIndex, {
         lock: payload.locked
       } as Partial<PPTElement>);
@@ -2278,18 +2310,22 @@ export function createAgenticApi(options: {
   };
   register('elements.lock', (payload: {
     elementId: string | string[];
+    slideId?: string;
     locked?: boolean;
   }) => {
     return setElementLock({
       elementId: payload.elementId,
+      slideId: payload.slideId,
       locked: payload.locked ?? true
     });
   });
   register('elements.unlock', (payload: {
     elementId: string | string[];
+    slideId?: string;
   }) => {
     return setElementLock({
       elementId: payload.elementId,
+      slideId: payload.slideId,
       locked: false
     });
   });
@@ -2331,7 +2367,7 @@ export function createAgenticApi(options: {
       hidden: false
     });
   });
-  register('elements.setLink', (payload: {
+  const setElementLink = (payload: {
     elementId: string;
     slideId?: string;
     link?: PPTElement['link'];
@@ -2339,17 +2375,29 @@ export function createAgenticApi(options: {
     const found = findElement(stores.slides.slides, payload.elementId, payload.slideId, stores.slides.slideIndex);
     const link = normalizeElementLink(payload.link, stores.slides.slides);
     if (!link) {
-      const slides = clonePlain(stores.slides.slides);
-      const element = slides[found.slideIndex]?.elements[found.elementIndex];
+      const slide = stores.slides.slides[found.slideIndex];
+      const element = slide?.elements[found.elementIndex];
       if (!element) throw new Error('Element location is invalid');
-      delete element.link;
-      stores.slides.setSlides(slides);
-      return [clonePlain(element)];
+      const nextElement = { ...element };
+      delete nextElement.link;
+      const elements = slide.elements.slice();
+      elements[found.elementIndex] = nextElement;
+      stores.slides.updateSlide({ elements }, slide.id);
+      return [clonePlain(nextElement)];
     }
     return [updateElementAt(stores, found.slideIndex, found.elementIndex, {
       link
     } as Partial<PPTElement>)];
-  });
+  };
+  register('elements.setLink', setElementLink);
+  register('links.set', setElementLink);
+  register('links.remove', (payload: {
+    elementId: string;
+    slideId?: string;
+  }) => setElementLink({
+    elementId: payload.elementId,
+    slideId: payload.slideId
+  }));
   const getShapeElement = (elementId: string, slideId?: string) => {
     const found = findElement(stores.slides.slides, elementId, slideId, stores.slides.slideIndex);
     if (found.element.type !== 'shape') throw new Error(`Element is not a shape: ${elementId}`);
@@ -2412,6 +2460,79 @@ export function createAgenticApi(options: {
     const element = mergeShapeElement(found.element, normalizedPatch as Partial<PPTShapeElement>);
     return replaceElementAt(stores, found.slideIndex, found.elementIndex, element) as PPTShapeElement;
   };
+  const createShapeOnSlide = (payload: FikaCreateShapeInput = {}) => {
+    const {
+      slide,
+      index: slideIndex
+    } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
+    const element = createShapeElementFromInput(payload);
+    const elements = clonePlain(slide.elements);
+    elements.splice(insertIndex(payload.index, elements.length), 0, element);
+    updateSlideAt(stores, slideIndex, {
+      elements
+    });
+    if (payload.select !== false) stores.main.setActiveElementIdList([element.id]);
+    return clonePlain(element);
+  };
+  register('shapes.presets', (payload: {
+    categoryKey?: FikaShapePreset['categoryKey'] | 'rect';
+  } = {}) => listShapePresets(payload.categoryKey));
+  register('shapes.create', (payload: FikaCreateShapeInput = {}) => createShapeOnSlide(payload));
+  register('shapes.patch', (payload: {
+    elementId: string;
+    slideId?: string;
+    patch: FikaShapePatch;
+  }) => patchShapeElement(payload.elementId, payload.slideId, payload.patch));
+  register('shapes.update', (payload: {
+    elementId: string;
+    slideId?: string;
+    patch: FikaShapePatch;
+  }) => patchShapeElement(payload.elementId, payload.slideId, payload.patch));
+  register('shapes.setPath', (payload: {
+    elementId: string;
+    slideId?: string;
+    path: string;
+    viewBox?: PPTShapeElement['viewBox'];
+    fixedRatio?: boolean;
+  }) => patchShapeElement(payload.elementId, payload.slideId, {
+    path: payload.path,
+    ...(payload.viewBox ? {
+      viewBox: payload.viewBox
+    } : {}),
+    ...(payload.fixedRatio !== undefined ? {
+      fixedRatio: payload.fixedRatio
+    } : {})
+  }));
+  register('shapes.setFormula', (payload: {
+    elementId: string;
+    slideId?: string;
+    pathFormula: PPTShapeElement['pathFormula'];
+    keypoints?: number[];
+  }) => patchShapeElement(payload.elementId, payload.slideId, {
+    pathFormula: payload.pathFormula,
+    ...(payload.keypoints ? {
+      keypoints: payload.keypoints
+    } : {})
+  }));
+  register('shapes.setFill', (payload: {
+    elementId: string;
+    slideId?: string;
+    fill: FikaShapeFillInput;
+  }) => patchShapeElement(payload.elementId, payload.slideId, normalizeShapeFillPatch(payload.fill)));
+  register('shapes.setOutline', (payload: {
+    elementId: string;
+    slideId?: string;
+    outline?: FikaShapePatch['outline'];
+  }) => patchShapeElement(payload.elementId, payload.slideId, {
+    outline: payload.outline
+  }));
+  register('shapes.setText', (payload: {
+    elementId: string;
+    slideId?: string;
+    text?: Partial<ShapeText>;
+  }) => patchShapeElement(payload.elementId, payload.slideId, {
+    text: payload.text
+  }));
   const latexElement = (elementId: string, slideId?: string) => {
     const found = findElement(stores.slides.slides, elementId, slideId, stores.slides.slideIndex);
     if (found.element.type !== 'latex') throw new Error(`Element is not a LaTeX element: ${elementId}`);
@@ -2595,13 +2716,13 @@ export function createAgenticApi(options: {
       removals.add(id);
       removalsBySlide.set(found.slideIndex, removals);
     }
-    const slides = clonePlain(stores.slides.slides);
     for (const [slideIndex, removals] of removalsBySlide) {
-      const slide = slides[slideIndex];
+      const slide = stores.slides.slides[slideIndex];
       if (!slide) throw new Error(`Slide index not found: ${slideIndex}`);
-      slide.elements = slide.elements.filter(element => !removals.has(element.id));
+      updateSlideAt(stores, slideIndex, {
+        elements: slide.elements.filter(element => !removals.has(element.id))
+      });
     }
-    stores.slides.setSlides(slides);
     stores.main.setActiveElementIdList(stores.main.activeElementIdList.filter(id => !ids.includes(id)));
     return {
       deleted: ids
@@ -3221,13 +3342,17 @@ export function createAgenticApi(options: {
     elementId: string;
     slideId?: string;
     series: number[];
+    legend?: string;
   }) => {
     const found = chartElement(payload.elementId, payload.slideId);
     const series = normalizeChartSeries(found.element.data.series);
     series.push(normalizeChartSeriesRow(payload.series, `series[${series.length}]`));
+    const legends = [...(found.element.data.legends || [])];
+    if (legends.length === series.length - 1) legends.push(payload.legend || `Series ${series.length}`);
     const data = normalizeChartData({
       ...found.element.data,
-      series
+      series,
+      legends
     });
     return updateElementAt(stores, found.slideIndex, found.elementIndex, {
       data
@@ -3241,10 +3366,14 @@ export function createAgenticApi(options: {
     const found = chartElement(payload.elementId, payload.slideId);
     const series = normalizeChartSeries(found.element.data.series);
     if (series.length === 1) throw new Error('Chart data must include at least one series');
-    series.splice(normalizeSeriesIndex(payload.index, series.length), 1);
+    const seriesIndex = normalizeSeriesIndex(payload.index, series.length);
+    series.splice(seriesIndex, 1);
+    const legends = [...(found.element.data.legends || [])];
+    if (legends.length === series.length + 1) legends.splice(seriesIndex, 1);
     const data = normalizeChartData({
       ...found.element.data,
-      series
+      series,
+      legends
     });
     return updateElementAt(stores, found.slideIndex, found.elementIndex, {
       data
@@ -3506,20 +3635,23 @@ export function createAgenticApi(options: {
     const targetSlideId = payload.options?.slideId || found.slide.id;
     const targetIndex = stores.slides.slides.findIndex(slide => slide.id === targetSlideId);
     if (targetIndex === -1) throw new Error(`Slide not found: ${targetSlideId}`);
-    const slides = clonePlain(stores.slides.slides);
-    slides[targetIndex].background = {
-      ...slides[targetIndex].background,
-      type: 'image',
-      image: {
-        src: found.element.src,
-        size: payload.options?.size || 'cover'
+    updateSlideAt(stores, targetIndex, {
+      background: {
+        ...stores.slides.slides[targetIndex].background,
+        type: 'image',
+        image: {
+          src: found.element.src,
+          size: payload.options?.size || 'cover'
+        }
       }
-    };
+    });
     if (payload.options?.deleteElement) {
-      slides[found.slideIndex].elements = slides[found.slideIndex].elements.filter(element => element.id !== found.element.id);
+      const source = stores.slides.slides[found.slideIndex];
+      updateSlideAt(stores, found.slideIndex, {
+        elements: source.elements.filter(element => element.id !== found.element.id)
+      });
     }
-    stores.slides.setSlides(slides);
-    return clonePlain(slides[targetIndex]);
+    return clonePlain(stores.slides.slides[targetIndex]);
   });
   const videoElement = (elementId: string, slideId?: string) => {
     const found = findElement(stores.slides.slides, elementId, slideId, stores.slides.slideIndex);
@@ -3797,6 +3929,68 @@ export function createAgenticApi(options: {
     });
     return reply;
   });
+  register('notes.listReplies', (payload: {
+    slideId: string;
+    noteId: string;
+  }) => {
+    const {
+      note
+    } = findNote(ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex).slide.notes || [], payload.noteId);
+    return clonePlain(note.replies || []);
+  });
+  register('notes.updateReply', (payload: {
+    slideId: string;
+    noteId: string;
+    replyId: string;
+    patch: Partial<NoteReply>;
+  }) => {
+    const {
+      slide,
+      index
+    } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
+    const notes = clonePlain(slide.notes || []);
+    const {
+      note
+    } = findNote(notes, payload.noteId);
+    const replies = clonePlain(note.replies || []);
+    const {
+      replyIndex
+    } = findReply(replies, payload.replyId);
+    const nextReply = {
+      ...replies[replyIndex],
+      ...clonePlain(payload.patch)
+    };
+    replies[replyIndex] = nextReply;
+    note.replies = replies;
+    updateSlideAt(stores, index, {
+      notes
+    });
+    return nextReply;
+  });
+  register('notes.deleteReply', (payload: {
+    slideId: string;
+    noteId: string;
+    replyId: string | string[];
+  }) => {
+    const ids = toIdList(payload.replyId);
+    const {
+      slide,
+      index
+    } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
+    const notes = clonePlain(slide.notes || []);
+    const {
+      note
+    } = findNote(notes, payload.noteId);
+    const replies = clonePlain(note.replies || []);
+    for (const id of ids) findReply(replies, id);
+    note.replies = replies.filter(reply => !ids.includes(reply.id));
+    updateSlideAt(stores, index, {
+      notes
+    });
+    return {
+      deleted: ids
+    };
+  });
   register('sections.list', () => listSectionRanges(stores.slides.slides));
   register('sections.set', (payload: {
     slideId: string;
@@ -3806,13 +4000,12 @@ export function createAgenticApi(options: {
     const {
       index
     } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
-    const slides = clonePlain(stores.slides.slides);
-    for (let slideIndex = 0; slideIndex < slides.length; slideIndex++) {
-      if (slideIndex !== index && slides[slideIndex].sectionTag?.id === payload.section.id) delete slides[slideIndex].sectionTag;
+    for (const slide of stores.slides.slides) {
+      if (slide.id !== payload.slideId && slide.sectionTag?.id === payload.section.id) {
+        stores.slides.removeSlideProps({ id: slide.id, propName: 'sectionTag' });
+      }
     }
-    slides[index].sectionTag = clonePlain(payload.section);
-    stores.slides.setSlides(slides);
-    return clonePlain(slides[index]);
+    return updateSlideAt(stores, index, { sectionTag: clonePlain(payload.section) });
   });
   register('sections.clear', (payload: {
     sectionIdOrSlideId?: string;
@@ -3821,34 +4014,29 @@ export function createAgenticApi(options: {
   }) => {
     const sectionIdOrSlideId = payload.sectionIdOrSlideId || payload.sectionId || payload.slideId;
     if (!sectionIdOrSlideId) throw new Error('Section id or slide id is required');
-    const slides = clonePlain(stores.slides.slides);
-    const range = findSectionRange(slides, sectionIdOrSlideId);
-    delete slides[range.startIndex].sectionTag;
-    stores.slides.setSlides(slides);
-    return clonePlain(slides[range.startIndex]);
+    const range = findSectionRange(stores.slides.slides, sectionIdOrSlideId);
+    stores.slides.removeSlideProps({ id: stores.slides.slides[range.startIndex].id, propName: 'sectionTag' });
+    return clonePlain(stores.slides.slides[range.startIndex]);
   });
   register('sections.rename', (payload: {
     sectionId: string;
     title: string;
   }) => {
-    const slides = clonePlain(stores.slides.slides);
-    const range = findSectionRange(slides, payload.sectionId);
-    slides[range.startIndex].sectionTag = {
-      ...range.section,
-      title: payload.title
-    };
-    stores.slides.setSlides(slides);
-    return clonePlain(slides.slice(range.startIndex, range.endIndex + 1));
+    const range = findSectionRange(stores.slides.slides, payload.sectionId);
+    updateSlideAt(stores, range.startIndex, {
+      sectionTag: {
+        ...range.section,
+        title: payload.title
+      }
+    });
+    return clonePlain(stores.slides.slides.slice(range.startIndex, range.endIndex + 1));
   });
   register('sections.delete', (payload: {
     sectionId: string;
   }) => {
-    const slides = clonePlain(stores.slides.slides);
-    const range = findSectionRange(slides, payload.sectionId);
-    if (range.slideIds.length >= slides.length) throw new Error('Cannot delete every slide through a section range');
-    slides.splice(range.startIndex, range.slideIds.length);
-    stores.slides.setSlides(slides);
-    stores.slides.updateSlideIndex(clampIndex(range.startIndex, slides.length));
+    const range = findSectionRange(stores.slides.slides, payload.sectionId);
+    if (range.slideIds.length >= stores.slides.slides.length) throw new Error('Cannot delete every slide through a section range');
+    stores.slides.deleteSlide(range.slideIds);
     stores.main.setActiveElementIdList([]);
     return {
       deleted: range.slideIds
@@ -3860,31 +4048,34 @@ export function createAgenticApi(options: {
     section: NonNullable<Slide['sectionTag']>;
   }) => {
     if (!payload.section?.id) throw new Error('Section id is required');
-    const slides = clonePlain(stores.slides.slides);
-    const startIndex = fromApiSlideIndex(payload.startIndex, slides.length, 'startIndex');
-    const endIndex = fromApiSlideIndex(payload.endIndex, slides.length, 'endIndex');
+    const startIndex = fromApiSlideIndex(payload.startIndex, stores.slides.slides.length, 'startIndex');
+    const endIndex = fromApiSlideIndex(payload.endIndex, stores.slides.slides.length, 'endIndex');
     const [from, to] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
-    for (let index = 0; index < slides.length; index++) {
-      if (slides[index].sectionTag?.id === payload.section.id) delete slides[index].sectionTag;
+    const section = clonePlain(payload.section);
+    for (let index = 0; index < stores.slides.slides.length; index++) {
+      const slide = stores.slides.slides[index];
+      if (slide.sectionTag?.id === section.id && index !== from) {
+        stores.slides.removeSlideProps({ id: slide.id, propName: 'sectionTag' });
+      }
     }
     for (let index = from; index <= to; index++) {
-      slides[index].sectionTag = index === from ? clonePlain(payload.section) : undefined;
+      if (index === from) updateSlideAt(stores, index, { sectionTag: section });
+      else if (stores.slides.slides[index].sectionTag) stores.slides.removeSlideProps({ id: stores.slides.slides[index].id, propName: 'sectionTag' });
     }
-    stores.slides.setSlides(slides);
-    return clonePlain(slides.slice(from, to + 1));
+    return clonePlain(stores.slides.slides.slice(from, to + 1));
   });
   register('sections.move', (payload: {
     sectionId: string;
     toIndex: number;
   }) => {
-    const slides = clonePlain(stores.slides.slides);
-    const range = findSectionRange(slides, payload.sectionId);
-    const targetIndex = fromApiInsertSlideIndex(payload.toIndex, slides.length, 'toIndex');
-    if (targetIndex >= range.startIndex && targetIndex <= range.endIndex + 1) return clonePlain(slides);
+    const range = findSectionRange(stores.slides.slides, payload.sectionId);
+    const targetIndex = fromApiInsertSlideIndex(payload.toIndex, stores.slides.slides.length, 'toIndex');
+    if (targetIndex >= range.startIndex && targetIndex <= range.endIndex + 1) return clonePlain(stores.slides.slides);
+    const slides = stores.slides.slides.slice();
     const movingSlides = slides.splice(range.startIndex, range.slideIds.length);
     const adjustedIndex = targetIndex > range.startIndex ? targetIndex - movingSlides.length : targetIndex;
     slides.splice(insertIndex(adjustedIndex, slides.length), 0, ...movingSlides);
-    stores.slides.setSlides(slides);
+    stores.slides.setSlides(slides, undefined, { clone: false });
     stores.slides.updateSlideIndex(clampIndex(adjustedIndex, slides.length));
     return clonePlain(slides);
   });
@@ -4008,11 +4199,11 @@ export function createAgenticApi(options: {
     return getState(stores, documentVersion);
   });
   register('view.enterPresentation', () => {
-    stores.screen.setScreening(true);
+    beginScreening();
     return getState(stores, documentVersion);
   });
   register('view.exitPresentation', () => {
-    stores.screen.setScreening(false);
+    exitScreening();
     return getState(stores, documentVersion);
   });
   register('view.setLocale', async (payload: {
@@ -4371,7 +4562,7 @@ export function createAgenticApi(options: {
         background,
         slideIds
       }, meta),
-      applyBackgroundToAll: (background, meta) => command('slides.applyBackground', {
+      applyBackgroundToAll: (background, meta) => command('slides.applyBackgroundToAll', {
         background
       }, meta),
       getTransition: slideId => {
@@ -4595,101 +4786,44 @@ export function createAgenticApi(options: {
         const element = findElement(stores.slides.slides, elementId, slideId, stores.slides.slideIndex).element;
         return element.type === 'shape' ? clonePlain(element) : null;
       },
-      create: (input = {}, meta) => withMutation({
-        type: 'shapes.create',
-        payload: input,
-        meta
-      }, () => {
-        const {
-          slide,
-          index: slideIndex
-        } = ensureSlide(stores.slides.slides, input.slideId, stores.slides.slideIndex);
-        const element = createShapeElementFromInput(input);
-        const elements = clonePlain(slide.elements);
-        elements.splice(insertIndex(input.index, elements.length), 0, element);
-        updateSlideAt(stores, slideIndex, {
-          elements
-        });
-        if (input.select !== false) stores.main.setActiveElementIdList([element.id]);
-        return clonePlain(element);
-      }),
-      patch: (elementId, patch, meta) => withMutation({
-        type: 'shapes.patch',
-        payload: {
-          elementId,
-          slideId: meta?.slideId,
-          patch
-        },
-        meta
-      }, () => patchShapeElement(elementId, meta?.slideId, patch)),
-      update: (elementId, patch, meta) => withMutation({
-        type: 'shapes.update',
-        payload: {
-          elementId,
-          slideId: meta?.slideId,
-          patch
-        },
-        meta
-      }, () => patchShapeElement(elementId, meta?.slideId, patch)),
-      setPath: (elementId, path, options, meta) => withMutation({
-        type: 'shapes.setPath',
-        payload: {
-          elementId,
-          slideId: meta?.slideId,
-          path,
-          ...(options || {})
-        },
-        meta
-      }, () => patchShapeElement(elementId, meta?.slideId, {
+      create: (input = {}, meta) => command('shapes.create', input, meta),
+      patch: (elementId, patch, meta) => command('shapes.patch', {
+        elementId,
+        slideId: meta?.slideId,
+        patch
+      }, meta),
+      update: (elementId, patch, meta) => command('shapes.update', {
+        elementId,
+        slideId: meta?.slideId,
+        patch
+      }, meta),
+      setPath: (elementId, path, options, meta) => command('shapes.setPath', {
+        elementId,
+        slideId: meta?.slideId,
         path,
         ...(options || {})
-      })),
-      setFormula: (elementId, pathFormula, keypoints, meta) => withMutation({
-        type: 'shapes.setFormula',
-        payload: {
-          elementId,
-          slideId: meta?.slideId,
-          pathFormula,
-          keypoints
-        },
-        meta
-      }, () => patchShapeElement(elementId, meta?.slideId, {
+      }, meta),
+      setFormula: (elementId, pathFormula, keypoints, meta) => command('shapes.setFormula', {
+        elementId,
+        slideId: meta?.slideId,
         pathFormula,
-        ...(keypoints ? {
-          keypoints
-        } : {})
-      })),
-      setFill: (elementId, fill, meta) => withMutation({
-        type: 'shapes.setFill',
-        payload: {
-          elementId,
-          slideId: meta?.slideId,
-          fill
-        },
-        meta
-      }, () => patchShapeElement(elementId, meta?.slideId, normalizeShapeFillPatch(fill))),
-      setOutline: (elementId, outline, meta) => withMutation({
-        type: 'shapes.setOutline',
-        payload: {
-          elementId,
-          slideId: meta?.slideId,
-          outline
-        },
-        meta
-      }, () => patchShapeElement(elementId, meta?.slideId, {
+        keypoints
+      }, meta),
+      setFill: (elementId, fill, meta) => command('shapes.setFill', {
+        elementId,
+        slideId: meta?.slideId,
+        fill
+      }, meta),
+      setOutline: (elementId, outline, meta) => command('shapes.setOutline', {
+        elementId,
+        slideId: meta?.slideId,
         outline
-      })),
-      setText: (elementId, text, meta) => withMutation({
-        type: 'shapes.setText',
-        payload: {
-          elementId,
-          slideId: meta?.slideId,
-          text
-        },
-        meta
-      }, () => patchShapeElement(elementId, meta?.slideId, {
+      }, meta),
+      setText: (elementId, text, meta) => command('shapes.setText', {
+        elementId,
+        slideId: meta?.slideId,
         text
-      }))
+      }, meta)
     },
     lines: {
       get: (elementId, slideId) => {
@@ -4736,15 +4870,11 @@ export function createAgenticApi(options: {
         attrs
       }, meta),
       image: (elementId, patch, meta) => updateElementSubtype<PPTImageElement>('image', elementId, patch, meta),
-      shape: (elementId, patch, meta) => withMutation({
-        type: 'shapes.patch',
-        payload: {
-          elementId,
-          slideId: meta?.slideId,
-          patch
-        },
-        meta
-      }, () => patchShapeElement(elementId, meta?.slideId, patch)),
+      shape: (elementId, patch, meta) => command('shapes.patch', {
+        elementId,
+        slideId: meta?.slideId,
+        patch
+      }, meta),
       line: (elementId, patch, meta) => command('lines.update', {
         elementId,
         slideId: meta?.slideId,
@@ -4897,6 +5027,7 @@ export function createAgenticApi(options: {
       addSeries: (elementId, series, meta) => command('charts.addSeries', {
         elementId,
         series,
+        legend: meta?.legend,
         slideId: meta?.slideId
       }, meta),
       deleteSeries: (elementId, index, meta) => command('charts.deleteSeries', {
@@ -5133,95 +5264,17 @@ export function createAgenticApi(options: {
         } = findNote(ensureSlide(stores.slides.slides, slideId, stores.slides.slideIndex).slide.notes || [], noteId);
         return clonePlain(note.replies || []);
       },
-      updateReply: async (slideId, noteId, replyId, patch, meta) => {
-        const agentCommand: FikaAgentCommand = {
-          type: 'notes.update',
-          payload: {
-            slideId,
-            noteId,
-            replyId,
-            patch
-          },
-          meta
-        };
-        try {
-          const {
-            note
-          } = findNote(ensureSlide(stores.slides.slides, slideId, stores.slides.slideIndex).slide.notes || [], noteId);
-          const replies = clonePlain(note.replies || []);
-          const {
-            replyIndex
-          } = findReply(replies, replyId);
-          const nextReply = {
-            ...replies[replyIndex],
-            ...clonePlain(patch)
-          };
-          replies[replyIndex] = nextReply;
-          const result = await command<Note>('notes.update', {
-            slideId,
-            noteId,
-            patch: {
-              replies
-            }
-          }, meta);
-          return {
-            ...result,
-            data: result.ok ? clonePlain(nextReply) : undefined
-          } as FikaCommandResult<NoteReply>;
-        } catch (error) {
-          const result = failResult(agentCommand, error);
-          if (!destroyed) emit({
-            type: 'commandFailed',
-            command: agentCommand,
-            result
-          });
-          return result as FikaCommandResult<NoteReply>;
-        }
-      },
-      deleteReply: async (slideId, noteId, replyId, meta) => {
-        const agentCommand: FikaAgentCommand = {
-          type: 'notes.update',
-          payload: {
-            slideId,
-            noteId,
-            replyId
-          },
-          meta
-        };
-        try {
-          const ids = toIdList(replyId);
-          const {
-            note
-          } = findNote(ensureSlide(stores.slides.slides, slideId, stores.slides.slideIndex).slide.notes || [], noteId);
-          const replies = clonePlain(note.replies || []);
-          for (const id of ids) findReply(replies, id);
-          const result = await command<Note>('notes.update', {
-            slideId,
-            noteId,
-            patch: {
-              replies: replies.filter(reply => !ids.includes(reply.id))
-            }
-          }, meta);
-          return {
-            ...result,
-            data: result.ok ? {
-              deleted: ids
-            } : undefined
-          } as FikaCommandResult<{
-            deleted: string[];
-          }>;
-        } catch (error) {
-          const result = failResult(agentCommand, error);
-          if (!destroyed) emit({
-            type: 'commandFailed',
-            command: agentCommand,
-            result
-          });
-          return result as FikaCommandResult<{
-            deleted: string[];
-          }>;
-        }
-      }
+      updateReply: (slideId, noteId, replyId, patch, meta) => command('notes.updateReply', {
+        slideId,
+        noteId,
+        replyId,
+        patch
+      }, meta),
+      deleteReply: (slideId, noteId, replyId, meta) => command('notes.deleteReply', {
+        slideId,
+        noteId,
+        replyId
+      }, meta)
     },
     sections: {
       set: (slideId, section, meta) => command('sections.set', {
@@ -5309,16 +5362,14 @@ export function createAgenticApi(options: {
       json: () => documentFromStores(stores)
     }
   };
-  stopHandles.push(useMainStore.subscribe(() => emit({
-    type: 'selectionChanged',
-    data: getState(stores, documentVersion)
-  })), useSlidesStore.subscribe(() => emit({
-    type: 'selectionChanged',
-    data: getState(stores, documentVersion)
-  })), useScreenStore.subscribe(() => emit({
-    type: 'selectionChanged',
-    data: getState(stores, documentVersion)
-  })));
+  const emitSelectionChanged = () => {
+    if (!listeners.size) return;
+    emit({
+      type: 'selectionChanged',
+      data: getState(stores, documentVersion)
+    });
+  };
+  stopHandles.push(useMainStore.subscribe(emitSelectionChanged), useSlidesStore.subscribe(emitSelectionChanged), useScreenStore.subscribe(emitSelectionChanged));
   return {
     api,
     stop() {

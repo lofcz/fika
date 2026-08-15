@@ -177,10 +177,11 @@ export default (
           targetMaxY = yRange[1]
         }
         else if (element.type === 'line') {
-          targetMinX = targetLeft
-          targetMaxX = targetLeft + Math.max(element.start[0], element.end[0])
-          targetMinY = targetTop
-          targetMaxY = targetTop + Math.max(element.start[1], element.end[1])
+          const range = getElementRange({ ...element, left: targetLeft, top: targetTop })
+          targetMinX = range.minX
+          targetMaxX = range.maxX
+          targetMinY = range.minY
+          targetMaxY = range.maxY
         }
         else {
           targetMinX = targetLeft
@@ -211,10 +212,11 @@ export default (
             bottomValues.push(yRange[1])
           }
           else if (element.type === 'line') {
-            leftValues.push(left)
-            topValues.push(top)
-            rightValues.push(left + Math.max(element.start[0], element.end[0]))
-            bottomValues.push(top + Math.max(element.start[1], element.end[1]))
+            const range = getElementRange({ ...element, left, top })
+            leftValues.push(range.minX)
+            topValues.push(range.minY)
+            rightValues.push(range.maxX)
+            bottomValues.push(range.maxY)
           }
           else {
             leftValues.push(left)
@@ -230,8 +232,10 @@ export default (
         targetMaxY = Math.max(...bottomValues)
       }
       
+      const eventCtrl = 'ctrlKey' in e && !!(e.ctrlKey || e.metaKey)
       if ('altKey' in e) syncPointerModifiers(e)
       const altGrid = 'altKey' in e && e.altKey
+      const ctrlHeld = eventCtrl || useKeyboardStore.getState().ctrlKeyState
       const { offsetX, offsetY, guides } = snapMovingBox(
         { minX: targetMinX, maxX: targetMaxX, minY: targetMinY, maxY: targetMaxY },
         others,
@@ -240,6 +244,7 @@ export default (
           canvas: { width: edgeWidth, height: edgeHeight },
           gridSize: resolveGridSize(gridLineSizeRef.current, altGrid),
           index: snapIndex,
+          ctrlMeasures: ctrlHeld,
         },
       )
       targetLeft += offsetX

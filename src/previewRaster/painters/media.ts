@@ -1,6 +1,6 @@
 import Konva from 'konva'
 import type { PPTAudioElement, PPTVideoElement } from '@/types/slides'
-import { loadImageBitmap } from '@/utils/imageBitmapCache'
+import { loadPreviewImageBitmap } from '@/utils/imageBitmapCache'
 
 const iconStub = (element: PPTVideoElement | PPTAudioElement) => {
   const group = new Konva.Group({ listening: false })
@@ -57,7 +57,7 @@ const iconStub = (element: PPTVideoElement | PPTAudioElement) => {
 export const paintMedia = async (element: PPTVideoElement | PPTAudioElement) => {
   const poster = element.poster
   if (poster) {
-    const bitmap = await loadImageBitmap(poster)
+    const bitmap = await loadPreviewImageBitmap(poster)
     if (bitmap) {
       return new Konva.Image({
         image: bitmap,

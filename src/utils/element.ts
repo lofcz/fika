@@ -83,16 +83,40 @@ export const getRectRotatedOffset = (element: RotatedElementData) => {
 };
 
 /**
+ * Local control points that define a line's painted path.
+ * Includes elbows so a bent/curved stroke is never clipped to the start–end chord.
+ */
+export const getLineLocalPoints = (element: PPTLineElement): [number, number][] => {
+  const points: [number, number][] = [element.start, element.end];
+  if (element.broken) points.push(element.broken);
+  if (element.broken2) points.push(element.broken2);
+  if (element.curve) points.push(element.curve);
+  if (element.cubic) points.push(element.cubic[0], element.cubic[1]);
+  return points;
+};
+
+/**
  * Axis-aligned bounds of a single element on the canvas.
  * @param element Element data
  */
 export const getElementRange = (element: PPTElement) => {
   let minX, maxX, minY, maxY;
   if (element.type === 'line') {
-    minX = element.left;
-    maxX = element.left + Math.max(element.start[0], element.end[0]);
-    minY = element.top;
-    maxY = element.top + Math.max(element.start[1], element.end[1]);
+    const points = getLineLocalPoints(element);
+    let minLocalX = Infinity;
+    let maxLocalX = -Infinity;
+    let minLocalY = Infinity;
+    let maxLocalY = -Infinity;
+    for (const point of points) {
+      minLocalX = Math.min(minLocalX, point[0]);
+      maxLocalX = Math.max(maxLocalX, point[0]);
+      minLocalY = Math.min(minLocalY, point[1]);
+      maxLocalY = Math.max(maxLocalY, point[1]);
+    }
+    minX = element.left + minLocalX;
+    maxX = element.left + maxLocalX;
+    minY = element.top + minLocalY;
+    maxY = element.top + maxLocalY;
   } else if ('rotate' in element && element.rotate) {
     const {
       left,
@@ -127,6 +151,33 @@ export const getElementRange = (element: PPTElement) => {
     minY,
     maxY
   };
+};
+
+export type ElementRangeAlign = {
+  minX?: number
+  maxX?: number
+  centerX?: number
+  minY?: number
+  maxY?: number
+  centerY?: number
+}
+
+/**
+ * Shift left/top so the element's painted AABB matches the given edges or centers.
+ * Lines use control-point bounds, not the start–end chord.
+ */
+export const alignElementToRange = (element: PPTElement, target: ElementRangeAlign) => {
+  const range = getElementRange(element);
+  let dx = 0;
+  let dy = 0;
+  if (target.minX !== undefined) dx = target.minX - range.minX;
+  else if (target.maxX !== undefined) dx = target.maxX - range.maxX;
+  else if (target.centerX !== undefined) dx = target.centerX - (range.minX + range.maxX) / 2;
+  if (target.minY !== undefined) dy = target.minY - range.minY;
+  else if (target.maxY !== undefined) dy = target.maxY - range.maxY;
+  else if (target.centerY !== undefined) dy = target.centerY - (range.minY + range.maxY) / 2;
+  element.left += dx;
+  element.top += dy;
 };
 
 /**
@@ -182,7 +233,6 @@ export const canRotateGroupElements = (elements: PPTElement[]) => {
   if (!isSingleGroupSelection(elements)) return false;
   return elements.every(element => {
     if (!ROTATABLE_GROUP_ELEMENT_TYPES.includes(element.type)) return false;
-    if (element.type === 'line' && (element.broken || element.broken2 || element.curve || element.cubic)) return false;
     return true;
   });
 };
@@ -241,8 +291,10 @@ const getRectElementPoints = (element: Exclude<PPTElement, PPTLineElement>) => {
  * @param element Line element
  */
 const getAbsoluteLinePointList = (element: PPTLineElement) => {
-  const points = getAbsoluteLinePoints(element);
-  return [points.start, points.end];
+  return getLineLocalPoints(element).map(point => ({
+    x: element.left + point[0],
+    y: element.top + point[1],
+  }));
 };
 
 /**

@@ -5,6 +5,7 @@ const cx = bindStyles(styles)
 import { useRef, useState, useEffect, useCallback, useMemo, memo, type CSSProperties, type MutableRefObject, type WheelEvent } from 'react'
 import { OverlayScrollbars } from 'overlayscrollbars'
 import { useMainStore, useSlidesStore, useSnapshotStore, selectCanUndo, selectCanRedo } from '@/store'
+import { drainCommitQueue } from '@/utils/commitQueue'
 import type { ShapePoolItem } from '@/configs/shapes'
 import type { LinePoolItem } from '@/configs/lines'
 import type { CustomShapeDrawMode } from '@/types/edit'
@@ -245,8 +246,8 @@ const CanvasTool = memo(function CanvasTool({ className, style }: { className?: 
     <SymbolPool onSelect={() => setSymbolPoolVisible(false)} />
   ), [])
   const endCanvasEdit = useCallback(() => {
+    drainCommitQueue()
     const main = useMainStore.getState()
-    if (main.editingElementId) main.setEditingElementId('')
     if (main.disableHotkeys) main.setDisableHotkeysState(false)
   }, [])
   const openLatexEditor = useCallback(() => {

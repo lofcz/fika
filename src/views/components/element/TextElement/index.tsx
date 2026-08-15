@@ -14,7 +14,7 @@ import useElementShadow from '@/views/components/element/hooks/useElementShadow'
 import useTextFit from '@/views/components/element/hooks/useTextFit';
 import { useOutlineRadiusCss } from '@/views/components/element/hooks/useElementOutline';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
-import { resolveElementDefaultFontColor, resolveElementSurfaces, resolvePlaceholderColor } from '@/utils/textContrast';
+import { resolveElementDefaultFontColor, resolveElementSurfaces, resolveLiveTextPaint, resolvePlaceholderColor } from '@/utils/textContrast';
 import { computePlaceholderSlotHeight, resolveTextBoxLayout, shouldBlockPlaceholderHeightShrink, textBoxFlexColumn, textBoxJustify, textBoxLiveMode, textBoxPaintSize, type TextBoxLiveMode } from '@/utils/placeholderLayout';
 import { isPlaceholderPromptFontSize } from '@/configs/textPresets';
 import { isEmptyRichText, isListPlaceholder, placeholderBoxVars, placeholderPhase, placeholderSeed, repairFilledPlaceholderHtml } from '@/utils/placeholderPaint';
@@ -52,16 +52,20 @@ const TextElement = memo((props: ITextElementProps) => {
   const isScaling = useMainStore(s => s.handleElementId === elementId && s.isScaling);
   const { addHistorySnapshot } = useHistorySnapshot();
   const { currentSlide, theme } = readSlideTheme();
+  const painted = resolveLiveTextPaint(elementInfo.defaultColor || theme?.fontColor || '#333', elementInfo.content, {
+    element: elementInfo,
+    elements: currentSlide?.elements,
+    fill: elementInfo.fill,
+    background: currentSlide?.background,
+    fallbackSurface: theme?.backgroundColor,
+    themeFontColor: theme?.fontColor,
+  });
   const elementSurfaces = resolveElementSurfaces({
     fill: elementInfo.fill,
     background: currentSlide?.background,
     fallbackSurface: theme?.backgroundColor
   });
-  const defaultInkColor = resolveElementDefaultFontColor(elementInfo.defaultColor || theme?.fontColor || '#333', {
-    fill: elementInfo.fill,
-    background: currentSlide?.background,
-    fallbackSurface: theme?.backgroundColor
-  });
+  const defaultInkColor = painted.ink;
   const elementRef = useRef<HTMLDivElement | null>(null);
   const prosemirrorEditorRef = useRef<ElementRef<typeof ProsemirrorEditor> | null>(null);
   const [editorFocused, setEditorFocused] = useState(false);
@@ -419,6 +423,6 @@ const TextElement = memo((props: ITextElementProps) => {
           return;
         }
         handleSelectElement($event, !(isEditing || placeholderTextEditing));
-      }} onDoubleClick={(event) => { event.stopPropagation(); startEdit(); }}><ElementOutline width={elementInfo.width} height={elementInfo.height} outline={elementInfo.outline} /><div className={cx('text-fit-host')} ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}><div className={cx('text')}><ProsemirrorEditor elementId={elementId} defaultColor={defaultInkColor} defaultFontName={elementInfo.defaultFontName} defaultFontSize={placeholderEditorDefaults.defaultFontSize} defaultAlign={placeholderEditorDefaults.defaultAlign} editable={!elementInfo.lock && !!(isEditing || placeholderTextEditing)} wrapEmptyAs={listPlaceholder ? 'bullet' : undefined} value={elementInfo.content} autoFocus={!!(isEditing || placeholderTextEditing)} ref={prosemirrorEditorRef} onUpdate={handleUpdate} onMouseDown={handleEditorMouseDown} onFocus={handleEditorFocus} onBlur={handleEditorBlur} onEmptyChange={handleEmptyChange} onPlaceholderFill={() => seedPlaceholder(elementInfoRef.current, false)} placeholderFillStyles={elementInfo.placeholder ? placeholderSeed(elementInfo, 'filled', defaultInkColor) : undefined} onDocChange={handleDocChange} onPlaceholderStyle={handlePlaceholderStyle} /></div></div>{}<div className={cx('drag-handler', 'top')} /><div className={cx('drag-handler', 'bottom')} /></div></div></div>;
+      }} onDoubleClick={(event) => { event.stopPropagation(); startEdit(); }}><ElementOutline width={elementInfo.width} height={elementInfo.height} outline={elementInfo.outline} /><div className={cx('text-fit-host')} ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}><div className={cx('text')}><ProsemirrorEditor elementId={elementId} defaultColor={defaultInkColor} defaultFontName={elementInfo.defaultFontName} defaultFontSize={placeholderEditorDefaults.defaultFontSize} defaultAlign={placeholderEditorDefaults.defaultAlign} editable={!elementInfo.lock && !!(isEditing || placeholderTextEditing)} wrapEmptyAs={listPlaceholder ? 'bullet' : undefined} value={(isEditing || placeholderTextEditing || editorFocused) ? elementInfo.content : painted.html} autoFocus={!!(isEditing || placeholderTextEditing)} ref={prosemirrorEditorRef} onUpdate={handleUpdate} onMouseDown={handleEditorMouseDown} onFocus={handleEditorFocus} onBlur={handleEditorBlur} onEmptyChange={handleEmptyChange} onPlaceholderFill={() => seedPlaceholder(elementInfoRef.current, false)} placeholderFillStyles={elementInfo.placeholder ? placeholderSeed(elementInfo, 'filled', defaultInkColor) : undefined} onDocChange={handleDocChange} onPlaceholderStyle={handlePlaceholderStyle} /></div></div>{}<div className={cx('drag-handler', 'top')} /><div className={cx('drag-handler', 'bottom')} /></div></div></div>;
 });
 export default TextElement;

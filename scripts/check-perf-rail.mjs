@@ -30,6 +30,22 @@ function read(rel) {
   return readFileSync(join(root, rel), 'utf8')
 }
 
+function sliceNamedFn(src, name) {
+  const match = src.match(new RegExp(String.raw`(?:const|function|let)\s+${name}\b[\s\S]*?\{`))
+  if (!match) return ''
+  const open = src.indexOf(match[0]) + match[0].length - 1
+  let depth = 0
+  for (let i = open; i < src.length; i++) {
+    const ch = src[i]
+    if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) return src.slice(open, i + 1)
+    }
+  }
+  return ''
+}
+
 function walk(dir, acc = []) {
   for (const name of readdirSync(dir)) {
     const abs = join(dir, name)
@@ -110,9 +126,58 @@ assert(clampScrollTop(180, 40, 200) === 200, 'wheel scroll clamps to the bottom'
 const handler = read('src/hooks/useSlideHandler.ts')
 assert(!/JSON\.parse\(JSON\.stringify\(useSlidesStore\.getState\(\)\.slides\)\)/.test(handler), 'sortSlides must not deep-clone the deck')
 assert(handler.includes('reorderSlides'), 'sortSlides uses the identity-preserving store action')
-assert(read('src/store/slides.ts').includes('reorderSlidesPreservingIdentity'), 'store reorder keeps unchanged slide refs')
+const slidesStore = read('src/store/slides.ts')
+assert(slidesStore.includes('reorderSlidesPreservingIdentity'), 'store reorder keeps unchanged slide refs')
+assert(slidesStore.includes('deleteSlidesPreservingIdentity'), 'store delete keeps unchanged slide refs')
+assert(slidesStore.includes('insertSlidesPreservingIdentity'), 'store insert keeps unchanged slide refs')
+assert(slidesStore.includes('moveSlidePreservingIdentity'), 'store move keeps unchanged slide refs')
+assert(!/JSON\.parse\(JSON\.stringify\(state\.slides\)\)/.test(slidesStore), 'deleteSlide must not deep-clone the deck')
+assert(!/JSON\.parse\(JSON\.stringify\(get\(\)\.slides\)\)/.test(slidesStore), 'slide mutations must not deep-clone via get()')
 
-const { reorderSlidesPreservingIdentity } = await import(
+const agentic = read('src/embed/agentic/createAgenticApi.ts')
+const commandSlice = (command, until) => {
+  const start = agentic.indexOf(`register('${command}'`)
+  const end = until ? agentic.indexOf(`register('${until}'`, start + 1) : start + 2500
+  return { start, slice: start >= 0 ? agentic.slice(start, end > start ? end : start + 2500) : '' }
+}
+const slideCommands = [
+  ['slides.create', 'slides.createFromLayout'],
+  ['slides.insertFromTemplate', 'slides.insert'],
+  ['slides.insert', 'slides.update'],
+  ['slides.duplicate', 'slides.move'],
+]
+for (const [command, until] of slideCommands) {
+  const { start, slice } = commandSlice(command, until)
+  assert(start >= 0, `${command} is registered`)
+  assert(!/const\s+\w+\s*=\s*clonePlain\(stores\.slides\.slides\)/.test(slice), `${command} must not clone the whole deck`)
+  assert(!slice.includes('setSlides('), `${command} must not replace the deck via setSlides`)
+  assert(slice.includes('addSlide('), `${command} inserts via addSlide`)
+}
+const { start: moveStart, slice: moveSlice } = commandSlice('slides.move', 'slides.select')
+assert(moveStart >= 0, 'slides.move is registered')
+assert(moveSlice.includes('moveSlide('), 'slides.move uses the identity-preserving store action')
+assert(!moveSlice.includes('setSlides('), 'slides.move must not replace the deck via setSlides')
+
+const updateSlideAt = sliceNamedFn(agentic, 'updateSlideAt')
+assert(updateSlideAt.includes('updateSlide('), 'updateSlideAt writes one slide via the store')
+assert(!updateSlideAt.includes('clonePlain(stores.slides.slides)'), 'updateSlideAt must not clone the deck')
+assert(!updateSlideAt.includes('setSlides('), 'updateSlideAt must not replace the deck')
+const updateElementAt = sliceNamedFn(agentic, 'updateElementAt')
+assert(updateElementAt.includes('updateElement('), 'updateElementAt writes one element via the store')
+assert(!updateElementAt.includes('clonePlain(stores.slides.slides)'), 'updateElementAt must not clone the deck')
+const capture = sliceNamedFn(agentic, 'captureRuntimeState')
+assert(capture.includes('slides: stores.slides.slides'), 'rollback capture keeps the live slides array ref')
+assert(!capture.includes('documentFromStores'), 'rollback capture must not deep-clone the document')
+const emitChanged = sliceNamedFn(agentic, 'emitDocumentChanged')
+assert(emitChanged.includes('!listeners.size') || emitChanged.includes('listeners.size'), 'documentChanged skips the full clone when nothing is listening')
+
+const {
+  reorderSlidesPreservingIdentity,
+  insertSlidesPreservingIdentity,
+  deleteSlidesPreservingIdentity,
+  moveSlidePreservingIdentity,
+  slideIndexAfterDelete,
+} = await import(
   pathToFileURL(join(root, 'src/utils/slideOrder.ts')).href
 )
 const a = { id: 'a', elements: [{ id: 'ae' }], background: { type: 'solid' } }
@@ -127,6 +192,32 @@ const body = { id: 'd', elements: [] }
 const shifted = reorderSlidesPreservingIdentity([headed, body], 0, 1)
 assert(shifted[0] !== headed && shifted[1] !== body, 'section handoff clones only the two touched slides')
 assert(!shifted[1].sectionTag && shifted[0].sectionTag?.id === 's', 'section tag moves to the slide that stays at the start')
+
+const inserted = insertSlidesPreservingIdentity([a, b, c], 1, [{ id: 'n', elements: [] }])
+assert(inserted.map(slide => slide.id).join(',') === 'a,n,b,c', 'insert places the new slide')
+assert(inserted[0] === a && inserted[2] === b && inserted[3] === c, 'insert keeps existing slide identities')
+assert(inserted[0].elements === a.elements, 'insert does not clone elements')
+
+const removed = deleteSlidesPreservingIdentity([a, b, c], ['b'])
+assert(removed.slides.map(slide => slide.id).join(',') === 'a,c', 'delete drops the target')
+assert(removed.slides[0] === a && removed.slides[1] === c, 'delete keeps remaining slide identities')
+assert(removed.deletedIndexes.join(',') === '1', 'delete reports the original index')
+assert(slideIndexAfterDelete(1, [a, b, c], new Set(['b']), removed.slides.length, removed.deletedIndexes) === 1, 'deleting the current slide lands on the hole')
+assert(slideIndexAfterDelete(2, [a, b, c], new Set(['b']), 2, [1]) === 1, 'deleting a slide before current shifts the index')
+assert(slideIndexAfterDelete(0, [a, b, c], new Set(['c']), 2, [2]) === 0, 'deleting a later slide keeps the current slide')
+
+const headedDelete = { id: 'h2', elements: [], sectionTag: { id: 's2', title: 'Mid' } }
+const bodyDelete = { id: 'd2', elements: [] }
+const tailDelete = { id: 't2', elements: [] }
+const afterSectionDelete = deleteSlidesPreservingIdentity([headedDelete, bodyDelete, tailDelete], ['h2'])
+assert(afterSectionDelete.slides[0] !== bodyDelete, 'section handoff clones only the next slide')
+assert(afterSectionDelete.slides[1] === tailDelete, 'untouched slides keep identity after sectioned delete')
+assert(afterSectionDelete.slides[0].sectionTag?.id === 's2', 'section tag moves to the following slide')
+
+const moved = moveSlidePreservingIdentity([a, b, c], 0, 2)
+assert(moved.slides.map(slide => slide.id).join(',') === 'b,c,a', 'move relocates the slide')
+assert(moved.slides[0] === b && moved.slides[1] === c && moved.slides[2] === a, 'move keeps every slide identity')
+assert(moved.index === 2, 'move reports the landing index')
 
 if (failures.length) {
   console.error('perf rail checks failed:\n' + failures.map(f => ` - ${f}`).join('\n'))

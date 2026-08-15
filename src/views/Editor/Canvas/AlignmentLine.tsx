@@ -57,6 +57,13 @@ const AlignmentLine = memo((props: IAlignmentLineProps) => {
   return (
     <div
       className={cx('alignment-line', kind, type)}
+      data-alignment-line=""
+      data-kind={kind}
+      data-type={type}
+      data-label={label || ''}
+      data-axis-x={String(props.axis.x)}
+      data-axis-y={String(props.axis.y)}
+      data-length={String(props.length)}
       style={{ left: `${left}px`, top: `${top}px` }}
     >
       <svg

@@ -745,7 +745,7 @@ export interface FikaAgentTextApi {
   }): Promise<FikaCommandResult<PPTTextElement>>;
 }
 export interface FikaAgentShapesApi {
-  presets(categoryKey?: ShapeCategoryKey): FikaShapePreset[];
+  presets(categoryKey?: ShapeCategoryKey | 'rect'): FikaShapePreset[];
   get(elementId: string, slideId?: string): PPTShapeElement | null;
   create(input?: FikaCreateShapeInput, meta?: FikaCommandMeta): Promise<FikaCommandResult<PPTShapeElement>>;
   patch(elementId: string, patch: FikaShapePatch, meta?: FikaCommandMeta & {
@@ -857,6 +857,7 @@ export interface FikaAgentChartsApi {
   }): Promise<FikaCommandResult<PPTChartElement>>;
   addSeries(elementId: string, series: number[], meta?: FikaCommandMeta & {
     slideId?: string;
+    legend?: string;
   }): Promise<FikaCommandResult<PPTChartElement>>;
   deleteSeries(elementId: string, index: number, meta?: FikaCommandMeta & {
     slideId?: string;
@@ -1257,6 +1258,7 @@ export interface FikaCommandPayloadMap {
   'slides.applyBackground': {
     background: SlideBackground;
     slideIds?: string[];
+    slideId?: string | string[];
   };
   'slides.applyBackgroundToAll': {
     background: SlideBackground;
@@ -1366,10 +1368,12 @@ export interface FikaCommandPayloadMap {
   };
   'elements.lock': {
     elementId: string | string[];
+    slideId?: string;
     locked?: boolean;
   };
   'elements.unlock': {
     elementId: string | string[];
+    slideId?: string;
   };
   'elements.hide': {
     elementId: string | string[];
@@ -1452,6 +1456,48 @@ export interface FikaCommandPayloadMap {
     elementId: string;
     slideId?: string;
     direction?: FikaLineDirectionInput;
+  };
+  'shapes.presets': {
+    categoryKey?: ShapeCategoryKey | 'rect';
+  } | undefined;
+  'shapes.create': FikaCreateShapeInput | undefined;
+  'shapes.patch': {
+    elementId: string;
+    slideId?: string;
+    patch: FikaShapePatch;
+  };
+  'shapes.update': {
+    elementId: string;
+    slideId?: string;
+    patch: FikaShapePatch;
+  };
+  'shapes.setPath': {
+    elementId: string;
+    slideId?: string;
+    path: string;
+    viewBox?: PPTShapeElement['viewBox'];
+    fixedRatio?: boolean;
+  };
+  'shapes.setFormula': {
+    elementId: string;
+    slideId?: string;
+    pathFormula: PPTShapeElement['pathFormula'];
+    keypoints?: number[];
+  };
+  'shapes.setFill': {
+    elementId: string;
+    slideId?: string;
+    fill: FikaShapeFillInput;
+  };
+  'shapes.setOutline': {
+    elementId: string;
+    slideId?: string;
+    outline?: FikaShapePatch['outline'];
+  };
+  'shapes.setText': {
+    elementId: string;
+    slideId?: string;
+    text?: Partial<ShapeText>;
   };
   'animations.list': {
     slideId?: string;
@@ -1582,6 +1628,7 @@ export interface FikaCommandPayloadMap {
     elementId: string;
     slideId?: string;
     series: number[];
+    legend?: string;
   };
   'charts.deleteSeries': {
     elementId: string;
@@ -1914,6 +1961,15 @@ export interface FikaCommandResultDataMap {
   'lines.setStyle': PPTLineElement;
   'lines.setArrowheads': PPTLineElement;
   'lines.setDirection': PPTLineElement;
+  'shapes.presets': FikaShapePreset[];
+  'shapes.create': PPTShapeElement;
+  'shapes.patch': PPTShapeElement;
+  'shapes.update': PPTShapeElement;
+  'shapes.setPath': PPTShapeElement;
+  'shapes.setFormula': PPTShapeElement;
+  'shapes.setFill': PPTShapeElement;
+  'shapes.setOutline': PPTShapeElement;
+  'shapes.setText': PPTShapeElement;
   'animations.list': PPTAnimation[];
   'animations.catalog': FikaAnimationCatalog;
   'animations.sequence': FikaAnimationSequenceStep[];

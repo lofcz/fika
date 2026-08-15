@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { Patch } from 'immer';
 import { databaseId } from '@/store/main';
-import type { Slide } from '@/types/slides';
+import type { Slide, SlideTemplate, SlideTheme } from '@/types/slides';
 import { LOCALSTORAGE_KEY_DISCARDED_DB } from '@/configs/storage';
 export interface writingBoardImg {
   id: string;
@@ -10,6 +10,11 @@ export interface writingBoardImg {
 export interface Snapshot {
   id: number;
   index: number;
+  title?: string;
+  theme?: SlideTheme;
+  viewportSize?: number;
+  viewportRatio?: number;
+  templates?: SlideTemplate[];
   slides?: Slide[];
   patches?: Patch[];
   inversePatches?: Patch[];

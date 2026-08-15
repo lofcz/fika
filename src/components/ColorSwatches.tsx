@@ -30,6 +30,7 @@ export type IColorSwatchesProps = {
   className?: string
   style?: CSSProperties
   'data-tooltip'?: string
+  'data-swatches'?: string
   onUpdateModelValue?: (value: string) => void
 }
 
@@ -59,6 +60,7 @@ function ColorSwatches({
   className,
   style,
   'data-tooltip': dataTooltip,
+  'data-swatches': dataSwatches,
   onUpdateModelValue,
 }: IColorSwatchesProps) {
   const themeColors = useSlidesStore(s => s.theme.themeColors)
@@ -126,7 +128,7 @@ function ColorSwatches({
   const customInk = preferredInk(customPreview)
 
   return (
-    <div className={cx('color-swatches', { wrap }, className)} style={style} data-tooltip={dataTooltip}>
+    <div className={cx('color-swatches', { wrap }, className)} style={style} data-tooltip={dataTooltip} data-swatches={dataSwatches}>
       {chips.map(chip => (
         <button
           key={chip.value}

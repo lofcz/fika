@@ -1,4 +1,4 @@
-import { SLIDE_ANIMATIONS } from '@/configs/animation'
+import { DEFAULT_TURNING_MODE, SLIDE_ANIMATIONS } from '@/configs/animation'
 import type { TurningMode } from '@/types/slides'
 
 /** Neighbors kept in the turning window (current ± 1). */
@@ -22,7 +22,7 @@ const RANDOM_MODES = SLIDE_ANIMATIONS
 const randomById = new Map<string, TurningMode>()
 
 export const resolveTurningMode = (slideId: string, turningMode?: TurningMode): TurningMode => {
-  const mode = turningMode || 'slideY'
+  const mode = turningMode ?? DEFAULT_TURNING_MODE
   if (mode !== 'random') return mode
   const cached = randomById.get(slideId)
   if (cached) return cached

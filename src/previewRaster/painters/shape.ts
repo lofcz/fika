@@ -1,6 +1,6 @@
 import Konva from 'konva'
 import type { PPTShapeElement } from '@/types/slides'
-import { loadImageBitmap } from '@/utils/imageBitmapCache'
+import { loadPreviewImageBitmap } from '@/utils/imageBitmapCache'
 import { serializeRichTextHtml } from '@/utils/prosemirror'
 import {
   outlineStrokePaint,
@@ -9,10 +9,76 @@ import {
   shadowPaint,
   shapeFillPaint,
 } from '@/utils/elementPaint'
-import { textFitScaleForHtml } from '@/utils/textFit'
-import { escapeBoothText, quoteFontFamily, rasterHtml } from './booth'
+import { familiesFromHtml, rasterHtml, waitForFonts } from './booth'
+import { needsHtmlBooth, readTextPaintLayout, textPaintHtml } from '../textPaintHtml'
+import { paintKonvaHtmlBox } from './text'
+import { resolveRasterTextPaint, type RasterPaintContext } from './contrast'
+import { isAxisAlignedRectPath, isSimpleShape, shapeTextIsEmpty } from '../simpleShape'
+import { shapePaintHtml } from '@/utils/shapePaint'
 
-export const paintShape = async (element: PPTShapeElement, captureScale = 1) => {
+export { isSimpleShape }
+
+const pathScale = (element: PPTShapeElement) => {
+  const [vbW, vbH] = element.viewBox
+  return {
+    scaleX: vbW ? element.width / vbW : 1,
+    scaleY: vbH ? element.height / vbH : 1,
+  }
+}
+
+export const paintSimpleShape = (element: PPTShapeElement) => {
+  const [vbW, vbH] = element.viewBox
+  const { scaleX, scaleY } = pathScale(element)
+  const opacity = element.opacity ?? 1
+  const outline = outlineStrokePaint(element.outline)
+  if (isAxisAlignedRectPath(element.path, element.viewBox)) {
+    return new Konva.Rect({
+      width: element.width,
+      height: element.height,
+      opacity,
+      listening: false,
+      perfectDrawEnabled: false,
+      ...shapeFillPaint(element.width, element.height, element.fill, element.gradient),
+      ...outline,
+    })
+  }
+  const group = new Konva.Group({ listening: false, opacity })
+  group.add(new Konva.Path({
+    data: element.path,
+    scaleX,
+    scaleY,
+    listening: false,
+    perfectDrawEnabled: false,
+    strokeScaleEnabled: false,
+    ...shapeFillPaint(vbW, vbH, element.fill, element.gradient),
+    ...outline,
+  }))
+  return group
+}
+
+export const paintShape = async (element: PPTShapeElement, captureScale = 1, paintContext?: RasterPaintContext) => {
+  if (isSimpleShape(element) && isAxisAlignedRectPath(element.path, element.viewBox)) {
+    return paintSimpleShape(element)
+  }
+  if (!isAxisAlignedRectPath(element.path, element.viewBox)) {
+    const text = element.text
+    const contrasted = text?.content && !shapeTextIsEmpty(text.content)
+      ? resolveRasterTextPaint(text.defaultColor, text.content, element, paintContext)
+      : undefined
+    const body = contrasted ? serializeRichTextHtml(contrasted.html) : ''
+    if (body) await waitForFonts([text?.defaultFontName || '', ...familiesFromHtml(body)])
+    return rasterHtml(shapePaintHtml(element, contrasted && body ? {
+      body,
+      ink: contrasted.ink,
+      fontFamily: text?.defaultFontName || 'sans-serif',
+      align: text?.align,
+      inset: text?.inset,
+      lineHeight: text?.lineHeight,
+      letterSpacing: text?.wordSpace,
+      paragraphSpace: text?.paragraphSpace,
+    } : undefined), element.width, element.height, captureScale)
+  }
+  if (isSimpleShape(element)) return paintSimpleShape(element)
   const [vbW, vbH] = element.viewBox
   const scaleX = vbW ? element.width / vbW : 1
   const scaleY = vbH ? element.height / vbH : 1
@@ -38,7 +104,7 @@ export const paintShape = async (element: PPTShapeElement, captureScale = 1) => 
 
   let fillPaint: Record<string, unknown> = shapeFillPaint(vbW, vbH, element.fill, element.gradient)
   if (element.pattern) {
-    const bitmap = await loadImageBitmap(element.pattern)
+    const bitmap = await loadPreviewImageBitmap(element.pattern)
     if (bitmap) {
       fillPaint = {
         fillPatternImage: patternImageSource(bitmap),
@@ -52,31 +118,46 @@ export const paintShape = async (element: PPTShapeElement, captureScale = 1) => 
     scaleX,
     scaleY,
     listening: false,
+    perfectDrawEnabled: false,
     ...fillPaint,
     ...outlineStrokePaint(element.outline),
   }))
 
   const text = element.text
-  if (text?.content) {
+  if (text?.content && !shapeTextIsEmpty(text.content)) {
     const inset = text.inset || [10, 10, 10, 10]
-    const paragraphSpace = text.paragraphSpace === undefined ? 5 : text.paragraphSpace
     const vAlign = { top: 'flex-start', middle: 'center', bottom: 'flex-end' } as const
-    const body = serializeRichTextHtml(text.content)
-    const fitScale = text.fixedHeight !== false
-      ? textFitScaleForHtml(body, {
-        innerWidth: Math.max(1, element.width - inset[1] - inset[3]),
-        innerHeight: Math.max(1, element.height - inset[0] - inset[2]),
-        defaultFontFamily: text.defaultFontName,
+    const contrasted = resolveRasterTextPaint(text.defaultColor, text.content, element, paintContext)
+    const body = serializeRichTextHtml(contrasted.html)
+    if (!needsHtmlBooth(body)) {
+      const layout = readTextPaintLayout(body)
+      await waitForFonts([text.defaultFontName || '', ...familiesFromHtml(body)])
+      content.add(paintKonvaHtmlBox({
+        html: body,
+        width: element.width,
+        height: element.height,
+        inset,
+        fontSize: Math.max(1, layout.fontSize || 16),
+        fontFamily: familiesFromHtml(body)[0] || text.defaultFontName || 'sans-serif',
+        color: layout.color || contrasted.ink,
+        align: layout.align || 'left',
+        verticalAlign: text.align === 'top' ? 'top' : text.align === 'bottom' ? 'bottom' : 'middle',
         lineHeight: text.lineHeight ?? 1.5,
         letterSpacing: text.wordSpace || 0,
-        blockSpace: paragraphSpace,
-      })
-      : 1
-    const fittedBody = fitScale < 1
-      ? `<div data-text-fit-host style="zoom:${fitScale};width:100%">${body}</div>`
-      : body
-    const html = `<style>.fika-booth-text p{margin:0 0 ${paragraphSpace}px}</style><div class="ProseMirror ProseMirror-static fika-booth-text" style="width:100%;height:100%;box-sizing:border-box;overflow:hidden;word-break:break-word;display:flex;flex-direction:column;justify-content:${vAlign[text.align || 'middle']};line-height:${text.lineHeight ?? 1.5};letter-spacing:${text.wordSpace || 0}px;color:${escapeBoothText(text.defaultColor || '#333')};font-family:${escapeBoothText(quoteFontFamily(text.defaultFontName || 'sans-serif'))};padding:${inset[0]}px ${inset[1]}px ${inset[2]}px ${inset[3]}px">${fittedBody}</div>`
-    content.add(await rasterHtml(html, element.width, element.height, captureScale))
+      }))
+    }
+    else {
+      content.add(await rasterHtml(textPaintHtml({
+        body,
+        inset,
+        paragraphSpace: text.paragraphSpace === undefined ? 5 : text.paragraphSpace,
+        lineHeight: text.lineHeight ?? 1.5,
+        letterSpacing: text.wordSpace || 0,
+        color: contrasted.ink,
+        fontFamily: text.defaultFontName || 'sans-serif',
+        justify: vAlign[text.align || 'middle'],
+      }), element.width, element.height, captureScale))
+    }
   }
 
   pivoted.add(content)

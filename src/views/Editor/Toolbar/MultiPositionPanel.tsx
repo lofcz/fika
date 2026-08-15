@@ -32,31 +32,31 @@ const MultiPositionPanel = memo(function MultiPositionPanel() {
     <div className={cx('multi-position-panel')}>
       <PanelSection label={LL.editor.positionPanel.align()}>
         <ButtonGroup className={cx('row')}>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignLeft()} onClick={() => alignElement(ElementAlignCommands.LEFT)}>
+          <Button style={{ flex: 1 }} data-align="left" data-tooltip={LL.editor.multiPosition.alignLeft()} onClick={() => alignElement(ElementAlignCommands.LEFT)}>
             <Icon icon="align-start-vertical" />
           </Button>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignHorizontalCenter()} onClick={() => alignElement(ElementAlignCommands.HORIZONTAL)}>
+          <Button style={{ flex: 1 }} data-align="horizontal" data-tooltip={LL.editor.multiPosition.alignHorizontalCenter()} onClick={() => alignElement(ElementAlignCommands.HORIZONTAL)}>
             <Icon icon="align-center-vertical" />
           </Button>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignRight()} onClick={() => alignElement(ElementAlignCommands.RIGHT)}>
+          <Button style={{ flex: 1 }} data-align="right" data-tooltip={LL.editor.multiPosition.alignRight()} onClick={() => alignElement(ElementAlignCommands.RIGHT)}>
             <Icon icon="align-end-vertical" />
           </Button>
         </ButtonGroup>
         <ButtonGroup className={cx('row')}>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignTop()} onClick={() => alignElement(ElementAlignCommands.TOP)}>
+          <Button style={{ flex: 1 }} data-align="top" data-tooltip={LL.editor.multiPosition.alignTop()} onClick={() => alignElement(ElementAlignCommands.TOP)}>
             <Icon icon="align-start-horizontal" />
           </Button>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignVerticalCenter()} onClick={() => alignElement(ElementAlignCommands.VERTICAL)}>
+          <Button style={{ flex: 1 }} data-align="vertical" data-tooltip={LL.editor.multiPosition.alignVerticalCenter()} onClick={() => alignElement(ElementAlignCommands.VERTICAL)}>
             <Icon icon="align-center-horizontal" />
           </Button>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignBottom()} onClick={() => alignElement(ElementAlignCommands.BOTTOM)}>
+          <Button style={{ flex: 1 }} data-align="bottom" data-tooltip={LL.editor.multiPosition.alignBottom()} onClick={() => alignElement(ElementAlignCommands.BOTTOM)}>
             <Icon icon="align-end-horizontal" />
           </Button>
         </ButtonGroup>
         {displayItemCount > 2 ? (
           <ButtonGroup className={cx('row')}>
-            <Button style={{ flex: 1 }} onClick={() => uniformHorizontalDisplay()}>{LL.editor.multiPosition.uniformHorizontal()}</Button>
-            <Button style={{ flex: 1 }} onClick={() => uniformVerticalDisplay()}>{LL.editor.multiPosition.uniformVertical()}</Button>
+            <Button style={{ flex: 1 }} data-align="distribute-h" onClick={() => uniformHorizontalDisplay()}>{LL.editor.multiPosition.uniformHorizontal()}</Button>
+            <Button style={{ flex: 1 }} data-align="distribute-v" onClick={() => uniformVerticalDisplay()}>{LL.editor.multiPosition.uniformVertical()}</Button>
           </ButtonGroup>
         ) : null}
       </PanelSection>

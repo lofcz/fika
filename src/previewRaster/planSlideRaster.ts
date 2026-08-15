@@ -1,5 +1,17 @@
 import type { Slide } from '@/types/slides'
+import type { PreviewWorkingQuality } from '@/views/Editor/Thumbnails/paneSize'
 import { diffPaintedSlide, type PaintedSlideDiff } from './diffPaintedSlide'
+
+export const QUALITY_RANK: Record<PreviewWorkingQuality, number> = {
+  lq: 0,
+  rail: 1,
+  full: 2,
+}
+
+export const qualityCovers = (
+  have: PreviewWorkingQuality | undefined,
+  target: PreviewWorkingQuality,
+) => !!have && QUALITY_RANK[have] >= QUALITY_RANK[target]
 
 export type RasterPlan =
   | { kind: 'skip' }

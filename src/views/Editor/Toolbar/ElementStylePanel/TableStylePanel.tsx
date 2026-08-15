@@ -6,8 +6,10 @@ import { memo, useState, useEffect } from 'react'
 
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { useMainStore, useSlidesStore } from '@/store'
-import { getHandleElement, shallowEqual, useHandleElementId, useHandleElementSelect } from '../common/handleElement'
-import type { PPTTableElement, TableCell, TableCellStyle, TableTheme } from '@/types/slides'
+import { applyTableCellStyles } from '@/utils/tableCellStyle'
+import { tableStyleTarget } from '@/utils/tableStyleTarget'
+import { shallowEqual, useHandleElementId, useHandleElementSelect } from '../common/handleElement'
+import type { PPTTableElement, TableCellStyle, TableTheme } from '@/types/slides'
 import { FONT_SIZE_PX_OPTIONS, useFonts } from '@/configs/font'
 import { DEFAULT_TABLE_THEME } from '@/configs/table'
 import emitter, { EmitterEvents, type TableCommand } from '@/utils/emitter'
@@ -30,14 +32,9 @@ const TableStylePanel = memo(() => {
   const selectedCells = useMainStore(s => s.selectedTableCells)
   const tableStyle = useHandleElementSelect(el => {
     if (!el || el.type !== 'table') return null
-    const cells = useMainStore.getState().selectedTableCells
-    let rowIndex = 0
-    let colIndex = 0
-    if (cells.length) {
-      const selectedCell = cells[0]
-      rowIndex = +selectedCell.split('_')[0]
-      colIndex = +selectedCell.split('_')[1]
-    }
+    const selected = tableStyleTarget(el.id, useMainStore.getState().selectedTableCells)[0]
+    const rowIndex = selected ? +selected.split('_')[0] : 0
+    const colIndex = selected ? +selected.split('_')[1] : 0
     return {
       theme: el.theme,
       cellStyle: el.data[rowIndex]?.[colIndex]?.style,
@@ -111,18 +108,7 @@ const TableStylePanel = memo(() => {
   }
 
   const updateTextAttrs = (textAttrProp: Partial<TableCellStyle>) => {
-    const _handleElement = getHandleElement() as PPTTableElement | null
-    if (!_handleElement || _handleElement.type !== 'table') return
-    const data: TableCell[][] = JSON.parse(JSON.stringify(_handleElement.data))
-    for (let i = 0; i < data.length; i++) {
-      for (let j = 0; j < data[i].length; j++) {
-        if (!selectedCells.length || selectedCells.includes(`${i}_${j}`)) {
-          const style = data[i][j].style || {}
-          data[i][j].style = { ...style, ...textAttrProp }
-        }
-      }
-    }
-    updateElement({ data })
+    if (!applyTableCellStyles(textAttrProp)) return
     setTextAttrs(prev => ({ ...prev, ...textAttrProp }))
   }
 
@@ -158,7 +144,6 @@ const TableStylePanel = memo(() => {
           value={textAttrs.fontname}
           search
           searchLabel={LL.editor.multiStyle.searchFont()}
-          autofocus
           previewFonts
           onUpdateValue={value => updateTextAttrs({ fontname: String(value) })}
           options={fonts}
@@ -168,7 +153,6 @@ const TableStylePanel = memo(() => {
           value={textAttrs.fontsize}
           search
           searchLabel={LL.editor.multiStyle.searchFontSize()}
-          autofocus
           onUpdateValue={value => updateTextAttrs({ fontsize: String(value) })}
           options={FONT_SIZE_PX_OPTIONS}
         />
@@ -198,6 +182,7 @@ const TableStylePanel = memo(() => {
 
       <PanelSection label={LL.editor.stylePanel.table.cellFill()}>
         <ColorSwatches
+          data-swatches="table-cell-fill"
           modelValue={textAttrs.backcolor}
           allowNone
           noneValue=""

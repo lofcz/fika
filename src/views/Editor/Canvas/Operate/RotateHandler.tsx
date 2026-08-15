@@ -18,6 +18,7 @@ const RotateHandler = memo(({ className, style, onMouseDown }: IRotateHandlerPro
   return (
     <div
       className={cx('rotate-handler', className)}
+      data-rotate-handle=""
       style={style}
       onMouseDown={e => {
         stopHandleEvent(e)

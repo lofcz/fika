@@ -160,24 +160,24 @@ const ElementPositionPanel = memo(function ElementPositionPanel() {
 
       <PanelSection label={LL.editor.positionPanel.align()}>
         <ButtonGroup className={cx('row')}>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignLeft()} onClick={() => alignElementToCanvas(ElementAlignCommands.LEFT)}>
+          <Button style={{ flex: 1 }} data-align="left" data-tooltip={LL.editor.multiPosition.alignLeft()} onClick={() => alignElementToCanvas(ElementAlignCommands.LEFT)}>
             <Icon icon="align-start-vertical" />
           </Button>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignHorizontalCenter()} onClick={() => alignElementToCanvas(ElementAlignCommands.HORIZONTAL)}>
+          <Button style={{ flex: 1 }} data-align="horizontal" data-tooltip={LL.editor.multiPosition.alignHorizontalCenter()} onClick={() => alignElementToCanvas(ElementAlignCommands.HORIZONTAL)}>
             <Icon icon="align-center-horizontal" />
           </Button>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignRight()} onClick={() => alignElementToCanvas(ElementAlignCommands.RIGHT)}>
+          <Button style={{ flex: 1 }} data-align="right" data-tooltip={LL.editor.multiPosition.alignRight()} onClick={() => alignElementToCanvas(ElementAlignCommands.RIGHT)}>
             <Icon icon="align-end-vertical" />
           </Button>
         </ButtonGroup>
         <ButtonGroup className={cx('row')}>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignTop()} onClick={() => alignElementToCanvas(ElementAlignCommands.TOP)}>
+          <Button style={{ flex: 1 }} data-align="top" data-tooltip={LL.editor.multiPosition.alignTop()} onClick={() => alignElementToCanvas(ElementAlignCommands.TOP)}>
             <Icon icon="align-start-horizontal" />
           </Button>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignVerticalCenter()} onClick={() => alignElementToCanvas(ElementAlignCommands.VERTICAL)}>
+          <Button style={{ flex: 1 }} data-align="vertical" data-tooltip={LL.editor.multiPosition.alignVerticalCenter()} onClick={() => alignElementToCanvas(ElementAlignCommands.VERTICAL)}>
             <Icon icon="align-center-vertical" />
           </Button>
-          <Button style={{ flex: 1 }} data-tooltip={LL.editor.multiPosition.alignBottom()} onClick={() => alignElementToCanvas(ElementAlignCommands.BOTTOM)}>
+          <Button style={{ flex: 1 }} data-align="bottom" data-tooltip={LL.editor.multiPosition.alignBottom()} onClick={() => alignElementToCanvas(ElementAlignCommands.BOTTOM)}>
             <Icon icon="align-end-horizontal" />
           </Button>
         </ButtonGroup>

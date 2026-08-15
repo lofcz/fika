@@ -4,6 +4,9 @@ const cx = bindStyles(styles)
 import { type CSSProperties, useRef, useCallback, memo, useLayoutEffect } from 'react';
 
 import { pasteCustomClipboardString, pasteExcelClipboardString, pasteHTMLTableClipboardString } from '@/utils/clipboard';
+import { editorHtmlLooksEmpty } from '@/utils/prosemirror/commitPolicy';
+
+export type TableCellCommitSource = 'blur' | 'unmount';
 
 export type ICustomTextareaProps = {
   value?: string;
@@ -11,7 +14,7 @@ export type ICustomTextareaProps = {
   style?: CSSProperties;
 } & {
   onUpdateValue?: (payload: string) => void;
-  onCommitValue?: (payload: string) => void;
+  onCommitValue?: (payload: string, source?: TableCellCommitSource) => void;
   onInsertExcelData?: (payload: string[][]) => void;
 };
 
@@ -32,6 +35,7 @@ const CustomTextarea = memo((props: ICustomTextareaProps) => {
     const el = textareaRef.current;
     if (!el) return;
     if (isFocusRef.current || document.activeElement === el) return;
+    if (editorHtmlLooksEmpty(next) && !editorHtmlLooksEmpty(el.innerHTML)) return;
     if (el.innerHTML !== next) el.innerHTML = next;
   }, []);
 
@@ -41,7 +45,7 @@ const CustomTextarea = memo((props: ICustomTextareaProps) => {
     syncDom(valueRef.current);
     return () => {
       el.onpaste = null;
-      onCommitValueRef.current?.(el.innerHTML);
+      onCommitValueRef.current?.(el.innerHTML, 'unmount');
       if (textareaRef.current === el) textareaRef.current = null;
     };
   }, [syncDom]);
@@ -94,7 +98,7 @@ const CustomTextarea = memo((props: ICustomTextareaProps) => {
     const el = textareaRef.current;
     if (!el) return;
     el.onpaste = null;
-    onCommitValueRef.current?.(el.innerHTML);
+    onCommitValueRef.current?.(el.innerHTML, 'blur');
   }, []);
 
   return <div

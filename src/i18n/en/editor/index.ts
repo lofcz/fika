@@ -227,8 +227,8 @@ const en_editor: BaseTranslation = {
     justify: 'Justify',
   },
   slideAnimation: {
-    applyToAll: 'Apply to all slides',
-    appliedToAll: 'Applied to all slides',
+    applyToAll: 'Use on every slide',
+    appliedToAll: 'On every slide',
   },
   slideDesign: {
     themeColorsSetting: {

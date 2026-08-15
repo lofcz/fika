@@ -552,7 +552,7 @@ const cs_editor: NamespaceEditorTranslation = {
   },
   slideAnimation: {
     applyToAll: 'Použít na všechny snímky',
-    appliedToAll: 'Použito na všechny snímky',
+    appliedToAll: 'Na všech snímcích',
   },
   slideDesign: {
     themeColorsSetting: {

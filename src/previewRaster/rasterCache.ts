@@ -111,6 +111,13 @@ export const resizeRasterSnapshot = (slideId: string, destWidth: number, destHei
   snap.destHeight = destHeight
 }
 
+/** CSS-scale an already-attached view. Do not blit or realloc the bitmap. */
+export const scaleRasterSnapshotView = (target: HTMLElement, destWidth: number, destHeight: number) => {
+  const view = views.get(target)
+  if (!view) return
+  displayCanvas(view, destWidth, destHeight)
+}
+
 export const snapshotCoversDest = (
   slideId: string,
   destWidth: number,

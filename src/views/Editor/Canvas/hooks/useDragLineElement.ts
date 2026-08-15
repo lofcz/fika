@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react'
-import { useKeyboardStore, useMainStore, useSlidesStore, selectCtrlOrShiftKeyActive } from '@/store'
+import { useMainStore, useSlidesStore } from '@/store'
 import type { PPTElement, PPTLineElement } from '@/types/slides'
 import { OperateLineHandlers } from '@/types/edit'
 import { getBroken2LineDirection } from '@/utils/element'
@@ -17,7 +17,6 @@ export default (elementList: PPTElement[],
   const canvasScale = useMainStore(s => s.canvasScale)
   const viewportSize = useSlidesStore(s => s.viewportSize)
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
-  const ctrlOrShiftKeyActive = useKeyboardStore(selectCtrlOrShiftKeyActive)
   const elementListRef = useRef(elementList)
   const draggingRef = useRef(false)
   if (!draggingRef.current) elementListRef.current = elementList
@@ -27,8 +26,6 @@ export default (elementList: PPTElement[],
   viewportSizeRef.current = viewportSize
   const viewportRatioRef = useRef(viewportRatio)
   viewportRatioRef.current = viewportRatio
-  const ctrlOrShiftKeyActiveRef = useRef(ctrlOrShiftKeyActive)
-  ctrlOrShiftKeyActiveRef.current = ctrlOrShiftKeyActive
   const { addHistorySnapshot } = useHistorySnapshot()
 
   const dragLineElement = useCallback((e: MouseEvent, element: PPTLineElement, command: OperateLineHandlers) => {
@@ -206,17 +203,10 @@ export default (elementList: PPTElement[],
             end: end,
           }
           if (command === OperateLineHandlers.START || command === OperateLineHandlers.END) {
-            if (ctrlOrShiftKeyActiveRef.current) {
-              if (element.broken) newEl.broken = [midX - minX, midY - minY]
-              if (element.curve) newEl.curve = [midX - minX, midY - minY]
-              if (element.cubic) newEl.cubic = [[c1X - minX, c1Y - minY], [c2X - minX, c2Y - minY]]
-            }
-            else {
-              if (element.broken) newEl.broken = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
-              if (element.curve) newEl.curve = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
-              if (element.cubic) newEl.cubic = [[(start[0] + end[0]) / 2, (start[1] + end[1]) / 2], [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]]
-            }
-            if (element.broken2) newEl.broken2 = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
+            if (element.broken) newEl.broken = [midX - minX, midY - minY]
+            if (element.curve) newEl.curve = [midX - minX, midY - minY]
+            if (element.cubic) newEl.cubic = [[c1X - minX, c1Y - minY], [c2X - minX, c2Y - minY]]
+            if (element.broken2) newEl.broken2 = [midX - minX, midY - minY]
           }
           else if (command === OperateLineHandlers.C) {
             if (element.broken) newEl.broken = [midX - minX, midY - minY]

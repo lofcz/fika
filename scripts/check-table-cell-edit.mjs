@@ -130,7 +130,7 @@ const nextViews = {
 for (const id of Object.keys(mounts)) {
   if (!areTableCellViewEqual(prevViews[id], nextViews[id])) mounts[id] += 1
 }
-assert(mounts.a === 1, `active editor must stay mounted while typing (mounts=${mounts.a})`)
+assert(mounts.a === 2, `committed text reaches the active editor value (mounts=${mounts.a})`)
 assert(mounts.b === 1 && mounts.c === 1 && mounts.d === 1, `typing must not remount other cells (mounts=${JSON.stringify(mounts)})`)
 
 const indexSrc = readFileSync(join(root, 'src/views/components/element/TableElement/index.tsx'), 'utf8')
@@ -144,7 +144,8 @@ assert(editableSrc.includes('areTableCellViewEqual'), 'cells skip re-render when
 assert(editableSrc.includes('isTableCellHtmlEcho'), 'EditableTable does not rebuild on cell HTML echoes')
 assert(editableSrc.includes('isActive ? <CustomTextarea'), 'active cell keeps the CustomTextarea editor')
 const compareSrc = readFileSync(join(root, 'src/views/components/element/TableElement/gridCompare.ts'), 'utf8')
-assert(compareSrc.includes('if (next.isActive) return true'), 'active editor ignores store HTML so it stays mounted')
+assert(!compareSrc.includes('if (next.isActive) return true'), 'active editor still receives committed cell HTML')
+assert(compareSrc.includes('return a.text === b.text'), 'active and idle cells compare text the same way')
 
 const grid = [
   [cell('a', 'Hello'), cell('b', 'World')],
@@ -183,13 +184,18 @@ assert(grid[0].length === 2 && grid[0][1].id === 'b', 'insertColIntoGrid does no
 
 const textareaSrc = readFileSync(join(root, 'src/views/components/element/TableElement/CustomTextarea.tsx'), 'utf8')
 assert(textareaSrc.includes('onCommitValue'), 'CustomTextarea exposes an immediate commit callback')
-assert(textareaSrc.includes('onCommitValueRef.current?.(el.innerHTML)'), 'CustomTextarea commits the live HTML on blur and unmount')
+assert(textareaSrc.includes("onCommitValueRef.current?.(el.innerHTML, 'blur')"), 'CustomTextarea blur is an authoritative cell commit')
+assert(textareaSrc.includes("onCommitValueRef.current?.(el.innerHTML, 'unmount')"), 'CustomTextarea unmount reports a non-authoritative commit')
+assert(textareaSrc.includes('editorHtmlLooksEmpty'), 'idle empty remount does not wipe live cell HTML')
 assert(textareaSrc.includes('return () =>'), 'CustomTextarea flushes via the React ref cleanup, not a cancelled debounce')
 
 assert(editableSrc.includes('replaceTableCellText'), 'EditableTable commits through an immutable cell replace')
 assert(editableSrc.includes('flushDraft'), 'EditableTable flushes the pending cell draft')
 assert(editableSrc.includes('takeCommittedGrid'), 'structural edits apply the pending draft before rewriting the grid')
 assert(editableSrc.includes('onCommit={handleCommit}'), 'active cells flush immediately on blur/unmount')
+assert(editableSrc.includes('shouldWriteEditorHtml'), 'empty unmount commits cannot erase authored cell text')
+assert(editableSrc.includes("source === 'blur'"), 'only an authoritative blur may clear a cell')
+assert(editableSrc.includes('setGridRev'), 'committing a cell re-renders so the editor value is not stuck empty')
 assert(editableSrc.includes('flushDraftRef.current()'), 'changing the active cell flushes the previous draft first')
 assert(!editableSrc.includes('dataRef.current[rowIndex][colIndex].text'), 'EditableTable does not mutate store cells in place')
 assert(!/handleInput\.cancel\(\)/.test(editableSrc), 'unmount flushes the pending draft instead of dropping it')
@@ -245,8 +251,38 @@ assert(
   'cell style writes reach the canvas when the table is not in the editor',
 )
 
+const { rememberTableStyleTarget, tableStyleTarget } = await import(
+  pathToFileURL(join(root, 'src/utils/tableStyleTarget.ts')).href
+)
+rememberTableStyleTarget('table-style-target', ['0_0'])
+assert(tableStyleTarget('table-style-target').join() === '0_0', 'remembered style target is the last in-cell selection')
+assert(tableStyleTarget('table-style-target', []).join() === '0_0', 'empty live selection falls back to the remembered cell')
+assert(tableStyleTarget('table-style-target', ['1_2']).join() === '1_2', 'an explicit cell selection wins over the memory')
+
+const applySrc = readFileSync(join(root, 'src/utils/tableCellStyle.ts'), 'utf8')
+assert(applySrc.includes('flushCommitQueue()'), 'applyTableCellStyles persists the live cell draft first')
+assert(
+  applySrc.indexOf('flushCommitQueue()') < applySrc.indexOf('updateElement'),
+  'the live draft is flushed before any style write reads the store grid',
+)
+assert(applySrc.includes('tableStyleTarget'), 'omitted cells use the remembered style target')
+assert(applySrc.includes('allCells'), 'callers that mean the whole table say so explicitly')
+
 const panelSrc = readFileSync(join(root, 'src/views/Editor/Toolbar/ElementStylePanel/TableStylePanel.tsx'), 'utf8')
 assert(panelSrc.includes('setTextAttrs(prev => ({ ...prev, ...textAttrProp }))'), 'style panel keeps the chosen attrs instead of resetting from a stale selector')
+assert(panelSrc.includes('applyTableCellStyles(textAttrProp)'), 'table style panel only passes style fields')
+assert(!panelSrc.includes('JSON.parse(JSON.stringify'), 'table style panel does not clone grid data')
+assert(!panelSrc.includes('flushCommitQueue'), 'table style panel does not flush beside applyTableCellStyles')
+
+const multiSrc = readFileSync(join(root, 'src/views/Editor/Toolbar/MultiStylePanel.tsx'), 'utf8')
+assert(multiSrc.includes('applyTableCellStyles'), 'multi-select table styles use the shared writer')
+assert(!multiSrc.includes('JSON.parse(JSON.stringify'), 'multi-select panel does not clone table grids')
+
+const toolbarSrc = readFileSync(join(root, 'src/views/Editor/Canvas/ElementFloatLayer/FloatingToolbar/TableToolbar.tsx'), 'utf8')
+assert(toolbarSrc.includes('applyTableCellStyles({ backcolor })'), 'floating table fill uses the shared writer')
+assert(!toolbarSrc.includes('JSON.parse(JSON.stringify'), 'floating table toolbar does not clone grid data')
+
+assert(editableSrc.includes('skipStyleTargetSyncRef'), 'leaving cell edit keeps the style-target cells')
 
 if (failures.length) {
   console.error('table cell edit checks failed:\n' + failures.map(f => ` - ${f}`).join('\n'))

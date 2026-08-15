@@ -41,6 +41,8 @@ const {
   formatMeasureLabel,
   formatSnapLabel,
   collectCtrlMeasures,
+  projectMeasureCross,
+  RELATION_WEIGHT,
   resolveGridSize,
   snapMovingBox,
   snapQueryPad,
@@ -248,6 +250,56 @@ const farChain = collectCtrlMeasures(
   [{ type: 'vertical', kind: 'edge', axis: { x: 40, y: 26 }, length: 428 }],
 )
 assert(!farChain.some(guide => guide.label === '320px'), 'ctrl does not measure a distant object that only shares an X')
+
+// Screenshot repro: title (top-left) + bullet (left) + selected code (right).
+// Vertical measures must sit on the selected box, not in the empty gutter.
+const titleBox = box(80, 36, 320, 48)
+const bulletBox = box(80, 220, 200, 36)
+const codeBox = box(450, 200, 280, 140)
+const screenshotCtrl = collectCtrlMeasures(codeBox, [titleBox, bulletBox], canvas, [])
+const screenshotVertical = screenshotCtrl.filter(guide => guide.type === 'vertical')
+assert(screenshotVertical.length > 0, 'ctrl on a fika-like slide emits vertical measures')
+for (const guide of screenshotVertical) {
+  assert(
+    guide.axis.x >= codeBox.minX - 0.51 && guide.axis.x <= codeBox.maxX + 0.51,
+    `ctrl vertical measure x=${guide.axis.x} must stay on the selected code box [${codeBox.minX}, ${codeBox.maxX}] (got detached gutter line)`,
+  )
+}
+const screenshotHorizontal = screenshotCtrl.filter(guide => guide.type === 'horizontal')
+for (const guide of screenshotHorizontal) {
+  assert(
+    guide.axis.y >= codeBox.minY - 0.51 && guide.axis.y <= codeBox.maxY + 0.51,
+    `ctrl horizontal measure y=${guide.axis.y} must stay on the selected code box [${codeBox.minY}, ${codeBox.maxY}]`,
+  )
+}
+const titleGap = screenshotVertical.find(guide => guide.label === '116px' || guide.length > 100 && guide.length < 130)
+assert(titleGap, 'ctrl measures the title-to-code gap')
+assert(
+  !screenshotVertical.some(guide => guide.axis.x > bulletBox.maxX && guide.axis.x < codeBox.minX),
+  'ctrl must not park a vertical measure in the gutter between the bullet and the code',
+)
+assert(RELATION_WEIGHT >= 4, 'relation weight prefers same-row/column objects')
+assert(projectMeasureCross(450, 730, 80, 400) === 590, 'non-overlapping vertical measure projects onto the moving center')
+assert(projectMeasureCross(200, 340, 36, 84) === 270, 'non-overlapping horizontal measure projects onto the moving center')
+assert(projectMeasureCross(200, 340, 220, 256) === 238, 'overlapping row uses the shared span center')
+
+const liveCtrl = snapMovingBox(codeBox, [titleBox, bulletBox], {
+  mode: 'smart',
+  canvas,
+  gridSize: 0,
+  ctrlMeasures: true,
+})
+assert(liveCtrl.guides.some(guide => guide.kind === 'measure'), 'snapMovingBox can emit ctrl measures from the live box')
+assert(
+  liveCtrl.guides.filter(guide => guide.kind === 'measure' && guide.type === 'vertical')
+    .every(guide => guide.axis.x >= codeBox.minX && guide.axis.x <= codeBox.maxX),
+  'live ctrl measures stay on the moving box',
+)
+assert(
+  !snapMovingBox(codeBox, [titleBox, bulletBox], { mode: 'smart', canvas, gridSize: 0 }).guides
+    .some(guide => guide.kind === 'measure'),
+  'ctrl measures stay off the regular drag path',
+)
 
 const snapSrc = readFileSync(join(root, 'src/utils/snap.ts'), 'utf8')
 assert(/collectGaps\(nearby/.test(snapSrc), 'collectGaps is invoked on the nearby k-set')

@@ -5,7 +5,7 @@ import { memo, useEffect, useLayoutEffect, useRef } from 'react'
 
 import type { Slide } from '@/types/slides'
 import { attachStage, detachStage, hasRasterSnapshot, paintDetachedSlide, releaseDetachedSlide } from '@/previewRaster'
-import { usePreviewDestSize } from '@/views/Editor/Thumbnails/paneSize'
+import { getPreviewDestSize, usePreviewDestSize } from '@/views/Editor/Thumbnails/paneSize'
 import { useSlidesStore } from '@/store'
 import { arePaintedSlideIdentitiesEqual, selectPaintedSlide, selectPaintedSlideAuthoredKey, selectPaintedSlidePaintKey } from './paintedSlide'
 
@@ -57,8 +57,14 @@ const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
 
   useEffect(() => {
     if (!visible || !full) return
-    paintDetachedSlide(full, { destWidth: width, destHeight: height, pixelRatio: dest.dpr })
-  }, [slide.id, width, height, dest.dpr, visible, full, authoredKey, paintKey])
+    const size = getPreviewDestSize()
+    const destWidth = props.size || size.cssWidth
+    paintDetachedSlide(full, {
+      destWidth,
+      destHeight: destWidth * useSlidesStore.getState().viewportRatio,
+      pixelRatio: size.dpr,
+    })
+  }, [slide.id, visible, full, authoredKey, paintKey])
 
   return (
     <div

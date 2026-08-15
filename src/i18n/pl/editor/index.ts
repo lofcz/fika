@@ -551,8 +551,8 @@ const pl_editor: NamespaceEditorTranslation = {
     },
   },
   slideAnimation: {
-    applyToAll: 'Zastosuj do wszystkich slajdów',
-    appliedToAll: 'Zastosowano do wszystkich slajdów',
+    applyToAll: 'Użyj na wszystkich slajdach',
+    appliedToAll: 'Na wszystkich slajdach',
   },
   slideDesign: {
     themeColorsSetting: {

@@ -14,8 +14,7 @@ import { SlideScaleContext } from '@/types/injectKey'
 import { removeAllRanges } from '@/utils/selection'
 import { clientToCanvas } from '@/utils/canvasPointer'
 import { clicksToEditText, collectVisualHitPlan, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInAnyVisualHitRect, retryPendingCaret, type ClientCoords } from '@/utils/canvasHitTest'
-import { getEditorView } from '@/utils/prosemirror/caret'
-import { commitAllLiveEditors } from '@/utils/commitSlideElements'
+import { drainCommitQueue, registerAfterCommitDrain } from '@/utils/commitQueue'
 import { richTextAttrsFromElement } from '@/utils/prosemirror/richTextAttrsFromElement'
 import { KEYS } from '@/configs/hotkey'
 import { getElementRange } from '@/utils/element'
@@ -121,6 +120,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     : undefined
   const spaceKeyState = useKeyboardStore(s => s.spaceKeyState)
   const ctrlKeyState = useKeyboardStore(s => s.ctrlKeyState)
+  const gesturingState = useMainStore(s => s.isGesturing)
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const viewportSize = useSlidesStore(s => s.viewportSize)
   const { operateLineColor, operateLineHalo } = useOperateChrome()
@@ -131,9 +131,10 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
   const beginEdit = useCallback((elementId: string, caret?: ClientCoords) => {
     const main = useMainStore.getState()
     if (!elementId) {
-      if (main.editingElementId) main.setEditingElementId('')
+      drainCommitQueue()
       return
     }
+    if (main.editingElementId && main.editingElementId !== elementId) drainCommitQueue()
     const slide = selectCurrentSlide(useSlidesStore.getState())
     const el = slide?.elements.find(item => item.id === elementId)
     const attrs = el ? richTextAttrsFromElement(el) : null
@@ -170,19 +171,13 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
   ))
   const prevSlideRef = useRef(currentSnap)
 
-  const endEdit = useCallback(() => {
-    const editingId = useMainStore.getState().editingElementId
-    commitAllLiveEditors()
-    if (editingId) {
-      const view = getEditorView(editingId)
-      if (view?.hasFocus()) view.dom.blur()
-    }
+  const syncElementListFromStore = useCallback(() => {
     const storeSlide = selectCurrentSlide(useSlidesStore.getState())
     prevSlideRef.current = snapSlideElements(storeSlide)
     setElementList(storeSlide ? cloneElements(storeSlide.elements) : [])
-    if (!useMainStore.getState().editingElementId) return
-    useMainStore.getState().setEditingElementId('')
   }, [])
+
+  useEffect(() => registerAfterCommitDrain(syncElementListFromStore), [syncElementListFromStore])
 
   const liveSnap = currentSnap
   const prevSnap = prevSlideRef.current
@@ -209,9 +204,9 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
 
   useEffect(() => {
     if (editingElementId && !activeElementIdList.includes(editingElementId)) {
-      endEdit()
+      drainCommitQueue()
     }
-  }, [activeElementIdList, editingElementId, endEdit])
+  }, [activeElementIdList, editingElementId])
 
   useEffect(() => {
     const id = takePendingCreatedTextId()
@@ -312,7 +307,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
       if (pointInAnyVisualHitRect(e.clientX - bounds.left, e.clientY - bounds.top, occluderRects)) return
     }
 
-    endEdit()
+    drainCommitQueue()
     const main = useMainStore.getState()
     const keyboard = useKeyboardStore.getState()
     if (!selectCtrlOrShiftKeyActive(keyboard) && main.activeElementIdList.length) main.setActiveElementIdList([])
@@ -321,7 +316,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     if (!main.editorAreaFocus) main.setEditorareaFocus(true)
     if (main.textFormatPainter) main.setTextFormatPainter(null)
     removeAllRanges()
-  }, [elementList, endEdit, updateMouseSelection, dragViewport])
+  }, [elementList, updateMouseSelection, dragViewport])
 
   const handleDblClick = useCallback((e: MouseEvent) => {
     const main = useMainStore.getState()
@@ -497,13 +492,14 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
   }, [LL, pasteElement, selectAllElements, toggleRuler, deleteAllElements, toggleBubbleMenu, toggleOpenPanelOnTextSelection, enterScreeningFromStart])
 
   const displayAlignmentLines = useMemo(() => {
+    if (gesturingState) return alignmentLines
     const snapGuides = alignmentLines.filter(line => line.kind !== 'measure')
     if (!ctrlKeyState || !activeElementIdList.length) return snapGuides
     const selected = new Set(activeElementIdList)
     const moving = unionBoxes(elementList.filter(el => selected.has(el.id)).map(getElementRange))
     if (!moving) return snapGuides
     const others = elementList.filter(el => !selected.has(el.id)).map(getElementRange)
-    const nearby = boxesNear(buildSnapIndex(others), moving, snapQueryPad())
+    const nearby = others.length ? boxesNear(buildSnapIndex(others), moving, snapQueryPad()) : []
     const measures = collectCtrlMeasures(
       moving,
       nearby,
@@ -511,7 +507,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
       snapGuides,
     )
     return measures.length ? [...snapGuides, ...measures] : snapGuides
-  }, [ctrlKeyState, activeElementIdList, alignmentLines, elementList, viewportSize, viewportRatio])
+  }, [ctrlKeyState, gesturingState, activeElementIdList, alignmentLines, elementList, viewportSize, viewportRatio])
 
   return (
     <SlideScaleContext.Provider value={canvasScale}>

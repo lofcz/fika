@@ -13,7 +13,8 @@ import { TextSelection } from 'prosemirror-state';
 import { toggleMark, wrapIn, lift } from 'prosemirror-commands';
 import { initProsemirrorEditor, createDocument } from '@/utils/prosemirror';
 import { clearPendingCaret, consumePendingCaret, registerEditorView, unregisterEditorView } from '@/utils/prosemirror/caret';
-import { commitLiveEditorToStore, richTextHtmlLooksEmpty } from '@/utils/prosemirror/commitEditor';
+import { commitLiveEditorToStore, resolveEditorMountHtml, richTextHtmlLooksEmpty } from '@/utils/prosemirror/commitEditor';
+import { registerCommitFlusher } from '@/utils/commitQueue';
 import { isActiveOfParentNodeType, findNodesWithSameMark, getMarkAttrs, getTextAttrs, autoSelectAll, addMark, markActive, getFontsize, rememberTextSelection, forgetTextSelection, restoreTextSelection, resolveRememberedRange, richTextHtmlEqual } from '@/utils/prosemirror/utils';
 import emitter, { EmitterEvents, type RichTextAction, type RichTextCommand, type ApplyInlineMathPayload } from '@/utils/emitter';
 import { alignmentCommand } from '@/utils/prosemirror/commands/setTextAlign';
@@ -686,6 +687,10 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
   emitDocChangeRef.current = emitDocChange;
   const handleInputRef = useRef(handleInput);
   handleInputRef.current = handleInput;
+  const persistLiveEditor = () => {
+    handleInputRef.current.flush();
+    if (editorView.current) commitLiveEditorToStore(elementIdRef.current);
+  };
   const hideLinkTooltipStableRef = useRef(hideLinkTooltip);
   hideLinkTooltipStableRef.current = hideLinkTooltip;
   const beginPointerSelectRef = useRef(beginPointerSelect);
@@ -698,7 +703,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
   useLayoutEffect(() => {
     const mountEl = editorViewRef.current;
     if (!mountEl || editorView.current) return;
-    const view = initProsemirrorEditor(mountEl, valueRef.current, {
+    const view = initProsemirrorEditor(mountEl, resolveEditorMountHtml(elementIdRef.current, valueRef.current), {
       handleDOMEvents: {
         focus: () => handleFocusRef.current(),
         blur: () => handleBlurRef.current(),
@@ -775,18 +780,16 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       consumePendingCaret(elementIdRef.current, view);
     }
     emitEmptyStateRef.current();
+    const unreg = registerCommitFlusher(persistLiveEditor);
     return () => {
       if (docChangeRaf.current) cancelAnimationFrame(docChangeRaf.current);
       const current = editorView.current;
+      persistLiveEditor();
+      unreg();
       if (current) {
-        commitLiveEditorToStore(elementIdRef.current);
-        handleInputRef.current.cancel();
         unregisterEditorView(elementIdRef.current, current);
         current.destroy();
         editorView.current = null;
-      }
-      else {
-        handleInputRef.current.cancel();
       }
       hideLinkTooltipStableRef.current();
       clearPointerSelectReleaseRef.current();

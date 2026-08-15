@@ -1,7 +1,7 @@
 
 import { useMainStore, useSlidesStore, useActiveElementList, selectCurrentSlide } from '@/store';
 import type { PPTElement } from '@/types/slides';
-import { getElementRange, getElementListRange, getRectRotatedOffset } from '@/utils/element';
+import { alignElementToRange, getElementRange, getElementListRange } from '@/utils/element';
 import useHistorySnapshot from './useHistorySnapshot';
 interface ElementItem {
   min: number;
@@ -156,18 +156,7 @@ export default () => {
       if (!activeElementIdList.includes(element.id)) continue;
       for (const sortedItem of sortedElementData) {
         if (sortedItem.el.id === element.id) {
-          if ('rotate' in element && element.rotate) {
-            const {
-              offsetX
-            } = getRectRotatedOffset({
-              left: element.left,
-              top: element.top,
-              width: element.width,
-              height: element.height,
-              rotate: element.rotate
-            });
-            element.left = sortedItem.pos - offsetX;
-          } else element.left = sortedItem.pos;
+          alignElementToRange(element, { minX: sortedItem.pos });
         }
       }
     }
@@ -283,18 +272,7 @@ export default () => {
       if (!activeElementIdList.includes(element.id)) continue;
       for (const sortedItem of sortedElementData) {
         if (sortedItem.el.id === element.id) {
-          if ('rotate' in element && element.rotate) {
-            const {
-              offsetY
-            } = getRectRotatedOffset({
-              left: element.left,
-              top: element.top,
-              width: element.width,
-              height: element.height,
-              rotate: element.rotate
-            });
-            element.top = sortedItem.pos - offsetY;
-          } else element.top = sortedItem.pos;
+          alignElementToRange(element, { minY: sortedItem.pos });
         }
       }
     }

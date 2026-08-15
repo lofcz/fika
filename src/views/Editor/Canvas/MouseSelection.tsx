@@ -15,6 +15,7 @@ const MouseSelection = memo((props: IMouseSelectionProps) => {
   return (
     <div
       className={cx('mouse-selection')}
+      data-mouse-selection=""
       style={{
         top: top + 'px',
         left: left + 'px',

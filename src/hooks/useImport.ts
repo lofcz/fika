@@ -3,6 +3,7 @@ import { parse, type Shape, type Element, type ChartItem, type BaseElement } fro
 import { nanoid } from 'nanoid';
 import tinycolor from 'tinycolor2';
 import { useSlidesStore, useMainStore, useImportConfirmStore } from '@/store';
+import { drainCommitQueue } from '@/utils/commitQueue';
 import { decrypt } from '@/utils/crypto';
 import { isFloatEqual } from '@/utils/common';
 import { type ShapePoolItem, SHAPE_LIST, SHAPE_PATH_FORMULAS } from '@/configs/shapes';
@@ -23,6 +24,7 @@ import { importedParagraphMetrics, scalePptxTextInset } from '@/utils/pptxImport
 import { markSourcePackageDirty, retainSourcePackage } from '@/utils/pptxSourcePackage';
 import { htmlToStructuredText } from '@/utils/pptxStructuredText';
 import { buildImportDiagnosticsReport, setLastImportDiagnostics } from '@/utils/pptxImportDiagnostics';
+import { internSlidesMedia, startInternSlideMedia } from '@/utils/mediaIntern';
 import { normalizeImportApplyOptions, resolveImportApply, type ImportApplyMode, type ImportApplyOptions } from '@/utils/importApply';
 import { createJobProgress, isAbortError, slideJobProgress } from '@/utils/jobProgress';
 import type { Slide, SlideTheme, TableCellStyle, TableCell, ChartType, SlideBackground, PPTShapeElement, PPTLineElement, LinePoint, PPTImageElement, TextAlignVertical, PPTTextElement, ChartOptions, Gradient, PPTElement } from '@/types/slides';
@@ -256,6 +258,7 @@ export function getImportApi() {
     message.error(fallback);
   };
   const resetEditorSelection = () => {
+    drainCommitQueue();
     const main = useMainStore.getState();
     main.setActiveElementIdList([]);
     main.setActiveGroupElementId('');
@@ -266,12 +269,13 @@ export function getImportApi() {
     if (main.creatingCustomShape) main.setCreatingCustomShapeState(null);
     if (main.disableHotkeys) main.setDisableHotkeysState(false);
   };
-  const applyImportedSlides = (slides: Slide[], apply: ImportApplyMode, extras?: {
+  const applyImportedSlides = async (slides: Slide[], apply: ImportApplyMode, extras?: {
     theme?: Partial<SlideTheme>;
     title?: string;
     aspectRatio?: number;
     width?: number;
   }) => {
+    await internSlidesMedia(slides);
     resetEditorSelection();
     if (apply === 'replace') {
       const store = slidesState();
@@ -319,7 +323,7 @@ export function getImportApi() {
       }
       importJob.setTotal(parsed.slides.length, gen);
       await importJob.tick(0.82, parsed.slides.length + 1, gen);
-      applyImportedSlides(parsed.slides, apply, {
+      await applyImportedSlides(parsed.slides, apply, {
         theme: parsed.theme || {},
         title: parsed.title,
         aspectRatio: getAspectRatio(parsed.width || 0, parsed.height || 0),
@@ -1260,6 +1264,7 @@ export function getImportApi() {
             if (bound.length) slide.animations = bound;
           }
           slides.push(slide);
+          startInternSlideMedia(slide);
         } catch (error) {
           failedSlides.push(slideIndex + 1);
           console.error(`[pptx-import] slide ${slideIndex + 1} failed`, error);
@@ -1314,7 +1319,7 @@ export function getImportApi() {
       slidesState().setTheme({
         themeColors: json.themeColors
       });
-      applyImportedSlides(slides, apply, {
+      await applyImportedSlides(slides, apply, {
         aspectRatio
       });
       await importJob.tick(1, slideCount + 1, gen);

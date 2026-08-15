@@ -1,6 +1,6 @@
 import Konva from 'konva'
 import type { SlideBackground } from '@/types/slides'
-import { loadImageBitmap } from '@/utils/imageBitmapCache'
+import { loadPreviewImageBitmap } from '@/utils/imageBitmapCache'
 import {
   fitRect,
   linearGradientPaint,
@@ -44,7 +44,7 @@ export const paintBackground = async (
   }
 
   if (background?.type === 'image' && background.image?.src) {
-    const bitmap = await loadImageBitmap(background.image.src)
+    const bitmap = await loadPreviewImageBitmap(background.image.src)
     if (bitmap) {
       const size = background.image.size || 'cover'
       if (size === 'repeat') {

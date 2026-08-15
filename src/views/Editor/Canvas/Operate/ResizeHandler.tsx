@@ -12,10 +12,11 @@ export type IResizeHandlerProps = {
   rotate?: number
   className?: string
   style?: CSSProperties
+  'data-line-handle'?: string
   onMouseDown?: (e: ReactMouseEvent<HTMLDivElement>) => void
 }
 
-const ResizeHandler = memo(({ type, rotate = 0, className, style, onMouseDown }: IResizeHandlerProps) => {
+const ResizeHandler = memo(({ type, rotate = 0, className, style, onMouseDown, 'data-line-handle': lineHandle }: IResizeHandlerProps) => {
   const onMouseDownRef = useRef(onMouseDown)
   onMouseDownRef.current = onMouseDown
   const prefix = 'rotate-'
@@ -33,6 +34,7 @@ const ResizeHandler = memo(({ type, rotate = 0, className, style, onMouseDown }:
     <div
       className={cx('resize-handler', rotateClassName, type, className)}
       data-resize-handle={type || undefined}
+      data-line-handle={lineHandle}
       style={style}
       onMouseDown={e => {
         stopHandleEvent(e)

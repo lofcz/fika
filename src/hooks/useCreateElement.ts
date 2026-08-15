@@ -1,6 +1,8 @@
 import { nanoid } from 'nanoid';
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store';
+import { drainCommitQueue } from '@/utils/commitQueue';
 import { getImageSize } from '@/utils/image';
+import { internMediaSrc } from '@/utils/mediaIntern';
 import { queryFika } from '@/utils/portal';
 import { focusElementEditor } from '@/utils/canvasHitTest';
 import { resolveChartSeriesColors, resolveElementDefaultFontColor, resolveSlideSurfaceColors } from '@/utils/textContrast';
@@ -85,6 +87,7 @@ export default () => {
   };
   const commitElements = (elements: PPTElement[]) => {
     if (!elements.length) return;
+    drainCommitQueue();
     const main = useMainStore.getState();
     getSlideEnv().addElement(elements);
     main.setActiveElementIdList([elements[elements.length - 1].id]);
@@ -96,6 +99,7 @@ export default () => {
   };
 
   const createElement = (element: PPTElement, callback?: () => void) => {
+    drainCommitQueue();
     const main = useMainStore.getState();
     getSlideEnv().addElement(element);
     main.setActiveElementIdList([element.id]);
@@ -112,7 +116,7 @@ export default () => {
    * @param src Image address
    */
   const createImageElement = (src: string) => {
-    probeImageSize(src).then(({
+    internMediaSrc(src).then(interned => probeImageSize(interned).then(({
       width,
       height
     }) => {
@@ -121,7 +125,7 @@ export default () => {
       createElement({
         type: 'image',
         id: nanoid(10),
-        src,
+        src: interned,
         width: size.width,
         height: size.height,
         left: (viewportSize - size.width) / 2,
@@ -129,17 +133,21 @@ export default () => {
         fixedRatio: true,
         rotate: 0
       });
-    });
+    }));
   };
   const createMediaElements = async (items: Array<FikaMediaUploadResult & {
     kind: FikaMediaKind;
   }>) => {
     if (!items.length) return;
+    const internedItems = await Promise.all(items.map(async item => ({
+      ...item,
+      src: await internMediaSrc(item.src),
+    })));
     const { theme, viewportRatio, viewportSize } = getSlideEnv();
     const canvasWidth = viewportSize;
     const canvasHeight = viewportSize * viewportRatio;
     const naturalBoxes: MediaBox[] = [];
-    for (const item of items) {
+    for (const item of internedItems) {
       if (item.kind === 'image') {
         const probed = await probeImageSize(item.src);
         naturalBoxes.push(items.length === 1 ? fitImageToViewport(probed.width, probed.height) : probed);
@@ -155,7 +163,7 @@ export default () => {
     }
     const placements = layoutMediaBoxes(naturalBoxes, canvasWidth, canvasHeight);
     const elements: PPTElement[] = [];
-    for (const [index, item] of items.entries()) {
+    for (const [index, item] of internedItems.entries()) {
       const place = placements[index];
       if (item.kind === 'image') {
         const image: PPTImageElement = {

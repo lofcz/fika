@@ -1,4 +1,5 @@
 import type { PPTElement } from '@/types/slides';
+import { getElementRange } from '@/utils/element';
 import { queryFika } from '@/utils/portal';
 import { HitIndex, type HitBox } from '@/utils/spatial/hitIndex';
 import { consumePendingCaret, getEditorView, setPendingCaret, type ClientCoords } from '@/utils/prosemirror/caret';
@@ -265,10 +266,7 @@ export interface VisualHitRect {
  */
 export function elementVisualHitRect(element: PPTElement, canvasScale: number, zIndex: number): VisualHitRect {
   if (element.type === 'line') {
-    const minX = element.left;
-    const maxX = element.left + Math.max(element.start[0], element.end[0]);
-    const minY = element.top;
-    const maxY = element.top + Math.max(element.start[1], element.end[1]);
+    const { minX, maxX, minY, maxY } = getElementRange(element);
     return {
       id: element.id,
       left: minX * canvasScale,
@@ -458,6 +456,18 @@ function sameIdList(prev: readonly string[], next: readonly string[]): boolean {
   return true;
 }
 
+function samePair(a?: [number, number], b?: [number, number]) {
+  if (a === b) return true;
+  if (!a || !b) return a === b;
+  return a[0] === b[0] && a[1] === b[1];
+}
+
+function sameCubic(a?: [[number, number], [number, number]], b?: [[number, number], [number, number]]) {
+  if (a === b) return true;
+  if (!a || !b) return a === b;
+  return samePair(a[0], b[0]) && samePair(a[1], b[1]);
+}
+
 /**
  * Geometry / type / ring-vs-body identity for one element.
  * Ignores HTML content except the empty↔text flip that changes hasInteractiveSurface.
@@ -467,7 +477,7 @@ export function hitLayerElementUnchanged(prev: PPTElement, next: PPTElement): bo
   if (prev.id !== next.id || prev.type !== next.type) return false;
   if (prev.left !== next.left || prev.top !== next.top || prev.width !== next.width) return false;
   if (prev.type === 'line' && next.type === 'line') {
-    return prev.start[0] === next.start[0] && prev.start[1] === next.start[1] && prev.end[0] === next.end[0] && prev.end[1] === next.end[1];
+    return samePair(prev.start, next.start) && samePair(prev.end, next.end) && samePair(prev.broken, next.broken) && samePair(prev.broken2, next.broken2) && samePair(prev.curve, next.curve) && sameCubic(prev.cubic, next.cubic);
   }
   const prevHeight = 'height' in prev ? prev.height : 0;
   const nextHeight = 'height' in next ? next.height : 0;

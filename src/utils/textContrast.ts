@@ -673,6 +673,88 @@ export const resolveElementDefaultFontColor = (preferred: string, options: {
   fallbackSurface?: string;
 } = {}): string => resolveDefaultFontColor(preferred, resolveElementSurfaces(options));
 
+export type LiveTextPaintOptions = {
+  fill?: string;
+  background?: SlideBackground;
+  fallbackSurface?: string;
+  themeFontColor?: string;
+  /** The text/shape being painted. Own fill/gradient win; otherwise under-paints. */
+  element?: PPTTextElement | PPTShapeElement;
+  /** Painter-order siblings so overlay labels see the chip/card underneath. */
+  elements?: PPTElement[];
+};
+
+const themeOf = (options: LiveTextPaintOptions): ThemeColors => ({
+  backgroundColor: options.fallbackSurface || '#ffffff',
+  fontColor: options.themeFontColor || '#333333',
+});
+
+/**
+ * Surfaces the text actually sits on — same query as import contrast.
+ * Own opaque fill/gradient first; otherwise the topmost paint under the box.
+ */
+export const resolveTextPaintSurfaces = (
+  el: PPTTextElement | PPTShapeElement | undefined,
+  options: LiveTextPaintOptions = {},
+): string[] => {
+  const theme = themeOf(options);
+  if (el) {
+    const own = ownBackgroundPaint(el);
+    if (own?.kind === 'unknown') return [];
+    if (own?.kind === 'color' && (own.alpha === undefined || own.alpha >= OPAQUE)) {
+      return [tinycolor(own.color).toHexString()];
+    }
+    const elements = options.elements;
+    const index = elements && el.id ? elements.findIndex(item => item.id === el.id) : -1;
+    if (elements && index >= 0) {
+      const query = queryBackgroundsUnder(elements, index, options.background, theme);
+      if (query.colors.length) {
+        if (own?.kind === 'color' && own.alpha !== undefined) {
+          return query.colors.map(bg => compositeOver(own.color, bg));
+        }
+        return query.colors;
+      }
+    }
+    if (own?.kind === 'color' && own.alpha !== undefined) {
+      return resolveSlideSurfaceColors(options.background, options.fallbackSurface)
+        .map(bg => compositeOver(own.color, bg));
+    }
+  }
+  else if (options.fill) {
+    return resolveElementSurfaces({
+      fill: options.fill,
+      background: options.background,
+      fallbackSurface: options.fallbackSurface,
+    });
+  }
+  return resolveSlideSurfaceColors(options.background, options.fallbackSurface);
+};
+
+/**
+ * Single paint-time contrast pass for the live editor and the preview raster.
+ * Surfaces match {@link fixSlideTextContrast}: overlay labels on a chip use
+ * the chip, not the slide paper. Default inks rewrite to the same hex.
+ */
+export const resolveLiveTextPaint = (
+  preferred: string | undefined,
+  html: string,
+  options: LiveTextPaintOptions = {},
+): { ink: string; html: string } => {
+  const el = options.element;
+  if (el && ownBackgroundPaint(el)?.kind === 'unknown') {
+    return { ink: preferred || options.themeFontColor || '#333', html };
+  }
+  const surfaces = resolveTextPaintSurfaces(el, options);
+  if (!surfaces.length) {
+    return { ink: preferred || options.themeFontColor || '#333', html };
+  }
+  const ink = resolveDefaultFontColor(preferred || options.themeFontColor || '#333', surfaces);
+  return {
+    ink,
+    html: rewriteDefaultInksInHtml(html, ink),
+  };
+};
+
 /**
  * Chart axis / legend / label ink. Same rules as text: default greys / black /
  * white snap to {@link preferredInk} on the chart fill, else the slide.
