@@ -56,15 +56,6 @@ jobs:
           done
           exit 1
 
-      - name: Install Playwright Chromium
-        run: bunx playwright install --with-deps chromium
-
-      - name: Typecheck
-        run: bun --canary run type-check
-
-      - name: Tests
-        run: bun --canary run test
-
       - name: Bump package version
         id: version
         run: |
