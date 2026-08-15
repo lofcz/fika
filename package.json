@@ -35,7 +35,8 @@
     "node": ">=24 <25"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "sideEffects": [
     "*.css",
@@ -48,6 +49,9 @@
     "build:embed": "node scripts/run-i18n.mjs --no-watch && npm run build:types && rsbuild build --config rsbuild.config.embed.ts && node scripts/scope-embed-css.mjs && node scripts/extract-embed-fonts.mjs && node scripts/copy-embed-public.mjs && node scripts/generate-agentic-manifest.mjs",
     "agentic:manifest": "node scripts/generate-agentic-manifest.mjs",
     "build:types": "node -e \"require('node:fs').rmSync('dist/types',{recursive:true,force:true})\" && tsc -p tsconfig.types.json && node scripts/rewrite-embed-types.mjs",
+    "prepack": "node scripts/verify-embed-pack.mjs",
+    "prepublishOnly": "npm run build:embed && node scripts/verify-embed-pack.mjs --tarball",
+    "pack:verify": "node scripts/verify-embed-pack.mjs --tarball",
     "preview": "rsbuild preview",
     "build-only": "rsbuild build",
     "type-check": "tsc -p tsconfig.app.json --noEmit --pretty false",

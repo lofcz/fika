@@ -13,13 +13,14 @@ on:
           - minor
           - major
 
+# npm Trusted Publisher must list this exact filename: release.yml
+# Do not publish from a laptop. OIDC only works on GitHub-hosted runners.
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -36,6 +37,12 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Require npm 11.5.1+ for OIDC
+        run: |
+          npm install -g npm@latest
+          node -e "const [maj, min, pat] = require('child_process').execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim().split('.').map(Number); if (maj < 11 || (maj === 11 && min < 5) || (maj === 11 && min === 5 && pat < 1)) { console.error('npm >= 11.5.1 is required for trusted publishing'); process.exit(1) }"
 
       - name: Install dependencies
         run: |
@@ -68,10 +75,10 @@ jobs:
         run: bun --canary run build:embed
 
       - name: Verify package contents
-        run: bun --canary publish --dry-run --access public
+        run: bun --canary run pack:verify
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --access public --ignore-scripts
 
       - name: Commit release version and create tag
         run: |

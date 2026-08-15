@@ -1,0 +1,5 @@
+# Prefer this over .gitignore when packing. dist/ is gitignored but must ship.
+node_modules
+coverage
+*.local
+.DS_Store
