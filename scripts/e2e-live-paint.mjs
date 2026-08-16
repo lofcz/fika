@@ -1,7 +1,7 @@
 /**
- * Live gradient / property updates must paint the canvas without wiping the
- * preview raster. The old path wrote the store on every slider tick, which
- * cleared the Konva scratch stage and SnapDOM-rebuilt every sibling.
+ * Live gradient / property updates must paint the canvas and the rail thumb
+ * without remounting anything. The thumb IS the live slide DOM now, so a
+ * gesture must never swap its tree — only update attributes in place.
  *
  *   node scripts/e2e-live-paint.mjs
  */
@@ -17,12 +17,12 @@ const DEV_PORTS = [5173, 5174, 5175, 5176]
 const CASES = [
   [1, 'angle slider updates the painted gradient during the drag'],
   [2, 'angle slider does not write gradient.rotate to the store until mouseup'],
-  [3, 'angle slider does not full-rebuild the preview raster during the drag'],
-  [4, 'angle slider does not SnapDOM-rebuild sibling text during the drag'],
+  [3, 'angle slider does not remount the thumb slide tree during the drag'],
+  [4, 'no capture/stage machinery exists on the thumbnail path'],
   [5, 'sibling shape path node stays the same during the drag'],
-  [6, 'mouseup commits the painted rotate to the store'],
-  [7, 'a burst of store gradient writes patches one shape, not the whole slide'],
-  [8, 'a burst of store gradient writes does not SnapDOM sibling text'],
+  [6, 'mouseup commits the painted rotate to the store and the thumb follows'],
+  [7, 'a burst of store gradient writes lands the final angle in the thumb'],
+  [8, 'a burst of store gradient writes keeps the thumb tree mounted'],
 ]
 
 const gradientShape = {
@@ -120,12 +120,8 @@ async function waitForStoreHook(page) {
 }
 
 async function waitForRasterHook(page) {
-  const start = Date.now()
-  while (Date.now() - start < 20000) {
-    if (await page.evaluate(() => !!window.__FIKA_RASTER__)) return
-    await sleep(250)
-  }
-  throw new Error('window.__FIKA_RASTER__ hook did not appear')
+  // The rail mounts live slide DOM now — wait for the first thumb tree.
+  await page.waitForSelector('[data-thumbnail-slide] .screen-slide', { timeout: 20000 })
 }
 
 async function selectElement(page, id) {
@@ -174,12 +170,39 @@ async function snapshot(page) {
   }, { shapeId: gradientShape.id, siblingId: siblingShape.id })
 }
 
-async function rasterStats(page) {
-  return page.evaluate(() => window.__FIKA_RASTER__.read())
+/** The thumb's slide tree for the current slide (live DOM). */
+async function tagThumbTree(page) {
+  await page.evaluate(() => {
+    const slides = window.__FIKA_SLIDES__.getState()
+    const current = slides.slides[slides.slideIndex]
+    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
+      el.getAttribute('data-thumbnail-slide') === current?.id
+    ))
+    const slide = host?.querySelector('.screen-slide')
+    if (slide) slide.dataset.e2eNode = String(Date.now())
+  })
 }
 
-async function resetRaster(page) {
-  await page.evaluate(() => window.__FIKA_RASTER__.reset())
+async function readThumbNodeKey(page) {
+  return page.evaluate(() => {
+    const slides = window.__FIKA_SLIDES__.getState()
+    const current = slides.slides[slides.slideIndex]
+    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
+      el.getAttribute('data-thumbnail-slide') === current?.id
+    ))
+    return host?.querySelector('.screen-slide')?.dataset.e2eNode || null
+  })
+}
+
+/** The thumb's painted gradient rotate for the gradient shape. */
+async function thumbGradientRotate(page, shapeId) {
+  return page.evaluate((id) => {
+    const def = document.getElementById(`base-gradient-${id}`)
+    if (!def) return null
+    const raw = def.getAttribute('gradientTransform') || ''
+    const match = raw.match(/rotate\(([-.\d]+)/)
+    return match ? Number(match[1]) : null
+  }, shapeId)
 }
 
 async function waitForIdleRaster(page, requirePaint = true) {
@@ -211,7 +234,7 @@ async function claimCurrentScratch(page, id) {
       props: { gradient: { ...el.gradient, rotate: (el.gradient.rotate + 15) % 360 } },
     })
   }, id)
-  await waitForIdleRaster(page)
+  await sleep(400)
 }
 
 const results = []
@@ -242,9 +265,11 @@ try {
   await page.waitForSelector(`#editable-gradient-${gradientShape.id}`, { state: 'attached', timeout: 15000 })
   await selectElement(page, gradientShape.id)
   await page.waitForSelector('[data-style-slider="gradient-angle"]', { timeout: 15000 })
-  await waitForIdleRaster(page)
+  await sleep(400)
   await claimCurrentScratch(page, gradientShape.id)
-  await resetRaster(page)
+  await tagThumbTree(page)
+  const thumbKeyBefore = await readThumbNodeKey(page)
+  const thumbRotateBefore = await thumbGradientRotate(page, gradientShape.id)
 
   const before = await snapshot(page)
   const siblingPathBefore = await page.evaluate((id) => {
@@ -263,7 +288,8 @@ try {
   await sleep(80)
 
   const live = await snapshot(page)
-  const liveStats = await rasterStats(page)
+  const thumbKeyDuring = await readThumbNodeKey(page)
+  const thumbRotateDuring = await thumbGradientRotate(page, gradientShape.id)
   const siblingSame = await page.evaluate((id) => (
     document.getElementById(`editable-element-${id}`)?.querySelector('path')?.getAttribute('data-e2e-path') === '1'
   ), siblingShape.id)
@@ -271,21 +297,29 @@ try {
   await page.mouse.up()
   await sleep(350)
   const after = await snapshot(page)
-  const afterStats = await rasterStats(page)
+  const thumbRotateAfter = await thumbGradientRotate(page, gradientShape.id)
 
   rec(1, live.paintedRotate !== before.paintedRotate && live.paintedRotate != null, { before: before.paintedRotate, live: live.paintedRotate })
   rec(2, live.storeRotate === before.storeRotate, { store: live.storeRotate, painted: live.paintedRotate })
-  rec(3, liveStats.fullPaints === 0, liveStats)
-  rec(4, liveStats.booths === 0, { booths: liveStats.booths })
+  // During the drag the gesture lives on a fork — the store (and so the
+  // thumb) only moves on commit; the tree must stay mounted, not remount.
+  rec(3, !!thumbKeyDuring && thumbKeyDuring === thumbKeyBefore, {
+    thumbKeyDuring,
+    thumbKeyBefore,
+    thumbRotateBefore,
+    thumbRotateDuring,
+  })
+  rec(4, await page.evaluate(() => !document.querySelector('[data-slide-dom-stage], [data-preview-raster]')), {})
   rec(5, siblingPathBefore && siblingSame, { siblingPathBefore, siblingSame })
-  rec(6, after.storeRotate === after.paintedRotate && after.storeRotate !== before.storeRotate, {
+  rec(6, after.storeRotate === after.paintedRotate && after.storeRotate !== before.storeRotate && thumbRotateAfter === after.storeRotate, {
     store: after.storeRotate,
     painted: after.paintedRotate,
+    thumb: thumbRotateAfter,
   })
 
-  await waitForIdleRaster(page, false)
   await claimCurrentScratch(page, gradientShape.id)
-  await resetRaster(page)
+  await tagThumbTree(page)
+  const burstKeyBefore = await readThumbNodeKey(page)
   const burst = await page.evaluate((id) => {
     const slides = window.__FIKA_SLIDES__
     const started = performance.now()
@@ -299,12 +333,15 @@ try {
     return performance.now() - started
   }, gradientShape.id)
   await sleep(600)
-  const burstStats = await rasterStats(page)
-  rec(7, burstStats.fullPaints === 0 && burstStats.elementInvalidations <= 12 && burstStats.elementInvalidations >= 1, {
-    ...burstStats,
+  const burstStore = await snapshot(page)
+  const burstThumb = await thumbGradientRotate(page, gradientShape.id)
+  const burstKeyAfter = await readThumbNodeKey(page)
+  rec(7, burstThumb === burstStore.storeRotate, {
     burstMs: Math.round(burst),
+    store: burstStore.storeRotate,
+    thumb: burstThumb,
   })
-  rec(8, burstStats.booths === 0, { booths: burstStats.booths, afterStats })
+  rec(8, burstKeyAfter === burstKeyBefore, { burstKeyBefore, burstKeyAfter })
 }
 finally {
   await browser.close()

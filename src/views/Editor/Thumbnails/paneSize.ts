@@ -4,17 +4,11 @@ export const PREVIEW_MIN_PANE = 120
 export const PREVIEW_DEFAULT_PANE = 168
 export const PREVIEW_MAX_PANE = 420
 export const PREVIEW_THUMB_INSET = 48
-export const PREVIEW_SUPER_SAMPLE = 2
-export const PREVIEW_RAIL_SUPER_SAMPLE = 1
-export const PREVIEW_MAX_WORKING = 1024
-export const PREVIEW_RAIL_MAX_WORKING = 512
-export const PREVIEW_LQ_MAX_WORKING = 80
+export const PREVIEW_PANE_RESIZE_COMMIT_MS = 120
 export type PreviewWorkingQuality = 'full' | 'rail' | 'lq'
 type DestPublishHandler = () => void
 let destPublishHandler: DestPublishHandler | null = null
 let destLiveHandler: DestPublishHandler | null = null
-export const PREVIEW_PANE_RESIZE_COMMIT_MS = 120
-let paneCommitTimer = 0
 
 export type PreviewDestSize = {
   cssWidth: number
@@ -64,7 +58,32 @@ const publish = () => {
   destPublishHandler?.()
 }
 
+/**
+ * A gutter drag holds the freeze for its whole duration: no debounce commits
+ * mid-drag (each one flips the rail between scaled-frozen and crisp-rendered,
+ * which reads as jumping). The commit happens on drag end.
+ */
+let paneCommitTimer = 0
+let paneDragging = false
+export const isPaneDragging = () => paneDragging
+export const beginPaneDrag = () => {
+  if (paneDragging) return
+  paneDragging = true
+  window.clearTimeout(paneCommitTimer)
+  paneCommitTimer = 0
+  notifyPaneLive()
+}
+export const endPaneDrag = () => {
+  if (!paneDragging) return
+  paneDragging = false
+  window.clearTimeout(paneCommitTimer)
+  paneCommitTimer = 0
+  notifyPaneLive()
+  destPublishHandler?.()
+}
+
 const schedulePaneDestCommit = () => {
+  if (paneDragging) return
   destLiveHandler?.()
   if (typeof window === 'undefined') {
     destPublishHandler?.()
@@ -77,22 +96,21 @@ const schedulePaneDestCommit = () => {
   }, PREVIEW_PANE_RESIZE_COMMIT_MS)
 }
 
-const syncWorkingWidth = () => {
-  workingSlideWidth = Math.min(
-    PREVIEW_MAX_WORKING,
-    Math.max(1, Math.ceil(destCssWidth() * readDpr() * PREVIEW_SUPER_SAMPLE)),
-  )
+/**
+ * Live (pre-commit) pane content width, driven per drag frame. The rail
+ * freezes its React trees during a gutter drag and visually scales to this
+ * width; the committed `usePreviewDestSize` lands once the drag settles.
+ */
+const paneLiveListeners = new Set<(contentWidth: number) => void>()
+const notifyPaneLive = () => {
+  const w = destCssWidth()
+  for (const listener of paneLiveListeners) listener(w)
 }
-
-export const previewWorkingWidth = (
-  destWidth: number,
-  pixelRatio: number,
-  quality: PreviewWorkingQuality = 'full',
-) => {
-  if (quality === 'lq') return PREVIEW_LQ_MAX_WORKING
-  const superSample = quality === 'full' ? PREVIEW_SUPER_SAMPLE : PREVIEW_RAIL_SUPER_SAMPLE
-  const cap = quality === 'full' ? PREVIEW_MAX_WORKING : PREVIEW_RAIL_MAX_WORKING
-  return Math.min(cap, Math.max(1, Math.ceil(destWidth * pixelRatio * superSample)))
+export const subscribePaneLive = (listener: (contentWidth: number) => void) => {
+  paneLiveListeners.add(listener)
+  return () => {
+    paneLiveListeners.delete(listener)
+  }
 }
 
 export const setPreviewDestPublishHandler = (fn: DestPublishHandler | null) => {
@@ -107,7 +125,10 @@ export const setPreviewPaneWidth = (width: number) => {
   const next = Math.round(Math.min(PREVIEW_MAX_PANE, Math.max(PREVIEW_MIN_PANE, width)))
   if (next === paneWidth) return
   paneWidth = next
-  syncWorkingWidth()
+  // Chrome (row boxes, numbers, spacing) tracks the pointer LIVE via the
+  // synchronous notify; the heavy thumbnail CONTENT freezes itself against
+  // paneLive (see LiveSlideThumb) so only light components re-render.
+  notifyPaneLive()
   if (!notifyLayout()) return
   schedulePaneDestCommit()
 }
@@ -134,7 +155,6 @@ export const usePreviewDestSize = (): PreviewDestSize => (
 if (typeof window !== 'undefined') {
   let media: MediaQueryList | undefined
   const syncDevicePixelRatio = () => {
-    syncWorkingWidth()
     publish()
     const next = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
     if (next === media) return

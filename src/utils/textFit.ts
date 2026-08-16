@@ -11,6 +11,7 @@
  * callers wrap usage so a non-DOM context falls back gracefully.
  */
 import { layout as pretextLayout, prepare as pretextPrepare } from '@chenglou/pretext';
+import { prepareRichInline, walkRichInlineLineRanges } from '@chenglou/pretext/rich-inline';
 import { cssLengthParts, cssLengthToPx } from './cssLength';
 
 /** ProseMirror's default text size (assets/styles/prosemirror.scss). */
@@ -40,6 +41,13 @@ export interface TextFitBlock {
   listIndentPx?: number;
   /** `ul`/`ol` padding-inline-start in em, when authored as em. */
   listIndentEm?: number;
+  /**
+   * Mixed-size runs inside one paragraph, measured exactly: each run gets its
+   * own font and pretext's rich-inline line breaker, so wrapping and per-line
+   * heights match what the browser paints (a 57px body with one 120px word
+   * wraps like 57px and only that one line is 120px tall).
+   */
+  runs?: Array<{ text: string; size: number; bold?: boolean; italic?: boolean }>;
 }
 export interface MeasureBlocksOptions {
   /** Box content width in px (insets already removed). */
@@ -174,30 +182,99 @@ function listColumnInset(block: TextFitBlock, size: number, fallbackIndent?: num
  * independently with pretext, then summed with the (unscaled, px-fixed)
  * inter-block gap. Returns 0 for an empty input.
  */
+/** Canvas font for one run at a scaled size. */
+const runFont = (run: { bold?: boolean; italic?: boolean }, family: string, size: number): string => {
+  const style = run.italic ? 'italic' : 'normal'
+  const weight = run.bold ? '700' : '400'
+  return `${style} ${weight} ${size}px ${quoteFontFamily(family)}`
+}
+
+const richInlineCache = new Map<string, ReturnType<typeof prepareRichInline>>()
+const RICH_INLINE_CACHE_MAX = 300
+
+/**
+ * Exact height of a mixed-size block: rich-inline breaks lines across the
+ * per-run fonts; every line costs the max run size on it × lineHeight.
+ */
+const measureRunsHeight = (
+  runs: NonNullable<TextFitBlock['runs']>,
+  family: string,
+  sizeScale: number,
+  width: number,
+  lineHeight: number,
+  letterSpacing?: number,
+): number => {
+  const items = runs.map(run => ({
+    text: run.text,
+    font: runFont(run, family, run.size * sizeScale),
+    ...(letterSpacing ? { letterSpacing } : {}),
+  }))
+  // Prepared rich-inline handles are immutable — cache them like the block
+  // prepares so the fit search's repeated candidates stay cheap.
+  const key = `${items.map(item => `${item.font}\0${item.text.length}\0${item.text.slice(0, 32)}`).join('\x1f')}\0${letterSpacing ?? 0}`
+  let prepared = richInlineCache.get(key)
+  if (!prepared) {
+    prepared = prepareRichInline(items)
+    if (richInlineCache.size >= RICH_INLINE_CACHE_MAX) {
+      const oldest = richInlineCache.keys().next().value
+      if (oldest !== undefined) richInlineCache.delete(oldest)
+    }
+    richInlineCache.set(key, prepared)
+  }
+  let height = 0
+  walkRichInlineLineRanges(prepared, Math.max(1, width), line => {
+    let max = 0
+    for (const fragment of line.fragments) {
+      const size = runs[fragment.itemIndex]?.size ?? 0
+      if (size > max) max = size
+    }
+    height += max * sizeScale * lineHeight
+  })
+  return height
+}
+
+/**
+ * Global pretext prepare cache: the fit search re-prepares the same (text,
+ * font) pair across candidates and frames — canvas prepares are the hot cost
+ * of the re-wrap search, and handles are immutable.
+ */
+const preparedHandleCache = new Map<string, ReturnType<typeof pretextPrepare>>()
+const PREPARED_CACHE_MAX = 600
+const prepareCached = (text: string, font: string, letterSpacing?: number) => {
+  const key = `${text.length}\0${text.slice(0, 64)}\0${font}\0${letterSpacing ?? 0}`
+  let prepared = preparedHandleCache.get(key)
+  if (!prepared) {
+    prepared = pretextPrepare(text, font, letterSpacing ? { letterSpacing } : undefined)
+    if (preparedHandleCache.size >= PREPARED_CACHE_MAX) {
+      const oldest = preparedHandleCache.keys().next().value
+      if (oldest !== undefined) preparedHandleCache.delete(oldest)
+    }
+    preparedHandleCache.set(key, prepared)
+  }
+  return prepared
+}
+
 export function measureTextBlocksHeight(blocks: TextFitBlock[], options: MeasureBlocksOptions): number {
   if (!blocks.length) return 0;
   const sizeScale = options.sizeScale ?? 1;
-  const prepareOptions = options.letterSpacing ? {
-    letterSpacing: options.letterSpacing
-  } : undefined;
-  const preparedByFont = new Map<string, ReturnType<typeof pretextPrepare>>();
   let total = 0;
   for (const block of blocks) {
+    const width = Math.max(1, options.innerWidth - listColumnInset(block, block.size * sizeScale, options.bulletIndent));
+    if (block.runs?.length) {
+      // Mixed-size paragraph: measure exactly — rich-inline breaks lines across
+      // the per-run fonts and each line costs its own max run size.
+      total += measureRunsHeight(block.runs, block.fontFamily, sizeScale, width, options.lineHeight, options.letterSpacing)
+      continue
+    }
     const size = block.size * sizeScale;
     if (size <= 0) continue;
     const lineHeightPx = size * options.lineHeight;
     const font = canvasFont(block, size);
-    const width = Math.max(1, options.innerWidth - listColumnInset(block, size, options.bulletIndent));
-    const cacheKey = `${block.text}\0${font}\0${options.letterSpacing ?? 0}`;
-    let prepared = preparedByFont.get(cacheKey);
-    if (!prepared) {
-      prepared = pretextPrepare(block.text, font, prepareOptions);
-      preparedByFont.set(cacheKey, prepared);
-    }
+    const prepared = prepareCached(block.text, font, options.letterSpacing || undefined);
     total += pretextLayout(prepared, width, lineHeightPx).height;
   }
   total += Math.max(0, blocks.length - 1) * (options.blockSpace ?? 0);
-  return total;
+  return total
 }
 export interface FitFontScaleOptions {
   innerWidth: number;
@@ -236,7 +313,10 @@ export function fitFontScaleForBlocks(blocks: TextFitBlock[], options: FitFontSc
     let lo = minScale;
     let hi = 1;
     let best = minScale;
-    for (let i = 0; i < 18; i++) {
+    // 6 halvings ≈ 1.4% font precision (finer than PowerPoint's 1% autofit
+    // steps): fits the resize hot-path budget while the prepare cache covers
+    // repeated (text, font) pairs across frames.
+    for (let i = 0; i < 6; i++) {
       const mid = (lo + hi) / 2;
       if (fits(mid)) {
         best = mid;
@@ -361,49 +441,129 @@ export function fitZoomScaleFromSession(
 
 const DEFAULT_FIT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
 
+const FITTED_FONT_RE = /calc\(var\(--text-fit-scale,\s*1\)\s*\*\s*([0-9.]+)px\)/g
+/** Rendered spans may carry calc(var(--text-fit-scale,...)); measurement wants authored px. */
+const stripFitScale = (html: string) => (
+  html && html.includes('--text-fit-scale') ? html.replace(FITTED_FONT_RE, '$1px') : html
+)
+export const stripFitScaleForProbe = stripFitScale
+
+/**
+ * Memoized one-shot scales: the live editor keeps a cached measure session,
+ * so its zoom never flips when font metrics resolve slightly differently
+ * between measurements. The raster must do the same — re-measuring per paint
+ * let identical inputs produce different zooms (and different cached booth
+ * bitmaps) across repaints.
+ */
+const fitScaleMemo = new Map<string, number>()
+const FIT_SCALE_MEMO_MAX = 400
+
+/**
+ * Extraction memo: a resize drag changes box geometry every frame but the
+ * authored html rarely — DOMParser + the run walk must not run per frame.
+ */
+const blocksMemo = new Map<string, TextFitBlock[]>()
+const BLOCKS_MEMO_MAX = 80
+const extractBlocksCached = (html: string, fontFamily: string, defaultSize: number) => {
+  const key = `${html.length}\0${fontFamily}\0${defaultSize}\0${html.slice(0, 128)}\0${html.slice(-64)}`
+  let blocks = blocksMemo.get(key)
+  if (!blocks) {
+    blocks = extractFitBlocksFromHtml(stripFitScale(html), {
+      defaultFontFamily: fontFamily,
+      defaultSize,
+    }).blocks
+    if (blocksMemo.size >= BLOCKS_MEMO_MAX) {
+      const oldest = blocksMemo.keys().next().value
+      if (oldest !== undefined) blocksMemo.delete(oldest)
+    }
+    blocksMemo.set(key, blocks)
+  }
+  return { blocks }
+}
+
+type FitScaleOptions = {
+  innerWidth: number
+  innerHeight: number
+  defaultFontFamily?: string
+  defaultSize?: number
+  lineHeight: number
+  letterSpacing?: number
+  blockSpace?: number
+  locale?: string
+}
+
+const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
+  const fontFamily = options.defaultFontFamily || DEFAULT_FIT_FONT_FAMILY
+  const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
+  const key = fitSessionKey(
+    html,
+    fontFamily,
+    options.lineHeight,
+    options.letterSpacing || 0,
+    options.locale || 'en',
+    defaultSize,
+  )
+  return `${key}\0${Math.round(options.innerWidth)}x${Math.round(options.innerHeight)}\0${options.blockSpace ?? 0}`
+}
+
+/**
+ * Persist a DOM-verified correction: the editor measured the REAL rendered
+ * height and found the searched scale overflowing. Remembered so the rail,
+ * later applies, and export reuse the corrected value instead of re-overflow.
+ */
+export function rememberFitScale(html: string, options: FitScaleOptions, scale: number) {
+  if (!html || scale >= 1) return
+  if (fitScaleMemo.size >= FIT_SCALE_MEMO_MAX) {
+    const oldest = fitScaleMemo.keys().next().value
+    if (oldest !== undefined) fitScaleMemo.delete(oldest)
+  }
+  fitScaleMemo.set(fitScaleMemoKey(html, options), scale)
+}
+
 /**
  * One-shot locked-box scale for a rich-text HTML string. Editor resize keeps a
  * cached session; preview/export call this so they shrink with the same math.
  */
 export function textFitScaleForHtml(
   html: string,
-  options: {
-    innerWidth: number
-    innerHeight: number
-    defaultFontFamily?: string
-    defaultSize?: number
-    lineHeight: number
-    letterSpacing?: number
-    blockSpace?: number
-    locale?: string
-  },
+  options: FitScaleOptions,
 ): number {
   if (!html || options.innerWidth <= 2 || options.innerHeight <= 2) return 1
   const fontFamily = options.defaultFontFamily || DEFAULT_FIT_FONT_FAMILY
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
   const letterSpacing = options.letterSpacing || 0
-  const key = fitSessionKey(
-    html,
-    fontFamily,
-    options.lineHeight,
-    letterSpacing,
-    options.locale || 'en',
-    defaultSize,
-  )
-  const session = createFitMeasureSession(html, {
-    key,
-    defaultFontFamily: fontFamily,
-    defaultSize,
-    lineHeight: options.lineHeight,
-    letterSpacing: letterSpacing || undefined,
-  })
-  if (!session?.items.length) return 1
-  return fitZoomScaleFromSession(
-    session,
-    options.innerWidth,
-    options.innerHeight,
-    options.blockSpace ?? 0,
-  )
+  const memoKey = fitScaleMemoKey(html, options)
+  const memoized = fitScaleMemo.get(memoKey)
+  if (memoized !== undefined) return memoized
+  const { blocks } = extractBlocksCached(html, fontFamily, defaultSize)
+  const maxFont = blocks.reduce((max, block) => Math.max(max, block.size), defaultSize)
+  // Re-wrap search: the largest font whose RE-WRAPPED height fits. Unlike a
+  // geometric zoom divide, smaller candidates wrap onto fewer lines and can
+  // fit at a much larger size (no wasted box space). Measured slightly narrow
+  // (0.5%) so canvas-vs-browser rounding drift errs toward fewer glyph px.
+  const measureWidth = Math.max(1, options.innerWidth * 0.995)
+  const scale = !blocks.length
+    ? 1
+    : (() => {
+      try {
+        return fitFontScaleForBlocks(blocks, {
+          innerWidth: measureWidth,
+          innerHeight: Math.max(1, options.innerHeight - fitClipPadding(maxFont, options.lineHeight)),
+          lineHeight: options.lineHeight,
+          blockSpace: options.blockSpace ?? 0,
+          letterSpacing: letterSpacing || undefined,
+        })
+      }
+      catch {
+        return 1
+      }
+    })()
+  if (fitScaleMemo.size >= FIT_SCALE_MEMO_MAX) {
+    const oldest = fitScaleMemo.keys().next().value
+    if (oldest !== undefined) fitScaleMemo.delete(oldest)
+  }
+  fitScaleMemo.set(memoKey, scale)
+  return scale
 }
 function parseFontSizePx(value: string | null | undefined): number {
   return cssLengthToPx(value, DEFAULT_TEXT_FONT_SIZE) ?? 0;
@@ -462,9 +622,36 @@ export interface ExtractOptions {
 const BLOCK_SELECTOR = 'li, p, blockquote';
 
 /**
+ * Inline run profile of a block: one entry per styled run with its text,
+ * size, and bold/italic ancestry (closest styled ancestor wins; unmarked
+ * text uses the default size). Feeds pretext's rich-inline measurement.
+ */
+const runSizeProfile = (block: Element, defaultSize: number): NonNullable<TextFitBlock['runs']> => {
+  const runs: NonNullable<TextFitBlock['runs']> = []
+  const walk = (el: Element, inherited: number, bold: boolean, italic: boolean) => {
+    const htmlEl = el as HTMLElement
+    let size = parseFontSizePx(htmlEl.style?.fontSize)
+    if (!(size > 0)) size = inherited
+    const tag = el.tagName
+    const nextBold = bold || tag === 'STRONG' || tag === 'B' || (htmlEl.style?.fontWeight === 'bold' || htmlEl.style?.fontWeight === '700')
+    const nextItalic = italic || tag === 'EM' || tag === 'I' || htmlEl.style?.fontStyle === 'italic'
+    let own = ''
+    for (const node of el.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) own += node.textContent || ''
+    }
+    own = own.replace(/\s+/g, ' ')
+    if (own.length > 0) runs.push({ text: own, size, bold: nextBold, italic: nextItalic })
+    for (const child of el.children) walk(child, size, nextBold, nextItalic)
+  }
+  walk(block, defaultSize, false, false)
+  return runs
+}
+
+/**
  * Parse a Fika rich-text HTML string into measurable blocks. Each list item
  * and top-level paragraph/quote becomes one block; a block's representative font
- * size is the largest inline size in it (so measurement never under-estimates).
+ * size is the largest inline size in it (so the clip pad never under-
+ * estimates), while wrapping measures the mixed-size run profile.
  * Returns no blocks when there's no DOM parser or no text. List items are tagged
  * so the marker indent is accounted for.
  */
@@ -486,6 +673,7 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
     const isList = el.tagName === 'LI';
     // Empty bullets still occupy a line (Enter on a list placeholder).
     if (!text && !isList) continue;
+    const runs = runSizeProfile(el, defaultSize)
     blocks.push({
       text: text || ' ',
       size: blockFontSize(el, defaultSize),
@@ -493,7 +681,8 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
       italic: !!el.querySelector('em, i'),
       fontFamily: blockFontFamily(el, options.defaultFontFamily),
       listItem: isList,
-      ...(isList ? listIndentFrom(el) : {})
+      ...(isList ? listIndentFrom(el) : {}),
+      ...(runs.length > 1 ? { runs } : {})
     });
   }
 

@@ -262,7 +262,6 @@ export function getImportApi() {
     const main = useMainStore.getState();
     main.setActiveElementIdList([]);
     main.setActiveGroupElementId('');
-    main.setEditingElementId('');
     main.setClipingImageElementId('');
     main.updateSelectedSlidesIndex([]);
     if (main.creatingElement) main.setCreatingElement(null);

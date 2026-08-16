@@ -1,5 +1,6 @@
 import { deepEqual } from 'fast-equals'
 import type { PPTElement, Slide, SlideBackground } from '@/types/slides'
+import { shapeTextIsEmpty } from './simpleShape'
 
 export type PaintedSlide = Pick<Slide, 'id' | 'elements' | 'background' | 'type'>
 
@@ -21,6 +22,19 @@ const paintPropsOf = (element: PPTElement): Record<string, unknown> => {
   return next
 }
 
+/**
+ * Text-bearing boxes repaint through the one painter on every change — even a
+ * pure move. Their bitmap depends on the text-fit pipeline, and the
+ * move-only shortcut (reposition the existing Konva node) left stale or
+ * half-updated composites on the stage. Non-text elements keep the cheap
+ * move path: their paint is a pure function of geometry.
+ */
+const canMoveWithoutRepaint = (element: PPTElement) => {
+  if (element.type === 'text') return !element.content
+  if (element.type === 'shape') return shapeTextIsEmpty(element.text?.content)
+  return true
+}
+
 const isMoveOnly = (prev: PPTElement, next: PPTElement) => {
   if (prev === next) return false
   const keys = new Set([...Object.keys(prev), ...Object.keys(next)])
@@ -28,7 +42,8 @@ const isMoveOnly = (prev: PPTElement, next: PPTElement) => {
     if (POSITION_KEYS.has(key)) continue
     if (!deepEqual((prev as unknown as Record<string, unknown>)[key], (next as unknown as Record<string, unknown>)[key])) return false
   }
-  return prev.left !== next.left || prev.top !== next.top
+  if (prev.left === next.left && prev.top === next.top) return false
+  return canMoveWithoutRepaint(prev) && canMoveWithoutRepaint(next)
 }
 
 export function diffPaintedSlide(prev: PaintedSlide | undefined, next: PaintedSlide | undefined): PaintedSlideDiff {
@@ -64,6 +79,12 @@ export function diffPaintedSlide(prev: PaintedSlide | undefined, next: PaintedSl
     if (older === el) continue
     if (isMoveOnly(older, el)) movedOnly.push(id)
     else if (!deepEqual(paintPropsOf(older), paintPropsOf(el))) contentChanged.push(id)
+    // Position-only change on a text-bearing box: it cannot take the
+    // move-only shortcut, and paintProps (left/top stripped) are equal —
+    // without this branch the diff would classify it as nothing and the
+    // thumbnail would keep the box at its old spot until the next content
+    // change.
+    else if (older.left !== el.left || older.top !== el.top) contentChanged.push(id)
   }
   for (const id of prevById.keys()) {
     if (!nextById.has(id)) removed.push(id)

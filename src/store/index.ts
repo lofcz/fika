@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useMainStore, selectHandleElement, selectActiveElementList } from './main'
-import { useSlidesStore, selectCurrentSlide, selectCurrentSlideAnimations, selectFormatedAnimations, selectSlideId, selectElementById, selectIsEmptySlide } from './slides'
+import { useSlidesStore, selectCurrentSlide, selectSlideById, selectCurrentSlideAnimations, selectFormatedAnimations, selectSlideId, selectElementById, selectIsEmptySlide } from './slides'
 import { useSnapshotStore, selectCanUndo, selectCanRedo } from './snapshot'
 import { useKeyboardStore, selectCtrlOrShiftKeyActive, syncPointerModifiers } from './keyboard'
 import { useScreenStore } from './screen'
@@ -16,6 +16,7 @@ export {
   selectActiveElementList,
   useSlidesStore,
   selectCurrentSlide,
+  selectSlideById,
   selectIsEmptySlide,
   selectCurrentSlideAnimations,
   selectFormatedAnimations,

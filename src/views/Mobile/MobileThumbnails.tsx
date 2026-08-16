@@ -3,7 +3,7 @@ import styles from './MobileThumbnails.module.scss'
 const cx = bindStyles(styles)
 import { useSlidesStore } from '@/store'
 import useSlideHandler from '@/hooks/useSlideHandler'
-import Draggable from '@/components/Draggable'
+import Draggable, { slideDragOverlay } from '@/components/Draggable'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
 
 export default function MobileThumbnails({ className }: { className?: string }) {
@@ -24,6 +24,7 @@ export default function MobileThumbnails({ className }: { className?: string }) 
       modelValue={slides}
       itemKey="id"
       onEnd={handleDragEnd}
+      overlayRender={slideDragOverlay}
       item={({ element, index }) => (
         <div
           className={cx('thumbnail-item', { active: slideIndex === index })}

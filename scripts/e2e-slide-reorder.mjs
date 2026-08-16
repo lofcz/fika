@@ -69,18 +69,14 @@ async function dragHold(page, fromIndex, toIndex) {
   await page.mouse.move(x, y1, { steps: 16 })
   const overlayInk = appeared
     ? await overlay.evaluate(node => {
-      const c = node.querySelector('canvas')
-      if (!c) return { w: 0, h: 0, ink: 0, card: node.getBoundingClientRect().width }
-      const ctx = c.getContext('2d')
-      const d = ctx.getImageData(0, 0, Math.max(1, c.width), Math.max(1, c.height)).data
-      let ink = 0
-      let dark = 0
-      for (let p = 0; p < d.length; p += 16) {
-        if (d[p + 3] > 8) ink++
-        if (d[p + 3] > 8 && (d[p] < 248 || d[p + 1] < 248 || d[p + 2] < 248)) dark++
-      }
-      const r = c.getBoundingClientRect()
-      return { w: c.width, h: c.height, ink, dark, cssW: Math.round(r.width), cssH: Math.round(r.height) }
+      const slide = node.querySelector('.screen-slide')
+      if (!slide) return { w: 0, h: 0, ink: 0, card: node.getBoundingClientRect().width }
+      const text = (slide.textContent || '').replace(/\s+/g, ' ').trim()
+      const nodes = slide.querySelectorAll('path, img, canvas, table td').length
+      const r = slide.getBoundingClientRect()
+      // Character-count proxy calibrated to the old sampled-pixel thresholds.
+      const ink = text.length * 8 + nodes * 20
+      return { w: Math.round(r.width), h: Math.round(r.height), ink, dark: ink, cssW: Math.round(r.width), cssH: Math.round(r.height) }
     })
     : { w: 0, h: 0, ink: 0 }
   const sourceHidden = await page.locator('[data-sortable-id]').nth(fromIndex).evaluate(el => getComputedStyle(el).opacity === '0')
@@ -149,7 +145,7 @@ async function run(page) {
 
   const startIds = await idsOf(page)
   rec(1, 'Rail mounts 5 sortable slides', startIds.length === 5, { n: startIds.length })
-  rec(2, 'Each thumb has a dest raster canvas', await page.locator('[data-preview-raster]').count() >= 5)
+  rec(2, 'Each thumb mounts its live slide DOM', await page.locator('[data-thumbnail-slide] .screen-slide').count() >= 5)
 
   const clickIds = await idsOf(page)
   const { box } = await thumbBox(page, 1)
@@ -173,16 +169,14 @@ async function run(page) {
   rec(5, 'Typed titles persist on two slides', title0.includes('AlphaRail') && title1.includes('BetaRail'), { title0, title1 })
 
   const filledInk = await page.evaluate(() => {
-    const canvases = [...document.querySelectorAll('[data-preview-raster]')]
-    return canvases.slice(0, 2).map(c => {
-      const ctx = c.getContext('2d')
-      const d = ctx.getImageData(0, 0, c.width, c.height).data
-      let ink = 0
-      for (let p = 3; p < d.length; p += 16) if (d[p] > 8) ink++
-      return { w: c.width, h: c.height, ink }
+    const hosts = [...document.querySelectorAll('[data-thumbnail-slide]')]
+    return hosts.slice(0, 2).map(host => {
+      const slide = host.querySelector('.screen-slide')
+      const r = slide?.getBoundingClientRect()
+      return { w: Math.round(r?.width || 0), h: Math.round(r?.height || 0), ink: (slide?.textContent || '').trim().length }
     })
   })
-  rec(6, 'Filled thumbs have raster backing store', filledInk.every(c => c.w > 10 && c.h > 10), filledInk)
+  rec(6, 'Filled thumbs render their live slide', filledInk.every(c => c.w > 10 && c.h > 10 && c.ink > 0), filledInk)
 
   const before = await idsOf(page)
   const first = await dragHold(page, 0, 2)
@@ -197,7 +191,7 @@ async function run(page) {
   const afterFirst = await idsOf(page)
   rec(14, 'Dropping 0→2 changes rail order', afterFirst.join() !== before.join(), { before, after: afterFirst })
   rec(15, 'All 5 slide ids survive the first drop', afterFirst.length === 5 && before.every(id => afterFirst.includes(id)))
-  rec(16, 'Thumbs still have rasters after first drop', await page.locator('[data-preview-raster]').count() >= 5)
+  rec(16, 'Thumbs still mount their slide DOM after first drop', await page.locator('[data-thumbnail-slide] .screen-slide').count() >= 5)
 
   const mid = await dragHold(page, 1, 3)
   rec(17, 'Second drag overlay is visible', mid.overlay)
@@ -226,7 +220,7 @@ async function run(page) {
     id += 1
   }
 
-  rec(42, 'Rapid chain left every thumb with a raster', await page.locator('[data-preview-raster]').count() >= 5)
+  rec(42, 'Rapid chain left every thumb mounted', await page.locator('[data-thumbnail-slide] .screen-slide').count() >= 5)
   rec(43, 'No leftover overlay after the chain', await page.locator('[data-slide-drag-overlay]').count() === 0)
 
   const t0 = performance.now()

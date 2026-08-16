@@ -69,11 +69,12 @@ function importsBanned(src, name) {
 const railFiles = [
   'src/views/Editor/Thumbnails/index.tsx',
   'src/views/components/ThumbnailSlide/index.tsx',
+  'src/views/components/ThumbnailSlide/LiveSlideThumb.tsx',
+  'src/views/components/ThumbnailSlide/paintedSlide.ts',
   'src/components/Draggable.tsx',
-  ...walk(join(root, 'src/previewRaster')).map(relOf),
 ]
 
-assert(railFiles.some(rel => rel.startsWith('src/previewRaster/')), 'previewRaster render path is scanned')
+assert(railFiles.includes('src/views/components/ThumbnailSlide/LiveSlideThumb.tsx'), 'the live thumb render path is scanned')
 
 for (const rel of railFiles) {
   const src = read(rel)
@@ -85,8 +86,6 @@ for (const rel of railFiles) {
 
 const thumb = read('src/views/components/ThumbnailSlide/index.tsx')
 assert(!/\bThumbnailElement\b/.test(thumb), 'ThumbnailSlide must not reference ThumbnailElement')
-assert(!/\bensureStage\b/.test(thumb), 'ThumbnailSlide must not create empty stages on virtualized remount')
-assert(thumb.includes('[slide.id, visible]'), 'host attach is keyed by slide identity, not dest size')
 assert(!/slide\.elements/.test(thumb), 'ThumbnailSlide must not read slide.elements')
 assert(
   !/\.elements\s*\.map\s*\(/.test(thumb) && !/elements\s*\.map\s*\(/.test(thumb),

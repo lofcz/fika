@@ -93,6 +93,15 @@ function assertOnDisk() {
   assert(dts.includes('mountFika'), 'dist/types/embed/index.d.ts does not export mountFika')
   assert(dts.includes('FikaHeaderMenuItem'), 'dist/types/embed/index.d.ts does not export FikaHeaderMenuItem')
   assert(dts.includes('FikaViewMode'), 'dist/types/embed/index.d.ts does not export FikaViewMode')
+
+  const embedJs = join(root, 'dist/embed/fika-embed.js')
+  if (existsSync(embedJs)) {
+    const js = readFileSync(embedJs, 'utf8')
+    assert(
+      !js.includes('new URL("./",import.meta.url)') && !js.includes("new URL('./',import.meta.url)"),
+      'fika-embed.js still contains new URL("./", import.meta.url) — host bundlers fail with Can\'t resolve \'./\'',
+    )
+  }
 }
 
 function assertTarball(tarball) {

@@ -1,6 +1,6 @@
 import { useSlidesStore } from '@/store'
 import type { Slide } from '@/types/slides'
-import { diffPaintedSlide, type PaintedSlide, type PaintedSlideDiff } from '@/previewRaster/diffPaintedSlide'
+import { diffPaintedSlide, type PaintedSlide, type PaintedSlideDiff } from '@/utils/diffPaintedSlide'
 
 export type { PaintedSlide, PaintedSlideDiff }
 export { diffPaintedSlide }

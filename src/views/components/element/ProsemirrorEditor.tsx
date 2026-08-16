@@ -11,7 +11,7 @@ import type { EditorView } from 'prosemirror-view';
 import type { Mark, Node as ProsemirrorNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import { toggleMark, wrapIn, lift } from 'prosemirror-commands';
-import { initProsemirrorEditor, createDocument } from '@/utils/prosemirror';
+import { initProsemirrorEditor, createDocument, normalizeFittedFontSizes } from '@/utils/prosemirror';
 import { clearPendingCaret, consumePendingCaret, registerEditorView, unregisterEditorView } from '@/utils/prosemirror/caret';
 import { commitLiveEditorToStore, resolveEditorMountHtml, richTextHtmlLooksEmpty } from '@/utils/prosemirror/commitEditor';
 import { registerCommitFlusher } from '@/utils/commitQueue';
@@ -203,7 +203,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     if (!editorView.current) return;
     if (valueRef.current.replace(/ style=\"\"/g, '') === editorView.current.dom.innerHTML.replace(/ style=\"\"/g, '')) return;
     callbacksRef.current.onUpdate?.({
-      value: editorView.current.dom.innerHTML,
+      value: normalizeFittedFontSizes(editorView.current.dom.innerHTML),
       ignore: isHanldeHistory
     });
   }, 300, {
@@ -685,6 +685,8 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
   emitEmptyStateRef.current = emitEmptyState;
   const emitDocChangeRef = useRef(emitDocChange);
   emitDocChangeRef.current = emitDocChange;
+  const syncRichTextAttrsRef = useRef(syncRichTextAttrsFromView);
+  syncRichTextAttrsRef.current = syncRichTextAttrsFromView;
   const handleInputRef = useRef(handleInput);
   handleInputRef.current = handleInput;
   const persistLiveEditor = () => {
@@ -775,6 +777,11 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     if (wrapEmptyAsRef.current === 'bullet' && view.state.doc.textContent.trim().length === 0) {
       wrapEmptyInBulletList(view);
     }
+    // Editors that mount because their element was just selected (shape text)
+    // missed the panel's SYNC_RICH_TEXT_ATTRS_TO_STORE emit — catch up now.
+    if (useMainStore.getState().handleElementId === elementIdRef.current) {
+      syncRichTextAttrsRef.current();
+    }
     if (autoFocusRef.current) {
       view.focus();
       consumePendingCaret(elementIdRef.current, view);
@@ -798,7 +805,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
   const syncAttrsToStore = useCallback(() => {
     syncRichTextAttrsFromView();
   }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     emitter.on(EmitterEvents.RICH_TEXT_COMMAND, execCommand);
     emitter.on(EmitterEvents.SYNC_RICH_TEXT_ATTRS_TO_STORE, syncAttrsToStore);
     emitter.on(EmitterEvents.APPLY_INLINE_MATH, applyInlineMath);

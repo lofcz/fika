@@ -30,7 +30,10 @@ export const useThumbnailVirtualizer = (
     count: items.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: index => thumbHeight + (rowHasSection(items[index], index, hasSection) ? SECTION_HEIGHT : 0),
-    overscan: 3,
+    // Each row mounts a full live slide tree — keep the pre-mount window
+    // minimal; content-visibility on .thumbnail-slide skips the offscreen
+    // layout/paint of what does mount.
+    overscan: 1,
     getItemKey: index => items[index]?.id ?? index,
   })
 

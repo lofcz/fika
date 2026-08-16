@@ -1,10 +1,11 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './BaseChartElement.module.scss'
 const cx = bindStyles(styles)
-import { memo } from 'react';
+import { memo, useContext } from 'react';
 
-import { useSlidesStore, selectCurrentSlide } from '@/store';
+import { useSlidesStore, selectSlideById } from '@/store';
 import type { PPTChartElement, SlideBackground } from '@/types/slides';
+import { SlideIdContext } from '@/types/injectKey';
 import { DEFAULT_CHART_LINE_COLOR } from '@/configs/chart';
 import { resolveChartElementSeriesColors, resolveChartLabelColor } from '@/utils/textContrast';
 import { useOutlineRadiusCss } from '@/views/components/element/hooks/useElementOutline';
@@ -20,7 +21,8 @@ export type IBaseChartElementProps = {
 
 const BaseChartElement = memo((props: IBaseChartElementProps) => {
   const { elementInfo, target } = props;
-  const currentSlide = useSlidesStore(selectCurrentSlide);
+  const slideId = useContext(SlideIdContext);
+  const currentSlide = useSlidesStore(s => selectSlideById(s, slideId || undefined));
   const theme = useSlidesStore(s => s.theme);
   const labelColor = resolveChartLabelColor(props.elementInfo, {
     background: props.background ?? currentSlide?.background,

@@ -142,7 +142,11 @@ const fontsize: MarkSpec = {
       fontsize
     } = mark.attrs;
     let style = '';
-    if (fontsize) style += `font-size: ${fontsize};`;
+    // Scaled through the fit host's variable so fixed-height boxes re-wrap at
+    // smaller fonts (zoom keeps authored wraps and over-shrinks). Falls back
+    // to the authored size when no fit host sets the variable. Stored HTML is
+    // normalized back to plain px (normalizeFittedFontSizes).
+    if (fontsize) style += `font-size: calc(var(--text-fit-scale, 1) * ${fontsize});`;
     return ['span', {
       style
     }, 0];

@@ -87,6 +87,16 @@ export type SlidesStore = SlidesState & SlidesActions
 
 export const selectCurrentSlide = (state: SlidesState) => state.slides[state.slideIndex]
 
+/**
+ * Slide by id — the owning slide for a rendered slide tree. Contrast and
+ * placeholder painting must resolve against THIS slide, not the editor's
+ * current one, or off-screen renders (thumbnail captures, presenter preview)
+ * inherit the wrong background/elements.
+ */
+export const selectSlideById = (state: SlidesState, slideId: string | undefined) => (
+  slideId ? state.slides.find(slide => slide.id === slideId) : undefined
+)
+
 export const selectIsEmptySlide = (state: SlidesState) => {
   if (state.slides.length === 0) return true
   if (state.slides.length > 1) return false

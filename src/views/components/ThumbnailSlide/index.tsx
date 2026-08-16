@@ -1,13 +1,13 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { memo, useEffect, useLayoutEffect, useRef } from 'react'
+import { memo } from 'react'
 
 import type { Slide } from '@/types/slides'
-import { attachStage, detachStage, hasRasterSnapshot, paintDetachedSlide, releaseDetachedSlide } from '@/previewRaster'
-import { getPreviewDestSize, usePreviewDestSize } from '@/views/Editor/Thumbnails/paneSize'
 import { useSlidesStore } from '@/store'
-import { arePaintedSlideIdentitiesEqual, selectPaintedSlide, selectPaintedSlideAuthoredKey, selectPaintedSlidePaintKey } from './paintedSlide'
+import { usePreviewDestSize } from '@/views/Editor/Thumbnails/paneSize'
+import LiveSlideThumb from './LiveSlideThumb'
+import { arePaintedSlideIdentitiesEqual } from './paintedSlide'
 
 export type IThumbnailSlideProps = {
   slide: Slide | { id: string }
@@ -29,52 +29,28 @@ export function areThumbnailSlidePropsEqual(prev: IThumbnailSlideProps, next: IT
     )
 }
 
+/**
+ * The thumbnail IS the slide: the real ScreenSlide DOM scaled into the thumb
+ * box (see LiveSlideThumb). The rail stays faithful to the editor canvas by
+ * construction and updates live while editing — no raster pipeline, no
+ * per-element capture booths, nothing to fall behind.
+ */
 const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
   const { slide, size, visible = true, className } = props
-  const hostRef = useRef<HTMLDivElement | null>(null)
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
-  const authoredKey = useSlidesStore(s => selectPaintedSlideAuthoredKey(s, slide.id))
-  const paintKey = useSlidesStore(s => selectPaintedSlidePaintKey(s, slide.id))
-  const storeSlide = useSlidesStore(s => selectPaintedSlide(s, slide.id))
+  const storeSlide = useSlidesStore(s => s.slides.find(item => item.id === slide.id))
+  const full = storeSlide ?? ('elements' in slide ? slide : undefined)
   const dest = usePreviewDestSize()
   const width = size || dest.cssWidth
-  const height = width * viewportRatio
-  const full = storeSlide ?? ('elements' in slide ? slide : undefined)
-
-  useLayoutEffect(() => {
-    if (!visible) {
-      detachStage(slide.id)
-      return
-    }
-    attachStage(slide.id, hostRef.current)
-    return () => {
-      detachStage(slide.id)
-      if (!useSlidesStore.getState().slides.some(item => item.id === slide.id)) {
-        releaseDetachedSlide(slide.id)
-      }
-    }
-  }, [slide.id, visible])
-
-  useEffect(() => {
-    if (!visible || !full) return
-    const size = getPreviewDestSize()
-    const destWidth = props.size || size.cssWidth
-    paintDetachedSlide(full, {
-      destWidth,
-      destHeight: destWidth * useSlidesStore.getState().viewportRatio,
-      pixelRatio: size.dpr,
-    })
-  }, [slide.id, visible, full, authoredKey, paintKey])
 
   return (
     <div
-      ref={hostRef}
       className={cx('thumbnail-slide', className)}
       data-thumbnail-slide={slide.id}
-      data-authored-key={authoredKey.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}
-      data-raster-pending={hasRasterSnapshot(slide.id) ? undefined : ''}
-      style={{ width: width + 'px', height: height + 'px' }}
-    />
+      style={{ width: width + 'px', height: width * viewportRatio + 'px' }}
+    >
+      {visible && full ? <LiveSlideThumb slide={full} width={width} /> : null}
+    </div>
   )
 }, areThumbnailSlidePropsEqual)
 

@@ -164,21 +164,24 @@ async function readFidelity(page) {
         const host = (slide && document.querySelector(`[data-thumbnail-slide="${slide.id}"]`))
           || document.querySelector('[data-thumb-active] [data-thumbnail-slide]')
         const live = document.querySelector('[class*=viewport-wrapper] [data-element-type=chart] [data-live-box] svg')
-        if (host && live && !host.hasAttribute('data-raster-pending') && host.querySelector('canvas')) return { host, live }
+        const thumbSvg = host?.querySelector('.screen-slide svg') || null
+        if (host && live && thumbSvg) return { host, live, thumbSvg }
         await sleep(80)
       }
+      const host = (slide && document.querySelector(`[data-thumbnail-slide="${slide.id}"]`))
+        || document.querySelector('[data-thumb-active] [data-thumbnail-slide]')
       return {
-        host: (slide && document.querySelector(`[data-thumbnail-slide="${slide.id}"]`))
-          || document.querySelector('[data-thumb-active] [data-thumbnail-slide]'),
+        host,
         live: document.querySelector('[class*=viewport-wrapper] [data-element-type=chart] [data-live-box] svg'),
+        thumbSvg: host?.querySelector('.screen-slide svg') || null,
       }
     }
 
-    const { host, live } = await waitPaint()
+    const { host, live, thumbSvg } = await waitPaint()
     const liveType = document.querySelector('[class*=viewport-wrapper] [data-element-type=chart] [data-live-box]')?.getAttribute('data-chart-type') || ''
     const empty = {
       liveType,
-      pending: !host || host.hasAttribute('data-raster-pending'),
+      pending: !host || !thumbSvg,
       mae: 1,
       corr: 0,
       xCorr: 0,
@@ -197,23 +200,8 @@ async function readFidelity(page) {
       stubRatio: 1,
       colorDelta: 1,
     }
-    const canvas = host && (host.querySelector('[data-preview-raster]') || host.querySelector('canvas'))
-    if (!live || !canvas || !chart || !store) return empty
+    if (!live || !thumbSvg || !chart || !store) return empty
 
-    const xml = new XMLSerializer().serializeToString(live)
-    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
-    const img = new Image()
-    await new Promise((resolve, reject) => {
-      img.onload = resolve
-      img.onerror = reject
-      img.src = url
-    })
-    URL.revokeObjectURL(url)
-
-    const liveC = document.createElement('canvas')
-    liveC.width = SIZE
-    liveC.height = SIZE
-    const liveCtx = liveC.getContext('2d', { willReadFrequently: true })
     const settle = (ctx, source, sw, sh) => {
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, SIZE, SIZE)
@@ -224,26 +212,31 @@ async function readFidelity(page) {
       ctx.imageSmoothingEnabled = true
       ctx.drawImage(mid, 0, 0, SIZE, SIZE)
     }
-    liveCtx.imageSmoothingEnabled = true
-    settle(liveCtx, img, img.width || chart.width, img.height || chart.height)
-    const liveData = liveCtx.getImageData(0, 0, SIZE, SIZE).data
+
+    const rasterizeSvg = async (svg) => {
+      const xml = new XMLSerializer().serializeToString(svg)
+      const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
+      const img = new Image()
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+        img.src = url
+      })
+      URL.revokeObjectURL(url)
+      const c = document.createElement('canvas')
+      c.width = SIZE
+      c.height = SIZE
+      const ctx = c.getContext('2d', { willReadFrequently: true })
+      ctx.imageSmoothingEnabled = true
+      settle(ctx, img, svg.viewBox?.baseVal?.width || img.width || chart.width, svg.viewBox?.baseVal?.height || img.height || chart.height)
+      return ctx.getImageData(0, 0, SIZE, SIZE).data
+    }
+
+    const liveData = await rasterizeSvg(live)
 
     const slideW = store.viewportSize
     const slideH = store.viewportSize * store.viewportRatio
-    const tx = chart.left / slideW * canvas.width
-    const ty = chart.top / slideH * canvas.height
-    const tw = chart.width / slideW * canvas.width
-    const th = chart.height / slideH * canvas.height
-    const thumbC = document.createElement('canvas')
-    thumbC.width = SIZE
-    thumbC.height = SIZE
-    const thumbCtx = thumbC.getContext('2d', { willReadFrequently: true })
-    const region = document.createElement('canvas')
-    region.width = Math.max(1, Math.round(tw))
-    region.height = Math.max(1, Math.round(th))
-    region.getContext('2d').drawImage(canvas, tx, ty, tw, th, 0, 0, region.width, region.height)
-    settle(thumbCtx, region, region.width, region.height)
-    const thumbData = thumbCtx.getImageData(0, 0, SIZE, SIZE).data
+    const thumbData = await rasterizeSvg(thumbSvg)
 
     const liveX = new Array(SIZE).fill(0)
     const thumbX = new Array(SIZE).fill(0)
@@ -347,7 +340,7 @@ async function readFidelity(page) {
     const colorDelta = Math.abs(liveS0 - thumbS0) / Math.max(1, liveS0 + thumbS0) + Math.abs(liveS1 - thumbS1) / Math.max(1, liveS1 + thumbS1)
     return {
       liveType,
-      pending: host.hasAttribute('data-raster-pending'),
+      pending: !thumbSvg,
       mae: mae / n / 255,
       corr,
       xCorr: pearson(liveX, thumbX),

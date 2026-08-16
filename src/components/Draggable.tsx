@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEventHandler, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEventHandler, type PointerEvent, type ReactNode } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -11,7 +11,8 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { paintRasterSnapshot } from '@/previewRaster'
+import { useSlidesStore } from '@/store'
+import LiveSlideThumb from '@/views/components/ThumbnailSlide/LiveSlideThumb'
 import type { ThumbnailVirtualizerApi } from '@/views/Editor/Thumbnails/useThumbnailVirtualizer'
 import {
   clampScrollTop,
@@ -24,41 +25,38 @@ import {
 } from './draggableLayout'
 
 type ItemRender = (args: { element: any; index: number }) => ReactNode
+type OverlayRender = (paint: OverlayPaint) => ReactNode
 type VirtualizerApi = ThumbnailVirtualizerApi
 type VirtualRow = VirtualizerApi['virtualItems'][number]
 
 const skipLayoutAnimation = () => false
 
-function OverlayRaster({ paint }: { paint: OverlayPaint }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  useLayoutEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    paintRasterSnapshot(paint.slideId, canvas)
-  }, [paint.slideId])
+function SlideOverlayLive({ paint }: { paint: OverlayPaint }) {
+  const slide = useSlidesStore(s => s.slides.find(item => item.id === paint.slideId))
   return (
     <div
       data-slide-drag-overlay={paint.slideId}
       style={{ width: paint.width, height: paint.height, position: 'relative' }}
     >
-      <canvas
-        ref={canvasRef}
-        style={{
+      {slide ? (
+        <div style={{
           position: 'absolute',
           left: paint.thumbX,
           top: paint.thumbY,
-          width: paint.thumbW,
-          height: paint.thumbH,
-          display: 'block',
-          pointerEvents: 'none',
           borderRadius: 8,
+          overflow: 'hidden',
           boxShadow: '0 0 0 1px rgba(15, 23, 42, 0.12), 0 10px 28px rgba(15, 23, 42, 0.18)',
           background: '#fff',
-        }}
-      />
+        }}>
+          <LiveSlideThumb slide={slide} width={paint.thumbW} />
+        </div>
+      ) : null}
     </div>
   )
 }
+
+/** Drag ghost for slide rails: the live slide DOM at thumb size. */
+export const slideDragOverlay: OverlayRender = paint => <SlideOverlayLive paint={paint} />
 
 export default function Draggable({
   modelValue,
@@ -76,6 +74,7 @@ export default function Draggable({
   virtualItems,
   virtualizer,
   totalSize,
+  overlayRender,
 }: {
   modelValue?: any[]
   list?: any[]
@@ -83,15 +82,16 @@ export default function Draggable({
   item?: ItemRender
   children?: ReactNode
   className?: string
-  disabled?: boolean
-  handle?: string
-  onContextMenu?: MouseEventHandler<HTMLDivElement>
   onEnd?: (event: { oldIndex: number; newIndex: number }) => void
   onUpdateModelValue?: (next: any[]) => void
+  onContextMenu?: MouseEventHandler<HTMLDivElement>
+  disabled?: boolean
+  handle?: string
   scrollRef?: VirtualizerApi['scrollRef']
   virtualItems?: VirtualizerApi['virtualItems']
   virtualizer?: VirtualizerApi['virtualizer']
   totalSize?: number
+  overlayRender?: OverlayRender
 }) {
   const items = modelValue ?? list ?? []
   const ids = useMemo(
@@ -132,6 +132,7 @@ export default function Draggable({
   const handleDragStart = (event: DragStartEvent) => {
     const id = String(event.active.id)
     setActiveId(id)
+    if (!overlayRender) return
     const node = (event.activatorEvent.target as HTMLElement | null)?.closest<HTMLElement>('[data-sortable-id]')
     if (node) setOverlay(overlayFromNode(node, id))
   }
@@ -191,7 +192,7 @@ export default function Draggable({
         </div>
       </SortableContext>
       <DragOverlay dropAnimation={null} style={{ pointerEvents: 'none', zIndex: 40 }}>
-        {overlay ? <OverlayRaster paint={overlay} /> : null}
+        {overlay && overlayRender ? overlayRender(overlay) : null}
       </DragOverlay>
     </DndContext>
   )

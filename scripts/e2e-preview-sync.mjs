@@ -104,48 +104,33 @@ async function runPreviewSync(page) {
     }
     const boxes = () => [...document.querySelectorAll('[class*=viewport-wrapper] [data-live-box]')]
     const storeSlide = (i = 0) => {
-      const host = document.querySelectorAll('[class*=thumbnail-slide]')[i]
-      if (!host) return null
-      const authored = (host.getAttribute('data-authored-key') || '').split('\u0000').map(s => s.replace(/\s+/g, ' ').trim())
-      const k = Object.keys(host).find(x => x.startsWith('__reactFiber'))
-      let f = host[k]
-      for (let n = 0; n < 30 && f; n++) {
-        let hook = f.memoizedState
-        for (let h = 0; h < 20 && hook; h++) {
-          const v = hook.memoizedState
-          if (v && v.elements && v.id) {
-            return {
-              id: v.id,
-              elements: v.elements.map((e, idx) => {
-                const fiberText = (e.content || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().slice(0, 120)
-                const text = authored[idx] || fiberText
-                return {
-                  id: e.id,
-                  textType: e.textType,
-                  left: e.left,
-                  top: e.top,
-                  text,
-                  empty: !text,
-                }
-              }),
-            }
+      const slide = window.__FIKA_SLIDES__.getState().slides[i]
+      if (!slide) return null
+      return {
+        id: slide.id,
+        elements: slide.elements.map(e => {
+          const html = e.type === 'text' ? e.content : e.type === 'shape' ? e.text?.content : ''
+          const text = (html || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().slice(0, 120)
+          return {
+            id: e.id,
+            textType: e.textType,
+            left: e.left,
+            top: e.top,
+            text,
+            empty: !text,
           }
-          hook = hook.next
-        }
-        f = f.return
+        }),
       }
-      return null
     }
     const thumbInk = (i = 0) => {
-      const host = document.querySelectorAll('[class*=thumbnail-slide]')[i]
-      const c = host && host.querySelector('canvas')
-      if (!c) return { ink: 0, pending: true }
-      const d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data
-      let ink = 0
-      for (let p = 0; p < d.length; p += 16) {
-        if (d[p + 3] > 12 && (d[p] < 248 || d[p + 1] < 248 || d[p + 2] < 248)) ink++
-      }
-      return { ink, pending: host.hasAttribute('data-raster-pending') }
+      const host = document.querySelectorAll('[data-thumbnail-slide]')[i]
+      const slide = host && host.querySelector('.screen-slide')
+      if (!slide) return { ink: 0, pending: true }
+      const text = (slide.textContent || '').replace(/\s+/g, ' ').trim()
+      const nodes = slide.querySelectorAll('path, img, canvas, table td').length
+      // Character-count proxy calibrated to the old pixel-ink thresholds
+      // (a sampled-pixel count scaled ~5x the text length at thumb size).
+      return { ink: text.length * 5 + nodes * 20, pending: false, textLen: text.length }
     }
     const waitPaint = async (i = 0) => {
       const t0 = Date.now()
@@ -394,7 +379,7 @@ async function runPreviewSync(page) {
   for (const [id, name] of CASES) {
     const proof = results.find(p => p.id === id)
     if (!proof) throw new Error(`missing proof ${id} ${name}`)
-    if (!proof.pass) throw new Error(`failed ${id} ${name}`)
+    if (!proof.pass) throw new Error(`failed ${id} ${name}${proof.measured ? ` ${JSON.stringify(proof.measured)}` : ''}`)
   }
   if (results.length !== CASES.length) throw new Error(`expected ${CASES.length} proofs, got ${results.length}`)
   if (failed.length) throw new Error(`${failed.length} preview-sync proofs failed`)

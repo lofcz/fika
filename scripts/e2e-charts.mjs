@@ -140,7 +140,7 @@ async function readChartPaint(page) {
       while (Date.now() - start < 5000) {
         const host = document.querySelector('[data-thumb-active] [data-thumbnail-slide]')
           || document.querySelector('[data-thumbnail-slide]')
-        if (host && !host.hasAttribute('data-raster-pending') && host.querySelector('canvas')) return host
+        if (host?.querySelector('.screen-slide svg')) return host
         await sleep(80)
       }
       return document.querySelector('[data-thumb-active] [data-thumbnail-slide]')
@@ -148,7 +148,7 @@ async function readChartPaint(page) {
     }
 
     const host = await waitPaint()
-    const canvas = host && (host.querySelector('[data-preview-raster]') || host.querySelector('canvas'))
+    const thumbSvg = host?.querySelector('.screen-slide svg') || null
     const live = document.querySelector('[class*=viewport-wrapper] [data-element-type=chart] [data-live-box]')
     const liveType = live?.getAttribute('data-chart-type') || ''
     const liveCount = document.querySelectorAll('[class*=viewport-wrapper] [data-element-type=chart]').length
@@ -169,7 +169,7 @@ async function readChartPaint(page) {
       liveCount,
       liveSeries0,
       liveSeries1,
-      pending: !host || host.hasAttribute('data-raster-pending'),
+      pending: !host || !thumbSvg,
       ink: 0,
       series0: 0,
       series1: 0,
@@ -181,10 +181,29 @@ async function readChartPaint(page) {
       centerWhite: true,
       distinct: 0,
     }
-    if (!canvas || !canvas.width) return empty
+    if (!thumbSvg) return empty
 
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    // The thumb renders the same echarts SVG as the canvas — rasterize it and
+    // run the pixel analysis unchanged.
+    const SIZE = 180
+    const xml = new XMLSerializer().serializeToString(thumbSvg)
+    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
+    const img = new Image()
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = url
+    })
+    URL.revokeObjectURL(url)
+    const raster = document.createElement('canvas')
+    raster.width = SIZE
+    raster.height = SIZE
+    const rctx = raster.getContext('2d', { willReadFrequently: true })
+    rctx.fillStyle = '#ffffff'
+    rctx.fillRect(0, 0, SIZE, SIZE)
+    rctx.imageSmoothingEnabled = true
+    rctx.drawImage(img, 0, 0, SIZE, SIZE)
+    const { data, width, height } = rctx.getImageData(0, 0, SIZE, SIZE)
     const x0 = Math.floor(width * 0.30)
     const x1 = Math.max(x0 + 1, Math.floor(width * 0.70))
     const y0 = Math.floor(height * 0.14)
@@ -217,15 +236,23 @@ async function readChartPaint(page) {
         if (near(r, g, b, STUB, 3)) stubBg++
       }
     }
-    const ci = (cy * width + cx) * 4
-    const centerWhite = data[ci + 3] < 12 || nearWhite(data[ci], data[ci + 1], data[ci + 2])
+    let centerWhite = true
+    for (const [fx, fy] of [[0.46, 0.44], [0.48, 0.48], [0.5, 0.46], [0.52, 0.5], [0.47, 0.52], [0.5, 0.5]]) {
+      const px = Math.floor(width * fx)
+      const py = Math.floor(height * fy)
+      const pi = (py * width + px) * 4
+      if (data[pi + 3] >= 12 && !nearWhite(data[pi], data[pi + 1], data[pi + 2])) {
+        centerWhite = false
+        break
+      }
+    }
     const distinct = [series0, series1, teal, amber, purple].filter(n => n > 4).length
     return {
       liveType,
       liveCount,
       liveSeries0,
       liveSeries1,
-      pending: host.hasAttribute('data-raster-pending'),
+      pending: !thumbSvg,
       ink,
       series0,
       series1,
@@ -365,44 +392,65 @@ try {
   rec(46, 'First bar thumb still has series colors after other slides', back.liveType === 'bar' && back.series0 > 8 && back.series1 > 8, back)
 
   const session = await page.evaluate(() => {
-    const types = [...document.querySelectorAll('[data-thumbnail-slide]')].map(host => host.getAttribute('data-authored-key') || '')
-    const pending = [...document.querySelectorAll('[data-thumbnail-slide][data-raster-pending]')].length
+    const state = window.__FIKA_SLIDES__.getState()
+    const types = state.slides.flatMap(slide => slide.elements.filter(el => el.type === 'chart').map(el => el.chartType))
+    const pending = [...document.querySelectorAll('[data-thumbnail-slide]')].filter(host => !host.querySelector('.screen-slide')).length
     const live = document.querySelectorAll('[class*=viewport-wrapper] [data-element-type=chart]').length
     return { types, pending, live }
   })
-  rec(47, 'Every chart type was inserted in this session', CHART_TYPES.every(type => inserted.has(type) && session.types.some(key => key.includes(type))), { inserted: [...inserted], keys: session.types })
-  rec(48, 'No thumb is still raster-pending', session.pending === 0, session)
+  rec(47, 'Every chart type was inserted in this session', CHART_TYPES.every(type => inserted.has(type) && session.types.includes(type)), { inserted: [...inserted], store: session.types })
+  rec(48, 'No visible thumb is unmounted', session.pending === 0, session)
 
-  const thumbs = await page.evaluate(() => {
+  const thumbs = await page.evaluate(async () => {
+    const sleep = ms => new Promise(r => setTimeout(r, ms))
     const SERIES0 = [59, 91, 219]
     const SERIES1 = [28, 126, 214]
     const STUB = [248, 250, 252]
     const near = (r, g, b, t, tol = 22) => Math.abs(r - t[0]) <= tol && Math.abs(g - t[1]) <= tol && Math.abs(b - t[2]) <= tol
-    return [...document.querySelectorAll('[data-thumbnail-slide]')].map(host => {
-      const key = host.getAttribute('data-authored-key') || ''
-      const canvas = host.querySelector('[data-preview-raster]') || host.querySelector('canvas')
-      if (!canvas || !canvas.width) return { key, stubRatio: 1, series: 0, ink: 0 }
-      const { data, width, height } = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height)
+    const state = window.__FIKA_SLIDES__.getState()
+    const typeOf = (slideId) => {
+      const slide = state.slides.find(item => item.id === slideId)
+      return slide?.elements.find(el => el.type === 'chart')?.chartType || ''
+    }
+    const out = []
+    for (const host of document.querySelectorAll('[data-thumbnail-slide]')) {
+      const key = typeOf(host.getAttribute('data-thumbnail-slide'))
+      const svg = host.querySelector('.screen-slide svg')
+      if (!key || !svg) { out.push({ key, stubRatio: 1, series: 0, ink: 0 }); continue }
+      const SIZE = 180
+      const xml = new XMLSerializer().serializeToString(svg)
+      const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
+      const img = new Image()
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+        img.src = url
+      })
+      URL.revokeObjectURL(url)
+      const raster = document.createElement('canvas')
+      raster.width = SIZE
+      raster.height = SIZE
+      const rctx = raster.getContext('2d', { willReadFrequently: true })
+      rctx.fillStyle = '#ffffff'
+      rctx.fillRect(0, 0, SIZE, SIZE)
+      rctx.imageSmoothingEnabled = true
+      rctx.drawImage(img, 0, 0, SIZE, SIZE)
+      const { data } = rctx.getImageData(0, 0, SIZE, SIZE)
       let stub = 0
       let pix = 0
       let series = 0
       let ink = 0
-      const x0 = Math.floor(width * 0.30)
-      const x1 = Math.floor(width * 0.70)
-      const y0 = Math.floor(height * 0.14)
-      const y1 = Math.floor(height * 0.86)
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-          const i = (y * width + x) * 4
-          if (data[i + 3] < 12) continue
-          pix++
-          if (data[i] < 246 || data[i + 1] < 246 || data[i + 2] < 246) ink++
-          if (near(data[i], data[i + 1], data[i + 2], STUB, 3)) stub++
-          if (near(data[i], data[i + 1], data[i + 2], SERIES0) || near(data[i], data[i + 1], data[i + 2], SERIES1)) series++
-        }
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 12) continue
+        pix++
+        if (data[i] < 246 || data[i + 1] < 246 || data[i + 2] < 246) ink++
+        if (near(data[i], data[i + 1], data[i + 2], STUB, 3)) stub++
+        if (near(data[i], data[i + 1], data[i + 2], SERIES0) || near(data[i], data[i + 1], data[i + 2], SERIES1)) series++
       }
-      return { key, stubRatio: stub / Math.max(1, pix), series, ink }
-    })
+      out.push({ key, stubRatio: stub / Math.max(1, pix), series, ink })
+      await sleep(0)
+    }
+    return out
   })
   const cartesianThumbs = thumbs.filter(t => /bar|column|line|area|radar/.test(t.key))
   rec(49, 'No cartesian thumb is a cropped white stub', cartesianThumbs.length > 0 && cartesianThumbs.every(t => t.stubRatio < 0.35 && t.ink > 80), thumbs)

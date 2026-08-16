@@ -43,7 +43,10 @@ const applyAutoHeightChrome = (id: string, height: number) => {
   const scale = useMainStore.getState().canvasScale;
   const scaleHeight = height * scale;
   operate.style.height = `${scaleHeight}px`;
-  operate.style.transformOrigin = `${operate.offsetWidth / 2}px ${scaleHeight / 2}px`;
+  // inline px width (applyLiveSize/React keep it current) — offsetWidth would
+  // force a layout on this drag hot path
+  const scaleWidth = parseFloat(operate.style.width) || operate.offsetWidth;
+  operate.style.transformOrigin = `${scaleWidth / 2}px ${scaleHeight / 2}px`;
 };
 const TextElement = memo((props: ITextElementProps) => {
   const { elementInfo, contextmenus, isEditing, className, style } = props;
@@ -250,19 +253,32 @@ const TextElement = memo((props: ITextElementProps) => {
     if (!isScaling) {
       const info = elementInfoRef.current;
       const layout = textBoxLayoutRef.current;
-      if (!layout.lockPaintHeight && !info.vertical && realHeightCache.current !== -1) {
-        applyAutoHeightChrome(info.id, realHeightCache.current);
-        useSlidesStore.getState().updateElement({
-          id: info.id,
-          props: { height: realHeightCache.current }
-        });
+      if (!layout.lockPaintHeight && !info.vertical) {
+        // The drag can end after the last ResizeObserver fire was swallowed
+        // by the gesture guards — measure NOW so the box always matches its
+        // text on drop (cache empty means the RO never captured the drop size).
+        const real = realHeightCache.current !== -1
+          ? realHeightCache.current
+          : (elementRef.current ? Math.ceil(elementRef.current.offsetHeight) : -1);
+        if (real !== -1 && real !== info.height) {
+          applyAutoHeightChrome(info.id, real);
+          useSlidesStore.getState().updateElement({
+            id: info.id,
+            props: { height: real }
+          });
+        }
         realHeightCache.current = -1;
       }
-      if (!layout.lockPaintHeight && info.vertical && realWidthCache.current !== -1) {
-        useSlidesStore.getState().updateElement({
-          id: info.id,
-          props: { width: realWidthCache.current }
-        });
+      if (!layout.lockPaintHeight && info.vertical) {
+        const real = realWidthCache.current !== -1
+          ? realWidthCache.current
+          : (elementRef.current ? Math.ceil(elementRef.current.offsetWidth) : -1);
+        if (real !== -1 && real !== info.width) {
+          useSlidesStore.getState().updateElement({
+            id: info.id,
+            props: { width: real }
+          });
+        }
         realWidthCache.current = -1;
       }
     }
@@ -300,6 +316,8 @@ const TextElement = memo((props: ITextElementProps) => {
     if (shouldBlockPlaceholderHeightShrink(info, realHeight, editorEmptyRef.current)) return;
     const layout = textBoxLayoutRef.current;
     const main = useMainStore.getState();
+    // While a resize drag is active the drag loop owns the live height (it
+    // measures and paints per frame) — reacting here would fight it.
     if (main.isGesturing) return;
     const scaling = main.isScaling;
     if (!layout.lockPaintHeight && !info.vertical && info.height !== realHeight) {

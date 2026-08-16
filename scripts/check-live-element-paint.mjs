@@ -22,11 +22,8 @@ const bgPaint = slidePanel.slice(slidePanel.indexOf('const paintGradientBackgrou
 assert(slidePanel.includes('applyLiveBackgroundGradient'), 'slide background sliders live-paint CSS')
 assert(!bgPaint.includes('updateSlide'), 'background paintGradient must not write the store')
 
-const subscribe = readFileSync(join(root, 'src/previewRaster/subscribeSlides.ts'), 'utf8')
-assert(subscribe.includes('planSlideRaster'), 'preview raster uses the patch/full plan')
-assert(subscribe.includes('patchSlide'), 'a single-element write patches the scratch compositor')
-assert(subscribe.includes('prepareScratch'), 'full rebuilds still wipe the scratch compositor')
-assert(subscribe.includes('__FIKA_RASTER__'), 'dev hook exposes raster stats for e2e')
+const liveThumb = readFileSync(join(root, 'src/views/components/ThumbnailSlide/LiveSlideThumb.tsx'), 'utf8')
+assert(liveThumb.includes('ScreenSlide'), 'the thumb renders the live slide DOM — gesture writes appear without any raster patch layer')
 
 const livePaint = readFileSync(join(root, 'src/utils/liveElementPaint.ts'), 'utf8')
 assert(livePaint.includes('export const syncGradientDef'), 'stop nodes have a single imperative writer')

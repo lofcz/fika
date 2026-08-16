@@ -62,6 +62,13 @@ export default defineConfig({
       }
       config.output ??= {}
       config.output.library = { type: 'module' }
+      // Host bundlers (Rsbuild/Rspack/Vite) parse `new URL("./", import.meta.url)`
+      // as a module request and fail with `Can't resolve './'`. Keep the ESM
+      // library shape, but do not emit import.meta.url for the runtime base URI.
+      config.output.environment = {
+        ...(typeof config.output.environment === 'object' ? config.output.environment : {}),
+        importMeta: false,
+      }
       config.experiments = { ...config.experiments, outputModule: true }
     },
   },

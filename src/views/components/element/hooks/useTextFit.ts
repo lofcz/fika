@@ -4,12 +4,15 @@ import type { PPTShapeElement, PPTTextElement, TextInset } from '@/types/slides'
 import { authoredTextFitSize, elementLocksTextBox } from '@/utils/placeholderLayout'
 import { subscribeLiveBox } from '@/utils/liveElementSize'
 import { useI18nContext } from '@/i18n/useI18nContext'
+import { useMainStore } from '@/store'
 import {
   contentBoxOfHost,
   createFitMeasureSession,
   fitSessionKey,
-  fitZoomScaleFromSession,
   innerBoxFromLiveStyles,
+  rememberFitScale,
+  textFitScaleForHtml,
+  DEFAULT_TEXT_FONT_SIZE,
   type FitMeasureSession,
 } from '@/utils/textFit'
 
@@ -100,19 +103,26 @@ export default (
 
   const paintStyleFor = (scale: number): CSSProperties | undefined => {
     if (!enabledNow() || scale >= 1) return undefined
-    return { zoom: String(scale) }
+    // Font scaling (not zoom): spans render `calc(var(--text-fit-scale,1) * Npx)`
+    // so the text RE-WRAPS at the smaller size — no over-shrink, and the raster
+    // booth paints the identical CSS.
+    return {
+      '--text-fit-scale': String(scale),
+      '--text-fit-base-size': `${Math.round(DEFAULT_TEXT_FONT_SIZE * scale * 100) / 100}px`,
+    } as CSSProperties
   }
 
   const commitScale = (next: number) => {
     fitScaleRef.current = next
     const host = hostElRef.current?.current
     if (!host) return
-    const style = paintStyleFor(next)
-    if (!style) {
-      if (host.style.zoom) host.style.removeProperty('zoom')
+    if (next >= 1) {
+      host.style.removeProperty('--text-fit-scale')
+      host.style.removeProperty('--text-fit-base-size')
       return
     }
-    if (host.style.zoom !== style.zoom) host.style.zoom = String(style.zoom)
+    host.style.setProperty('--text-fit-scale', String(next))
+    host.style.setProperty('--text-fit-base-size', `${Math.round(DEFAULT_TEXT_FONT_SIZE * next * 100) / 100}px`)
   }
 
   const ensureSession = () => {
@@ -172,12 +182,69 @@ export default (
       return
     }
     if (host) lastInnerRef.current = { width, height }
-    commitScale(fitZoomScaleFromSession(
-      session,
+    const params = {
       innerWidth,
       innerHeight,
-      fitParagraphSpaceOf(el),
-    ))
+      defaultFontFamily: fitFontNameOf(el),
+      defaultSize: authoredSize(),
+      lineHeight: fitLineHeightOf(el),
+      letterSpacing: fitWordSpaceOf(el) || 0,
+      blockSpace: fitParagraphSpaceOf(el),
+    }
+    // Pretext estimate first (fast, usually close), then converge on the REAL
+    // rendered height: pretext and the browser disagree on wrap points (narrow
+    // boxes compound the drift over many lines), and a one-shot correction
+    // under-shrinks when wraps change at the corrected scale. Refining both
+    // directions on the live DOM ends on the largest scale that truly fits —
+    // no clipping (only fitting scales are kept) and no wasted space.
+    const estimate = textFitScaleForHtml(measuredContent(), params)
+    commitScale(estimate)
+    if (host) {
+      host.style.removeProperty('--paragraphSpace')
+      const content = host.querySelector('.ProseMirror, .ProseMirror-static, .prosemirror-editor') as HTMLElement | null
+      if (content && height > 2) {
+        if (useMainStore.getState().isScaling) {
+          // Drag hot path: one down-correction only (never clips mid-drag);
+          // the tightness refine runs on drop when frames are not scarce.
+          commitScale(estimate)
+          const rendered = content.scrollHeight
+          if (rendered > height + 1) {
+            commitScale(Math.max(0.01, estimate * (height / Math.max(1, rendered)) * 0.995))
+          }
+        }
+        else {
+          let candidate = estimate
+          let settled: number | null = null
+          for (let i = 0; i < 4; i++) {
+            commitScale(candidate)
+            const rendered = content.scrollHeight
+            if (rendered <= height + 1) {
+              // keep the LARGEST scale VERIFIED to fit — the estimate itself
+              // is not trusted until the DOM confirms it
+              if (settled == null || candidate > settled) settled = candidate
+              const target = candidate * (height / Math.max(1, rendered))
+              if (candidate >= 1 || target - candidate < 0.015) break
+              candidate = Math.min(1, target * 0.995)
+            }
+            else {
+              candidate = Math.max(0.01, candidate * (height / Math.max(1, rendered)) * 0.995)
+            }
+          }
+          if (settled == null) settled = candidate
+          commitScale(settled)
+          rememberFitScale(measuredContent(), params, settled)
+        }
+        if (content.scrollHeight > height + 1 && box) {
+          // Paragraph gaps are fixed px and do not scale with the font — in a
+          // box shorter than the gaps no font factor can fit. Scale the gap
+          // var for this subtree so the never-clip guarantee still holds.
+          const gap = parseFloat(getComputedStyle(box).getPropertyValue('--paragraphSpace')) || 0
+          if (gap > 0) {
+            host.style.setProperty('--paragraphSpace', `${Math.max(0, Math.floor(gap * (height / Math.max(1, content.scrollHeight)) * 100) / 100)}px`)
+          }
+        }
+      }
+    }
   }
 
   const schedule = () => {

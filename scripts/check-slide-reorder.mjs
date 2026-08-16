@@ -56,15 +56,11 @@ assert(clampScrollTop(90, 40, 100) === 100, 'wheel clamp hits max')
 assert(wheelDeltaPx(2, 1, 200) === 32, 'line-mode wheel converts to px')
 
 const drag = read('src/components/Draggable.tsx')
-assert(drag.includes('paintRasterSnapshot'), 'overlay blits the off-DOM master, not the hidden thumb canvas')
+assert(drag.includes('LiveSlideThumb'), 'the drag ghost is the live slide DOM at thumb size')
 assert(drag.includes('data-slide-drag-overlay'), 'drag overlay is queryable for e2e')
-assert(drag.includes('useLayoutEffect'), 'overlay paints before the first drag frame')
 assert(drag.includes('hideWhileDragging'), 'source row hides only after an overlay exists')
-assert(!drag.includes('getRasterSnapshot'), 'overlay must not read the live display canvas')
-
-const cache = read('src/previewRaster/rasterCache.ts')
-assert(cache.includes('data-preview-raster-master'), 'master snapshot stays off-DOM')
-assert(!/appendChild\(snap\.canvas\)/.test(cache), 'master canvas is never moved into a thumb')
+assert(drag.includes('overlayRender'), 'the slide overlay is opt-in so generic lists keep their behavior')
+assert(!drag.includes('getRasterSnapshot'), 'no raster snapshot reads on the drag path')
 
 const thumb = read('src/views/components/ThumbnailSlide/index.tsx')
 assert(thumb.includes('data-thumbnail-slide'), 'overlay measures the thumb via a stable data attribute')

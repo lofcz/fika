@@ -116,8 +116,11 @@ const ShapeElement = memo((props: IShapeElementProps) => {
   const staticContent = serializeRichTextHtml(painted.html);
   const inset = text.inset || [10, 10, 10, 10];
   const lockedText = shapeTextLocksSize(text);
-  const textHostRef = useAutoShapeTextHeight(!lockedText, elementInfo.id, inset);
   const textFitHostRef = useRef<HTMLDivElement | null>(null);
+  const textHostRef = useAutoShapeTextHeight(!lockedText, elementInfo.id, inset, textFitHostRef);
+  // Selected shapes host a live (non-editable) editor so panel style commands
+  // (font size, presets, bold...) land — same contract as text elements.
+  const mountEditor = editable || (!!handleElementId && handleElementId === elementInfo.id && !!text.content);
   const svgRef = useRef<SVGSVGElement | null>(null);
   useLayoutEffect(() => {
     const svg = svgRef.current;
@@ -212,6 +215,6 @@ const ShapeElement = memo((props: IShapeElementProps) => {
           padding: `${inset[0]}px ${inset[1]}px ${inset[2]}px ${inset[3]}px`,
           overflow: lockedText ? 'hidden' : undefined,
           '--paragraphSpace': `${text.paragraphSpace === undefined ? 5 : text.paragraphSpace}px`
-        } as CSSProperties}><div ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}>{!editable && text.content ? <div className={cx('prosemirror-editor')}><div className={cx('ProseMirror', 'ProseMirror-static')} dangerouslySetInnerHTML={{ __html: staticContent }} /></div> : editable ? <ProsemirrorEditor ref={prosemirrorEditorRef} elementId={elementInfo.id} defaultColor={text.defaultColor} defaultFontName={text.defaultFontName} editable={!elementInfo.lock} value={editorValueRef.current} autoFocus onUpdate={handleEditorUpdate} onBlur={checkEmptyText} onMouseDown={handleEditorMouseDown} /> : null}</div></div></div></div></div>;
+        } as CSSProperties}><div ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}>{mountEditor ? <ProsemirrorEditor ref={prosemirrorEditorRef} elementId={elementInfo.id} defaultColor={text.defaultColor} defaultFontName={text.defaultFontName} editable={!elementInfo.lock && editable} value={editorValueRef.current} autoFocus={editable} onUpdate={handleEditorUpdate} onBlur={checkEmptyText} onMouseDown={handleEditorMouseDown} /> : text.content ? <div className={cx('prosemirror-editor')}><div className={cx('ProseMirror', 'ProseMirror-static')} dangerouslySetInnerHTML={{ __html: staticContent }} /></div> : null}</div></div></div></div></div>;
 }, areShapeElementPropsEqual);
 export default ShapeElement;

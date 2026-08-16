@@ -4,7 +4,6 @@
  * {@link normalizePptxUsedFonts}; blob URLs must be registered as FontFace
  * so import does not crash and the packaged face actually paints.
  */
-
 export type PptxUsedFontObject = {
   name?: string;
   fontFamily?: string;

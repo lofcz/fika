@@ -66,7 +66,7 @@ async function titleMetrics(page) {
     const br = box.getBoundingClientRect()
     const pr = pm?.getBoundingClientRect()
     const or_ = operate?.getBoundingClientRect()
-    const zoom = parseFloat(host?.style.zoom || getComputedStyle(host || box).zoom || '1') || 1
+    const zoom = parseFloat(host?.style.getPropertyValue('--text-fit-scale') || getComputedStyle(host || box).getPropertyValue('--text-fit-scale') || '1') || 1
     const overflowPx = pr && or_ ? pr.bottom - or_.bottom : null
     const handles = [...document.querySelectorAll('[class*=resize-handler]')]
     return {

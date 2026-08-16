@@ -1,7 +1,8 @@
 /**
- * Real-browser coverage for the preview-raster work: time-sliced queue,
- * booth cache, shared ProseMirror text booth, cheaper rail working size, and
- * parallel onscreen paints.
+ * Real-browser coverage for the live-DOM thumbnail rail: thumbnails render the
+ * genuine ScreenSlide tree scaled by CSS, so faithfulness is asserted by
+ * comparing the thumb DOM against the editor canvas DOM (geometry + computed
+ * styles) instead of raster pixels.
  *
  *   node scripts/e2e-preview-raster.mjs
  */
@@ -15,30 +16,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 const DEV_PORTS = [5173, 5174, 5175, 5176]
 
 const CASES = [
-  [1, 'Raster debug hook is available'],
-  [2, 'Cover thumb finishes its first raster'],
-  [3, 'Typing a title with the keyboard inks the cover thumb'],
-  [4, 'Simple typed title does not SnapDOM-booth'],
+  [1, 'Thumbnails mount the genuine slide DOM'],
+  [2, 'Cover thumb renders its slide tree'],
+  [3, 'Typing a title inks the cover thumb live'],
+  [4, 'Thumb text matches the store slide'],
   [5, 'Add slide creates a second thumb'],
   [6, 'Typing on slide 02 inks that thumb'],
   [7, 'Cover thumb stays inked after typing on slide 02'],
-  [8, 'Clicking the cover thumb keeps both rasters'],
-  [9, 'Adding two more slides leaves every visible thumb rasterized'],
-  [10, 'Scratch pool never exceeds three stages'],
-  [11, 'Current slide paints at full working quality'],
-  [12, 'A never-selected visible thumb paints at rail quality'],
-  [13, 'A single-size list SnapDOM-booths the live HTML'],
-  [14, 'List thumb is inked'],
-  [15, 'Two identical tables share one SnapDOM booth via the hash cache'],
-  [16, 'Twin-table thumb is inked'],
-  [17, 'Latex path + mermaid paint without a SnapDOM booth'],
-  [18, 'Latex/mermaid thumb is inked'],
-  [19, 'Clicking a rail thumb upgrades it without blanking siblings'],
-  [20, 'Keyboard edit after inject still patches without a full-rail wipe'],
-  [21, 'Dark-slide title contrast is rasterized as light ink'],
-  [22, 'An injected image inks the thumb without a gutter resize'],
-  [23, 'Partial rich-text color SnapDOM-booths and inks blue in the thumb'],
-  [24, 'Overlay label on a dark chip stays white in the thumb'],
+  [8, 'Clicking the cover thumb keeps both thumbs mounted'],
+  [9, 'Adding two more slides leaves every visible thumb mounted'],
+  [10, 'Thumb geometry matches the editor canvas (scaled)'],
+  [11, 'Thumb typography matches the editor canvas'],
+  [12, 'List markup keeps real list markers in the thumb'],
+  [13, 'Twin tables render as tables, not stubs'],
+  [14, 'Latex path renders as SVG in the thumb'],
+  [15, 'Dark-slide title contrast is light ink in the thumb'],
+  [16, 'An injected image renders its bitmap surface in the thumb'],
+  [17, 'Partial rich-text color stays blue in the thumb'],
+  [18, 'Overlay label on a dark chip stays white in the thumb'],
+  [19, 'Clicking a rail thumb swaps slides without blanking siblings'],
+  [20, 'Video poster renders as an image in the thumb'],
 ]
 
 const listSlide = {
@@ -174,17 +171,23 @@ const formulaSlide = {
       viewBox: [80, 50],
       fixedRatio: false,
     },
-    {
-      id: 'e2e-raster-mermaid',
-      type: 'mermaid',
-      left: 48,
-      top: 140,
-      width: 360,
-      height: 120,
-      rotate: 0,
-      code: 'graph TD; A-->B',
-    },
   ],
+}
+
+const videoSlide = {
+  id: 'e2e-raster-video',
+  elements: [{
+    id: 'e2e-raster-video-el',
+    type: 'video',
+    left: 60,
+    top: 60,
+    width: 320,
+    height: 180,
+    rotate: 0,
+    src: 'data:video/mp4;base64,AAAA',
+    poster: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mP8z8Dwn4GBgYGRAQIAADQwCgftn9EAAAAASUVORK5CYII=',
+    autoplay: false,
+  }],
 }
 
 async function isFikaDev(url) {
@@ -228,57 +231,24 @@ async function stripScan(page) {
 async function waitForHooks(page) {
   const start = Date.now()
   while (Date.now() - start < 20000) {
-    if (await page.evaluate(() => !!(window.__FIKA_SLIDES__ && window.__FIKA_RASTER__))) return
+    if (await page.evaluate(() => !!window.__FIKA_SLIDES__)) return
     await sleep(250)
   }
-  throw new Error('fika store / raster hooks did not appear')
-}
-
-async function raster(page) {
-  return page.evaluate(() => window.__FIKA_RASTER__.read())
-}
-
-async function resetRaster(page) {
-  await page.evaluate(() => window.__FIKA_RASTER__.reset())
-}
-
-async function waitIdle(page, requirePaint = true) {
-  const start = Date.now()
-  let last = -1
-  let stable = 0
-  while (Date.now() - start < 10000) {
-    const stats = await raster(page)
-    const token = stats.fullPaints + stats.patchPaints + stats.elementInvalidations + stats.booths + stats.boothHits
-    if (token === last) {
-      stable += 1
-      if (stable >= 4 && (!requirePaint || stats.fullPaints + stats.patchPaints > 0)) return stats
-    }
-    else {
-      stable = 0
-      last = token
-    }
-    await sleep(80)
-  }
-  return raster(page)
+  throw new Error('fika store hook did not appear')
 }
 
 async function thumbState(page) {
   return page.evaluate(() => {
     const hosts = [...document.querySelectorAll('[data-thumbnail-slide]')]
     return hosts.map(host => {
-      const canvas = host.querySelector('[data-preview-raster]') || host.querySelector('canvas')
-      let ink = 0
-      if (canvas && canvas.width && canvas.height) {
-        const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height).data
-        for (let p = 0; p < data.length; p += 16) {
-          if (data[p + 3] > 12 && (data[p] < 248 || data[p + 1] < 248 || data[p + 2] < 248)) ink++
-        }
-      }
+      const slide = host.querySelector('.screen-slide')
+      const text = (slide?.textContent || '').replace(/\s+/g, ' ').trim()
       return {
         id: host.getAttribute('data-thumbnail-slide'),
-        pending: host.hasAttribute('data-raster-pending'),
-        hasCanvas: !!canvas,
-        ink,
+        mounted: !!slide,
+        ink: text.length + slide?.querySelectorAll('path, img, canvas, table td').length * 4 || 0,
+        textLen: text.length,
+        text,
       }
     })
   })
@@ -289,7 +259,7 @@ async function waitThumbs(page, min = 1) {
   let last = []
   while (Date.now() - start < 12000) {
     last = await thumbState(page)
-    if (last.length >= min && last.every(t => !t.pending && t.hasCanvas)) return last
+    if (last.length >= min && last.every(t => t.mounted)) return last
     await sleep(80)
   }
   return last
@@ -312,7 +282,7 @@ async function typeInFirstBox(page, text) {
   await page.mouse.click(rect.x + rect.width / 2, rect.y + rect.height / 2)
   await sleep(120)
   await page.keyboard.type(text, { delay: 12 })
-  await sleep(200)
+  await sleep(250)
 }
 
 async function injectSlide(page, slide) {
@@ -326,6 +296,18 @@ async function injectSlide(page, slide) {
     })
     return true
   }, slide)
+}
+
+/** Wait for the injected slide's thumbnail to mount (it lands at the rail's end). */
+async function waitInjectedThumb(page, prefix) {
+  const start = Date.now()
+  while (Date.now() - start < 12000) {
+    const state = await thumbState(page)
+    const found = state.find(t => t.id?.startsWith(prefix))
+    if (found?.mounted) return found
+    await sleep(100)
+  }
+  return null
 }
 
 const results = []
@@ -353,40 +335,74 @@ try {
   await waitForHooks(page)
   await waitThumbs(page, 1)
 
-  const hook = await raster(page)
-  rec(1, Number.isFinite(hook.booths) && Number.isFinite(hook.boothHits) && !!hook.qualities && Array.isArray(hook.scratches), hook)
+  const first = (await waitThumbs(page, 1))[0]
+  rec(1, first?.mounted, first)
+  rec(2, first?.mounted, first)
 
-  const cover = (await waitThumbs(page, 1))[0]
-  rec(2, cover && !cover.pending && cover.hasCanvas, cover)
-
-  await resetRaster(page)
   await typeInFirstBox(page, 'RasterAlpha')
-  await waitIdle(page, false)
   const afterType = await waitThumbs(page, 1)
-  const typedStats = await raster(page)
-  rec(3, afterType[0]?.ink > 8 && !afterType[0]?.pending, afterType[0])
-  rec(4, typedStats.booths === 0, typedStats)
+  rec(3, (afterType[0]?.textLen || 0) > 4, afterType[0])
+  const storeText = await page.evaluate(() => {
+    const slides = window.__FIKA_SLIDES__.getState()
+    return (slides.slides[slides.slideIndex].elements
+      .map(el => (el.type === 'text' ? el.content : el.text?.content || ''))
+      .join(' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
+  })
+  rec(4, storeText.includes('RasterAlpha') && (afterType[0]?.text || '').includes('RasterAlpha'), { storeText, thumbText: afterType[0]?.text })
 
   await page.getByText('Add slide', { exact: true }).click()
   await sleep(250)
   const two = await waitThumbs(page, 2)
-  rec(5, two.length >= 2 && two.every(t => t.hasCanvas && !t.pending), { n: two.length, pending: two.filter(t => t.pending).length })
+  rec(5, two.length >= 2 && two.every(t => t.mounted), { n: two.length })
 
   await typeInFirstBox(page, 'RasterBeta')
-  await waitIdle(page, false)
   const afterBeta = await waitThumbs(page, 2)
-  rec(6, afterBeta[1]?.ink > 8 && !afterBeta[1]?.pending, afterBeta[1])
-  rec(7, afterBeta[0]?.ink > 8 && !afterBeta[0]?.pending, afterBeta[0])
+  rec(6, (afterBeta[1]?.textLen || 0) > 4, afterBeta[1])
+  rec(7, (afterBeta[0]?.textLen || 0) > 4, afterBeta[0])
+
+  // Faithfulness: the same element's box in the editor canvas and in the
+  // thumb, normalized to authored slide units — they must agree.
+  const geometry = await page.evaluate(() => {
+    const slides = window.__FIKA_SLIDES__.getState()
+    const current = slides.slides[slides.slideIndex]
+    const firstId = current.elements[0]?.id
+    if (!firstId) return { ok: false, reason: 'no elements' }
+    const viewportSize = slides.viewportSize
+    const editor = [...document.querySelectorAll('[class*=viewport-wrapper]')].toSorted((a, b) => {
+      const ar = a.getBoundingClientRect(), br = b.getBoundingClientRect()
+      return (br.width * br.height) - (ar.width * ar.height)
+    })[0]
+    const thumbHost = [...document.querySelectorAll('[data-thumbnail-slide]')]
+      .find(el => el.getAttribute('data-thumbnail-slide') === current.id)
+    const editorNode = document.getElementById(`editable-element-${firstId}`)
+    const thumbNode = thumbHost?.querySelector(`#screen-element-${firstId}`)
+    // Both trees wrap the element in a 0×0 positioned shell; the element
+    // root (first child) carries the authored box in each.
+    const editorEl = editorNode?.querySelector(':scope > div') || editorNode
+    const thumbEl = thumbNode?.querySelector(':scope > div') || thumbNode
+    if (!editor || !thumbHost || !editorEl || !thumbEl) return { ok: false, reason: 'missing boxes' }
+    if (!editor || !thumbHost || !editorEl || !thumbEl) return { ok: false, reason: 'missing boxes' }
+    const editorBox = editor.getBoundingClientRect()
+    const thumbBox = thumbHost.getBoundingClientRect()
+    const eb = editorEl.getBoundingClientRect()
+    const tb = thumbEl.getBoundingClientRect()
+    const editorScale = editorBox.width / viewportSize
+    const thumbScale = thumbBox.width / viewportSize
+    return {
+      ok: true,
+      leftDelta: Math.abs(eb.left - editorBox.left - (tb.left - thumbBox.left) / thumbScale * editorScale),
+      widthDelta: Math.abs(eb.width / editorScale - tb.width / thumbScale),
+      editorFont: getComputedStyle(editorEl).fontFamily,
+      thumbFont: getComputedStyle(thumbEl).fontFamily,
+    }
+  })
+  rec(10, geometry.ok && geometry.leftDelta <= 1.5 && geometry.widthDelta <= 1.5, geometry)
+  rec(11, geometry.ok && geometry.editorFont === geometry.thumbFont, geometry)
 
   await clickThumb(page, 0)
-  await waitIdle(page, false)
   const afterClick = await waitThumbs(page, 2)
-  rec(8, afterClick.length >= 2 && afterClick.every(t => t.hasCanvas && !t.pending && t.ink > 8), afterClick)
+  rec(8, afterClick.length >= 2 && afterClick.every(t => t.mounted && t.textLen > 4), afterClick)
 
-  await page.getByText('Add slide', { exact: true }).click()
-  await sleep(80)
-  await page.getByText('Add slide', { exact: true }).click()
-  await sleep(120)
   await page.evaluate(() => {
     const stamp = Date.now()
     const text = (id, label) => ({
@@ -402,86 +418,71 @@ try {
       defaultColor: '#18181b',
     })
     window.__FIKA_SLIDES__.getState().addSlide([
-      { id: `e2e-rail-current-${stamp}`, elements: [text(`e2e-rail-cur-${stamp}`, 'RailCurrent')] },
-      { id: `e2e-rail-only-${stamp}`, elements: [text(`e2e-rail-sib-${stamp}`, 'RailSibling')] },
+      { id: `e2e-rail-a-${stamp}`, elements: [text(`e2e-rail-a-${stamp}`, 'RailA')] },
+      { id: `e2e-rail-b-${stamp}`, elements: [text(`e2e-rail-b-${stamp}`, 'RailB')] },
     ])
   })
-  await sleep(250)
+  await sleep(300)
   const many = await waitThumbs(page, 4)
-  const pool = await raster(page)
-  rec(9, many.length >= 4 && many.every(t => t.hasCanvas && !t.pending), {
-    n: many.length,
-    pending: many.filter(t => t.pending).length,
-  })
-  rec(10, pool.scratches.length <= 3, { scratches: pool.scratches.length })
-  const currentId = await page.evaluate(() => {
-    const slides = window.__FIKA_SLIDES__.getState()
-    return slides.slides[slides.slideIndex]?.id
-  })
-  rec(11, pool.qualities[currentId] === 'full', { currentId, qualities: pool.qualities })
-  const railId = Object.entries(pool.qualities).find(([id, quality]) => id !== currentId && quality === 'rail')?.[0]
-  rec(12, !!railId, { currentId, qualities: pool.qualities })
+  rec(9, many.length >= 4 && many.every(t => t.mounted), { n: many.length, unmounted: many.filter(t => !t.mounted).length })
 
-  await resetRaster(page)
   const listOk = await injectSlide(page, listSlide)
   if (!listOk) throw new Error('could not inject list slide')
-  const listStats = await waitIdle(page)
-  const listThumbs = await waitThumbs(page, 1)
-  const listThumb = listThumbs.find(t => t.id?.startsWith('e2e-raster-list')) || listThumbs[listThumbs.length - 1]
-  rec(13, listStats.booths >= 1, listStats)
-  rec(14, listThumb?.ink > 8 && !listThumb?.pending, listThumb)
+  const listThumb = await waitInjectedThumb(page, 'e2e-raster-list')
+  const listDom = await page.evaluate((prefix) => {
+    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
+      el.getAttribute('data-thumbnail-slide')?.startsWith(prefix)
+    ))
+    const lis = host?.querySelectorAll('.screen-slide li')
+    const ul = host?.querySelector('.screen-slide ul')
+    return { liCount: lis?.length || 0, hasUl: !!ul }
+  }, 'e2e-raster-list')
+  rec(12, !!listThumb && listThumb.textLen > 4 && listDom.liCount === 2 && listDom.hasUl, { thumb: listThumb, ...listDom })
 
-  await resetRaster(page)
   const tableOk = await injectSlide(page, tableSlide)
   if (!tableOk) throw new Error('could not inject table slide')
-  const tableStats = await waitIdle(page)
-  const tableThumbs = await waitThumbs(page, 1)
-  const tableThumb = tableThumbs.find(t => t.id?.startsWith('e2e-raster-tables')) || tableThumbs[tableThumbs.length - 1]
-  rec(15, tableStats.booths === 1 && tableStats.boothHits >= 1, tableStats)
-  rec(16, tableThumb?.ink > 8 && !tableThumb?.pending, tableThumb)
+  const tableThumb = await waitInjectedThumb(page, 'e2e-raster-tables')
+  const tableDom = await page.evaluate((prefix) => {
+    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
+      el.getAttribute('data-thumbnail-slide')?.startsWith(prefix)
+    ))
+    return { tables: host?.querySelectorAll('.screen-slide table').length || 0, cells: host?.querySelectorAll('.screen-slide td').length || 0 }
+  }, 'e2e-raster-tables')
+  rec(13, !!tableThumb && tableDom.tables === 2 && tableDom.cells === 4, { thumb: tableThumb, ...tableDom })
 
-  await resetRaster(page)
   const formulaOk = await injectSlide(page, formulaSlide)
   if (!formulaOk) throw new Error('could not inject formula slide')
-  const formulaStats = await waitIdle(page)
-  const formulaThumbs = await waitThumbs(page, 1)
-  const formulaThumb = formulaThumbs.find(t => t.id?.startsWith('e2e-raster-formula')) || formulaThumbs[formulaThumbs.length - 1]
-  rec(17, formulaStats.booths === 0, formulaStats)
-  rec(18, formulaThumb?.ink > 8 && !formulaThumb?.pending, formulaThumb)
+  const formulaThumb = await waitInjectedThumb(page, 'e2e-raster-formula')
+  // Latex renders through MathLive — the SAME renderer the editor canvas
+  // uses. Faithfulness = identical markup, not a hand-rolled path painter.
+  const formulaDom = await page.evaluate(async (prefix) => {
+    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
+      el.getAttribute('data-thumbnail-slide')?.startsWith(prefix)
+    ))
+    const sleep = ms => new Promise(r => setTimeout(r, ms))
+    let thumbLatex = null
+    let editorLatex = null
+    for (let i = 0; i < 30; i++) {
+      thumbLatex = host?.querySelector('.screen-slide [class*=latex-content]')?.innerHTML || ''
+      editorLatex = document.querySelector('#editable-element-e2e-raster-latex [class*=latex-content]')?.innerHTML || ''
+      if (thumbLatex && editorLatex && (thumbLatex.includes('<svg') || i > 20)) break
+      await sleep(100)
+    }
+    return { thumbLen: thumbLatex?.length || 0, editorLen: editorLatex?.length || 0, same: !!thumbLatex && thumbLatex === editorLatex }
+  }, 'e2e-raster-formula')
+  rec(14, !!formulaThumb && formulaDom.same, { thumb: formulaThumb, ...formulaDom })
 
-  const beforeSwitch = await thumbState(page)
-  await clickThumb(page, 0)
-  await waitIdle(page, false)
-  const afterSwitch = await waitThumbs(page, Math.min(4, beforeSwitch.length))
-  rec(19, afterSwitch.length >= 2 && afterSwitch.every(t => t.hasCanvas && !t.pending), afterSwitch)
-
-  await resetRaster(page)
-  await typeInFirstBox(page, 'Z')
-  const editStats = await waitIdle(page, false)
-  const afterEdit = await waitThumbs(page, 2)
-  rec(20, editStats.fullPaints === 0 && afterEdit.filter(t => t.ink > 8).length >= 2, {
-    ...editStats,
-    inked: afterEdit.filter(t => t.ink > 8).length,
-  })
-
-  await resetRaster(page)
   const contrastOk = await injectSlide(page, contrastSlide)
   if (!contrastOk) throw new Error('could not inject contrast slide')
-  await waitIdle(page)
-  const contrastLight = await page.evaluate(() => {
+  const contrastThumb = await waitInjectedThumb(page, 'e2e-raster-contrast')
+  const contrastColor = await page.evaluate((prefix) => {
     const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
-      el.getAttribute('data-thumbnail-slide')?.startsWith('e2e-raster-contrast')
-    )) || document.querySelector('[data-thumbnail-slide]:last-of-type')
-    const canvas = host?.querySelector('[data-preview-raster]') || host?.querySelector('canvas')
-    if (!canvas || !canvas.width || !canvas.height) return { light: 0, id: host?.getAttribute('data-thumbnail-slide') }
-    const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height).data
-    let light = 0
-    for (let p = 0; p < data.length; p += 16) {
-      if (data[p + 3] > 12 && data[p] > 200 && data[p + 1] > 200 && data[p + 2] > 200) light++
-    }
-    return { light, id: host?.getAttribute('data-thumbnail-slide') }
-  })
-  rec(21, contrastLight.light > 8, contrastLight)
+      el.getAttribute('data-thumbnail-slide')?.startsWith(prefix)
+    ))
+    const el = host?.querySelector('.screen-slide .ProseMirror-static')
+    return el ? getComputedStyle(el).color : ''
+  }, 'e2e-raster-contrast')
+  rec(15, !!contrastThumb && /rgb\(2(?:5[0-5]|4\d), 2(?:5[0-5]|4\d), 2(?:5[0-5]|4\d)\)|#fff/i.test(contrastColor) || contrastColor.includes('255'), { color: contrastColor })
 
   const imageOk = await page.evaluate(() => {
     const canvas = document.createElement('canvas')
@@ -507,68 +508,77 @@ try {
     return true
   })
   if (!imageOk) throw new Error('could not inject image slide')
-  await waitIdle(page)
-  const imageInk = await page.evaluate(() => {
+  const imageThumb = await waitInjectedThumb(page, 'e2e-raster-image')
+  const imageDom = await page.evaluate(async (prefix) => {
     const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
-      el.getAttribute('data-thumbnail-slide')?.startsWith('e2e-raster-image')
-    )) || document.querySelector('[data-thumbnail-slide]:last-of-type')
-    const canvas = host?.querySelector('[data-preview-raster]') || host?.querySelector('canvas')
-    if (!canvas || !canvas.width || !canvas.height) {
-      return { red: 0, pending: host?.hasAttribute('data-raster-pending'), id: host?.getAttribute('data-thumbnail-slide') }
+      el.getAttribute('data-thumbnail-slide')?.startsWith(prefix)
+    ))
+    const sleep = ms => new Promise(r => setTimeout(r, ms))
+    // The bitmap surface draws asynchronously after decode; a fresh canvas
+    // sits at the 300×150 default until then.
+    let surface = null
+    for (let i = 0; i < 40; i++) {
+      surface = host?.querySelector('.screen-slide canvas')
+      if (surface && (surface.width !== 300 || surface.height !== 150)) break
+      await sleep(100)
     }
-    const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height).data
-    let red = 0
-    for (let p = 0; p < data.length; p += 16) {
-      if (data[p + 3] > 12 && data[p] > 160 && data[p + 1] < 90 && data[p + 2] < 90) red++
-    }
-    return { red, pending: host?.hasAttribute('data-raster-pending'), id: host?.getAttribute('data-thumbnail-slide') }
-  })
-  rec(22, imageInk.red > 8 && !imageInk.pending, imageInk)
+    return { hasCanvas: !!surface, w: surface?.width || 0 }
+  }, 'e2e-raster-image')
+  rec(16, !!imageThumb && imageDom.hasCanvas && imageDom.w === 80, { thumb: imageThumb, ...imageDom })
 
-  await resetRaster(page)
   const richOk = await injectSlide(page, richColorSlide)
   if (!richOk) throw new Error('could not inject rich-color slide')
-  const richStats = await waitIdle(page)
-  const richInk = await page.evaluate(() => {
+  const richThumb = await waitInjectedThumb(page, 'e2e-raster-rich-color')
+  const richColor = await page.evaluate((prefix) => {
     const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
-      el.getAttribute('data-thumbnail-slide')?.startsWith('e2e-raster-rich-color')
-    )) || document.querySelector('[data-thumbnail-slide]:last-of-type')
-    const canvas = host?.querySelector('[data-preview-raster]') || host?.querySelector('canvas')
-    if (!canvas || !canvas.width || !canvas.height) {
-      return { blue: 0, pending: host?.hasAttribute('data-raster-pending'), id: host?.getAttribute('data-thumbnail-slide') }
-    }
-    const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height).data
-    let blue = 0
-    for (let p = 0; p < data.length; p += 4) {
-      const r = data[p]
-      const g = data[p + 1]
-      const b = data[p + 2]
-      if (data[p + 3] > 12 && b > 140 && b > r + 30 && b > g + 15) blue++
-    }
-    return { blue, pending: host?.hasAttribute('data-raster-pending'), id: host?.getAttribute('data-thumbnail-slide') }
-  })
-  rec(23, richStats.booths >= 1 && richInk.blue > 8 && !richInk.pending, { ...richStats, ...richInk })
+      el.getAttribute('data-thumbnail-slide')?.startsWith(prefix)
+    ))
+    const spans = [...(host?.querySelectorAll('.screen-slide .ProseMirror-static span') || [])]
+    return spans.map(span => getComputedStyle(span).color)
+  }, 'e2e-raster-rich-color')
+  rec(17, !!richThumb && richColor.some(c => c.includes('37') && c.includes('99') && c.includes('235')), { colors: richColor })
 
-  await resetRaster(page)
   const overlayOk = await injectSlide(page, overlayContrastSlide)
   if (!overlayOk) throw new Error('could not inject overlay-contrast slide')
-  await waitIdle(page)
-  const overlayLight = await page.evaluate(() => {
+  const overlayThumb = await waitInjectedThumb(page, 'e2e-raster-overlay-contrast')
+  const overlayColor = await page.evaluate((prefix) => {
     const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
-      el.getAttribute('data-thumbnail-slide')?.startsWith('e2e-raster-overlay-contrast')
-    )) || document.querySelector('[data-thumbnail-slide]:last-of-type')
-    const canvas = host?.querySelector('[data-preview-raster]') || host?.querySelector('canvas')
-    if (!canvas || !canvas.width || !canvas.height) {
-      return { light: 0, pending: host?.hasAttribute('data-raster-pending'), id: host?.getAttribute('data-thumbnail-slide') }
-    }
-    const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height).data
-    let light = 0
-    for (let p = 0; p < data.length; p += 4) {
-      if (data[p + 3] > 12 && data[p] > 200 && data[p + 1] > 200 && data[p + 2] > 200) light++
-    }
-    return { light, pending: host?.hasAttribute('data-raster-pending'), id: host?.getAttribute('data-thumbnail-slide') }
+      el.getAttribute('data-thumbnail-slide')?.startsWith(prefix)
+    ))
+    const el = host?.querySelector('.screen-slide .ProseMirror-static')
+    return el ? getComputedStyle(el).color : ''
+  }, 'e2e-raster-overlay-contrast')
+  rec(18, !!overlayThumb && overlayColor.includes('255'), { color: overlayColor })
+
+  const videoOk = await injectSlide(page, videoSlide)
+  if (!videoOk) throw new Error('could not inject video slide')
+  const videoThumb = await waitInjectedThumb(page, 'e2e-raster-video')
+  const videoDom = await page.evaluate((prefix) => {
+    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
+      el.getAttribute('data-thumbnail-slide')?.startsWith(prefix)
+    ))
+    return { imgs: host?.querySelectorAll('.screen-slide img').length || 0, videos: host?.querySelectorAll('.screen-slide video').length || 0 }
+  }, 'e2e-raster-video')
+  rec(20, !!videoThumb && videoDom.imgs >= 1 && videoDom.videos === 0, { thumb: videoThumb, ...videoDom })
+
+  const beforeSwitch = await thumbState(page)
+  await clickThumb(page, 0)
+  await sleep(250)
+  const afterSwitch = await waitThumbs(page, Math.min(4, beforeSwitch.length))
+  // Blank template slides legitimately have no text; what must never happen
+  // is a mounted-but-empty slide that HAS content, or an unmounted thumb.
+  const slidesWithText = await page.evaluate(() => {
+    const state = window.__FIKA_SLIDES__.getState()
+    return state.slides.filter(slide => (slide.elements || []).some(el => (
+      (el.type === 'text' && (el.content || '').replace(/<[^>]+>/g, '').trim())
+      || (el.type === 'shape' && (el.text?.content || '').replace(/<[^>]+>/g, '').trim())
+    ))).map(slide => slide.id)
   })
-  rec(24, overlayLight.light > 8 && !overlayLight.pending, overlayLight)
+  const inkedMissing = slidesWithText.filter(id => {
+    const thumb = afterSwitch.find(t => t.id === id)
+    return thumb ? (!thumb.mounted || thumb.textLen === 0) : false
+  })
+  rec(19, afterSwitch.length >= 2 && afterSwitch.every(t => t.mounted) && inkedMissing.length === 0, { inkedMissing, thumbs: afterSwitch.slice(0, 3) })
 }
 finally {
   await browser.close()

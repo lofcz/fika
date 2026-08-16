@@ -5,6 +5,7 @@ const cx = bindStyles(styles)
 import { useRef, useMemo, useCallback, memo, useState, useEffect, type CSSProperties, type RefObject } from 'react'
 
 import { useMainStore, useSlidesStore, useKeyboardStore } from '@/store'
+import { beginPaneDrag, endPaneDrag } from './paneSize'
 import type { SlideThemeFile } from '@/types/slides'
 import { useRailItemSlide, useRailSlideMetas } from '@/views/components/ThumbnailSlide/paintedSlide'
 import { fillDigit } from '@/utils/common'
@@ -16,13 +17,12 @@ import useSectionHandler from '@/hooks/useSectionHandler'
 import useScreening from '@/hooks/useScreening'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { useThumbnailVirtualizer } from './useThumbnailVirtualizer'
-import { startPreviewRasterSubscription, setVisibleSlideIds } from '@/previewRaster'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
 import LayoutPicker from './LayoutPicker'
 import ExportThemeDialog from './ExportThemeDialog'
 import Popover from '@/components/Popover'
 import Modal from '@/components/Modal'
-import Draggable from '@/components/Draggable'
+import Draggable, { slideDragOverlay } from '@/components/Draggable'
 import { useI18nContext } from '@/i18n/useI18nContext'
 
 type RailHandlers = {
@@ -141,7 +141,25 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
   const _selectedSlidesIndex = useMainStore(s => s.selectedSlidesIndex)
   const selectedSlidesIndex = useMemo(() => [..._selectedSlidesIndex, slideIndex], [_selectedSlidesIndex, slideIndex])
   const hasSection = useMemo(() => slides.some(item => item.sectionTag), [slides])
-  const { scrollRef, virtualizer, virtualItems, visibleSlideIds, dest } = useThumbnailVirtualizer(slides, hasSection)
+  const { scrollRef, virtualizer, virtualItems, dest } = useThumbnailVirtualizer(slides, hasSection)
+
+  // The separator's pointer session bounds the thumbnail content freeze (see
+  // LiveSlideThumb): no mid-drag commits flipping between scaled and crisp.
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      if ((event.target as HTMLElement | null)?.closest?.('.layout-separator')) beginPaneDrag()
+    }
+    const onPointerUp = () => endPaneDrag()
+    document.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('pointerup', onPointerUp, true)
+    window.addEventListener('pointercancel', onPointerUp, true)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('pointerup', onPointerUp, true)
+      window.removeEventListener('pointercancel', onPointerUp, true)
+    }
+  }, [])
+
   const [presetLayoutPopoverVisible, setPresetLayoutPopoverVisible] = useState(false)
   const [themeExportDialogVisible, setThemeExportDialogVisible] = useState(false)
   const [themeForExport, setThemeForExport] = useState<SlideThemeFile | null>(null)
@@ -245,13 +263,8 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
   }, [])
 
   useEffect(() => {
-    startPreviewRasterSubscription()
     setThumbnailsFocus(true)
   }, [setThumbnailsFocus])
-
-  useEffect(() => {
-    setVisibleSlideIds(visibleSlideIds)
-  }, [visibleSlideIds])
 
   const blurThumbnails = useCallback(() => setThumbnailsFocus(false), [setThumbnailsFocus])
   useClickOutside(thumbnailsRootRef, blurThumbnails)
@@ -373,6 +386,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
         virtualizer={virtualizer}
         totalSize={virtualizer.getTotalSize()}
         onEnd={handleDragEnd}
+        overlayRender={slideDragOverlay}
         onContextMenu={event => { event.preventDefault(); event.stopPropagation(); openContextmenu(event, contextmenusThumbnails) }}
         item={({ element, index }) => (
           <ThumbnailRailItem

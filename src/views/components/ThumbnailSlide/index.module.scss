@@ -5,46 +5,8 @@
   user-select: none;
 }
 
-.thumbnail-slide[data-raster-pending] {
-  background-color: $surface;
-}
-
-.thumbnail-slide[data-raster-pending]::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient($surfaceActive, $surfaceActive) 10% 16% / 56% 11% no-repeat,
-    linear-gradient($surfaceHover, $surfaceHover) 10% 34% / 40% 6% no-repeat,
-    linear-gradient($surfaceHover, $surfaceHover) 10% 46% / 48% 6% no-repeat;
-  animation: thumb-raster-skel 1.4s ease-in-out infinite alternate;
-}
-
-@keyframes thumb-raster-skel {
-  to { opacity: 0.42; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .thumbnail-slide[data-raster-pending]::after {
-    animation: none;
-    opacity: 0.7;
-  }
-}
-.elements {
+.live-slide-thumb {
   position: relative;
-  transform-origin: 0 0;
-}
-.background {
-  width: 100%;
-  height: 100%;
-  background-position: center;
-  position: absolute;
-}
-.placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  overflow: hidden;
+  pointer-events: none;
 }

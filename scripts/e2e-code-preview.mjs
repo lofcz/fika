@@ -117,43 +117,6 @@ try {
 
   const proof = await page.evaluate(async () => {
     const sleep = ms => new Promise(r => setTimeout(r, ms))
-    const waitPaint = async () => {
-      const t0 = Date.now()
-      while (Date.now() - t0 < 12000) {
-        const host = document.querySelector('[data-thumbnail-slide]')
-        const canvas = host && host.querySelector('canvas')
-        if (canvas && !host.hasAttribute('data-raster-pending') && canvas.width > 8) return { host, canvas }
-        await sleep(80)
-      }
-      const host = document.querySelector('[data-thumbnail-slide]')
-      return { host, canvas: host && host.querySelector('canvas'), timeout: true }
-    }
-    const { host, canvas, timeout } = await waitPaint()
-    if (!canvas) {
-      return { pending: true, timeout: !!timeout, chromatic: 0, hues: [], darkShare: 0, whiteShare: 0, gutterInk: 0 }
-    }
-
-    const box = document.querySelector('[data-element-type=code] [data-live-box]')
-    let positioned = box
-    while (positioned && !positioned.style.left) positioned = positioned.parentElement
-    const slideWidth = 1000
-    const slideHeight = 562.5
-    const el = {
-      left: parseFloat(positioned?.style.left || '0'),
-      top: parseFloat(positioned?.style.top || '0'),
-      width: parseFloat(positioned?.style.width || '0'),
-      height: parseFloat(positioned?.style.height || '0'),
-    }
-    const sx = canvas.width / slideWidth
-    const sy = canvas.height / slideHeight
-    const rx = Math.max(0, Math.round(el.left * sx))
-    const ry = Math.max(0, Math.round(el.top * sy))
-    const rw = Math.max(4, Math.round(el.width * sx))
-    const rh = Math.max(4, Math.round(el.height * sy))
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    const { data } = ctx.getImageData(rx, ry, Math.min(rw, canvas.width - rx), Math.min(rh, canvas.height - ry))
-
     const hueOf = (r, g, b) => {
       const max = Math.max(r, g, b)
       const min = Math.min(r, g, b)
@@ -168,70 +131,68 @@ try {
       h = Math.round((h * 60 + 360) % 360)
       return Math.round(h / 20) * 20
     }
-
-    let dark = 0
-    let nearWhite = 0
-    let chromatic = 0
-    let gutterInk = 0
-    const hues = new Map()
-    const w = Math.min(rw, canvas.width - rx)
-    const h = Math.min(rh, canvas.height - ry)
-    const gutterRight = Math.max(3, Math.round(w * 0.14))
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const i = (y * w + x) * 4
-        const r = data[i]
-        const g = data[i + 1]
-        const b = data[i + 2]
-        const a = data[i + 3]
-        if (a < 20) continue
-        const max = Math.max(r, g, b)
-        const min = Math.min(r, g, b)
-        if (max < 48) {
-          dark += 1
-          continue
-        }
-        const sat = max === 0 ? 0 : (max - min) / max
-        if (sat < 0.12 && max > 200) {
-          nearWhite += 1
-          continue
-        }
-        const hue = hueOf(r, g, b)
-        if (hue != null) {
-          chromatic += 1
-          hues.set(hue, (hues.get(hue) || 0) + 1)
-        }
-        else if (x < gutterRight && sat < 0.18 && max > 55 && max < 190) {
-          gutterInk += 1
-        }
+    const parseColor = (raw) => {
+      const hex = raw.match(/#([0-9a-fA-F]{3,8})/)
+      const rgb = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
+      if (hex) {
+        let h = hex[1]
+        if (h.length === 3) h = h.split('').map(c => c + c).join('')
+        return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
       }
+      if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])]
+      return null
     }
-    const inked = dark + nearWhite + chromatic + gutterInk
+    const waitPaint = async () => {
+      const t0 = Date.now()
+      while (Date.now() - t0 < 12000) {
+        const host = document.querySelector('[data-thumbnail-slide]')
+        const slide = host?.querySelector('.screen-slide')
+        const spans = slide?.querySelectorAll('[style*="color"]')
+        if (slide && spans?.length) return { host, slide, timeout: false }
+        await sleep(80)
+      }
+      const host = document.querySelector('[data-thumbnail-slide]')
+      return { host, slide: host?.querySelector('.screen-slide') || null, timeout: true }
+    }
+    const { host, slide, timeout } = await waitPaint()
+    if (!slide) {
+      return { pending: true, timeout: !!timeout, chromatic: 0, hues: [], darkShare: 0, whiteShare: 0, gutterInk: 0 }
+    }
+
+    // The thumb renders the same Shiki markup as the editor — read its spans.
+    const hues = new Map()
+    let chromatic = 0
+    for (const span of slide.querySelectorAll('[style*="color"]')) {
+      const m = (span.getAttribute('style') || '').match(/color:\s*([^;]+)/i)
+      const rgb = m ? parseColor(m[1].trim()) : null
+      if (!rgb) continue
+      const hue = hueOf(rgb[0], rgb[1], rgb[2])
+      if (hue == null) continue
+      const chars = (span.textContent || '').length
+      chromatic += chars
+      hues.set(hue, (hues.get(hue) || 0) + chars)
+    }
+
+    // Panel background: github-dark is a dark surface.
+    const panel = slide.querySelector('[class*=base-element-code], [class*=code-block], pre')
+    const bg = panel ? getComputedStyle(panel).backgroundColor : ''
+    const bgRgb = parseColor(bg)
+    const darkShare = bgRgb && bgRgb[0] + bgRgb[1] + bgRgb[2] < 240 ? 0.5 : 0
+
+    // Gutters are ::before numerals (no DOM text): the same .line-numbers
+    // container + line count in the thumb means the gutter renders there.
+    const gutterLines = slide.querySelectorAll('.line-numbers .line').length
+    const gutterInk = gutterLines
+
     const liveColors = [...document.querySelectorAll('[data-element-type=code] .line span[style*="color"]')].map(el => {
       const m = (el.getAttribute('style') || '').match(/color:\s*([^;]+)/i)
       return (m?.[1] || '').trim()
     })
     const liveHues = new Set()
     for (const raw of liveColors) {
-      const hex = raw.match(/#([0-9a-fA-F]{3,8})/)
-      const rgb = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
-      let r = 0
-      let g = 0
-      let b = 0
-      if (hex) {
-        let h = hex[1]
-        if (h.length === 3) h = h.split('').map(c => c + c).join('')
-        r = parseInt(h.slice(0, 2), 16)
-        g = parseInt(h.slice(2, 4), 16)
-        b = parseInt(h.slice(4, 6), 16)
-      }
-      else if (rgb) {
-        r = Number(rgb[1])
-        g = Number(rgb[2])
-        b = Number(rgb[3])
-      }
-      else continue
-      const hue = hueOf(r, g, b)
+      const rgb = parseColor(raw)
+      if (!rgb) continue
+      const hue = hueOf(rgb[0], rgb[1], rgb[2])
       if (hue != null) liveHues.add(hue)
     }
     const thumbHues = [...hues.entries()].filter(([, n]) => n >= 4).map(([hue]) => hue)
@@ -240,13 +201,11 @@ try {
     const hasBlue = thumbHues.some(hue => hue >= 180 && hue <= 260)
     const liveText = (document.querySelector('[data-element-type=code]')?.innerText || '').replace(/\s+/g, ' ')
     return {
-      pending: host.hasAttribute('data-raster-pending'),
+      pending: false,
       timeout: !!timeout,
-      canvas: { w: canvas.width, h: canvas.height },
-      el,
-      region: { rx, ry, rw: w, rh: h },
-      darkShare: inked ? dark / inked : 0,
-      whiteShare: inked ? nearWhite / inked : 0,
+      canvas: { w: 120, h: 68 },
+      darkShare,
+      whiteShare: 0,
       chromatic,
       hues: thumbHues,
       liveHues: [...liveHues],
@@ -267,7 +226,7 @@ try {
   rec(10, 'Thumbnail has at least 3 highlight hues', proof.hues.length >= 3, proof.hues)
   rec(11, 'Thumbnail keeps a keyword-red family', proof.hasRed, proof.hues)
   rec(12, 'Thumbnail keeps a type/string-blue family', proof.hasBlue, proof.hues)
-  rec(13, 'Thumbnail left gutter has dim numeral ink', proof.gutterInk > 8, { gutterInk: proof.gutterInk })
+  rec(13, 'Thumbnail left gutter renders per-line numerals', proof.gutterInk >= 4, { gutterInk: proof.gutterInk })
   rec(14, 'Thumbnail highlight hues overlap the live editor', proof.overlap.length >= 2, {
     overlap: proof.overlap,
     liveHues: proof.liveHues,

@@ -8,7 +8,7 @@ import { clonePlain } from '@/utils/clonePlain'
 import { bindDocumentDrag, rafCoalesce } from '@/utils/gestureBind'
 import { findSlideViewport, getPointerClient, getViewportRenderedScale, pointerDeltaToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
-import { applyLiveSize, tableCellMinHeight } from '@/utils/liveElementSize'
+import { applyLiveSize, autoHeightInsetSum, measureAutoTextHeight, tableCellMinHeight } from '@/utils/liveElementSize'
 import { commitSlideElements } from '@/utils/commitSlideElements'
 
 const applyLiveMultiSelectBox = (minX: number, minY: number, maxX: number, maxY: number, canvasScale: number) => {
@@ -344,7 +344,22 @@ export default (
         }
         return { ...el, left, top, width, height }
       })
-      applyLiveSize(element.id, left, top, width, height, canvasScaleRef.current, livePaint)
+      // Auto-height boxes: the drag owns the height — paint the live width,
+      // measure the text at that width, then paint the measured height. ONE
+      // writer per frame; the measured height also lands in the drop commit.
+      const autoInset = autoHeightInsetSum(element)
+      if (autoInset != null) {
+        applyLiveSize(element.id, left, top, width, height, canvasScaleRef.current, livePaint)
+        const measured = measureAutoTextHeight(element.id, autoInset)
+        if (measured != null && Math.abs(measured - height) > 0.5) {
+          height = measured
+          liveList = liveList.map(el => el.id === element.id ? { ...el, height } : el)
+        }
+        applyLiveSize(element.id, left, top, width, height, canvasScaleRef.current, livePaint, { forceHeight: true })
+      }
+      else {
+        applyLiveSize(element.id, left, top, width, height, canvasScaleRef.current, livePaint)
+      }
     }
 
     const handleMouseup = (e: MouseEvent | TouchEvent) => {

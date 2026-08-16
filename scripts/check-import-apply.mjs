@@ -82,7 +82,7 @@ assert(normalizeImportApplyOptions().mode === undefined, 'missing options stay e
   assert(!dialog.includes('useMemo(() => confirmStore.register()'), 'confirm dialog must not register in useMemo')
   assert(controller.includes('getImportApi()') && controller.includes('confirm: importOptions?.confirm ?? false'), 'embed importPptx skips confirm by default')
   assert(importHook.includes('resetEditorSelection'), 'file import clears selection before swapping slides')
-  assert(importHook.includes('setEditingElementId(\'\')'), 'file import leaves no stale in-place editor')
+  assert(importHook.includes('drainCommitQueue()'), 'file import drains the live editor instead of clearing editing beside it')
   assert(importHook.includes('updateSelectedSlidesIndex([])'), 'file import drops multi-selected thumbnail indexes')
   const addSlides = readFileSync(join(root, 'src/hooks/useAddSlidesOrElements.ts'), 'utf8')
   assert(addSlides.includes('clonePlain(slides)'), 'append remaps ids on a clone, not the parsed slides')

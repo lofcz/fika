@@ -101,14 +101,11 @@ async function readState(page, boxIndex = 0) {
       panelFixed: fixedBtn?.getAttribute('aria-pressed') === 'true',
       text: (box?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
     }
+    // Live-DOM rail: the thumb IS the slide tree — count painted text chars
+    // instead of raster ink pixels.
     let ink = 0
-    const canvas = document.querySelector('[class*=thumbnail-slide] canvas')
-    if (canvas) {
-      const d = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height).data
-      for (let p = 0; p < d.length; p += 16) {
-        if (d[p + 3] > 12 && (d[p] < 248 || d[p + 1] < 248 || d[p + 2] < 248)) ink++
-      }
-    }
+    const thumbPm = document.querySelector('[class*=thumbnail-slide] .ProseMirror, [class*=thumbnail-slide] .ProseMirror-static')
+    if (thumbPm) ink = (thumbPm.textContent || '').replace(/\s+/g, '').length
     return {
       id,
       mode: box?.getAttribute('data-text-box-mode') || '',

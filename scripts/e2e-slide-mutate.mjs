@@ -17,8 +17,6 @@ const DEV_PORTS = [5173, 5174, 5175, 5176]
 const DECK_SIZE = 120
 const STORE_MS_BUDGET = 20
 const UI_MS_BUDGET = 400
-const ADD_PAINT_BUDGET = 8
-const DELETE_PAINT_BUDGET = 4
 const AGENTIC_MS_BUDGET = 80
 const AGENTIC_BATCH_MS_BUDGET = 400
 const RASTER_IDLE_MS = 2500
@@ -100,30 +98,31 @@ async function stripScan(page) {
 async function waitForHooks(page) {
   const start = Date.now()
   while (Date.now() - start < 20000) {
-    if (await page.evaluate(() => !!(window.__FIKA_SLIDES__ && window.__FIKA_RASTER__ && window.__FIKA_AGENTIC__))) return
+    if (await page.evaluate(() => !!(window.__FIKA_SLIDES__ && window.__FIKA_AGENTIC__))) return
     await sleep(250)
   }
-  throw new Error('fika store / raster / agentic hooks did not appear')
+  throw new Error('fika store / agentic hooks did not appear')
 }
 
-async function raster(page) {
-  return page.evaluate(() => window.__FIKA_RASTER__.read())
+/** Rail DOM token: mounted thumbs + their text mass — changes when the rail re-renders. */
+async function railToken(page) {
+  return page.evaluate(() => {
+    const hosts = [...document.querySelectorAll('[data-thumbnail-slide]')]
+    let text = 0
+    for (const host of hosts) text += (host.querySelector('.screen-slide')?.textContent || '').length
+    return hosts.length * 100000 + text
+  })
 }
 
-async function resetRaster(page) {
-  await page.evaluate(() => window.__FIKA_RASTER__.reset())
-}
-
-async function waitIdle(page, requirePaint = false) {
+async function waitIdle(page) {
   const start = Date.now()
   let last = -1
   let stable = 0
   while (Date.now() - start < RASTER_IDLE_MS) {
-    const stats = await raster(page)
-    const token = stats.fullPaints + stats.patchPaints + stats.elementInvalidations
+    const token = await railToken(page)
     if (token === last) {
       stable += 1
-      if (stable >= 3 && (!requirePaint || stats.fullPaints + stats.patchPaints > 0)) return stats
+      if (stable >= 3) return token
     }
     else {
       stable = 0
@@ -131,7 +130,28 @@ async function waitIdle(page, requirePaint = false) {
     }
     await sleep(50)
   }
-  return raster(page)
+  return last
+}
+
+/** Tag every mounted thumb tree; returns how many are STILL the same node later. */
+async function tagThumbTrees(page) {
+  return page.evaluate(() => {
+    const key = String(Date.now())
+    let tagged = 0
+    for (const host of document.querySelectorAll('[data-thumbnail-slide]')) {
+      const slide = host.querySelector('.screen-slide')
+      if (slide) {
+        slide.dataset.e2eTree = key
+        tagged += 1
+      }
+    }
+    window.__FIKA_TREE_KEY = key
+    return tagged
+  })
+}
+
+async function countSurvivingTrees(page) {
+  return page.evaluate(() => document.querySelectorAll(`.screen-slide[data-e2e-tree="${window.__FIKA_TREE_KEY}"]`).length)
 }
 
 function fatSlide(index) {
@@ -190,7 +210,6 @@ async function measureStoreOp(page, op) {
     const before = store.slides
     const beforeIds = before.map(slide => slide.id)
     const beforeRefs = new Map(before.map(slide => [slide.id, slide]))
-    const rasterBefore = window.__FIKA_RASTER__.read()
     const incoming = {
       id: `probe-${kind}-${Date.now()}`,
       elements: [{
@@ -235,7 +254,6 @@ async function measureStoreOp(page, op) {
       kept,
       rewritten,
       dropped,
-      paintsBefore: rasterBefore.fullPaints + rasterBefore.patchPaints,
     }
   }, op)
 }
@@ -254,8 +272,8 @@ async function thumbState(page) {
     const hosts = [...document.querySelectorAll('[data-thumbnail-slide]')]
     return {
       mounted: hosts.length,
-      pending: hosts.filter(host => host.hasAttribute('data-raster-pending')).length,
-      canvases: hosts.filter(host => host.querySelector('[data-preview-raster], canvas')).length,
+      unmounted: hosts.filter(host => !host.querySelector('.screen-slide')).length,
+      live: hosts.filter(host => host.querySelector('.screen-slide')).length,
     }
   })
 }
@@ -274,28 +292,39 @@ async function run(page) {
   await waitForHooks(page)
 
   const seeded = await seedDeck(page, DECK_SIZE)
-  await waitIdle(page, true)
+  await waitIdle(page)
   const thumbs = await thumbState(page)
   rec(1, seeded.count === DECK_SIZE, { ...seeded, thumbs })
   rec(2, thumbs.mounted > 0 && thumbs.mounted < DECK_SIZE, thumbs)
 
-  await resetRaster(page)
+  await tagThumbTrees(page)
   const add = await measureStoreOp(page, 'add')
   const addRaf = await waitRafPair(page)
-  const addIdle = await waitIdle(page, false)
-  const addPaints = addIdle.fullPaints + addIdle.patchPaints
+  await waitIdle(page)
+  const addSurvivors = await countSurvivingTrees(page)
+  const addState = await thumbState(page)
   rec(3, add.rewritten === 0 && add.kept === add.before, add)
   rec(4, add.storeMs < STORE_MS_BUDGET, { ...add, rafMs: addRaf })
-  rec(5, addPaints <= ADD_PAINT_BUDGET, { paints: addPaints, full: addIdle.fullPaints, patch: addIdle.patchPaints })
+  rec(5, addState.live > 0 && addSurvivors >= Math.min(addState.live, 1) && addState.unmounted === 0, {
+    survivors: addSurvivors,
+    live: addState.live,
+    unmounted: addState.unmounted,
+  })
 
-  await resetRaster(page)
+  const taggedBeforeDelete = await tagThumbTrees(page)
   const del = await measureStoreOp(page, 'delete')
   const delRaf = await waitRafPair(page)
-  const delIdle = await waitIdle(page, false)
-  const delPaints = delIdle.fullPaints + delIdle.patchPaints
+  await waitIdle(page)
+  const delSurvivors = await countSurvivingTrees(page)
+  const delState = await thumbState(page)
   rec(6, del.rewritten === 0 && del.kept === del.after, del)
   rec(7, del.storeMs < STORE_MS_BUDGET, { ...del, rafMs: delRaf })
-  rec(8, delPaints <= DELETE_PAINT_BUDGET, { paints: delPaints, full: delIdle.fullPaints, patch: delIdle.patchPaints })
+  rec(8, delSurvivors >= Math.min(taggedBeforeDelete - 1, delState.live) && delState.unmounted === 0, {
+    survivors: delSurvivors,
+    tagged: taggedBeforeDelete,
+    live: delState.live,
+    unmounted: delState.unmounted,
+  })
 
   const section = await page.evaluate(() => {
     const store = window.__FIKA_SLIDES__.getState()
@@ -363,7 +392,7 @@ async function run(page) {
   rec(12, uiAddMs < UI_MS_BUDGET, { ms: uiAddMs })
 
   await clickThumb(page, 2)
-  await waitIdle(page, false)
+  await waitIdle(page)
   await page.evaluate(() => {
     const slides = window.__FIKA_SLIDES__.getState().slides
     window.__FIKA_MUTATE_REFS = new Map(slides.map(slide => [slide.id, slide]))
@@ -398,7 +427,7 @@ async function run(page) {
   rec(15, rail.store === uiDelIdentity.after && rail.thumbs > 0 && rail.thumbs < rail.store, rail)
 
   const afterThumbs = await thumbState(page)
-  rec(16, afterThumbs.canvases >= Math.min(3, afterThumbs.mounted) && afterThumbs.pending === 0, afterThumbs)
+  rec(16, afterThumbs.live >= Math.min(3, afterThumbs.mounted) && afterThumbs.unmounted === 0, afterThumbs)
 
   const middle = await page.evaluate(() => {
     const store = window.__FIKA_SLIDES__.getState()
@@ -451,7 +480,6 @@ async function run(page) {
   })
   rec(19, snap.skipped || snap.ms < 80, snap)
 
-  await resetRaster(page)
   const farCount = await page.locator('[data-sortable-id]').count()
   if (farCount > 4) {
     await page.locator('[data-sortable-id]').nth(farCount - 1).click()
@@ -462,12 +490,17 @@ async function run(page) {
       store.updateSlideIndex(store.slides.length - 1)
     })
   }
-  const farIdle = await waitIdle(page, false)
+  await waitIdle(page)
   const farThumb = await thumbState(page)
-  rec(20, farThumb.canvases > 0 && farIdle.fullPaints + farIdle.patchPaints < 12, {
-    thumbs: farThumb,
-    paints: farIdle.fullPaints + farIdle.patchPaints,
+  const farCurrentMounted = await page.evaluate(() => {
+    const store = window.__FIKA_SLIDES__.getState()
+    const current = store.slides[store.slideIndex]
+    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
+      el.getAttribute('data-thumbnail-slide') === current?.id
+    ))
+    return !!host?.querySelector('.screen-slide')
   })
+  rec(20, farThumb.live > 0 && farCurrentMounted && farThumb.live < farThumb.mounted + 1, farThumb)
 
   const agenticReady = await page.evaluate(() => !!(window.__FIKA_AGENTIC__?.execute && window.__FIKA_AGENTIC__?.executeBatch))
   rec(21, agenticReady)

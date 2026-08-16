@@ -42,8 +42,10 @@ export const unitScripts = [
 
 export const e2eScripts = [
   'scripts/e2e-guidelines.mjs',
+  'scripts/e2e-autoheight-styles.mjs',
   'scripts/e2e-height-toggle.mjs',
   'scripts/e2e-houby-fixed-fit.mjs',
+  'scripts/e2e-jan-hus-wrap.mjs',
   'scripts/e2e-chart-fidelity.mjs',
   'scripts/e2e-charts.mjs',
   'scripts/e2e-insert-elements.mjs',
@@ -55,6 +57,10 @@ export const e2eScripts = [
   'scripts/e2e-resize-commit-match.mjs',
   'scripts/e2e-resize-elements.mjs',
   'scripts/e2e-resize-shapes.mjs',
+  'scripts/e2e-shape-fixed-fit.mjs',
+  'scripts/e2e-fixed-fit-never-clips.mjs',
+  'scripts/e2e-height-mode-swap.mjs',
+  'scripts/e2e-gutter-drag.mjs',
   'scripts/e2e-slide-reorder.mjs',
   'scripts/e2e-slide-mutate.mjs',
   'scripts/e2e-agentic-commands.mjs',

@@ -196,6 +196,38 @@ const stretchLiveContents = (content: HTMLElement, width: number, height: number
   if (table instanceof HTMLTableElement) stretchLiveTable(table, width, height)
 }
 
+/** True when the element's height is text-driven (auto-height box). */
+export const autoHeightInsetSum = (el: {
+  type?: string
+  fixedHeight?: boolean
+  vertical?: boolean
+  inset?: readonly number[]
+  text?: { fixedHeight?: boolean; inset?: readonly number[] } | null
+}): number | null => {
+  if (el.type === 'text' && !el.fixedHeight && !el.vertical) {
+    const inset = el.inset || [10, 10, 10, 10]
+    return inset[0] + inset[2]
+  }
+  if (el.type === 'shape' && el.text && el.text.fixedHeight === false) {
+    const inset = el.text.inset || [10, 10, 10, 10]
+    return inset[0] + inset[2]
+  }
+  return null
+}
+
+/**
+ * Height the auto-height element's text actually needs at its CURRENT live
+ * width (call after the width has been painted). scrollHeight reports the
+ * true content height even when the container still carries a stale height.
+ */
+export const measureAutoTextHeight = (id: string, insetSum: number): number | null => {
+  const root = editableRoot(id)
+  const pm = root?.querySelector('.ProseMirror, .ProseMirror-static, .prosemirror-editor') as HTMLElement | null
+  if (!pm) return null
+  const next = Math.ceil(pm.scrollHeight + insetSum)
+  return next > 0 ? next : null
+}
+
 export const applyLiveSize = (
   id: string,
   left: number,
@@ -204,6 +236,7 @@ export const applyLiveSize = (
   height: number,
   canvasScale: number,
   extras?: LivePaintExtras,
+  options?: { forceHeight?: boolean },
 ) => {
   const root = editableRoot(id)
   const box = root?.firstElementChild as HTMLElement | null
@@ -212,7 +245,9 @@ export const applyLiveSize = (
     || box?.querySelector('.element-content')
     || box?.firstElementChild?.firstElementChild
   ) as HTMLElement | null
-  const autoHeight = isLiveAutoHeight(content) || isLiveAutoHeight(box)
+  // `forceHeight`: an auto-height box whose TEXT height is being live-painted
+  // (resize drag rewrap) — write the measured height instead of skipping.
+  const autoHeight = options?.forceHeight ? false : (isLiveAutoHeight(content) || isLiveAutoHeight(box))
   if (box) {
     box.style.left = `${left}px`
     box.style.top = `${top}px`

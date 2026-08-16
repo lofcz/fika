@@ -31,8 +31,6 @@ export interface FontOption {
   label: string;
   value: string;
 }
-/** CJK faces that used to ship with extras builds; strip them from templates. */
-export const EASTERN_EXTRAS_FONT_VALUES = ['SourceHanSans', 'SourceHanSerif', 'WenDingPLKaiTi', 'WenDingPLSongTi', 'ZhuqueFangSong', 'LXGWWenKai', 'LXGWNeoZhiSong', 'LXGWNeoXiHei', 'AlibabaPuHuiTi', 'MiSans', 'DeYiHei'];
 
 /** @deprecated Use FONT_VALUES — kept for loadGoogleFonts preset detection */
 export const FONTS: FontOption[] = FONT_VALUES.map(value => ({

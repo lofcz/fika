@@ -3,6 +3,7 @@ import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import type { PPTElement, ShapeText } from '@/types/slides'
 import { repairFilledPlaceholderHtml } from '@/utils/placeholderPaint'
 import { getEditorView } from './caret'
+import { normalizeFittedFontSizes } from './index'
 import { editorHtmlLooksEmpty, shouldWriteEditorHtml } from './commitPolicy'
 
 export { editorHtmlLooksEmpty, shouldWriteEditorHtml } from './commitPolicy'
@@ -37,7 +38,7 @@ export function commitLiveEditorToStore(elementId: string, options?: { history?:
   const view = getEditorView(elementId)
   if (!view) return
   const empty = view.state.doc.textContent.trim().length === 0 && richTextHtmlLooksEmpty(view.dom.innerHTML)
-  const html = empty ? '' : view.dom.innerHTML
+  const html = empty ? '' : normalizeFittedFontSizes(view.dom.innerHTML)
   const found = findElementInPresentation(elementId)
   if (!found) return
   const { slideId, el } = found

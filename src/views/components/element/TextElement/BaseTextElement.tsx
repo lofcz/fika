@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './BaseTextElement.module.scss'
 const cx = bindStyles(styles)
-import { useRef, memo, type CSSProperties } from 'react';
+import { useRef, memo, useContext, type CSSProperties } from 'react';
 import type { CSSPropertiesWithVars } from '@/types/css';
 
 import type { PPTTextElement, Slide, SlideBackground } from '@/types/slides';
@@ -13,7 +13,8 @@ import { resolveTextBoxLayout, textBoxFlexColumn, textBoxJustify, textBoxLiveMod
 import { emptyPlaceholderHtml, isEmptyRichText, placeholderBoxVars } from '@/utils/placeholderPaint';
 import { resolveElementSurfaces, resolveLiveTextPaint, resolvePlaceholderColor } from '@/utils/textContrast';
 import { serializeRichTextHtml } from '@/utils/prosemirror';
-import { selectCurrentSlide, useSlidesStore } from '@/store';
+import { selectSlideById, useSlidesStore } from '@/store';
+import { SlideIdContext } from '@/types/injectKey';
 export type IBaseTextElementProps = {
   elementInfo: PPTTextElement;
   target?: string;
@@ -39,7 +40,8 @@ const BaseTextElement = memo((vrProps: IBaseTextElementProps) => {
   } = vrProps;
   const isEmptyContent = isEmptyRichText(elementInfo.content);
   const showPlaceholderPreview = showPlaceholders && isEmptyContent && !!elementInfo.placeholder;
-  const slideElements = selectCurrentSlide(useSlidesStore.getState())?.elements;
+  const slideId = useContext(SlideIdContext);
+  const slideElements = selectSlideById(useSlidesStore.getState(), slideId || undefined)?.elements;
   const { ink: defaultInkColor, html: contrastedHtml } = resolveLiveTextPaint(
     elementInfo.defaultColor || themeFontColor || '#333',
     elementInfo.content,

@@ -1,6 +1,5 @@
 import { describe, expect, it } from '@rstest/core'
-import { isEmptyPaintedDiff, planSlideRaster } from '../src/previewRaster/planSlideRaster'
-import { elementStackIds } from '../src/previewRaster/elementStack'
+import { diffPaintedSlide } from '../src/utils/diffPaintedSlide'
 import { liveGradientId, liveGradientTransform } from '../src/utils/liveElementPaint'
 
 const shapeA = {
@@ -38,7 +37,16 @@ const text = {
 }
 const slide = (elements: typeof shapeA[]) => ({ id: 's1', elements })
 
-describe('planSlideRaster', () => {
+const isEmpty = (diff: ReturnType<typeof diffPaintedSlide>) => (
+  !diff.backgroundChanged
+  && !diff.zOrderChanged
+  && diff.added.length === 0
+  && diff.removed.length === 0
+  && diff.contentChanged.length === 0
+  && diff.movedOnly.length === 0
+)
+
+describe('slide repaint diff', () => {
   const prev = slide([shapeA, shapeB, text])
   const rotated = slide([
     { ...shapeA, gradient: { ...shapeA.gradient, rotate: 90 } },
@@ -47,59 +55,37 @@ describe('planSlideRaster', () => {
   ])
   const moved = slide([{ ...shapeA, left: 40 }, shapeB, text])
 
-  it('full-rebuilds the first paint and an evicted scratch', () => {
-    expect(planSlideRaster(undefined, prev, { destCovers: false, scratchHasSlide: false }).kind).toBe('full')
-    expect(planSlideRaster(prev, rotated, { destCovers: true, scratchHasSlide: false }).kind).toBe('full')
+  it('reports every element as added on a first paint', () => {
+    const diff = diffPaintedSlide(undefined, prev)
+    expect(diff.added).toEqual(['a', 'b', 't'])
+    expect(diff.backgroundChanged).toBe(true)
   })
 
-  it('skips the same slide object', () => {
-    expect(planSlideRaster(prev, prev, { destCovers: true, scratchHasSlide: true }).kind).toBe('skip')
+  it('diffs to empty for the same slide object', () => {
+    expect(isEmpty(diffPaintedSlide(prev, prev))).toBe(true)
   })
 
-  it('patches only the edited shape for a gradient rotate', () => {
-    const plan = planSlideRaster(prev, rotated, { destCovers: true, scratchHasSlide: true })
-    expect(plan.kind).toBe('patch')
-    if (plan.kind !== 'patch') return
-    expect(plan.diff.contentChanged).toEqual(['a'])
-    expect(plan.diff.added).toEqual([])
-    expect(plan.diff.removed).toEqual([])
-    expect(plan.diff.backgroundChanged).toBe(false)
+  it('flags only the edited shape for a gradient rotate', () => {
+    const diff = diffPaintedSlide(prev, rotated)
+    expect(diff.contentChanged).toEqual(['a'])
+    expect(diff.added).toEqual([])
+    expect(diff.removed).toEqual([])
+    expect(diff.backgroundChanged).toBe(false)
   })
 
-  it('moves a node without destroying it', () => {
-    const plan = planSlideRaster(prev, moved, { destCovers: true, scratchHasSlide: true })
-    expect(plan.kind).toBe('patch')
-    if (plan.kind !== 'patch') return
-    expect(plan.diff.movedOnly).toEqual(['a'])
-    expect(plan.diff.contentChanged).toEqual([])
+  it('classifies a bare reposition as movedOnly', () => {
+    const diff = diffPaintedSlide(prev, moved)
+    expect(diff.movedOnly).toEqual(['a'])
+    expect(diff.contentChanged).toEqual([])
   })
 
   it('a resize is contentChanged and does not flip zOrderChanged', () => {
     const resized = slide([{ ...shapeA, width: 140 }, shapeB, text])
-    const plan = planSlideRaster(prev, resized, { destCovers: true, scratchHasSlide: true })
-    expect(plan.kind).toBe('patch')
-    if (plan.kind !== 'patch') return
-    expect(plan.diff.contentChanged).toEqual(['a'])
-    expect(plan.diff.zOrderChanged).toBe(false)
-    expect(plan.diff.added).toEqual([])
-    expect(plan.diff.removed).toEqual([])
-  })
-
-  it('treats an empty diff as skippable', () => {
-    expect(isEmptyPaintedDiff({
-      added: [],
-      removed: [],
-      contentChanged: [],
-      movedOnly: [],
-      zOrderChanged: false,
-      backgroundChanged: false,
-    })).toBe(true)
-  })
-})
-
-describe('elementStackIds', () => {
-  it('is the authored back-to-front order', () => {
-    expect(elementStackIds([{ id: 'beige' }, { id: 'title' }])).toEqual(['beige', 'title'])
+    const diff = diffPaintedSlide(prev, resized)
+    expect(diff.contentChanged).toEqual(['a'])
+    expect(diff.zOrderChanged).toBe(false)
+    expect(diff.added).toEqual([])
+    expect(diff.removed).toEqual([])
   })
 })
 

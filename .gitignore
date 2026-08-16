@@ -37,3 +37,4 @@ coverage
 *.sln
 *.sw?
 tsconfig.app.tsbuildinfo
+/output
