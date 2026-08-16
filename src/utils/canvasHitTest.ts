@@ -3,6 +3,7 @@ import { getElementRange } from '@/utils/element';
 import { queryFika } from '@/utils/portal';
 import { HitIndex, type HitBox } from '@/utils/spatial/hitIndex';
 import { consumePendingCaret, getEditorView, setPendingCaret, type ClientCoords } from '@/utils/prosemirror/caret';
+import { isEmptyRichText } from '@/utils/placeholderPaint';
 
 /** Temporary: paint every pointer hit target so the hit engine can be verified. */
 export const DEBUG_HIT_AREAS = false;
@@ -256,6 +257,21 @@ export interface VisualHitRect {
   height: number;
   rotate: number;
   zIndex: number;
+  /**
+   * Empty placeholder slot (dashed prompt, no authored content). It is a
+   * background affordance: any element carrying visible content that
+   * overlaps it wins the pointer regardless of z-order — users click the
+   * text they SEE, not the dashed frame behind it.
+   */
+  yieldToContent?: boolean;
+}
+
+/** True when the element paints authored content the user can click "on". */
+export function elementHasClickableContent(element: PPTElement): boolean {
+  if (element.type === 'text') {
+    return !element.placeholder || !isEmptyRichText(element.content)
+  }
+  return true
 }
 
 /**
@@ -265,6 +281,7 @@ export interface VisualHitRect {
  * That path fragments (glyph boxes, SVG fills) and offsets under zoom.
  */
 export function elementVisualHitRect(element: PPTElement, canvasScale: number, zIndex: number): VisualHitRect {
+  const yieldToContent = element.type === 'text' && !!element.placeholder && isEmptyRichText(element.content)
   if (element.type === 'line') {
     const { minX, maxX, minY, maxY } = getElementRange(element);
     return {
@@ -274,7 +291,8 @@ export function elementVisualHitRect(element: PPTElement, canvasScale: number, z
       width: Math.max((maxX - minX) * canvasScale, MIN_HIT_PX),
       height: Math.max((maxY - minY) * canvasScale, MIN_HIT_PX),
       rotate: 0,
-      zIndex
+      zIndex,
+      yieldToContent
     };
   }
   const height = 'height' in element ? element.height : 0;
@@ -286,7 +304,8 @@ export function elementVisualHitRect(element: PPTElement, canvasScale: number, z
     width: element.width * canvasScale,
     height: height * canvasScale,
     rotate,
-    zIndex
+    zIndex,
+    yieldToContent
   };
 }
 export function pointInVisualHitRect(x: number, y: number, rect: VisualHitRect): boolean {
@@ -520,19 +539,23 @@ export type VisualHitPlanInput = {
 export type VisualHitPlan = {
   hitRects: VisualHitRect[];
   occluderRects: VisualHitRect[];
+  /** Rects of elements painting authored content — they beat empty placeholder slots. */
+  contentRects: VisualHitRect[];
 };
 
 /**
  * Selected / editing / clipping boxes leave HitLayer so Operate or the live
  * editor can own the pointer. Those boxes must still punch holes in every
  * *lower* hit rect — otherwise the first click works, then hover/click/drag
- * fall through to the card underneath.
+ * fall through to the card underneath. Empty placeholder slots additionally
+ * yield to ANY overlapping content rect regardless of z-order.
  */
 export function collectVisualHitPlan(input: VisualHitPlanInput): VisualHitPlan {
   const hidden = input.hiddenElementIdList instanceof Set ? input.hiddenElementIdList : new Set(input.hiddenElementIdList);
   const selected = input.activeElementIdList instanceof Set ? input.activeElementIdList : new Set(input.activeElementIdList);
   const hitRects: VisualHitRect[] = [];
   const occluderRects: VisualHitRect[] = [];
+  const contentRects: VisualHitRect[] = [];
   for (let i = 0; i < input.elementList.length; i++) {
     const element = input.elementList[i];
     if (hidden.has(element.id)) continue;
@@ -540,13 +563,14 @@ export function collectVisualHitPlan(input: VisualHitPlanInput): VisualHitPlan {
     const occupiesBox = element.id === input.editingElementId
       || element.id === input.clipingImageElementId
       || selected.has(element.id) && element.type !== 'line';
+    if (elementHasClickableContent(element)) contentRects.push(rect);
     if (occupiesBox) {
       occluderRects.push(rect);
       continue;
     }
     hitRects.push(rect);
   }
-  return { hitRects, occluderRects };
+  return { hitRects, occluderRects, contentRects };
 }
 
 export function pointInAnyVisualHitRect(x: number, y: number, rects: VisualHitRect[]): boolean {
@@ -556,8 +580,11 @@ export function pointInAnyVisualHitRect(x: number, y: number, rects: VisualHitRe
   return false;
 }
 
-/** Occluders that sit on top of `rect` (same stack level included). */
+/** Occluders that sit on top of `rect` (same stack level included). Empty placeholder slots yield to every occluder. */
 export function occludersAboveRect(rect: VisualHitRect, occluders: VisualHitRect[]): VisualHitRect[] {
+  if (rect.yieldToContent) {
+    return occluders.filter(hole => hole.id !== rect.id)
+  }
   return occluders.filter(hole => hole.id !== rect.id && hole.zIndex >= rect.zIndex);
 }
 

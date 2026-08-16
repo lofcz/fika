@@ -1,5 +1,5 @@
 import type { PPTElement, PPTShapeElement, PPTTextElement, ShapeText, TextAlignVertical, TextInset } from '@/types/slides'
-import { resolveTextBoxLayout, shapeTextLocksSize } from '@/utils/placeholderLayout'
+import { placeholderFixedRestoreHeight, resolveTextBoxLayout, shapeTextLocksSize } from '@/utils/placeholderLayout'
 
 export const DEFAULT_TEXT_INSET: TextInset = [10, 10, 10, 10]
 
@@ -72,6 +72,9 @@ export function applyTextBoxStylePatch(
     if (patch.fixedHeight === true) {
       props.fixedHeight = true
       props.vAlign = patch.vAlign ?? resolveTextBoxLayout(el).vAlign
+      // A placeholder's fixed size is its designed slot — restore it instead
+      // of locking whatever the text last hugged in auto mode.
+      props.height = placeholderFixedRestoreHeight(el)
     }
     return { props }
   }

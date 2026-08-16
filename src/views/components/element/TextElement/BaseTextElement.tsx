@@ -86,6 +86,7 @@ const BaseTextElement = memo((vrProps: IBaseTextElementProps) => {
     left: elementInfo.left + 'px',
     width: elementInfo.width + 'px',
     height: paintSize.height,
+    minHeight: paintSize.minHeight,
     boxSizing: 'border-box',
     overflow: textBoxLayout.lockPaintHeight ? 'hidden' : undefined,
     ...style
@@ -100,6 +101,7 @@ const BaseTextElement = memo((vrProps: IBaseTextElementProps) => {
       })} data-live-box data-text-box-mode={textBoxLiveMode(elementInfo, textBoxLayout)} {...(textBoxLayout.fixedHeight ? { 'data-fixed-height': '' } : {})} {...(paintSize.height === 'auto' ? { 'data-live-auto-height': '' } : {})} style={{
         width: paintSize.width,
         height: paintSize.height,
+        minHeight: paintSize.minHeight,
         backgroundColor: elementInfo.fill,
         opacity: elementInfo.opacity,
         textShadow: shadowStyle,

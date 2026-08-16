@@ -270,10 +270,13 @@ async function waitRafPair(page) {
 async function thumbState(page) {
   return page.evaluate(() => {
     const hosts = [...document.querySelectorAll('[data-thumbnail-slide]')]
+    // A thumb is painted when it shows the live tree OR its captured
+    // snapshot bitmap (see thumbSnapshot.ts — pixel-equivalent by contract).
     return {
       mounted: hosts.length,
-      unmounted: hosts.filter(host => !host.querySelector('.screen-slide')).length,
+      unmounted: hosts.filter(host => !host.querySelector('.screen-slide') && !host.querySelector('.thumb-snapshot')).length,
       live: hosts.filter(host => host.querySelector('.screen-slide')).length,
+      bitmap: hosts.filter(host => host.querySelector('.thumb-snapshot')).length,
     }
   })
 }
@@ -491,15 +494,21 @@ async function run(page) {
     })
   }
   await waitIdle(page)
+  // The cold row mounts through the rail-idle gate (~350ms after the jump
+  // scroll) — poll until the selected slide's thumb paints.
+  let farCurrentMounted = false
+  for (let i = 0; i < 40 && !farCurrentMounted; i++) {
+    farCurrentMounted = await page.evaluate(() => {
+      const store = window.__FIKA_SLIDES__.getState()
+      const current = store.slides[store.slideIndex]
+      const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
+        el.getAttribute('data-thumbnail-slide') === current?.id
+      ))
+      return !!host?.querySelector('.screen-slide, .thumb-snapshot')
+    })
+    if (!farCurrentMounted) await page.waitForTimeout(150)
+  }
   const farThumb = await thumbState(page)
-  const farCurrentMounted = await page.evaluate(() => {
-    const store = window.__FIKA_SLIDES__.getState()
-    const current = store.slides[store.slideIndex]
-    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
-      el.getAttribute('data-thumbnail-slide') === current?.id
-    ))
-    return !!host?.querySelector('.screen-slide')
-  })
   rec(20, farThumb.live > 0 && farCurrentMounted && farThumb.live < farThumb.mounted + 1, farThumb)
 
   const agenticReady = await page.evaluate(() => !!(window.__FIKA_AGENTIC__?.execute && window.__FIKA_AGENTIC__?.executeBatch))

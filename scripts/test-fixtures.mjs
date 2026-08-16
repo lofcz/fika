@@ -63,6 +63,7 @@ export const e2eScripts = [
   'scripts/e2e-gutter-drag.mjs',
   'scripts/e2e-slide-reorder.mjs',
   'scripts/e2e-slide-mutate.mjs',
+  'scripts/e2e-thumb-snapshot.mjs',
   'scripts/e2e-agentic-commands.mjs',
 ]
 

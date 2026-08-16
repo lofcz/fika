@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react'
-import { useMainStore, useKeyboardStore, selectCtrlOrShiftKeyActive } from '@/store'
+import { useMainStore, useKeyboardStore, useSlidesStore, selectCtrlOrShiftKeyActive } from '@/store'
 import type { PPTElement, PPTImageElement, PPTLineElement, PPTShapeElement } from '@/types/slides'
 import { OperateResizeHandlers, type MultiSelectRange } from '@/types/edit'
 import { MIN_SIZE } from '@/configs/element'
@@ -9,6 +9,7 @@ import { bindDocumentDrag, rafCoalesce } from '@/utils/gestureBind'
 import { findSlideViewport, getPointerClient, getViewportRenderedScale, pointerDeltaToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { applyLiveSize, autoHeightInsetSum, measureAutoTextHeight, tableCellMinHeight } from '@/utils/liveElementSize'
+import { placeholderHeightFloor } from '@/utils/placeholderLayout'
 import { commitSlideElements } from '@/utils/commitSlideElements'
 
 const applyLiveMultiSelectBox = (minX: number, minY: number, maxX: number, maxY: number, canvasScale: number) => {
@@ -353,6 +354,16 @@ export default (
         const measured = measureAutoTextHeight(element.id, autoInset)
         if (measured != null && Math.abs(measured - height) > 0.5) {
           height = measured
+          liveList = liveList.map(el => el.id === element.id ? { ...el, height } : el)
+        }
+        // Slotted placeholders (empty slots, centered layout titles) never
+        // collapse below their slot, even transiently during the drag.
+        const slidesState = useSlidesStore.getState()
+        const slotFloor = element.type === 'text'
+          ? placeholderHeightFloor(element, slidesState.slides[slidesState.slideIndex]?.type)
+          : 0
+        if (slotFloor > 0 && height < slotFloor) {
+          height = slotFloor
           liveList = liveList.map(el => el.id === element.id ? { ...el, height } : el)
         }
         applyLiveSize(element.id, left, top, width, height, canvasScaleRef.current, livePaint, { forceHeight: true })

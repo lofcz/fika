@@ -1,12 +1,17 @@
 /**
- * Architecture guard for the live-DOM thumbnail rail.
+ * Architecture guard for the live-DOM thumbnail rail + snapshot cache.
  *
- * Thumbnails ARE the slide: each mounted thumb renders the genuine
- * ScreenSlide tree scaled with a CSS transform — the same renderer the
- * presenter uses — so the rail cannot drift from the editor canvas, and
- * there is no rasterization on the display path at all. (The previous
- * Konva-painter pipeline and the whole-slide snapdom capture that replaced
- * it both measured orders of magnitude slower on SVG-heavy decks.)
+ * Thumbnails ARE the slide: a mounted thumb renders the genuine ScreenSlide
+ * tree scaled with a CSS transform — the same renderer the presenter uses —
+ * so the rail cannot drift from the editor canvas. On top of that, a row
+ * that leaves the virtualizer window is snapshotted from that same tree
+ * (thumbSnapshot.ts) and re-enters as an <img>. Nothing is captured ahead
+ * of the viewport. The bitmap is only ever displayed while its key (slide
+ * object identity, theme, viewport geometry, thumb box) still matches the
+ * store.
+ * (The old Konva-painter pipeline was a re-implementation and was removed;
+ * capture now happens through snapdom from the real tree, off the display
+ * path, with only the USED font families embedded.)
  *
  * These asserts keep the properties that make it fast and faithful.
  */
@@ -64,9 +69,22 @@ assert(draggable.includes('overlayRender'), 'the slide drag ghost is opt-in — 
 
 const pkg = read('package.json')
 assert(!pkg.includes('"konva"'), 'konva dependency is gone with the painter stack')
-assert(!pkg.includes('"@zumer/snapdom"'), 'snapdom is not on the thumbnail display path')
 
 assert(!read('src/views/Editor/Thumbnails/index.tsx').includes('previewRaster'), 'the rail wires no raster subscription')
+assert(!read('src/views/Editor/Thumbnails/index.tsx').includes('ThumbSnapshotSweeper'), 'the rail does not pre-render slides outside the viewport')
+
+// --- snapshot cache invariants (see src/.../thumbSnapshot.ts) ---
+const snapshot = read('src/views/components/ThumbnailSlide/thumbSnapshot.ts')
+assert(snapshot.includes('MAX_SNAPSHOTS'), 'the snapshot cache is LRU-bounded')
+assert(snapshot.includes('revokeObjectURL'), 'evicted snapshot blob URLs are revoked')
+assert(snapshot.includes('depsEqual'), 'snapshots are keyed by full render identity (slide/theme/geometry/box)')
+assert(snapshot.includes('excludeFonts'), 'capture embeds ONLY used font families — unused declared families are excluded')
+assert(snapshot.includes('draining'), 'captures are single-flight through one idle queue')
+assert(snapshot.includes('teardownThumbSnapshot'), 'snapshots are taken when the virtualizer tears a row down')
+assert(snapshot.includes('HOSTILE_CAPTURE_MS'), 'slides whose capture measures slow are marked hostile, not retried forever')
+assert(!snapshot.includes('preCache'), 'snapdom preCache must not scan the whole document')
+assert(liveThumb.includes('snapshot ? ('), 'a row with a bitmap never mounts a live tree')
+assert(!liveThumb.includes('requestThumbCapture'), 'visible rows do not capture — only teardown does')
 
 if (failures.length) {
   console.error(`check-preview-raster: ${failures.length} failure(s)`)

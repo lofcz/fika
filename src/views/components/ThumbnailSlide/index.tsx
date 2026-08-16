@@ -15,6 +15,8 @@ export type IThumbnailSlideProps = {
   visible?: boolean
   showPlaceholders?: boolean
   className?: string
+  /** Opt into the identity-keyed snapshot cache (editor rail only). */
+  snapshot?: boolean
 }
 
 export function areThumbnailSlidePropsEqual(prev: IThumbnailSlideProps, next: IThumbnailSlideProps): boolean {
@@ -22,6 +24,7 @@ export function areThumbnailSlidePropsEqual(prev: IThumbnailSlideProps, next: IT
     && (prev.visible ?? true) === (next.visible ?? true)
     && (prev.showPlaceholders ?? false) === (next.showPlaceholders ?? false)
     && prev.className === next.className
+    && (prev.snapshot ?? false) === (next.snapshot ?? false)
     && prev.slide.id === next.slide.id
     && arePaintedSlideIdentitiesEqual(
       'elements' in prev.slide ? prev.slide : undefined,
@@ -36,7 +39,7 @@ export function areThumbnailSlidePropsEqual(prev: IThumbnailSlideProps, next: IT
  * per-element capture booths, nothing to fall behind.
  */
 const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
-  const { slide, size, visible = true, className } = props
+  const { slide, size, visible = true, className, snapshot } = props
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const storeSlide = useSlidesStore(s => s.slides.find(item => item.id === slide.id))
   const full = storeSlide ?? ('elements' in slide ? slide : undefined)
@@ -49,7 +52,7 @@ const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
       data-thumbnail-slide={slide.id}
       style={{ width: width + 'px', height: width * viewportRatio + 'px' }}
     >
-      {visible && full ? <LiveSlideThumb slide={full} width={width} /> : null}
+      {visible && full ? <LiveSlideThumb slide={full} width={width} snapshot={snapshot} /> : null}
     </div>
   )
 }, areThumbnailSlidePropsEqual)

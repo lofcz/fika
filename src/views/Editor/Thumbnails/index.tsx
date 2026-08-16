@@ -122,7 +122,7 @@ const ThumbnailRailItem = memo(function ThumbnailRailItem({
         onContextMenu={event => { event.preventDefault(); event.stopPropagation(); openContextmenu(event, handlersRef.current.contextmenusThumbnailItem) }}
       >
         <div className={cx('label', { 'offset-left': index >= 99 })}>{fillDigit(index + 1, 2)}</div>
-        <ThumbnailSlide className={cx('thumbnail')} slide={{ id: slideId }} size={thumbSize} />
+        <ThumbnailSlide className={cx('thumbnail')} slide={{ id: slideId }} size={thumbSize} snapshot />
         {slide?.notes && slide.notes.length ? (
           <div className={cx('note-flag')} onClick={() => handlersRef.current.openNotesPanel()}>{slide.notes.length}</div>
         ) : null}

@@ -70,11 +70,18 @@ export interface TextBoxLayout {
   vAlign: TextAlignVertical;
   /** Flex-column vertical centering without locking box height (content slides title). */
   flexCenterInLayoutBox: boolean;
+  /** Empty placeholder slot (dashed prompt). */
+  emptyPlaceholder: boolean;
   /**
-   * Definite `height` (not `auto`). True for explicit fixed-height and for an
-   * *empty* placeholder slot (dashed box + centered prompt). A filled
-   * auto-height title/subtitle unlocks so the box can grow with the text.
+   * Auto-height paint floored at the committed height (empty placeholder
+   * slots, filled content-slide titles): `height: auto` + `min-height`. The
+   * box grows with the text the same frame the text grows — no clip, and the
+   * painted box never lags behind its glyphs.
    */
+  slotFlooredAuto: boolean;
+  /** Flex-column paint: fixed boxes, empty slots, centered layout titles. */
+  flexColumn: boolean;
+  /** Definite px `height` paint: explicit fixed-height boxes only. */
   lockPaintHeight: boolean;
 }
 export const V_ALIGN_JUSTIFY = {
@@ -98,11 +105,15 @@ export const resolveTextBoxLayout = (
   const emptyPlaceholder = !!el.placeholder && (
     contentEmpty !== undefined ? contentEmpty : isEmptyRichText(el.content)
   );
+  const flexCenterInLayoutBox = contentTitle && !fixedHeight && !emptyPlaceholder;
   return {
     fixedHeight,
     vAlign: defaultTextBoxVAlign(el, contentTitle),
-    flexCenterInLayoutBox: contentTitle && !fixedHeight && !emptyPlaceholder,
-    lockPaintHeight: fixedHeight || emptyPlaceholder
+    flexCenterInLayoutBox,
+    emptyPlaceholder,
+    slotFlooredAuto: !fixedHeight && (emptyPlaceholder || flexCenterInLayoutBox),
+    flexColumn: fixedHeight || emptyPlaceholder || flexCenterInLayoutBox,
+    lockPaintHeight: fixedHeight,
   };
 };
 
@@ -116,7 +127,7 @@ export const textBoxLiveMode = (
   layout: TextBoxLayout,
 ): TextBoxLiveMode => {
   if (textElementLocksSize(el)) return 'fit';
-  if (layout.lockPaintHeight) return 'slot';
+  if (layout.emptyPlaceholder) return 'slot';
   return 'grow';
 };
 
@@ -126,26 +137,50 @@ export const authoredTextFitSize = (
 ) => (el.placeholder ? placeholderTypedSizeOf(el) : 16);
 export const textBoxPaintSize = (el: PPTTextElement, layout: TextBoxLayout) => ({
   width: el.vertical && !layout.fixedHeight ? 'auto' : `${el.width}px`,
-  height: !el.vertical && !layout.lockPaintHeight ? 'auto' : `${el.height}px`
+  height: !el.vertical && !layout.lockPaintHeight ? 'auto' : `${el.height}px`,
+  minHeight: !el.vertical && layout.slotFlooredAuto ? `${el.height}px` : undefined,
 });
-export const textBoxFlexColumn = (layout: TextBoxLayout) => (
-  layout.lockPaintHeight || layout.flexCenterInLayoutBox
-);
+export const textBoxFlexColumn = (layout: TextBoxLayout) => layout.flexColumn;
 export const textBoxJustify = (layout: TextBoxLayout) => {
   if (layout.flexCenterInLayoutBox) return 'center' as const;
-  if (layout.lockPaintHeight) return V_ALIGN_JUSTIFY[layout.vAlign];
+  if (layout.fixedHeight || layout.emptyPlaceholder) return V_ALIGN_JUSTIFY[layout.vAlign];
   return undefined;
 };
 
 /**
- * Empty slots keep the dashed frame. Filled auto-height follows the text —
- * including shrinking off the empty-slot floor so Enter can grow the box.
+ * The ONE rule for auto-height commits: the box tracks its text but never
+ * shrinks below its slot floor. Empty slots keep the dashed frame, filled
+ * content-slide titles keep their centered layout slot, every other filled
+ * box hugs the text. The floor never exceeds the current height, so an
+ * already-short slot is never surprise-grown. Returns null when the store
+ * height must not change.
  */
-export const shouldBlockPlaceholderHeightShrink = (
+export const textBoxAutoHeight = (
   el: PPTTextElement,
-  measuredHeight: number,
-  contentEmpty: boolean,
-): boolean => {
-  if (!isPlaceholderElement(el) || !contentEmpty) return false;
-  return measuredHeight < getPlaceholderBaselineHeight(el);
+  layout: TextBoxLayout,
+  measuredTextHeight: number,
+): number | null => {
+  if (layout.fixedHeight || el.vertical) return null;
+  const floor = el.placeholder && (layout.emptyPlaceholder || layout.flexCenterInLayoutBox)
+    ? Math.min(getPlaceholderBaselineHeight(el), el.height)
+    : 0;
+  const next = Math.max(measuredTextHeight, floor);
+  return next !== el.height ? next : null;
 };
+
+/** Slot floor for drag-time height measurements (store content, no live editor state). */
+export const placeholderHeightFloor = (el: PPTTextElement, slideType?: Slide['type']): number => {
+  if (!el.placeholder || el.vertical) return 0;
+  if (isEmptyRichText(el.content) || isContentSlideTitlePlaceholder(el, slideType)) {
+    return Math.min(getPlaceholderBaselineHeight(el), el.height);
+  }
+  return 0;
+};
+
+/**
+ * Fixed mode restores a placeholder to its slot: its "fixed size" is the
+ * designed slot, not whatever the text last hugged.
+ */
+export const placeholderFixedRestoreHeight = (el: PPTTextElement): number => (
+  el.placeholder ? Math.max(getPlaceholderBaselineHeight(el), el.height) : el.height
+);

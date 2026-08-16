@@ -5,7 +5,7 @@ import { useRef, useMemo, memo } from 'react'
 
 import { openContextmenu } from '@/utils/openContextmenu'
 import type { PPTElement } from '@/types/slides'
-import { clicksToEditText, collectVisualHitPlan, DEBUG_HIT_AREAS, focusElementEditor, hasInteractiveSurface, HIT_RING_SIDES, hitLayerSkipRebuild, hitRectClipPath, hitRingLayout, occludersAboveRect, pointInAnyVisualHitRect, pointInVisualHitRect, type VisualHitRect } from '@/utils/canvasHitTest'
+import { clicksToEditText, collectVisualHitPlan, DEBUG_HIT_AREAS, elementHasClickableContent, focusElementEditor, hasInteractiveSurface, HIT_RING_SIDES, hitLayerSkipRebuild, hitRectClipPath, hitRingLayout, occludersAboveRect, pointInAnyVisualHitRect, pointInVisualHitRect, type VisualHitRect } from '@/utils/canvasHitTest'
 import { queryFika } from '@/utils/portal'
 import { useMainStore } from '@/store'
 import useElementContextmenu from '@/hooks/useElementContextmenu'
@@ -61,8 +61,8 @@ const HitLayer = memo((props: IHitLayerProps) => {
   const hitRingSides = HIT_RING_SIDES
   const hitLayerRef = useRef<HTMLDivElement | null>(null)
 
-  const { hitRects, occluderRects } = useMemo(() => {
-    if (hitSource.disabled || isGesturing) return { hitRects: EMPTY_HIT_RECTS, occluderRects: EMPTY_HIT_RECTS }
+  const { hitRects, occluderRects, contentRects } = useMemo(() => {
+    if (hitSource.disabled || isGesturing) return { hitRects: EMPTY_HIT_RECTS, occluderRects: EMPTY_HIT_RECTS, contentRects: EMPTY_HIT_RECTS }
     return collectVisualHitPlan(hitSource)
   }, [hitSource, isGesturing])
 
@@ -96,7 +96,9 @@ const HitLayer = memo((props: IHitLayerProps) => {
       zIndex: String(rect.zIndex),
     }
     if (rect.rotate) style.transform = `rotate(${rect.rotate}deg)`
-    const clipPath = hitRectClipPath(rect, occluderRects)
+    // Empty placeholder slots are clipped by CONTENT rects (any z-order) —
+    // the text the user sees always wins over the dashed frame behind it.
+    const clipPath = hitRectClipPath(rect, rect.yieldToContent ? contentRects : occluderRects)
     if (clipPath) style.clipPath = clipPath
     return style
   }
@@ -164,10 +166,89 @@ const HitLayer = memo((props: IHitLayerProps) => {
     return true
   }
 
+  /**
+   * The editing (or single-selected) text element left the hit layer, so
+   * clicks inside its painted box rely on the store-built occluder hole and
+   * operate chrome. When those lag the painted editor (height commit
+   * mid-flight, long-lived tab state), a click on the text would resolve to
+   * the element underneath and steal the selection. Check the LIVE editor box
+   * at event time: if the pointer is physically inside it (and it stacks
+   * above the hit rect's element), retarget — editing keeps the caret,
+   * selected enters edit at the click point.
+   */
+  const retargetEditingEditor = (e: React.MouseEvent, rectId: string): boolean => {
+    const list = props.elementList
+    const guardId = props.editingElementId
+      || (props.activeElementIdList.length === 1 ? props.activeElementIdList[0] : null)
+    if (!guardId || guardId === rectId) return false
+    const guardIndex = list.findIndex(el => el.id === guardId)
+    const targetIndex = list.findIndex(el => el.id === rectId)
+    if (guardIndex < 0 || targetIndex < 0) return false
+    // Empty placeholder slots yield to the live editor regardless of z-order.
+    const targetYields = !elementHasClickableContent(list[targetIndex])
+    if (guardIndex < targetIndex && !targetYields) return false
+    if (!clicksToEditText(list[guardIndex])) return false
+    const root = queryFika(`#editable-element-${guardId}`)
+    if (!(root instanceof HTMLElement)) return false
+    const box = root.querySelector('[data-live-box]') ?? root.firstElementChild
+    if (!(box instanceof HTMLElement)) return false
+    const r = box.getBoundingClientRect()
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return false
+    // Stop the real event AND its default (default would steal focus from the
+    // editor we retarget into).
+    e.preventDefault()
+    e.stopPropagation()
+    e.nativeEvent.stopPropagation()
+    e.nativeEvent.preventDefault()
+    if (props.editingElementId === guardId) {
+      const retargetingTokens = cx('retargeting').split(/\s+/).filter(Boolean)
+      const layer = hitLayerRef.current
+      layer?.classList.add(...retargetingTokens)
+      try {
+        const target = document.elementsFromPoint(e.clientX, e.clientY).find(el => root.contains(el))
+        if (target instanceof HTMLElement) {
+          const opts: MouseEventInit = {
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+            view: window,
+            detail: e.detail,
+            screenX: e.screenX,
+            screenY: e.screenY,
+            clientX: e.clientX,
+            clientY: e.clientY,
+            ctrlKey: e.ctrlKey,
+            shiftKey: e.shiftKey,
+            altKey: e.altKey,
+            metaKey: e.metaKey,
+            button: e.button,
+            buttons: e.buttons,
+          }
+          target.dispatchEvent(new MouseEvent(e.type, opts))
+          if (e.type === 'mousedown') {
+            target.dispatchEvent(new MouseEvent('click', { ...opts, detail: 1 }))
+            // Synthetic events do not move DOM focus — focus the editor so the
+            // caret is live in the retargeted editor.
+            const editable = target.closest('.ProseMirror')
+            if (editable instanceof HTMLElement) editable.focus()
+          }
+        }
+      }
+      finally {
+        layer?.classList.remove(...retargetingTokens)
+      }
+      return true
+    }
+    // Selected but not editing: enter edit where the user clicked.
+    props.beginEdit(guardId, { left: e.clientX, top: e.clientY })
+    return true
+  }
+
   const onBorderMouseDown = (e: React.MouseEvent, id: string) => {
     if (e.button !== 0) return
     const element = elementById(id)
     if (!element || element.lock) return
+    if (retargetEditingEditor(e, id)) return
     if (absorbOccludedHit(e, hitRects.find(item => item.id === id))) return
     stopHitEvent(e)
     props.selectElement(e.nativeEvent, element, true)
@@ -177,6 +258,7 @@ const HitLayer = memo((props: IHitLayerProps) => {
     if (e.button !== 0) return
     const element = elementById(id)
     if (!element || element.lock) return
+    if (retargetEditingEditor(e, id)) return
     if (absorbOccludedHit(e, hitRects.find(item => item.id === id))) return
     stopHitEvent(e)
     const edit = clicksToEditText(element)
@@ -188,6 +270,7 @@ const HitLayer = memo((props: IHitLayerProps) => {
     if (e.button !== 0) return
     const element = elementById(id)
     if (!element || element.lock) return
+    if (retargetEditingEditor(e, id)) return
     if (absorbOccludedHit(e, hitRects.find(item => item.id === id))) return
     stopHitEvent(e)
     props.selectElement(e.nativeEvent, element, true)
@@ -196,6 +279,7 @@ const HitLayer = memo((props: IHitLayerProps) => {
   const onBodyDblclick = (e: React.MouseEvent, id: string) => {
     const element = elementById(id)
     if (!element || element.lock) return
+    if (retargetEditingEditor(e, id)) return
     if (absorbOccludedHit(e, hitRects.find(item => item.id === id))) return
     stopHitEvent(e)
     if (clicksToEditText(element)) {

@@ -15,7 +15,8 @@ import useTextFit from '@/views/components/element/hooks/useTextFit';
 import { useOutlineRadiusCss } from '@/views/components/element/hooks/useElementOutline';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 import { resolveElementDefaultFontColor, resolveElementSurfaces, resolveLiveTextPaint, resolvePlaceholderColor } from '@/utils/textContrast';
-import { computePlaceholderSlotHeight, resolveTextBoxLayout, shouldBlockPlaceholderHeightShrink, textBoxFlexColumn, textBoxJustify, textBoxLiveMode, textBoxPaintSize, type TextBoxLiveMode } from '@/utils/placeholderLayout';
+import { computePlaceholderSlotHeight, resolveTextBoxLayout, textBoxAutoHeight, textBoxFlexColumn, textBoxJustify, textBoxLiveMode, textBoxPaintSize, type TextBoxLiveMode } from '@/utils/placeholderLayout';
+import { measureAutoTextHeight } from '@/utils/liveElementSize';
 import { isPlaceholderPromptFontSize } from '@/configs/textPresets';
 import { isEmptyRichText, isListPlaceholder, placeholderBoxVars, placeholderPhase, placeholderSeed, repairFilledPlaceholderHtml } from '@/utils/placeholderPaint';
 import type { EmptyPlaceholderStylePatch } from '@/utils/prosemirror/commands/applyPlaceholderStyles';
@@ -70,6 +71,7 @@ const TextElement = memo((props: ITextElementProps) => {
   });
   const defaultInkColor = painted.ink;
   const elementRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const prosemirrorEditorRef = useRef<ElementRef<typeof ProsemirrorEditor> | null>(null);
   const [editorFocused, setEditorFocused] = useState(false);
   const [placeholderTextEditing, setPlaceholderTextEditing] = useState(false);
@@ -227,6 +229,25 @@ const TextElement = memo((props: ITextElementProps) => {
   const realHeightCache = useRef(-1);
   const realWidthCache = useRef(-1);
   const prevLiveModeRef = useRef<TextBoxLiveMode | undefined>(undefined);
+  // Resize drags live-paint a measured px height inline on auto-height boxes
+  // (applyLiveSize forceHeight). React skips rewriting a style whose rendered
+  // value did not change (`auto` -> `auto`), so that px would outlive the drag
+  // and freeze the box: the ResizeObserver then measures the stale box instead
+  // of the text. Restore the authored auto paint once the gesture is over.
+  useLayoutEffect(() => {
+    const main = useMainStore.getState();
+    if (main.isGesturing || main.isScaling) return;
+    const content = elementRef.current;
+    const root = rootRef.current;
+    if (paintSize.height === 'auto') {
+      if (root && root.style.height !== 'auto') root.style.height = 'auto';
+      if (content && content.style.height !== 'auto') content.style.height = 'auto';
+    }
+    if (paintSize.width === 'auto') {
+      if (root && root.style.width !== 'auto') root.style.width = 'auto';
+      if (content && content.style.width !== 'auto') content.style.width = 'auto';
+    }
+  });
   useLayoutEffect(() => {
     const prev = prevLiveModeRef.current;
     prevLiveModeRef.current = liveMode;
@@ -239,13 +260,17 @@ const TextElement = memo((props: ITextElementProps) => {
       applyAutoHeightChrome(info.id, info.height);
       return;
     }
-    const realHeight = Math.ceil(elementRef.current.offsetHeight);
-    if (shouldBlockPlaceholderHeightShrink(info, realHeight, editorEmptyRef.current)) return;
-    applyAutoHeightChrome(info.id, realHeight);
-    if (info.height === realHeight) return;
+    const layout = textBoxLayoutRef.current;
+    const ins = info.inset || [10, 10, 10, 10];
+    const measured = layout.slotFlooredAuto
+      ? (measureAutoTextHeight(info.id, ins[0] + ins[2]) ?? Math.ceil(elementRef.current.offsetHeight))
+      : Math.ceil(elementRef.current.offsetHeight);
+    const next = textBoxAutoHeight(info, layout, measured);
+    applyAutoHeightChrome(info.id, next ?? info.height);
+    if (next == null) return;
     useSlidesStore.getState().updateElement({
       id: info.id,
-      props: { height: realHeight }
+      props: { height: next }
     });
   }, [liveMode, resyncTextFit]);
   useEffect(() => {
@@ -253,23 +278,24 @@ const TextElement = memo((props: ITextElementProps) => {
     if (!isScaling) {
       const info = elementInfoRef.current;
       const layout = textBoxLayoutRef.current;
-      if (!layout.lockPaintHeight && !info.vertical) {
+      if (!info.vertical) {
         // The drag can end after the last ResizeObserver fire was swallowed
         // by the gesture guards — measure NOW so the box always matches its
         // text on drop (cache empty means the RO never captured the drop size).
         const real = realHeightCache.current !== -1
           ? realHeightCache.current
           : (elementRef.current ? Math.ceil(elementRef.current.offsetHeight) : -1);
-        if (real !== -1 && real !== info.height) {
-          applyAutoHeightChrome(info.id, real);
+        realHeightCache.current = -1;
+        const next = real === -1 ? null : textBoxAutoHeight(info, layout, real);
+        if (next != null) {
+          applyAutoHeightChrome(info.id, next);
           useSlidesStore.getState().updateElement({
             id: info.id,
-            props: { height: real }
+            props: { height: next }
           });
         }
-        realHeightCache.current = -1;
       }
-      if (!layout.lockPaintHeight && info.vertical) {
+      if (!layout.fixedHeight && info.vertical) {
         const real = realWidthCache.current !== -1
           ? realWidthCache.current
           : (elementRef.current ? Math.ceil(elementRef.current.offsetWidth) : -1);
@@ -290,15 +316,21 @@ const TextElement = memo((props: ITextElementProps) => {
       if (!elementRef.current) return;
       const info = elementInfoRef.current;
       const layout = textBoxLayoutRef.current;
-      if (!layout.lockPaintHeight && !info.vertical && info.height !== elementRef.current.offsetHeight) {
-        if (shouldBlockPlaceholderHeightShrink(info, elementRef.current.offsetHeight, editorEmptyRef.current)) return;
-        applyAutoHeightChrome(info.id, elementRef.current.offsetHeight);
-        useSlidesStore.getState().updateElement({
-          id: info.id,
-          props: { height: elementRef.current.offsetHeight }
-        });
+      if (!info.vertical) {
+        const ins = info.inset || [10, 10, 10, 10];
+        const measured = layout.slotFlooredAuto
+          ? (measureAutoTextHeight(info.id, ins[0] + ins[2]) ?? Math.ceil(elementRef.current.offsetHeight))
+          : Math.ceil(elementRef.current.offsetHeight);
+        const next = textBoxAutoHeight(info, layout, measured);
+        if (next != null) {
+          applyAutoHeightChrome(info.id, next);
+          useSlidesStore.getState().updateElement({
+            id: info.id,
+            props: { height: next }
+          });
+        }
       }
-      if (!layout.lockPaintHeight && info.vertical && info.width !== elementRef.current.offsetWidth) {
+      if (!layout.fixedHeight && info.vertical && info.width !== elementRef.current.offsetWidth) {
         if (info.placeholder && editorEmptyRef.current) return;
         useSlidesStore.getState().updateElement({
           id: info.id,
@@ -313,23 +345,31 @@ const TextElement = memo((props: ITextElementProps) => {
     const info = elementInfoRef.current;
     const realHeight = Math.ceil(node.offsetHeight);
     const realWidth = Math.ceil(node.offsetWidth);
-    if (shouldBlockPlaceholderHeightShrink(info, realHeight, editorEmptyRef.current)) return;
     const layout = textBoxLayoutRef.current;
     const main = useMainStore.getState();
     // While a resize drag is active the drag loop owns the live height (it
     // measures and paints per frame) — reacting here would fight it.
     if (main.isGesturing) return;
     const scaling = main.isScaling;
-    if (!layout.lockPaintHeight && !info.vertical && info.height !== realHeight) {
-      applyAutoHeightChrome(info.id, realHeight);
-      if (!scaling) {
-        useSlidesStore.getState().updateElement({
-          id: info.id,
-          props: { height: realHeight }
-        });
-      } else realHeightCache.current = realHeight;
+    if (!info.vertical) {
+      // Min-height-floored boxes clamp offsetHeight at the floor — measure
+      // the TEXT so shrinks below the floor still register.
+      const ins = info.inset || [10, 10, 10, 10];
+      const measured = layout.slotFlooredAuto
+        ? (measureAutoTextHeight(info.id, ins[0] + ins[2]) ?? realHeight)
+        : realHeight;
+      const next = textBoxAutoHeight(info, layout, measured);
+      if (next != null) {
+        applyAutoHeightChrome(info.id, next);
+        if (!scaling) {
+          useSlidesStore.getState().updateElement({
+            id: info.id,
+            props: { height: next }
+          });
+        } else realHeightCache.current = next;
+      }
     }
-    if (!layout.lockPaintHeight && info.vertical && info.width !== realWidth) {
+    if (!layout.fixedHeight && info.vertical && info.width !== realWidth) {
       if (!scaling) {
         useSlidesStore.getState().updateElement({
           id: info.id,
@@ -340,6 +380,13 @@ const TextElement = memo((props: ITextElementProps) => {
   }, []);
   const updateTextElementHeightRef = useRef(updateTextElementHeight);
   updateTextElementHeightRef.current = updateTextElementHeight;
+  // Store-driven content changes (undo/redo, AI replace) carry no live
+  // doc-change — re-run the height rule after the editor has synced the doc.
+  const contentKey = elementInfo.content;
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => updateTextElementHeightRef.current([]));
+    return () => cancelAnimationFrame(raf);
+  }, [contentKey]);
   useEffect(() => {
     const el = elementRef.current;
     const resizeObserver = new ResizeObserver(entries => updateTextElementHeightRef.current(entries));
@@ -386,15 +433,20 @@ const TextElement = memo((props: ITextElementProps) => {
     liveContentRef.current = html;
     setLiveHtml(html);
     setLiveContent(html);
+    // Commit the height in the SAME frame the text grew: the hit layer's
+    // occluder and the operate chrome follow the store, so a rAF-late commit
+    // leaves a strip where clicks fall through to the element underneath.
+    updateTextElementHeightRef.current([]);
     requestAnimationFrame(() => updateTextElementHeightRef.current([]));
   }, [setLiveContent]);
-  return <div className={cx('editable-element-text', className, {
+  return <div ref={rootRef} className={cx('editable-element-text', className, {
     'lock': elementInfo.lock
   })} style={{
     top: elementInfo.top + 'px',
     left: elementInfo.left + 'px',
     width: elementInfo.width + 'px',
     height: paintSize.height,
+    minHeight: paintSize.minHeight,
     boxSizing: 'border-box',
     overflow: textBoxLayout.lockPaintHeight ? 'hidden' : undefined,
     ...style
@@ -411,6 +463,7 @@ const TextElement = memo((props: ITextElementProps) => {
       })} ref={elementRef} data-live-box data-text-box-mode={textBoxLiveMode(elementInfo, textBoxLayout)} {...(textBoxLayout.fixedHeight ? { 'data-fixed-height': '' } : {})} {...(paintSize.height === 'auto' ? { 'data-live-auto-height': '' } : {})} style={{
         width: paintSize.width,
         height: paintSize.height,
+        minHeight: paintSize.minHeight,
         backgroundColor: elementInfo.fill,
         opacity: elementInfo.opacity,
         textShadow: shadowStyle,

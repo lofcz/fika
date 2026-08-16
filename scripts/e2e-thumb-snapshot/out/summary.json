@@ -1,0 +1,217 @@
+{
+  "results": [
+    {
+      "id": 1,
+      "name": "Text slide snapshot matches the live thumb pixels",
+      "pass": false,
+      "measured": {
+        "liveState": {
+          "live": false,
+          "bitmap": true
+        },
+        "bitmapState": {
+          "live": false,
+          "bitmap": true
+        },
+        "diff": {
+          "differingPct": 0,
+          "avgDelta": 0,
+          "maxDelta": 0,
+          "w": 240,
+          "h": 136
+        }
+      }
+    },
+    {
+      "id": 2,
+      "name": "Chart slide snapshot matches the live thumb pixels",
+      "pass": true,
+      "measured": {
+        "liveState": {
+          "live": true,
+          "bitmap": false
+        },
+        "bitmapState": {
+          "live": false,
+          "bitmap": true
+        },
+        "diff": {
+          "differingPct": 2.249,
+          "avgDelta": 2.05,
+          "maxDelta": 227,
+          "w": 240,
+          "h": 136
+        }
+      }
+    },
+    {
+      "id": 3,
+      "name": "SVG-heavy slide snapshot matches the live thumb pixels",
+      "pass": false,
+      "measured": {
+        "liveState": {
+          "live": true,
+          "bitmap": false
+        },
+        "bitmapState": {
+          "live": true,
+          "bitmap": false
+        },
+        "diff": null
+      }
+    },
+    {
+      "id": 4,
+      "name": "Image slide snapshot matches the live thumb pixels",
+      "pass": false,
+      "measured": {
+        "liveState": {
+          "live": true,
+          "bitmap": false
+        },
+        "bitmapState": {
+          "live": true,
+          "bitmap": false
+        },
+        "diff": null
+      }
+    },
+    {
+      "id": 5,
+      "name": "Table slide snapshot matches the live thumb pixels",
+      "pass": false,
+      "measured": {
+        "liveState": {
+          "live": true,
+          "bitmap": false
+        },
+        "bitmapState": {
+          "live": true,
+          "bitmap": false
+        },
+        "diff": null
+      }
+    },
+    {
+      "id": 6,
+      "name": "Gradient background snapshot matches the live thumb pixels",
+      "pass": false,
+      "measured": {
+        "liveState": {
+          "live": true,
+          "bitmap": false
+        },
+        "bitmapState": {
+          "live": true,
+          "bitmap": false
+        },
+        "diff": null
+      }
+    },
+    {
+      "id": 7,
+      "name": "Editing a slide invalidates its bitmap and remounts live ink",
+      "pass": true,
+      "measured": {
+        "bitmap": false,
+        "live": true,
+        "text": true
+      }
+    },
+    {
+      "id": 8,
+      "name": "Edited content never shows through the stale bitmap",
+      "pass": true,
+      "measured": {
+        "bitmap": false,
+        "live": true,
+        "text": true
+      }
+    },
+    {
+      "id": 9,
+      "name": "Theme change invalidates cached bitmaps",
+      "pass": true,
+      "measured": {
+        "bitmaps": 0,
+        "invalidated": 2
+      }
+    },
+    {
+      "id": 10,
+      "name": "Pane resize invalidates cached bitmaps",
+      "pass": true,
+      "measured": {
+        "beforeResize": 0,
+        "afterResize": {
+          "cached": 0,
+          "invalidated": 2
+        }
+      }
+    },
+    {
+      "id": 11,
+      "name": "Warm re-visit mounts no ScreenSlide",
+      "pass": true,
+      "measured": {
+        "mounts": 5,
+        "cached": 1
+      }
+    },
+    {
+      "id": 12,
+      "name": "Re-edited slide re-captures a fresh bitmap",
+      "pass": true,
+      "measured": {
+        "captures": 30,
+        "failed": 0,
+        "avgMs": 95
+      }
+    }
+  ],
+  "stats": {
+    "hits": 27,
+    "misses": 306,
+    "captures": 30,
+    "failed": 0,
+    "hostileSkips": 0,
+    "evictions": 0,
+    "invalidated": 2,
+    "captureMs": [
+      242,
+      130,
+      88,
+      60,
+      12,
+      90,
+      159,
+      58,
+      23,
+      104,
+      109,
+      74,
+      31,
+      81,
+      124,
+      52,
+      37,
+      116,
+      298,
+      101,
+      105,
+      159,
+      46,
+      83,
+      32,
+      40,
+      217,
+      60,
+      54,
+      66
+    ],
+    "captureMsAvg": 95,
+    "captureMsMax": 298,
+    "cached": 1,
+    "hostile": 0
+  }
+}
