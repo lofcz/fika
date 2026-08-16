@@ -43,6 +43,11 @@ export const unitScripts = [
 export const e2eScripts = [
   'scripts/e2e-guidelines.mjs',
   'scripts/e2e-autoheight-styles.mjs',
+  'scripts/e2e-autoheight-stuck.mjs',
+  'scripts/e2e-placeholder-slot.mjs',
+  'scripts/e2e-hit-retarget-guard.mjs',
+  'scripts/e2e-hit-contained-click.mjs',
+  'scripts/e2e-hit-placeholder-yield.mjs',
   'scripts/e2e-height-toggle.mjs',
   'scripts/e2e-houby-fixed-fit.mjs',
   'scripts/e2e-jan-hus-wrap.mjs',

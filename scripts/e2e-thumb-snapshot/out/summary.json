@@ -3,11 +3,11 @@
     {
       "id": 1,
       "name": "Text slide snapshot matches the live thumb pixels",
-      "pass": false,
+      "pass": true,
       "measured": {
         "liveState": {
-          "live": false,
-          "bitmap": true
+          "live": true,
+          "bitmap": false
         },
         "bitmapState": {
           "live": false,
@@ -16,7 +16,7 @@
         "diff": {
           "differingPct": 0,
           "avgDelta": 0,
-          "maxDelta": 0,
+          "maxDelta": 1,
           "w": 240,
           "h": 136
         }
@@ -36,9 +36,9 @@
           "bitmap": true
         },
         "diff": {
-          "differingPct": 2.249,
-          "avgDelta": 2.05,
-          "maxDelta": 227,
+          "differingPct": 0,
+          "avgDelta": 0,
+          "maxDelta": 1,
           "w": 240,
           "h": 136
         }
@@ -47,65 +47,89 @@
     {
       "id": 3,
       "name": "SVG-heavy slide snapshot matches the live thumb pixels",
-      "pass": false,
+      "pass": true,
       "measured": {
         "liveState": {
           "live": true,
           "bitmap": false
         },
         "bitmapState": {
-          "live": true,
-          "bitmap": false
+          "live": false,
+          "bitmap": true
         },
-        "diff": null
+        "diff": {
+          "differingPct": 0.031,
+          "avgDelta": 0.02,
+          "maxDelta": 65,
+          "w": 240,
+          "h": 136
+        }
       }
     },
     {
       "id": 4,
       "name": "Image slide snapshot matches the live thumb pixels",
-      "pass": false,
+      "pass": true,
       "measured": {
         "liveState": {
           "live": true,
           "bitmap": false
         },
         "bitmapState": {
-          "live": true,
-          "bitmap": false
+          "live": false,
+          "bitmap": true
         },
-        "diff": null
+        "diff": {
+          "differingPct": 1.072,
+          "avgDelta": 0.22,
+          "maxDelta": 21,
+          "w": 240,
+          "h": 136
+        }
       }
     },
     {
       "id": 5,
       "name": "Table slide snapshot matches the live thumb pixels",
-      "pass": false,
+      "pass": true,
       "measured": {
         "liveState": {
           "live": true,
           "bitmap": false
         },
         "bitmapState": {
-          "live": true,
-          "bitmap": false
+          "live": false,
+          "bitmap": true
         },
-        "diff": null
+        "diff": {
+          "differingPct": 0,
+          "avgDelta": 0,
+          "maxDelta": 1,
+          "w": 240,
+          "h": 136
+        }
       }
     },
     {
       "id": 6,
       "name": "Gradient background snapshot matches the live thumb pixels",
-      "pass": false,
+      "pass": true,
       "measured": {
         "liveState": {
           "live": true,
           "bitmap": false
         },
         "bitmapState": {
-          "live": true,
-          "bitmap": false
+          "live": false,
+          "bitmap": true
         },
-        "diff": null
+        "diff": {
+          "differingPct": 0,
+          "avgDelta": 0.27,
+          "maxDelta": 2,
+          "w": 240,
+          "h": 136
+        }
       }
     },
     {
@@ -134,7 +158,7 @@
       "pass": true,
       "measured": {
         "bitmaps": 0,
-        "invalidated": 2
+        "invalidated": 1
       }
     },
     {
@@ -145,7 +169,7 @@
         "beforeResize": 0,
         "afterResize": {
           "cached": 0,
-          "invalidated": 2
+          "invalidated": 1
         }
       }
     },
@@ -163,54 +187,37 @@
       "name": "Re-edited slide re-captures a fresh bitmap",
       "pass": true,
       "measured": {
-        "captures": 30,
+        "captures": 13,
         "failed": 0,
-        "avgMs": 95
+        "avgMs": 112
       }
     }
   ],
   "stats": {
-    "hits": 27,
-    "misses": 306,
-    "captures": 30,
+    "hits": 6,
+    "misses": 201,
+    "captures": 13,
     "failed": 0,
     "hostileSkips": 0,
     "evictions": 0,
-    "invalidated": 2,
+    "invalidated": 1,
     "captureMs": [
-      242,
-      130,
-      88,
-      60,
-      12,
-      90,
-      159,
-      58,
-      23,
-      104,
-      109,
-      74,
-      31,
-      81,
-      124,
-      52,
+      238,
+      89,
+      196,
+      93,
+      146,
       37,
-      116,
-      298,
-      101,
-      105,
-      159,
-      46,
-      83,
-      32,
-      40,
-      217,
-      60,
-      54,
-      66
+      49,
+      42,
+      245,
+      49,
+      106,
+      62,
+      104
     ],
-    "captureMsAvg": 95,
-    "captureMsMax": 298,
+    "captureMsAvg": 112,
+    "captureMsMax": 245,
     "cached": 1,
     "hostile": 0
   }

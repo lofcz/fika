@@ -220,16 +220,35 @@ try {
 
   await page.evaluate(deck => {
     window.__FIKA_SLIDES__.getState().setSlides(deck)
-  }, [...FIXTURES, ...FILLERS])
+  }, [textSlide, ...FILLERS])
   await page.waitForSelector('[data-thumbnail-slide]', { timeout: 20000 })
 
-  // --- Fidelity: for each fixture, clear the cache, force the row to
-  // remount so it mounts a LIVE tree, screenshot it, wait for the capture,
-  // then remount the row again so it comes back on its bitmap (a mounted
-  // tree is never swapped), and pixel-diff the two.
+  // --- Fidelity: for each fixture, mount it as the FIRST rail row in its
+  // own deck, clear the cache (the visible row remounts its live tree),
+  // screenshot the live pixels, step the rail so the row leaves (pinned
+  // teardown capture lands), come back on the bitmap and pixel-diff the two.
+  // A dedicated deck per fixture is required: the virtualizer pins only ONE
+  // leaving row per window shift (MAX_PINNED_TEARDOWNS), and after a cache
+  // clear every visible row is capture-eligible — with a shared deck an
+  // earlier row always steals the pin from the fixture under test.
   const farAndBack = async (slideId, index) => {
-    await page.evaluate(() => { document.querySelector('.thumbnail-list').scrollTop = 100000 })
-    await sleep(400)
+    await page.evaluate(id => {
+      const list = document.querySelector('.thumbnail-list')
+      if (!list) return
+      const row = document.querySelector(`[data-thumbnail-slide="${id}"]`)
+      if (!row) { list.scrollTop = 0; return }
+      const rowTop = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop
+      list.scrollTop = Math.max(0, rowTop - 60) + list.clientHeight
+    }, slideId)
+    // The leaving live row is pinned for a teardown capture; returning before
+    // it finishes aborts the capture (node already disconnected) and the row
+    // remounts live. Wait until the capture LANDS in the cache.
+    for (let i = 0; i < 60; i++) {
+      const cached = await page.evaluate(id => window.__FIKA_THUMB_SNAP__.debug().keys.includes(id), slideId)
+      if (cached) break
+      await sleep(400)
+    }
+    await sleep(200)
     await scrollToSlide(page, slideId, index)
     for (let i = 0; i < 30; i++) {
       const present = await page.evaluate(id => !!document.querySelector(`[data-thumbnail-slide="${id}"]`), slideId)
@@ -239,15 +258,21 @@ try {
     }
   }
   for (const fixture of FIXTURES) {
-    const index = FIXTURES.indexOf(fixture)
-    // The sweeper can recapture a cleared fixture before the remounted row
-    // mounts its tree — retry until the row genuinely comes up live.
+    // Dedicated deck: the fixture is rail row 0 — it is always the first
+    // leaving row and deterministically wins the teardown pin.
+    await page.evaluate(fx => {
+      const state = window.__FIKA_SLIDES__.getState()
+      state.setSlides([fx.fixture, ...fx.fillers])
+      state.updateSlideIndex(0)
+    }, { fixture, fillers: FILLERS })
+    await page.waitForSelector(`[data-thumbnail-slide="${fixture.id}"]`, { timeout: 20000 })
+    await scrollToSlide(page, fixture.id, 0)
+    const index = 0
     let liveShot = null
     let liveState = { live: false, bitmap: false }
     for (let attempt = 0; attempt < 3 && !liveState.live; attempt++) {
       await scrollToSlide(page, fixture.id, index)
       await page.evaluate(() => window.__FIKA_THUMB_SNAP__.clear())
-      await farAndBack(fixture.id, index)
       for (let i = 0; i < 30; i++) {
         liveState = await page.evaluate(id => {
           const host = document.querySelector(`[data-thumbnail-slide="${id}"]`)
@@ -256,26 +281,25 @@ try {
         }, fixture.id)
         if (liveState.live) break
         await sleep(250)
+        await scrollToSlide(page, fixture.id, index)
       }
       await sleep(1500) // tree settles (charts animate ~420ms)
     }
     liveShot = await shootThumb(page, fixture.id)
 
-    // Wait for the snapshot to land (row or sweeper capture).
-    let cachedForFixture = false
-    for (let i = 0; i < 60; i++) {
-      await sleep(400)
-      cachedForFixture = await page.evaluate(id => window.__FIKA_THUMB_SNAP__.debug().keys.includes(id), fixture.id)
-      if (cachedForFixture) break
-    }
-    // Remount the row on its bitmap: far away and back.
+    // Remount the row on its bitmap: the leaving live row teardown-captures
+    // (urgent) into the cache; the version bump swaps the remounted row onto
+    // the bitmap. Wait for that state before shooting.
     await farAndBack(fixture.id, index)
-    await sleep(600)
-    const bitmapState = await page.evaluate(id => {
-      const host = document.querySelector(`[data-thumbnail-slide="${id}"]`)
-      if (!host) return { live: false, bitmap: false, missing: true }
-      return { live: !!host.querySelector('.screen-slide'), bitmap: !!host.querySelector('.thumb-snapshot') }
-    }, fixture.id)
+    let bitmapState = { live: false, bitmap: false }
+    for (let i = 0; i < 60 && !bitmapState.bitmap; i++) {
+      bitmapState = await page.evaluate(id => {
+        const host = document.querySelector(`[data-thumbnail-slide="${id}"]`)
+        if (!host) return { live: false, bitmap: false, missing: true }
+        return { live: !!host.querySelector('.screen-slide'), bitmap: !!host.querySelector('.thumb-snapshot') }
+      }, fixture.id)
+      if (!bitmapState.bitmap) await sleep(400)
+    }
     const bitmapShot = bitmapState.bitmap ? await shootThumb(page, fixture.id) : null
     const diff = bitmapShot ? await diffPngs(page, liveShot, bitmapShot) : null
     // Tolerance profile: snapdom's raster AA differs from the live
@@ -293,6 +317,13 @@ try {
   }
 
   // --- Invalidation: edit a cached slide; the bitmap must drop and live ink return.
+  // --- Invalidation + warm-visit sections use the full shared deck (they
+  // operate on fid-text at rail index 0 and sweep across all fixtures).
+  await page.evaluate(({ all, fillers }) => {
+    const state = window.__FIKA_SLIDES__.getState()
+    state.setSlides([...all, ...fillers])
+    state.updateSlideIndex(0)
+  }, { all: FIXTURES, fillers: FILLERS })
   await scrollToSlide(page, 'fid-text', 0)
   for (let i = 0; i < 40; i++) {
     await sleep(300)

@@ -236,7 +236,17 @@ function usedFontFamilies(node: HTMLElement): Set<string> {
 // still pinned. The queue is single-flight so snapdom never overlaps.
 // ---------------------------------------------------------------------------
 
-const nextFrame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+// Headless and fully idle pages can stop producing frames — a bare rAF wait
+// would hang the single-flight capture queue until something repaints (CI
+// runners, e2e). Fall through on a timeout; the two frames only exist to let
+// layout settle before snapdom reads the subtree.
+const nextFrame = () => new Promise<void>(resolve => {
+  const timer = setTimeout(resolve, 500)
+  requestAnimationFrame(() => {
+    clearTimeout(timer)
+    resolve()
+  })
+})
 
 const withTimeout = (promise: Promise<unknown>, ms: number) => (
   Promise.race([promise, new Promise(resolve => setTimeout(resolve, ms))])
