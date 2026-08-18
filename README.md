@@ -43,3 +43,11 @@
   ·
   <a href="docs/I18N.md">i18n</a>
 </p>
+
+## Quick Start
+
+```bash
+dev start
+```
+
+Boots the Rsbuild editor at http://127.0.0.1:5173 and the i18n watcher. The `dev.bat` / `dev.sh` wrappers install Bun if needed, then start the [1dx](https://github.com/lofcz/1dx) monitor.

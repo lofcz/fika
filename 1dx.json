@@ -1,0 +1,139 @@
+{
+  "variables": {
+    "frontendPort": 5173
+  },
+  "project": {
+    "name": "fika",
+    "packageManager": "bun",
+    "frontendUrl": "http://127.0.0.1:${frontendPort}",
+    "dependencyInstallCommand": ["bun", "install"]
+  },
+  "startup": {
+    "autoInstallDependencies": true,
+    "autoOpenFrontend": true,
+    "frontendServiceId": "frontend"
+  },
+  "services": [
+    {
+      "id": "frontend",
+      "title": "Frontend (Rsbuild)",
+      "color": "green",
+      "ambient": false,
+      "health": {
+        "type": "port",
+        "port": "${frontendPort}"
+      },
+      "start": {
+        "shellCommand": "bun run dev"
+      },
+      "startPolicy": "if-dead",
+      "onPortInUse": "kill",
+      "cleanup": {
+        "ports": ["${frontendPort}"],
+        "commandLineContains": ["rsbuild", "bun run dev"]
+      }
+    },
+    {
+      "id": "i18n",
+      "title": "i18n (typesafe-i18n)",
+      "color": "blue",
+      "ambient": false,
+      "health": {
+        "type": "process",
+        "name": "typesafe-i18n"
+      },
+      "start": {
+        "shellCommand": "bun run i18n"
+      },
+      "startPolicy": "if-dead",
+      "cleanup": {
+        "processNames": ["typesafe-i18n"],
+        "commandLineContains": ["typesafe-i18n", "bun run i18n"]
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "start-dead",
+      "label": "Start dead services",
+      "shortcut": "1",
+      "mode": "internal",
+      "builtIn": "start-dead"
+    },
+    {
+      "id": "stop",
+      "label": "Stop all services",
+      "shortcut": "2",
+      "mode": "internal",
+      "builtIn": "stop-services"
+    },
+    {
+      "id": "refresh",
+      "label": "Refresh status",
+      "shortcut": "3",
+      "mode": "internal",
+      "builtIn": "refresh"
+    },
+    {
+      "id": "install-deps",
+      "label": "Install deps",
+      "shortcut": "4",
+      "mode": "inline",
+      "command": "bun",
+      "args": ["install"]
+    },
+    {
+      "id": "update-deps",
+      "label": "Update deps",
+      "shortcut": "5",
+      "mode": "inline",
+      "command": "bun",
+      "args": ["update"]
+    },
+    {
+      "id": "update-deps-interactive",
+      "label": "Update deps (interactive)",
+      "shortcut": "u",
+      "mode": "external",
+      "command": "bun",
+      "args": ["update", "-i"]
+    },
+    {
+      "id": "frontend",
+      "label": "Open frontend in browser",
+      "shortcut": "f",
+      "mode": "internal",
+      "builtIn": "open-frontend"
+    },
+    {
+      "id": "lint",
+      "label": "Run lint",
+      "shortcut": "l",
+      "mode": "external",
+      "command": "bun",
+      "args": ["run", "lint"]
+    },
+    {
+      "id": "react-doctor",
+      "label": "Run react-doctor",
+      "shortcut": "r",
+      "mode": "external",
+      "command": "bun",
+      "args": ["run", "doctor"]
+    },
+    {
+      "id": "terminal",
+      "label": "Open new terminal",
+      "shortcut": "t",
+      "mode": "internal",
+      "builtIn": "new-terminal"
+    },
+    {
+      "id": "exit",
+      "label": "Exit monitor",
+      "shortcut": "q",
+      "mode": "internal",
+      "builtIn": "exit"
+    }
+  ]
+}
