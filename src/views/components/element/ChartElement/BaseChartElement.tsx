@@ -49,8 +49,7 @@ const BaseChartElement = memo((props: IBaseChartElementProps) => {
         className={cx('element-content')}
         style={{
           backgroundColor: elementInfo.fill,
-          borderRadius: outlineBorderRadius,
-          overflow: outlineBorderRadius ? 'hidden' : undefined
+          borderRadius: outlineBorderRadius
         }}
       >
         <ElementOutline
@@ -58,19 +57,21 @@ const BaseChartElement = memo((props: IBaseChartElementProps) => {
           height={elementInfo.height}
           outline={elementInfo.outline}
         />
-        <Chart
-          width={elementInfo.width}
-          height={elementInfo.height}
-          type={elementInfo.chartType}
-          data={elementInfo.data}
-          themeColors={resolveChartElementSeriesColors(elementInfo, {
-            background: props.background ?? currentSlide?.background,
-            fallbackSurface: props.themeBackgroundColor ?? theme?.backgroundColor,
-          })}
-          textColor={labelColor}
-          lineColor={gridColor}
-          options={elementInfo.options}
-        />
+        <div style={{ overflow: outlineBorderRadius ? 'hidden' : undefined, borderRadius: outlineBorderRadius, width: '100%', height: '100%' }}>
+          <Chart
+            width={elementInfo.width}
+            height={elementInfo.height}
+            type={elementInfo.chartType}
+            data={elementInfo.data}
+            themeColors={resolveChartElementSeriesColors(elementInfo, {
+              background: props.background ?? currentSlide?.background,
+              fallbackSurface: props.themeBackgroundColor ?? theme?.backgroundColor,
+            })}
+            textColor={labelColor}
+            lineColor={gridColor}
+            options={elementInfo.options}
+          />
+        </div>
       </div>
     </div>
   </div>;

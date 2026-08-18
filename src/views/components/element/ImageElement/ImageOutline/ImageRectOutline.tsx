@@ -4,7 +4,7 @@ const cx = bindStyles(styles)
 import { memo } from 'react'
 
 import type { PPTElementOutline } from '@/types/slides'
-import { clampOutlineRadius } from '@/utils/elementOutline'
+import { resolveOutlineRadiusPx } from '@/utils/elementOutline'
 import useElementOutline from '@/views/components/element/hooks/useElementOutline'
 
 export type IImageRectOutlineProps = {
@@ -19,7 +19,7 @@ const ImageRectOutline = memo((props: IImageRectOutlineProps) => {
   const { outlineWidth, outlineColor, strokeDashArray } = useElementOutline(outline)
   const effectiveRadius = (() => {
     if (outline?.radius) {
-      return clampOutlineRadius(outline.radius, width, height)
+      return resolveOutlineRadiusPx(outline.radius, width, height)
     }
     const parsed = parseFloat(String(radius).replace('px', ''))
     return Number.isFinite(parsed) ? parsed : 0

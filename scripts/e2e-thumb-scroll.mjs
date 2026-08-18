@@ -6,9 +6,9 @@
  * trips while measuring:
  *   - long tasks (>=50ms) during the scroll phases
  *   - frame pacing (rAF deltas) during the scroll phases
- *   - ScreenSlide mounts inside thumbs (the "recomputed over and over" cost)
+ *   - direct canvas mounts inside virtualized thumb rows
  *   - blank-thumb samples while scrolling (visible rows with no ink)
- *   - snapshot stats when the app exposes window.__FIKA_THUMB_SNAP__
+ *   - frame-budgeted canvas paint stats
  *
  *   node scripts/e2e-thumb-scroll.mjs --label=after --passes=3
  *
@@ -31,8 +31,7 @@ const passesArg = args.find(a => a.startsWith('--passes='))
 const warmArg = args.find(a => a.startsWith('--warm='))
 const LABEL = labelArg ? labelArg.split('=').slice(1).join('=') : 'run'
 const PASSES = passesArg ? Number(passesArg.split('=')[1]) || 3 : 3
-// --warm=1 waits for the background snapshot sweep to cover the deck first
-// (measures the steady state); --warm=0 measures cold, like the original rail.
+// --warm=1 lets async image/chart/code resources settle before measuring.
 const WARM = warmArg ? Number(warmArg.split('=')[1]) : 0
 
 const N_SLIDES = 60
@@ -169,8 +168,7 @@ const COLLECTOR = () => {
     scrolling: false,
     longTasks: [],
     frames: [],
-    liveMounts: 0,
-    bitmapMounts: 0,
+    canvasMounts: 0,
     blankSamples: 0,
     placeholderSamples: 0,
     inkedSamples: 0,
@@ -193,11 +191,8 @@ const COLLECTOR = () => {
     for (const record of records) {
       for (const node of record.addedNodes) {
         if (!(node instanceof Element)) continue
-        if (node.classList?.contains('screen-slide') || node.querySelector?.('.screen-slide')) {
-          bench.liveMounts++
-        }
-        if (node.classList?.contains('thumb-snapshot') || node.querySelector?.('.thumb-snapshot')) {
-          bench.bitmapMounts++
+        if (node.matches?.('[data-canvas-slide-thumb], canvas') || node.querySelector?.('[data-canvas-slide-thumb]')) {
+          bench.canvasMounts++
         }
       }
     }
@@ -208,7 +203,7 @@ const COLLECTOR = () => {
       for (const host of document.querySelectorAll('[data-thumbnail-slide]')) {
         const rect = host.getBoundingClientRect()
         if (rect.bottom < 0 || rect.top > window.innerHeight) continue
-        const inked = host.querySelector('.screen-slide, .thumb-snapshot')
+        const inked = host.querySelector('canvas[data-canvas-painted]')
         if (inked) bench.inkedSamples++
         else if (host.querySelector('.thumb-bg-placeholder')) bench.placeholderSamples++
         else bench.blankSamples++
@@ -220,7 +215,7 @@ const COLLECTOR = () => {
   return true
 }
 
-const RUN_PASS = async ({ pass }) => {
+const RUN_PASS = async () => {
   // The whole pass runs inside ONE evaluate: element handles crossing the
   // boundary are unreliable in this app, and in-page rAF pacing resembles a
   // real wheel-driven scroll much more closely than cross-process stepping.
@@ -238,8 +233,7 @@ const RUN_PASS = async ({ pass }) => {
 
     bench.longTasks = []
     bench.frames = []
-    bench.liveMounts = 0
-    bench.bitmapMounts = 0
+    bench.canvasMounts = 0
     bench.blankSamples = 0
     bench.inkedSamples = 0
 
@@ -267,7 +261,7 @@ const RUN_PASS = async ({ pass }) => {
     for (let i = 1; i < frames.length; i++) deltas.push(frames[i] - frames[i - 1])
     deltas.sort((a, b) => a - b)
     const pct = q => deltas[Math.min(deltas.length - 1, Math.floor(deltas.length * q))] || 0
-    const snap = window.__FIKA_THUMB_SNAP__
+    const paint = window.__FIKA_CANVAS_PAINT__
     return {
       scroller: { max: maxScroll(), thumbs: document.querySelectorAll('[data-thumbnail-slide]').length },
       longTasks: bench.longTasks.map(t => ({ start: t.start, duration: t.duration })),
@@ -278,12 +272,11 @@ const RUN_PASS = async ({ pass }) => {
       frameMax: deltas[deltas.length - 1] || 0,
       framesOver20ms: deltas.filter(d => d > 20).length,
       framesOver50ms: deltas.filter(d => d > 50).length,
-      liveMounts: bench.liveMounts,
-      bitmapMounts: bench.bitmapMounts,
+      canvasMounts: bench.canvasMounts,
       blankSamples: bench.blankSamples,
       placeholderSamples: bench.placeholderSamples,
       inkedSamples: bench.inkedSamples,
-      snapshotStats: snap ? snap.read() : null,
+      paintStats: paint ? paint.read() : null,
     }
   }, { roundTrips: ROUND_TRIPS, settleMs: SETTLE_MS, stepPx: SCROLL_PX_PER_STEP })
 }
@@ -306,8 +299,7 @@ const summarize = passes => {
     frameMax: pick(p => p.frameMax),
     framesOver20ms: pick(p => p.framesOver20ms),
     framesOver50ms: pick(p => p.framesOver50ms),
-    liveMounts: pick(p => p.liveMounts),
-    bitmapMounts: pick(p => p.bitmapMounts),
+    canvasMounts: pick(p => p.canvasMounts),
     blankSamples: pick(p => p.blankSamples),
     placeholderSamples: pick(p => p.placeholderSamples),
     inkedSamples: pick(p => p.inkedSamples),
@@ -342,25 +334,19 @@ try {
   await sleep(2500)
 
   if (WARM) {
-    // Let the background sweep snapshot the whole deck before measuring.
-    const started = Date.now()
-    for (;;) {
-      const cached = await page.evaluate(() => window.__FIKA_THUMB_SNAP__ ? window.__FIKA_THUMB_SNAP__.read().cached : 0)
-      if (cached >= N_SLIDES - 2 || Date.now() - started > 180000) break
-      await sleep(2500)
-    }
+    // Let image/chart/code resource caches settle before measuring.
     await sleep(3000)
   }
 
   const passes = []
   for (let pass = 1; pass <= PASSES; pass++) {
-    passes.push(await RUN_PASS({ pass }))
+    passes.push(await RUN_PASS())
     const p = passes[pass - 1]
-    console.log(`pass ${pass}: scrollerMax=${p.scroller.max} thumbs=${p.scroller.thumbs} longTasks=${p.longTasks.length} liveMounts=${p.liveMounts} bitmapMounts=${p.bitmapMounts} blank=${p.blankSamples}/${p.blankSamples + p.inkedSamples}`)
+    console.log(`pass ${pass}: scrollerMax=${p.scroller.max} thumbs=${p.scroller.thumbs} longTasks=${p.longTasks.length} canvasMounts=${p.canvasMounts} blank=${p.blankSamples}/${p.blankSamples + p.inkedSamples}`)
   }
 
   const summary = summarize(passes)
-  const snapshotStats = passes[passes.length - 1].snapshotStats
+  const paintStats = passes[passes.length - 1].paintStats
   const report = {
     label: LABEL,
     nSlides: N_SLIDES,
@@ -369,7 +355,7 @@ try {
     warm: WARM,
     date: new Date().toISOString(),
     summary,
-    snapshotStats,
+    paintStats,
     passes: passes.map(p => ({ ...p, longTasks: p.longTasks.map(t => Math.round(t.duration)) })),
   }
   mkdirSync(outDir, { recursive: true })
@@ -379,10 +365,9 @@ try {
   console.log(`\n=== ${LABEL} (median of ${PASSES} passes) ===`)
   console.log(`long tasks (>=50ms): count=${summary.longTaskCount} total=${summary.longTaskTotalMs}ms max=${summary.longTaskMaxMs}ms`)
   console.log(`frames: n=${summary.frameCount} p50=${summary.frameP50.toFixed(1)}ms p95=${summary.frameP95.toFixed(1)}ms max=${summary.frameMax.toFixed(1)}ms over20=${summary.framesOver20ms} over50=${summary.framesOver50ms}`)
-  console.log(`thumb live mounts per pass: ${summary.liveMounts}`)
-  console.log(`thumb bitmap mounts per pass: ${summary.bitmapMounts}`)
+  console.log(`thumb canvas mounts per pass: ${summary.canvasMounts}`)
   console.log(`blank visible-thumb samples: ${summary.blankSamples} / ${summary.blankSamples + summary.inkedSamples}`)
-  if (snapshotStats) console.log(`snapshots: ${JSON.stringify({ cached: snapshotStats.cached, captures: snapshotStats.captures, failed: snapshotStats.failed, hostile: snapshotStats.hostile, captureMsAvg: snapshotStats.captureMsAvg, captureMsMax: snapshotStats.captureMsMax })}`)
+  if (paintStats) console.log(`canvas paint: ${JSON.stringify({ paints: paintStats.paints, paintMsAvg: paintStats.paintMsAvg, paintMsMax: paintStats.paintMsMax, maxQueue: paintStats.maxQueue })}`)
   console.log(`wrote ${outFile}`)
 }
 finally {

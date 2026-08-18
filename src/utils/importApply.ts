@@ -1,3 +1,6 @@
+import type { TurningMode } from '@/types/slides';
+import type { ImportTurningModeInput } from '@/utils/importTransition';
+
 export type ImportApplyMode = 'replace' | 'append';
 export interface ImportApplyOptions {
   /**
@@ -5,6 +8,14 @@ export interface ImportApplyOptions {
    * Default is `replace`.
    */
   mode?: ImportApplyMode;
+  /**
+   * Override imported slide transitions. A single mode applies to every slide;
+   * an array or index map sets individual slides (missing entries keep the
+   * file transition, or `defaultTurningMode` / Rise when the file has none).
+   */
+  turningMode?: ImportTurningModeInput;
+  /** Fallback when a slide has no file transition and no per-slide override. */
+  defaultTurningMode?: TurningMode;
   /**
    * Legacy alias: `true` replace, `false` append.
    * An empty deck (0 slides) is always replaced.

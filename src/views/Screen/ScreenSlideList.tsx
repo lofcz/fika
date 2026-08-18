@@ -4,6 +4,7 @@ const cx = bindStyles(styles)
 import { useEffect, useState, type MouseEventHandler, type TouchEventHandler, type WheelEventHandler } from 'react'
 import { useSlidesStore } from '@/store'
 import { SlideScaleContext } from '@/types/injectKey'
+import { turningDurationVars } from '@/configs/transitions'
 import { resolveTurningMode, screenWindowRange } from './screenWindow'
 import ScreenSlide from './ScreenSlide'
 
@@ -105,6 +106,7 @@ export default function ScreenSlideList({
               last: index === slideIndex - 1,
               next: index === slideIndex + 1,
             })}
+            style={turningDurationVars(turningMode)}
             data-screen-slide={index}
             {...(index === slideIndex ? { 'data-screen-current': '' } : {})}
             key={slide.id}

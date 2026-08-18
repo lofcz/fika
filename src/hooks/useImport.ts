@@ -26,6 +26,8 @@ import { htmlToStructuredText } from '@/utils/pptxStructuredText';
 import { buildImportDiagnosticsReport, setLastImportDiagnostics } from '@/utils/pptxImportDiagnostics';
 import { internSlidesMedia, startInternSlideMedia } from '@/utils/mediaIntern';
 import { normalizeImportApplyOptions, resolveImportApply, type ImportApplyMode, type ImportApplyOptions } from '@/utils/importApply';
+import { applyImportTransitions } from '@/utils/importTransition';
+import { DEFAULT_TURNING_MODE } from '@/configs/animation';
 import { createJobProgress, isAbortError, slideJobProgress } from '@/utils/jobProgress';
 import type { Slide, SlideTheme, TableCellStyle, TableCell, ChartType, SlideBackground, PPTShapeElement, PPTLineElement, LinePoint, PPTImageElement, TextAlignVertical, PPTTextElement, ChartOptions, Gradient, PPTElement } from '@/types/slides';
 
@@ -239,12 +241,14 @@ const convertTextContent = (html: string, ratio: number) => {
 const slidesState = () => useSlidesStore.getState();
 
 export function getImportApi() {
+  /* oxlint-disable react/rules-of-hooks -- zustand snapshot helpers, not React hooks */
   const {
     addHistorySnapshot
   } = useHistorySnapshot();
   const {
     addSlidesFromData
   } = useAddSlidesOrElements();
+  /* oxlint-enable react/rules-of-hooks */
   const beginImportJob = (total = 0) => {
     if (importJob.running.value) {
       message.warning(getLL().editor.import.busy());
@@ -273,13 +277,24 @@ export function getImportApi() {
     title?: string;
     aspectRatio?: number;
     width?: number;
+    turningMode?: ImportApplyOptions['turningMode'];
+    defaultTurningMode?: ImportApplyOptions['defaultTurningMode'];
   }) => {
-    await internSlidesMedia(slides);
+    const applied = applyImportTransitions(slides, {
+      turningMode: extras?.turningMode,
+      defaultTurningMode: extras?.defaultTurningMode ?? DEFAULT_TURNING_MODE,
+    })
+    await internSlidesMedia(applied.slides);
     resetEditorSelection();
+    const store = slidesState();
+    if (typeof extras?.turningMode === 'string') {
+      store.setDefaultTurningMode(extras.turningMode)
+    } else if (apply === 'replace') {
+      store.setDefaultTurningMode(DEFAULT_TURNING_MODE)
+    }
     if (apply === 'replace') {
-      const store = slidesState();
       store.updateSlideIndex(0);
-      store.setSlides(slides, extras?.theme, { clone: false });
+      store.setSlides(applied.slides, extras?.theme, { clone: false });
       if (extras?.title) store.setTitle(extras.title);
       if (extras?.aspectRatio !== undefined && extras.aspectRatio !== store.viewportRatio) {
         store.setViewportRatio(extras.aspectRatio);
@@ -288,13 +303,26 @@ export function getImportApi() {
       addHistorySnapshot();
       return;
     }
-    addSlidesFromData(slides);
+    addSlidesFromData(applied.slides);
   };
   const decideImportApply = async (options?: boolean | ImportApplyOptions) => {
+    const normalized = normalizeImportApplyOptions(options);
     const slideCount = slidesState().slides.length;
-    const decision = resolveImportApply(slideCount, normalizeImportApplyOptions(options));
-    if (!decision.needsConfirm) return decision.apply;
-    return useImportConfirmStore.getState().request(slideCount);
+    const decision = resolveImportApply(slideCount, normalized);
+    if (!decision.needsConfirm) {
+      return {
+        apply: decision.apply,
+        turningMode: normalized.turningMode,
+        defaultTurningMode: normalized.defaultTurningMode,
+      };
+    }
+    const confirmed = await useImportConfirmStore.getState().request(slideCount);
+    if (!confirmed) return null;
+    return {
+      apply: confirmed.apply,
+      turningMode: normalized.turningMode ?? (confirmed.turningMode === 'keep' ? undefined : confirmed.turningMode),
+      defaultTurningMode: normalized.defaultTurningMode,
+    };
   };
   const importTextDeck = async (files: FileList | File[], options: boolean | ImportApplyOptions, decode: (text: string) => unknown) => {
     if (importJob.running.value) {
@@ -322,11 +350,13 @@ export function getImportApi() {
       }
       importJob.setTotal(parsed.slides.length, gen);
       await importJob.tick(0.82, parsed.slides.length + 1, gen);
-      await applyImportedSlides(parsed.slides, apply, {
+      await applyImportedSlides(parsed.slides, apply.apply, {
         theme: parsed.theme || {},
         title: parsed.title,
         aspectRatio: getAspectRatio(parsed.width || 0, parsed.height || 0),
-        width: parsed.width
+        width: parsed.width,
+        turningMode: apply.turningMode,
+        defaultTurningMode: apply.defaultTurningMode,
       });
       await importJob.tick(1, parsed.slides.length + 1, gen);
       return true;
@@ -1297,7 +1327,7 @@ export function getImportApi() {
         }
         if (contrastFixes) markSourcePackageDirty();
         if (contrastFixes && import.meta.env.DEV) {
-          // eslint-disable-next-line no-console
+          // oxlint-disable-next-line no-console
           console.info(`[pptx-import] repaired ${contrastFixes} low-contrast text color(s)`);
         }
       }
@@ -1310,7 +1340,7 @@ export function getImportApi() {
       });
       setLastImportDiagnostics(diagnostics);
       if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
+        // oxlint-disable-next-line no-console
         console.info('[pptx-import]', diagnostics.status, diagnostics.summary, diagnostics);
       }
       await importJob.tick(0.96, slideCount + 1, gen);
@@ -1318,8 +1348,10 @@ export function getImportApi() {
       slidesState().setTheme({
         themeColors: json.themeColors
       });
-      await applyImportedSlides(slides, apply, {
-        aspectRatio
+      await applyImportedSlides(slides, apply.apply, {
+        aspectRatio,
+        turningMode: apply.turningMode,
+        defaultTurningMode: apply.defaultTurningMode,
       });
       await importJob.tick(1, slideCount + 1, gen);
       if (failedSlides.length) {

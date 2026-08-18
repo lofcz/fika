@@ -53,8 +53,7 @@ async function waitForHooks(page) {
   throw new Error('fika hooks missing')
 }
 async function waitIdle(page) {
-  // Live-DOM rail: wait until the current slide's thumb tree is mounted.
-  await page.waitForSelector('[data-thumbnail-slide] .screen-slide', { timeout: 20000 })
+  await page.waitForSelector('[data-thumbnail-slide] canvas[data-canvas-painted]', { timeout: 20000 })
   await sleep(500)
 }
 

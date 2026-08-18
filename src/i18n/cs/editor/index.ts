@@ -672,6 +672,10 @@ const cs_editor: NamespaceEditorTranslation = {
       replaceHint: 'Zahodit stávající snímky a použít importovaný soubor.',
       appendTitle: 'Přidat na konec',
       appendHint: 'Ponechat stávající snímky a připojit importované.',
+      transitionLabel: 'Přechody',
+      transitionKeep: 'Ze souboru',
+      transitionKeepHint: 'Zachovat přechod každého snímku. Snímky bez přechodu dostanou Výstup.',
+      transitionAll: 'Stejný na všech snímcích',
     },
     localeTooltip: 'Jazyk',
     locales: {

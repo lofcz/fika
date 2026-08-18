@@ -672,6 +672,10 @@ const pl_editor: NamespaceEditorTranslation = {
       replaceHint: 'Odrzuć bieżące slajdy i użyj importowanego pliku.',
       appendTitle: 'Dodaj na końcu',
       appendHint: 'Zachowaj bieżące slajdy i dołącz importowane.',
+      transitionLabel: 'Przejścia',
+      transitionKeep: 'Z pliku',
+      transitionKeepHint: 'Zachowaj przejście każdego slajdu. Slajdy bez przejścia dostaną Wzniesienie.',
+      transitionAll: 'Takie samo na wszystkich',
     },
     localeTooltip: 'Język',
     locales: {

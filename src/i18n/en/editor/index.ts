@@ -348,6 +348,10 @@ const en_editor: BaseTranslation = {
       replaceHint: 'Discard current slides and use the imported file.',
       appendTitle: 'Add to the end',
       appendHint: 'Keep current slides and append the imported ones.',
+      transitionLabel: 'Transitions',
+      transitionKeep: 'From file',
+      transitionKeepHint: 'Keep each slide’s transition. Slides without one get Rise.',
+      transitionAll: 'Same on every slide',
     },
     localeTooltip: 'Language',
     locales: {

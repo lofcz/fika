@@ -66,6 +66,10 @@ const en_canvas: BaseTranslation = {
   bubbleMenuDisabled: 'Element bubble menu disabled',
   openPanelOnTextSelectionEnabled: 'Style panel will open after selecting text',
   openPanelOnTextSelectionDisabled: 'Style panel stays closed when selecting text',
+  layerStack: {
+    title: 'Layers',
+    hint: 'Alt + Click · next layer',
+  },
   shapeCreate: {
     scribbleHint: 'Draw freely · Enter to apply · Esc to discard',
     scribbleAccept: 'Apply',

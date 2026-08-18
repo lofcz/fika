@@ -5,6 +5,7 @@ const cx = bindStyles(styles)
 import { useEffect, useRef, useState } from 'react'
 import { useSlidesStore } from '@/store'
 import type { Mode } from '@/types/mobile'
+import { turningDurationVars } from '@/configs/transitions'
 import { resolveTurningMode, screenWindowRange } from '../Screen/screenWindow'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
 import MobileThumbnails from './MobileThumbnails'
@@ -100,6 +101,7 @@ export default function MobilePlayer({ changeMode }: IMobilePlayerProps) {
                 last: index === slideIndex - 1,
                 next: index === slideIndex + 1,
               })}
+              style={turningDurationVars(turningMode)}
               key={slide.id}
             >
               <div

@@ -40,6 +40,9 @@ jobs:
       - name: Typecheck
         run: bun --canary run type-check
 
+      - name: Lint
+        run: bun --canary x oxlint --quiet
+
       - name: Start dev server
         run: |
           bun --canary run dev &

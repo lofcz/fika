@@ -66,6 +66,10 @@ const cs_canvas: NamespaceCanvasTranslation = {
   bubbleMenuDisabled: 'Bublinkové menu prvků vypnuto',
   openPanelOnTextSelectionEnabled: 'Panel stylu se otevře až po výběru textu',
   openPanelOnTextSelectionDisabled: 'Panel stylu se při výběru textu neotevře',
+  layerStack: {
+    title: 'Vrstvy',
+    hint: 'Alt + kliknutí · další vrstva',
+  },
   shapeCreate: {
     scribbleHint: 'Kreslete od ruky · Enter vloží · Esc zahodí',
     scribbleAccept: 'Použít',

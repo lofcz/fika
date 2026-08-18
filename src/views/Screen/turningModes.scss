@@ -1,0 +1,233 @@
+// Slide-turn effects. GPU rules: only transform, opacity and (composited)
+// clip-path may animate — never filter, box-shadow or layout properties.
+$turningEase: cubic-bezier(0.45, 0.05, 0.15, 1);
+$turningSettle: cubic-bezier(0.22, 1, 0.36, 1);
+$turningDur: var(--turning-duration, 700ms);
+
+@mixin turning-slide-item {
+  pointer-events: none;
+  will-change: transform, opacity, clip-path;
+  backface-visibility: hidden;
+
+  &.current {
+    pointer-events: auto;
+    z-index: 2;
+    opacity: 1;
+    clip-path: inset(0);
+    transform: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  &.turning-mode-no {
+    &.before {
+      transform: translateY(-100%);
+    }
+    &.after {
+      transform: translateY(100%);
+    }
+  }
+
+  &.turning-mode-fade {
+    transition: opacity $turningDur $turningEase;
+    &.before,
+    &.after {
+      opacity: 0;
+    }
+  }
+
+  // Fade through black: outgoing sinks into the dark stage first, the
+  // incoming slide surfaces after a delay. Opacity only — no filters.
+  &.turning-mode-throughInk {
+    transition: opacity calc(#{$turningDur} * 0.48) cubic-bezier(0.55, 0, 0.7, 0.4);
+    &.current {
+      transition: opacity calc(#{$turningDur} * 0.52) $turningSettle calc(#{$turningDur} * 0.44);
+    }
+    &.before,
+    &.after {
+      opacity: 0;
+    }
+  }
+
+  // Ink-wash dissolve: slow crossfade while both slides breathe in scale.
+  &.turning-mode-dissolve {
+    transition: opacity $turningDur $turningEase, transform $turningDur $turningEase;
+    &.before {
+      opacity: 0;
+      transform: scale(1.06);
+    }
+    &.after {
+      opacity: 0;
+      transform: scale(0.94);
+    }
+  }
+
+  // Parallax push: incoming glides over while outgoing recedes and dims.
+  &.turning-mode-slideX {
+    transition: transform $turningDur $turningEase, opacity $turningDur $turningEase;
+    &.before {
+      transform: translate3d(-30%, 0, 0) scale(0.96);
+      opacity: 0;
+    }
+    &.after {
+      transform: translate3d(100%, 0, 0);
+    }
+  }
+
+  &.turning-mode-slideY {
+    transition: transform $turningDur $turningEase, opacity $turningDur $turningEase;
+    &.before {
+      transform: translate3d(0, -30%, 0) scale(0.96);
+      opacity: 0;
+    }
+    &.after {
+      transform: translate3d(0, 100%, 0);
+    }
+  }
+
+  &.turning-mode-wipe {
+    transition: clip-path $turningDur $turningEase;
+    &.before {
+      clip-path: inset(0 0 0 100%);
+    }
+    &.after {
+      clip-path: inset(0 100% 0 0);
+    }
+  }
+
+  &.turning-mode-reveal {
+    transition: transform $turningDur $turningEase, opacity $turningDur $turningEase;
+    &.before {
+      z-index: 3;
+      transform: translate3d(-36%, 0, 0);
+      opacity: 0;
+    }
+    &.after {
+      z-index: 1;
+      transform: none;
+      opacity: 1;
+    }
+  }
+
+  &.turning-mode-scale {
+    transition: transform $turningDur $turningEase, opacity $turningDur $turningEase;
+    &.before,
+    &.after {
+      transform: scale(0.8);
+      opacity: 0;
+    }
+  }
+
+  &.turning-mode-scaleReverse {
+    transition: transform $turningDur $turningEase, opacity $turningDur $turningEase;
+    &.before,
+    &.after {
+      transform: scale(1.2);
+      opacity: 0;
+    }
+  }
+
+  // Morph: tight scale crossfade — the incoming settles late for a
+  // continuous, in-place feel.
+  &.turning-mode-morph {
+    transition: transform $turningDur $turningSettle, opacity calc(#{$turningDur} * 0.7) $turningEase;
+    &.before {
+      transform: scale(1.03);
+      opacity: 0;
+    }
+    &.after {
+      transform: scale(0.97);
+      opacity: 0;
+    }
+  }
+
+  &.turning-mode-ripple {
+    transition: clip-path $turningDur $turningEase;
+    &.before,
+    &.after {
+      clip-path: circle(0% at 50% 50%);
+    }
+    &.current {
+      clip-path: circle(75% at 50% 50%);
+    }
+  }
+
+  &.turning-mode-doors {
+    transition: clip-path $turningDur $turningEase, transform $turningDur $turningEase;
+    &.before,
+    &.after {
+      clip-path: inset(0 50% 0 50%);
+      transform: scale(1.04);
+    }
+  }
+
+  &.turning-mode-flythrough {
+    transition: transform $turningDur $turningEase, opacity calc(#{$turningDur} * 0.8) $turningEase;
+    &.before {
+      transform: translateZ(260px) scale(1.3);
+      opacity: 0;
+    }
+    &.after {
+      transform: translateZ(-420px) scale(0.6);
+      opacity: 0;
+    }
+  }
+
+  &.turning-mode-slideX3D {
+    transition: transform $turningDur $turningEase, opacity $turningDur $turningEase;
+    &.before {
+      transform: translate3d(-42%, 0, 0) rotateY(48deg) scale(0.9);
+      opacity: 0;
+    }
+    &.after {
+      transform: translate3d(42%, 0, 0) rotateY(-48deg) scale(0.9);
+      opacity: 0;
+    }
+  }
+
+  &.turning-mode-slideY3D {
+    transition: transform $turningDur $turningEase, opacity $turningDur $turningEase;
+    &.before {
+      transform: translate3d(0, -42%, 0) rotateX(-48deg) scale(0.9);
+      opacity: 0;
+    }
+    &.after {
+      transform: translate3d(0, 42%, 0) rotateX(48deg) scale(0.9);
+      opacity: 0;
+    }
+  }
+
+  &.turning-mode-rotate {
+    transition: transform $turningDur $turningEase, opacity $turningDur $turningEase;
+    transform-origin: 0 0;
+    &.before {
+      transform: rotate(72deg);
+      opacity: 0;
+    }
+    &.after {
+      transform: rotate(-72deg);
+      opacity: 0;
+    }
+  }
+
+  &.turning-mode-scaleY {
+    transition: transform $turningDur $turningEase, opacity $turningDur $turningEase;
+    &.before,
+    &.after {
+      transform: scaleY(0.12);
+      opacity: 0;
+    }
+  }
+
+  &.turning-mode-scaleX {
+    transition: transform $turningDur $turningEase, opacity $turningDur $turningEase;
+    &.before,
+    &.after {
+      transform: scaleX(0.12);
+      opacity: 0;
+    }
+  }
+}

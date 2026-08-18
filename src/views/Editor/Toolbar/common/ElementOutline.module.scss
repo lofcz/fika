@@ -56,11 +56,6 @@
   flex: 1;
   min-width: 0;
 }
-.metric-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
 .quiet-line :global { .select {
   height: 34px;
   border: 0;

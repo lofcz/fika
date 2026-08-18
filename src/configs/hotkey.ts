@@ -190,6 +190,9 @@ function buildHotkeyDoc(): HotkeyItem[] {
       label: h.labels.cycleFocusElement(),
       value: 'Tab'
     }, {
+      label: h.labels.cycleLayersAtPoint(),
+      value: v.altClick()
+    }, {
       label: h.labels.confirmImageCrop(),
       value: 'Enter'
     }, {

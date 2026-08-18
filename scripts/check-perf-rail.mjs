@@ -69,12 +69,12 @@ function importsBanned(src, name) {
 const railFiles = [
   'src/views/Editor/Thumbnails/index.tsx',
   'src/views/components/ThumbnailSlide/index.tsx',
-  'src/views/components/ThumbnailSlide/LiveSlideThumb.tsx',
+  'src/views/components/ThumbnailSlide/CanvasSlideThumb.tsx',
   'src/views/components/ThumbnailSlide/paintedSlide.ts',
   'src/components/Draggable.tsx',
 ]
 
-assert(railFiles.includes('src/views/components/ThumbnailSlide/LiveSlideThumb.tsx'), 'the live thumb render path is scanned')
+assert(railFiles.includes('src/views/components/ThumbnailSlide/CanvasSlideThumb.tsx'), 'the canvas thumb render path is scanned')
 
 for (const rel of railFiles) {
   const src = read(rel)

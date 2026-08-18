@@ -26,6 +26,17 @@ export const LIST_MARKER_GAP_EM = 0.4;
  */
 export const BULLET_INDENT = 40;
 
+export interface TextFitRun {
+  text: string;
+  size: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
+  color?: string;
+  fontFamily?: string;
+}
+
 /** A single measurable text block (one paragraph or one list item). */
 export interface TextFitBlock {
   /** Plain text of the block (markers stripped). */
@@ -47,7 +58,10 @@ export interface TextFitBlock {
    * heights match what the browser paints (a 57px body with one 120px word
    * wraps like 57px and only that one line is 120px tall).
    */
-  runs?: Array<{ text: string; size: number; bold?: boolean; italic?: boolean }>;
+  runs?: TextFitRun[];
+  /** Canvas/static-paint metadata. It does not affect fitting math. */
+  align?: 'left' | 'center' | 'right' | 'justify';
+  listMarker?: string;
 }
 export interface MeasureBlocksOptions {
   /** Box content width in px (insets already removed). */
@@ -626,24 +640,57 @@ const BLOCK_SELECTOR = 'li, p, blockquote';
  * size, and bold/italic ancestry (closest styled ancestor wins; unmarked
  * text uses the default size). Feeds pretext's rich-inline measurement.
  */
-const runSizeProfile = (block: Element, defaultSize: number): NonNullable<TextFitBlock['runs']> => {
+const runSizeProfile = (
+  block: Element,
+  defaultSize: number,
+  defaultFamily: string,
+): NonNullable<TextFitBlock['runs']> => {
   const runs: NonNullable<TextFitBlock['runs']> = []
-  const walk = (el: Element, inherited: number, bold: boolean, italic: boolean) => {
+  const walk = (
+    el: Element,
+    inherited: {
+      size: number
+      bold: boolean
+      italic: boolean
+      underline: boolean
+      strikethrough: boolean
+      color?: string
+      fontFamily: string
+    },
+  ) => {
     const htmlEl = el as HTMLElement
     let size = parseFontSizePx(htmlEl.style?.fontSize)
-    if (!(size > 0)) size = inherited
+    if (!(size > 0)) size = inherited.size
     const tag = el.tagName
-    const nextBold = bold || tag === 'STRONG' || tag === 'B' || (htmlEl.style?.fontWeight === 'bold' || htmlEl.style?.fontWeight === '700')
-    const nextItalic = italic || tag === 'EM' || tag === 'I' || htmlEl.style?.fontStyle === 'italic'
-    let own = ''
-    for (const node of el.childNodes) {
-      if (node.nodeType === Node.TEXT_NODE) own += node.textContent || ''
+    const decoration = htmlEl.style?.textDecoration || ''
+    const next = {
+      size,
+      bold: inherited.bold || tag === 'STRONG' || tag === 'B' || htmlEl.style?.fontWeight === 'bold' || Number(htmlEl.style?.fontWeight) >= 600,
+      italic: inherited.italic || tag === 'EM' || tag === 'I' || htmlEl.style?.fontStyle === 'italic',
+      underline: inherited.underline || tag === 'U' || decoration.includes('underline'),
+      strikethrough: inherited.strikethrough || tag === 'S' || tag === 'STRIKE' || decoration.includes('line-through'),
+      color: htmlEl.style?.color || inherited.color,
+      fontFamily: usableFamily(htmlEl.style?.fontFamily) || inherited.fontFamily,
     }
-    own = own.replace(/\s+/g, ' ')
-    if (own.length > 0) runs.push({ text: own, size, bold: nextBold, italic: nextItalic })
-    for (const child of el.children) walk(child, size, nextBold, nextItalic)
+    for (const node of el.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = (node.textContent || '').replace(/\s+/g, ' ')
+        if (text) runs.push({ text, ...next })
+      }
+      else if (node.nodeType === Node.ELEMENT_NODE) {
+        walk(node as Element, next)
+      }
+    }
   }
-  walk(block, defaultSize, false, false)
+  walk(block, {
+    size: defaultSize,
+    bold: false,
+    italic: false,
+    underline: false,
+    strikethrough: false,
+    color: (block as HTMLElement).style?.color || undefined,
+    fontFamily: blockFontFamily(block, defaultFamily),
+  })
   return runs
 }
 
@@ -673,7 +720,14 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
     const isList = el.tagName === 'LI';
     // Empty bullets still occupy a line (Enter on a list placeholder).
     if (!text && !isList) continue;
-    const runs = runSizeProfile(el, defaultSize)
+    const runs = runSizeProfile(el, defaultSize, options.defaultFontFamily)
+    const list = isList ? el.closest('ol, ul') : null
+    const listMarker = isList
+      ? (list?.tagName === 'OL'
+          ? `${Math.max(1, Array.from(list.children).indexOf(el) + 1)}.`
+          : '•')
+      : undefined
+    const align = ((el as HTMLElement).style?.textAlign || undefined) as TextFitBlock['align']
     blocks.push({
       text: text || ' ',
       size: blockFontSize(el, defaultSize),
@@ -681,6 +735,8 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
       italic: !!el.querySelector('em, i'),
       fontFamily: blockFontFamily(el, options.defaultFontFamily),
       listItem: isList,
+      align,
+      listMarker,
       ...(isList ? listIndentFrom(el) : {}),
       ...(runs.length > 1 ? { runs } : {})
     });

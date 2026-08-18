@@ -1,7 +1,13 @@
 import { create } from 'zustand'
 import type { ImportApplyMode } from '@/utils/importApply'
+import type { TurningMode } from '@/types/slides'
 
-export type ImportConfirmChoice = ImportApplyMode | null
+export type ImportTransitionChoice = 'keep' | TurningMode
+
+export type ImportConfirmChoice = {
+  apply: ImportApplyMode
+  turningMode: ImportTransitionChoice
+} | null
 
 export interface ImportConfirmState {
   visible: boolean

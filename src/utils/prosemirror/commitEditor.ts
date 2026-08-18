@@ -52,6 +52,7 @@ export function commitLiveEditorToStore(elementId: string, options?: { history?:
       isAuthoritative,
     })) return
     useSlidesStore.getState().updateElement({ id: elementId, slideId, props: { content: next } })
+    // oxlint-disable-next-line react/rules-of-hooks -- zustand snapshot helper, not a React hook
     if (history) useHistorySnapshot().addHistorySnapshot()
     return
   }
@@ -60,6 +61,7 @@ export function commitLiveEditorToStore(elementId: string, options?: { history?:
     if (!el.text) return
     if (!isAuthoritative) return
     useSlidesStore.getState().removeElementProps({ id: elementId, propName: 'text' })
+    // oxlint-disable-next-line react/rules-of-hooks -- zustand snapshot helper, not a React hook
     if (history) useHistorySnapshot().addHistorySnapshot()
     return
   }
@@ -76,5 +78,6 @@ export function commitLiveEditorToStore(elementId: string, options?: { history?:
     content: html,
   }
   useSlidesStore.getState().updateElement({ id: elementId, slideId, props: { text } })
+  // oxlint-disable-next-line react/rules-of-hooks -- zustand snapshot helper, not a React hook
   if (history) useHistorySnapshot().addHistorySnapshot()
 }

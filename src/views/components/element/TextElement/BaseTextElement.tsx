@@ -113,14 +113,10 @@ const BaseTextElement = memo((vrProps: IBaseTextElementProps) => {
         writingMode: elementInfo.vertical ? 'vertical-rl' : 'horizontal-tb',
         padding: `${inset[0]}px ${inset[1]}px ${inset[2]}px ${inset[3]}px`,
         boxSizing: 'border-box',
-        display: useFlexColumn ? 'flex' : undefined,
-        flexDirection: useFlexColumn ? 'column' : undefined,
-        justifyContent: contentBoxJustify,
-        overflow: textBoxLayout.lockPaintHeight || outlineBorderRadius ? 'hidden' : undefined,
         borderRadius: outlineBorderRadius,
         '--paragraphSpace': `${elementInfo.paragraphSpace === undefined ? 5 : elementInfo.paragraphSpace}px`
-      } as CSSPropertiesWithVars}><ElementOutline width={elementInfo.width} height={elementInfo.height} outline={elementInfo.outline} /><div className={cx('text-fit-host')} ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}><div className={cx('text', { 'thumbnail': target === 'thumbnail' })}><div className={cx('prosemirror-editor')}><div className={cx('ProseMirror', 'ProseMirror-static')} dangerouslySetInnerHTML={{
+      } as CSSPropertiesWithVars}><ElementOutline width={elementInfo.width} height={elementInfo.height} outline={elementInfo.outline} /><div className={cx('paint-clip')} style={{ overflow: textBoxLayout.lockPaintHeight || outlineBorderRadius ? 'hidden' : undefined, borderRadius: outlineBorderRadius, display: useFlexColumn ? 'flex' : undefined, flexDirection: useFlexColumn ? 'column' : undefined, justifyContent: contentBoxJustify }}><div className={cx('text-fit-host')} ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}><div className={cx('text', { 'thumbnail': target === 'thumbnail' })}><div className={cx('prosemirror-editor')}><div className={cx('ProseMirror', 'ProseMirror-static')} dangerouslySetInnerHTML={{
               __html: paintedHtml
-            }} /></div></div></div></div></div></div>;
+            }} /></div></div></div></div></div></div></div>;
 });
 export default BaseTextElement;

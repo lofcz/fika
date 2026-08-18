@@ -164,8 +164,8 @@ async function readFidelity(page) {
         const host = (slide && document.querySelector(`[data-thumbnail-slide="${slide.id}"]`))
           || document.querySelector('[data-thumb-active] [data-thumbnail-slide]')
         const live = document.querySelector('[class*=viewport-wrapper] [data-element-type=chart] [data-live-box] svg')
-        const thumbSvg = host?.querySelector('.screen-slide svg') || null
-        if (host && live && thumbSvg) return { host, live, thumbSvg }
+        const thumbCanvas = host?.querySelector('canvas[data-canvas-painted]') || null
+        if (host && live && thumbCanvas) return { host, live, thumbCanvas }
         await sleep(80)
       }
       const host = (slide && document.querySelector(`[data-thumbnail-slide="${slide.id}"]`))
@@ -173,15 +173,15 @@ async function readFidelity(page) {
       return {
         host,
         live: document.querySelector('[class*=viewport-wrapper] [data-element-type=chart] [data-live-box] svg'),
-        thumbSvg: host?.querySelector('.screen-slide svg') || null,
+        thumbCanvas: host?.querySelector('canvas[data-canvas-painted]') || null,
       }
     }
 
-    const { host, live, thumbSvg } = await waitPaint()
+    const { host, live, thumbCanvas } = await waitPaint()
     const liveType = document.querySelector('[class*=viewport-wrapper] [data-element-type=chart] [data-live-box]')?.getAttribute('data-chart-type') || ''
     const empty = {
       liveType,
-      pending: !host || !thumbSvg,
+      pending: !host || !thumbCanvas,
       mae: 1,
       corr: 0,
       xCorr: 0,
@@ -200,7 +200,7 @@ async function readFidelity(page) {
       stubRatio: 1,
       colorDelta: 1,
     }
-    if (!live || !thumbSvg || !chart || !store) return empty
+    if (!live || !thumbCanvas || !chart || !store) return empty
 
     const settle = (ctx, source, sw, sh) => {
       ctx.fillStyle = '#ffffff'
@@ -236,7 +236,24 @@ async function readFidelity(page) {
 
     const slideW = store.viewportSize
     const slideH = store.viewportSize * store.viewportRatio
-    const thumbData = await rasterizeSvg(thumbSvg)
+    const thumbRaster = document.createElement('canvas')
+    thumbRaster.width = SIZE
+    thumbRaster.height = SIZE
+    const thumbCtx = thumbRaster.getContext('2d', { willReadFrequently: true })
+    thumbCtx.fillStyle = '#ffffff'
+    thumbCtx.fillRect(0, 0, SIZE, SIZE)
+    thumbCtx.drawImage(
+      thumbCanvas,
+      chart.left / slideW * thumbCanvas.width,
+      chart.top / slideH * thumbCanvas.height,
+      chart.width / slideW * thumbCanvas.width,
+      chart.height / slideH * thumbCanvas.height,
+      0,
+      0,
+      SIZE,
+      SIZE,
+    )
+    const thumbData = thumbCtx.getImageData(0, 0, SIZE, SIZE).data
 
     const liveX = new Array(SIZE).fill(0)
     const thumbX = new Array(SIZE).fill(0)
@@ -340,7 +357,7 @@ async function readFidelity(page) {
     const colorDelta = Math.abs(liveS0 - thumbS0) / Math.max(1, liveS0 + thumbS0) + Math.abs(liveS1 - thumbS1) / Math.max(1, liveS1 + thumbS1)
     return {
       liveType,
-      pending: !thumbSvg,
+      pending: !thumbCanvas,
       mae: mae / n / 255,
       corr,
       xCorr: pearson(liveX, thumbX),

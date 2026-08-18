@@ -56,7 +56,7 @@ assert(clampScrollTop(90, 40, 100) === 100, 'wheel clamp hits max')
 assert(wheelDeltaPx(2, 1, 200) === 32, 'line-mode wheel converts to px')
 
 const drag = read('src/components/Draggable.tsx')
-assert(drag.includes('LiveSlideThumb'), 'the drag ghost is the live slide DOM at thumb size')
+assert(drag.includes('CanvasSlideThumb'), 'the drag ghost uses the direct canvas renderer at thumb size')
 assert(drag.includes('data-slide-drag-overlay'), 'drag overlay is queryable for e2e')
 assert(drag.includes('hideWhileDragging'), 'source row hides only after an overlay exists')
 assert(drag.includes('overlayRender'), 'the slide overlay is opt-in so generic lists keep their behavior')

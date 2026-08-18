@@ -40,48 +40,50 @@ type XmlNode = {
 const TRANSITION_IMPORT_MAP: Record<string, TurningMode> = {
   none: 'no',
   fade: 'fade',
-  fadeThroughBlack: 'fade',
+  fadeThroughBlack: 'throughInk',
   push: 'slideX',
-  wipe: 'slideX',
+  wipe: 'wipe',
   cover: 'slideX',
-  uncover: 'slideX',
-  pull: 'slideX',
-  split: 'slideY',
+  uncover: 'reveal',
+  pull: 'reveal',
+  split: 'doors',
   blinds: 'slideY',
   checker: 'slideX',
   comb: 'slideX',
   random: 'random',
   randomBar: 'random',
   cut: 'no',
-  dissolve: 'fade',
+  dissolve: 'dissolve',
   wheel: 'rotate',
   wedge: 'rotate',
-  circle: 'scale',
+  circle: 'ripple',
   diamond: 'scale',
   plus: 'scale',
   newsflash: 'rotate',
   zoom: 'scale',
-  warp: 'scale',
+  warp: 'scaleX',
   flip: 'slideX3D',
   gallery: 'slideX',
   conveyor: 'slideX',
-  doors: 'slideX',
-  window: 'slideX',
+  doors: 'doors',
+  window: 'doors',
   ferris: 'rotate',
-  flythrough: 'scale',
+  flythrough: 'flythrough',
   crush: 'scaleReverse',
-  peelOff: 'slideX',
-  pageCurl: 'slideX',
-  airplane: 'slideX',
+  peelOff: 'reveal',
+  pageCurl: 'reveal',
+  airplane: 'flythrough',
   origami: 'rotate',
-  morph: 'fade',
+  morph: 'morph',
   prism: 'slideX3D',
   pan: 'slideX',
-  glitter: 'fade',
-  honeycomb: 'fade',
-  flash: 'fade',
-  shred: 'fade',
-  switch: 'slideX',
+  glitter: 'dissolve',
+  honeycomb: 'dissolve',
+  flash: 'throughInk',
+  shred: 'dissolve',
+  switch: 'slideX3D',
+  ripple: 'ripple',
+  reveal: 'reveal',
   flipover: 'slideX3D'
 };
 
@@ -92,11 +94,19 @@ export function mapPptxTransitionToTurningMode(transition?: PptxSlideTransition 
   if (!transition?.type || transition.type === 'none') return undefined;
   const type = transition.type.replace(/^p\d{0,2}:/, '');
   const dir = (transition.direction || '').toLowerCase();
-  if (type === 'push' || type === 'wipe' || type === 'cover' || type === 'uncover' || type === 'pull') {
+  if (type === 'fade' && (dir === 'black' || dir === 'thrublk' || dir === 'throughblack')) return 'throughInk';
+  if (type === 'push') {
     if (dir === 'u' || dir === 'd') return 'slideY';
     return 'slideX';
   }
-  if (type === 'split' || type === 'blinds') {
+  if (type === 'wipe') return 'wipe';
+  if (type === 'cover') {
+    if (dir === 'u' || dir === 'd') return 'slideY';
+    return 'slideX';
+  }
+  if (type === 'uncover' || type === 'pull') return 'reveal';
+  if (type === 'split' || type === 'doors' || type === 'window') return 'doors';
+  if (type === 'blinds') {
     if (dir === 'vert' || dir === 'l' || dir === 'r') return 'slideX';
     return 'slideY';
   }
@@ -105,12 +115,17 @@ export function mapPptxTransitionToTurningMode(transition?: PptxSlideTransition 
     return 'scale';
   }
   if (type === 'warp') {
-    return dir === 'out' ? 'scaleReverse' : 'scale';
+    return dir === 'out' ? 'scaleReverse' : 'scaleX';
   }
   if (type === 'flip') {
     if (dir === 'u' || dir === 'd') return 'slideY3D';
     return 'slideX3D';
   }
+  if (type === 'flythrough') return 'flythrough';
+  if (type === 'ripple') return 'ripple';
+  if (type === 'reveal') return 'reveal';
+  if (type === 'morph') return 'morph';
+  if (type === 'dissolve') return 'dissolve';
   return TRANSITION_IMPORT_MAP[type];
 }
 

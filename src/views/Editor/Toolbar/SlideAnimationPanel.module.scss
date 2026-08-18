@@ -1,10 +1,22 @@
-$motion: 0.62s cubic-bezier(0.22, 1, 0.36, 1);
+$motion: 0.9s cubic-bezier(0.45, 0.05, 0.15, 1);
 
 .slide-animation-panel {
   width: 100%;
   min-width: 0;
   overflow: hidden;
   user-select: none;
+}
+.transition-section + .transition-section {
+  margin-top: 14px;
+}
+.group-label {
+  margin: 0 2px 8px;
+  color: $inkMuted;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 .transition-grid {
   display: grid;
@@ -66,6 +78,13 @@ $motion: 0.62s cubic-bezier(0.22, 1, 0.36, 1);
   color: #e4e4e7;
   transform-origin: center center;
 }
+.veil {
+  position: absolute;
+  inset: 0;
+  background: #09090b;
+  opacity: 0;
+  pointer-events: none;
+}
 .rule {
   display: block;
   height: 3px;
@@ -98,10 +117,31 @@ $motion: 0.62s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .fade .incoming {
-  opacity: 0.22;
+  opacity: 0.2;
 }
 .transition-card:hover .fade .incoming {
   animation: trans-fade $motion both;
+}
+
+.throughInk .incoming {
+  opacity: 0;
+}
+.throughInk .veil {
+  opacity: 0.55;
+}
+.transition-card:hover .throughInk .incoming {
+  animation: trans-through-ink $motion both;
+}
+.transition-card:hover .throughInk .veil {
+  animation: trans-veil $motion both;
+}
+
+.dissolve .incoming {
+  opacity: 0.18;
+  transform: scale(0.9);
+}
+.transition-card:hover .dissolve .incoming {
+  animation: trans-dissolve $motion both;
 }
 
 .slideX .incoming {
@@ -116,6 +156,72 @@ $motion: 0.62s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .transition-card:hover .slideY .incoming {
   animation: trans-slide-y $motion both;
+}
+
+.wipe .incoming {
+  clip-path: inset(0 100% 0 0);
+}
+.transition-card:hover .wipe .incoming {
+  animation: trans-wipe $motion both;
+}
+
+.reveal .outgoing {
+  z-index: 2;
+}
+.reveal .incoming {
+  z-index: 1;
+}
+.transition-card:hover .reveal .outgoing {
+  animation: trans-reveal $motion both;
+}
+
+.scale .incoming {
+  transform: scale(0.52);
+  opacity: 0.55;
+}
+.transition-card:hover .scale .incoming {
+  animation: trans-scale $motion both;
+}
+
+.scaleReverse .incoming {
+  transform: scale(1.45);
+  opacity: 0.5;
+}
+.transition-card:hover .scaleReverse .incoming {
+  animation: trans-scale-reverse $motion both;
+}
+
+.morph .incoming {
+  transform: scale(0.94);
+  opacity: 0.2;
+}
+.transition-card:hover .morph .incoming {
+  animation: trans-morph $motion both;
+}
+.transition-card:hover .morph .outgoing {
+  animation: trans-morph-out $motion both;
+}
+
+.ripple .incoming {
+  clip-path: circle(8% at 50% 50%);
+}
+.transition-card:hover .ripple .incoming {
+  animation: trans-ripple $motion both;
+}
+
+.doors .incoming {
+  clip-path: inset(0 50% 0 50%);
+}
+.transition-card:hover .doors .incoming {
+  animation: trans-doors $motion both;
+}
+
+.flythrough .incoming {
+  transform: translateZ(-80px) scale(0.58);
+  opacity: 0.35;
+}
+.transition-card:hover .flythrough .incoming {
+  animation: trans-flythrough $motion both;
 }
 
 .slideX3D .incoming {
@@ -158,27 +264,12 @@ $motion: 0.62s cubic-bezier(0.22, 1, 0.36, 1);
   animation: trans-scale-x $motion both;
 }
 
-.scale .incoming {
-  transform: scale(0.38);
-  opacity: 0.7;
-}
-.transition-card:hover .scale .incoming {
-  animation: trans-scale $motion both;
-}
-
-.scaleReverse .incoming {
-  transform: scale(1.55);
-}
-.transition-card:hover .scaleReverse .incoming {
-  animation: trans-scale-reverse $motion both;
-}
-
 .random .incoming {
   transform: translate(28%, -12%) rotate(8deg) scale(0.82);
   opacity: 0.85;
 }
 .transition-card:hover .random .incoming {
-  animation: trans-shuffle 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: trans-shuffle 0.9s cubic-bezier(0.45, 0.05, 0.15, 1) both;
 }
 
 .apply-all {
@@ -266,6 +357,21 @@ $motion: 0.62s cubic-bezier(0.22, 1, 0.36, 1);
   0% { opacity: 0; }
   100% { opacity: 1; }
 }
+@keyframes trans-through-ink {
+  0% { opacity: 0; }
+  46% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes trans-veil {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  62% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes trans-dissolve {
+  0% { opacity: 0; transform: scale(0.88); }
+  100% { opacity: 1; transform: none; }
+}
 @keyframes trans-slide-x {
   0% { transform: translateX(100%); }
   100% { transform: translateX(0); }
@@ -273,6 +379,42 @@ $motion: 0.62s cubic-bezier(0.22, 1, 0.36, 1);
 @keyframes trans-slide-y {
   0% { transform: translateY(100%); }
   100% { transform: translateY(0); }
+}
+@keyframes trans-wipe {
+  0% { clip-path: inset(0 100% 0 0); }
+  100% { clip-path: inset(0); }
+}
+@keyframes trans-reveal {
+  0% { transform: none; opacity: 1; }
+  100% { transform: translateX(-42%); opacity: 0; }
+}
+@keyframes trans-scale {
+  0% { transform: scale(0.42); opacity: 0.35; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes trans-scale-reverse {
+  0% { transform: scale(1.55); opacity: 0.4; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes trans-morph {
+  0% { transform: scale(0.94); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes trans-morph-out {
+  0% { transform: none; opacity: 1; }
+  100% { transform: scale(1.05); opacity: 0; }
+}
+@keyframes trans-ripple {
+  0% { clip-path: circle(0% at 50% 50%); }
+  100% { clip-path: circle(75% at 50% 50%); }
+}
+@keyframes trans-doors {
+  0% { clip-path: inset(0 50% 0 50%); }
+  100% { clip-path: inset(0); }
+}
+@keyframes trans-flythrough {
+  0% { transform: translateZ(-90px) scale(0.52); opacity: 0.2; }
+  100% { transform: none; opacity: 1; }
 }
 @keyframes trans-slide-x3d {
   0% { transform: translateX(100%) rotateY(-48deg) scale(0.62); }
@@ -293,14 +435,6 @@ $motion: 0.62s cubic-bezier(0.22, 1, 0.36, 1);
 @keyframes trans-scale-x {
   0% { transform: scaleX(0.08); }
   100% { transform: scaleX(1); }
-}
-@keyframes trans-scale {
-  0% { transform: scale(0.22); opacity: 0.4; }
-  100% { transform: scale(1); opacity: 1; }
-}
-@keyframes trans-scale-reverse {
-  0% { transform: scale(1.8); opacity: 0.5; }
-  100% { transform: scale(1); opacity: 1; }
 }
 @keyframes trans-shuffle {
   0% { transform: translate(40%, 8%) rotate(12deg) scale(0.7); opacity: 0.35; }

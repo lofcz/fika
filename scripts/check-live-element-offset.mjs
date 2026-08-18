@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const {
   livePositionCss,
+  liveTranslate3dCss,
   applyLivePositionStyles,
 } = await import(pathToFileURL(join(root, 'src/utils/liveElementOffset.ts')).href)
 
@@ -19,6 +20,7 @@ assert(scaled.visualLeft === '105px' && scaled.visualTop === '51px', 'operate us
 
 const identity = livePositionCss(16, 8, 1)
 assert(identity.slideLeft === identity.visualLeft && identity.slideTop === identity.visualTop, 'scale 1 is the same in both spaces')
+assert(liveTranslate3dCss(40, -12) === 'translate3d(40px, -12px, 0)', 'GPU drag uses a compositor transform in slide space')
 
 const box = { style: { translate: '40px -12px', left: '100px', top: '80px' } }
 const operate = { style: { translate: '30px -9px', left: '75px', top: '60px' } }
@@ -46,6 +48,12 @@ assert(scale.includes("from '@/utils/liveElementSize'"), 'live resize writes siz
 const impl = readFileSync(join(root, 'src/utils/liveElementOffset.ts'), 'utf8')
 assert(/firstElementChild/.test(impl), 'live position targets the positioned box, not the unsized wrapper')
 assert(!/nodes\.box\.style\.translate = (?!'')/.test(impl), 'live offset never assigns a non-empty translate on the painted box')
+assert(/data\.liveTranslate3d|dataset\.liveTranslate3d/.test(impl), 'live offset supports opt-in GPU drag surfaces')
+
+const chartEl = readFileSync(join(root, 'src/views/components/element/ChartElement/index.tsx'), 'utf8')
+const chartCss = readFileSync(join(root, 'src/views/components/element/ChartElement/index.module.scss'), 'utf8')
+assert(chartEl.includes('data-live-translate3d'), 'charts opt into compositor-only drag movement')
+assert(chartCss.includes('translate3d(0, 0, 0)'), 'charts are promoted before the first drag frame')
 
 const textEl = readFileSync(join(root, 'src/views/components/element/TextElement/index.tsx'), 'utf8')
 assert(/isGesturing/.test(textEl), 'auto-size height must not rewrite during a drag gesture')

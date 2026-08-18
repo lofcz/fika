@@ -11,7 +11,7 @@ import type {
   SlideBackgroundImageSize,
 } from '@/types/slides'
 import { getBroken2LineDirection } from '@/utils/element'
-import { clampOutlineRadius } from '@/utils/elementOutline'
+import { clampOutlineRadius, resolveOutlineRadiusPx } from '@/utils/elementOutline'
 
 /** Line elements store stroke thickness in `width` (not a bounding-box width). */
 export const lineStrokeWidth = (element: Pick<PPTLineElement, 'width'>): number => element.width
@@ -85,7 +85,7 @@ export const imageCropRect = (
 
 export const imageCornerRadius = (element: PPTImageElement): number => {
   if (element.radius) return clampOutlineRadius(element.radius, element.width, element.height)
-  if (element.outline?.radius) return clampOutlineRadius(element.outline.radius, element.width, element.height)
+  if (element.outline?.radius) return resolveOutlineRadiusPx(element.outline.radius, element.width, element.height)
   if (element.clip?.shape === 'roundRect') return clampOutlineRadius(10, element.width, element.height)
   return 0
 }

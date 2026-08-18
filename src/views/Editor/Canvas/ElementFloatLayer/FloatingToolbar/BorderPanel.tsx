@@ -6,6 +6,7 @@ import { useCallback, memo } from 'react'
 
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { useMainStore, useSlidesStore } from '@/store'
+import { OUTLINE_RADIUS_MAX, OUTLINE_WIDTH_MAX } from '@/views/Editor/Toolbar/common/ElementOutline'
 import { useToolbarStoreSelect } from '@/views/Editor/Toolbar/common/handleElement'
 import type { LineStyleType, PPTElementOutline } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
@@ -13,8 +14,9 @@ import SVGLine from '@/views/Editor/Toolbar/common/SVGLine'
 import Popover from '@/components/Popover'
 import ColorButton from '@/components/ColorButton'
 import ColorPicker from '@/components/ColorPicker/index'
-import NumberInput from '@/components/NumberInput'
 import SelectCustom from '@/components/SelectCustom'
+import Slider from '@/components/Slider'
+import { outlineRadiusToPercent, percentToOutlineRadius } from '@/utils/elementOutline'
 import { findSlideElement } from '../floatCompare'
 
 function outlineEqual(prev?: PPTElementOutline, next?: PPTElementOutline) {
@@ -33,10 +35,14 @@ const BorderPanel = memo(() => {
     const el = findSlideElement(useSlidesStore.getState(), useMainStore.getState().handleElementId)
     return el && 'outline' in el ? el.outline : undefined
   }, outlineEqual)
+  const box = useToolbarStoreSelect(() => {
+    const el = findSlideElement(useSlidesStore.getState(), useMainStore.getState().handleElementId)
+    return el ? { width: el.width, height: el.height } : { width: 0, height: 0 }
+  }, (prev, next) => prev.width === next.width && prev.height === next.height)
   const lineStyleOptions: LineStyleType[] = ['solid', 'dashed', 'dotted']
   const { addHistorySnapshot } = useHistorySnapshot()
 
-  const updateOutline = useCallback((outlineProps: Partial<PPTElementOutline>) => {
+  const paintOutline = useCallback((outlineProps: Partial<PPTElementOutline>) => {
     const id = useMainStore.getState().handleElementId
     if (!id) return
     const slides = useSlidesStore.getState()
@@ -47,8 +53,12 @@ const BorderPanel = memo(() => {
       id,
       props: { outline: newOutline },
     })
+  }, [])
+
+  const updateOutline = useCallback((outlineProps: Partial<PPTElementOutline>) => {
+    paintOutline(outlineProps)
     addHistorySnapshot()
-  }, [addHistorySnapshot])
+  }, [addHistorySnapshot, paintOutline])
 
   return (
     <Popover
@@ -80,20 +90,27 @@ const BorderPanel = memo(() => {
           </div>
           <div className={cx('row')}>
             <div className={cx('label')}>{LL.canvas.floatingToolbar.border.widthLabel()}</div>
-            <NumberInput
+            <Slider
               className={cx('control')}
+              min={0}
+              max={Math.max(OUTLINE_WIDTH_MAX, outline?.width || 0)}
+              step={1}
               value={outline?.width || 0}
+              onInput={value => paintOutline({ width: value })}
               onUpdateValue={value => updateOutline({ width: value })}
             />
           </div>
           <div className={cx('row')}>
             <div className={cx('label')}>{LL.canvas.floatingToolbar.border.radiusLabel()}</div>
-            <NumberInput
+            <Slider
               className={cx('control')}
               min={0}
-              max={200}
-              value={outline?.radius || 0}
-              onUpdateValue={value => updateOutline({ radius: value })}
+              max={OUTLINE_RADIUS_MAX}
+              step={1}
+              tooltipSuffix="%"
+              value={outlineRadiusToPercent(outline?.radius, box.width, box.height)}
+              onInput={value => paintOutline({ radius: percentToOutlineRadius(value) })}
+              onUpdateValue={value => updateOutline({ radius: percentToOutlineRadius(value) })}
             />
           </div>
         </div>

@@ -118,7 +118,7 @@ export interface StructuredTextBody {
  * style?: solid or dashed
  * width?: stroke width
  * color?: stroke color
- * radius?: corner radius in px
+ * radius?: 0–1 of max rounding (ECMA-376 / pptxgenjs `rectRadius`). Values > 1 are legacy px.
  */
 export interface PPTElementOutline {
   style?: LineStyleType;
@@ -543,7 +543,28 @@ export interface SlideBackground {
   image?: SlideBackgroundImage;
   gradient?: Gradient;
 }
-export type TurningMode = 'no' | 'fade' | 'slideX' | 'slideY' | 'random' | 'slideX3D' | 'slideY3D' | 'rotate' | 'scaleY' | 'scaleX' | 'scale' | 'scaleReverse';
+export type TurningMode =
+  | 'no'
+  | 'fade'
+  | 'throughInk'
+  | 'dissolve'
+  | 'slideX'
+  | 'slideY'
+  | 'wipe'
+  | 'reveal'
+  | 'scale'
+  | 'scaleReverse'
+  | 'morph'
+  | 'ripple'
+  | 'doors'
+  | 'flythrough'
+  | 'slideX3D'
+  | 'slideY3D'
+  | 'rotate'
+  | 'scaleY'
+  | 'scaleX'
+  | 'random';
+export type TurningGroup = 'atmosphere' | 'motion' | 'depth' | 'classic';
 export interface NoteReply {
   id: string;
   content: string;

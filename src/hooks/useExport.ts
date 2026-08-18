@@ -25,6 +25,7 @@ import { resolveChartLabelColor } from '@/utils/textContrast';
 import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
 import { getFikaExportMediaResolver } from '@/configs/exportMediaResolver';
+import { transitionExportForMode } from '@/configs/transitions';
 import { createJobProgress, slideJobProgress } from '@/utils/jobProgress';
 const exportJob = createJobProgress();
 
@@ -582,53 +583,9 @@ export default () => {
     auto: 'afterPrevious'
   } as const;
 
-  const TRANSITION_MAP: Record<string, pptxgen.SlideTransitionProps> = {
-    fade: {
-      type: 'fade'
-    },
-    slideX: {
-      type: 'push',
-      direction: 'l'
-    },
-    slideY: {
-      type: 'push',
-      direction: 'u'
-    },
-    slideX3D: {
-      type: 'flip',
-      direction: 'r'
-    },
-    slideY3D: {
-      type: 'flip',
-      direction: 'u'
-    },
-    rotate: {
-      type: 'ferris',
-      direction: 'l'
-    },
-    scaleX: {
-      type: 'warp',
-      direction: 'in'
-    },
-    scaleY: {
-      type: 'warp',
-      direction: 'in'
-    },
-    scale: {
-      type: 'zoom',
-      direction: 'in'
-    },
-    scaleReverse: {
-      type: 'zoom',
-      direction: 'out'
-    },
-    random: {
-      type: 'random'
-    }
-  };
   const transitionForSlide = (mode?: Slide['turningMode']): pptxgen.SlideTransitionProps | undefined => {
-    if (!mode || mode === 'no') return undefined;
-    return TRANSITION_MAP[mode];
+    const mapped = transitionExportForMode(mode);
+    return mapped as pptxgen.SlideTransitionProps | undefined;
   };
 
   const animationForElement = (elId: string, animations?: PPTAnimation[]): pptxgen.AnimationConfig | undefined => {

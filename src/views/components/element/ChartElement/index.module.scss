@@ -1,5 +1,8 @@
 .editable-element-chart {
   position: absolute;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  will-change: transform;
 
   &.lock .element-content {
     cursor: default;

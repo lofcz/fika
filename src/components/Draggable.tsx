@@ -12,7 +12,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useSlidesStore } from '@/store'
-import LiveSlideThumb from '@/views/components/ThumbnailSlide/LiveSlideThumb'
+import CanvasSlideThumb from '@/views/components/ThumbnailSlide/CanvasSlideThumb'
 import type { ThumbnailVirtualizerApi } from '@/views/Editor/Thumbnails/useThumbnailVirtualizer'
 import {
   clampScrollTop,
@@ -48,14 +48,14 @@ function SlideOverlayLive({ paint }: { paint: OverlayPaint }) {
           boxShadow: '0 0 0 1px rgba(15, 23, 42, 0.12), 0 10px 28px rgba(15, 23, 42, 0.18)',
           background: '#fff',
         }}>
-          <LiveSlideThumb slide={slide} width={paint.thumbW} />
+          <CanvasSlideThumb slide={slide} width={paint.thumbW} />
         </div>
       ) : null}
     </div>
   )
 }
 
-/** Drag ghost for slide rails: the live slide DOM at thumb size. */
+/** Drag ghost for slide rails: the same direct-canvas thumbnail path. */
 export const slideDragOverlay: OverlayRender = paint => <SlideOverlayLive paint={paint} />
 
 export default function Draggable({

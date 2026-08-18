@@ -8,6 +8,7 @@ import usePasteTextClipboardData from '@/hooks/usePasteTextClipboardData'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements'
 import { buildContentSlide, buildTitleSlide } from '@/configs/starterPresentation'
+import { DEFAULT_TURNING_MODE } from '@/configs/animation'
 import { getLL } from '@/i18n/getLL'
 
 const getSelectedSlidesIndex = () => {
@@ -46,6 +47,8 @@ export default () => {
     })
     useSlidesStore.getState().updateSlideIndex(0)
     useMainStore.getState().setActiveElementIdList([])
+    emptySlide.turningMode = DEFAULT_TURNING_MODE
+    useSlidesStore.getState().setDefaultTurningMode(DEFAULT_TURNING_MODE)
     useSlidesStore.getState().setSlides([emptySlide])
   }
 

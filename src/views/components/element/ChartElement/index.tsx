@@ -48,6 +48,7 @@ const ChartElement = memo((props: IChartElementProps) => {
 
   return <div
     className={cx('editable-element-chart', { lock: elementInfo.lock })}
+    data-live-translate3d
     style={{
       top: elementInfo.top + 'px',
       left: elementInfo.left + 'px',
@@ -64,8 +65,7 @@ const ChartElement = memo((props: IChartElementProps) => {
           width: elementInfo.width + 'px',
           height: elementInfo.height + 'px',
           backgroundColor: elementInfo.fill,
-          borderRadius: outlineBorderRadius,
-          overflow: outlineBorderRadius ? 'hidden' : undefined
+          borderRadius: outlineBorderRadius
         }}
         onContextMenu={event => { event.stopPropagation(); event.preventDefault(); openContextmenu(event, contextmenus); }}
         onMouseDown={$event => { handleSelectElement($event); }}
@@ -77,19 +77,21 @@ const ChartElement = memo((props: IChartElementProps) => {
           height={elementInfo.height}
           outline={elementInfo.outline}
         />
-        <Chart
-          width={elementInfo.width}
-          height={elementInfo.height}
-          type={elementInfo.chartType}
-          data={elementInfo.data}
-          themeColors={resolveChartElementSeriesColors(elementInfo, {
-            background: currentSlide?.background,
-            fallbackSurface: theme?.backgroundColor,
-          })}
-          textColor={labelColor}
-          lineColor={gridColor}
-          options={elementInfo.options}
-        />
+        <div style={{ overflow: outlineBorderRadius ? 'hidden' : undefined, borderRadius: outlineBorderRadius, width: '100%', height: '100%' }}>
+          <Chart
+            width={elementInfo.width}
+            height={elementInfo.height}
+            type={elementInfo.chartType}
+            data={elementInfo.data}
+            themeColors={resolveChartElementSeriesColors(elementInfo, {
+              background: currentSlide?.background,
+              fallbackSurface: theme?.backgroundColor,
+            })}
+            textColor={labelColor}
+            lineColor={gridColor}
+            options={elementInfo.options}
+          />
+        </div>
       </div>
     </div>
   </div>;

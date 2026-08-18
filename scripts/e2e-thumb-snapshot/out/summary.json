@@ -1,224 +1,191 @@
 {
   "results": [
     {
-      "id": 1,
-      "name": "Text slide snapshot matches the live thumb pixels",
+      "name": "fidelity:text",
+      "pass": false,
+      "measured": {
+        "differingPct": 68.64,
+        "avgDelta": 23.78,
+        "width": 240,
+        "height": 136,
+        "tolerance": 14
+      }
+    },
+    {
+      "name": "fidelity:chart",
+      "pass": false,
+      "measured": {
+        "differingPct": 9.372,
+        "avgDelta": 6.07,
+        "width": 240,
+        "height": 136,
+        "tolerance": 8
+      }
+    },
+    {
+      "name": "fidelity:svg-heavy",
       "pass": true,
       "measured": {
-        "liveState": {
-          "live": true,
-          "bitmap": false
-        },
-        "bitmapState": {
-          "live": false,
-          "bitmap": true
-        },
-        "diff": {
-          "differingPct": 0,
-          "avgDelta": 0,
-          "maxDelta": 1,
-          "w": 240,
-          "h": 136
+        "differingPct": 7.947,
+        "avgDelta": 9.51,
+        "width": 240,
+        "height": 136,
+        "tolerance": 9
+      }
+    },
+    {
+      "name": "fidelity:image",
+      "pass": true,
+      "measured": {
+        "differingPct": 10.316,
+        "avgDelta": 16.18,
+        "width": 240,
+        "height": 136,
+        "tolerance": 13
+      }
+    },
+    {
+      "name": "fidelity:table",
+      "pass": false,
+      "measured": {
+        "differingPct": 14.078,
+        "avgDelta": 11.78,
+        "width": 240,
+        "height": 136,
+        "tolerance": 14
+      }
+    },
+    {
+      "name": "fidelity:gradient",
+      "pass": true,
+      "measured": {
+        "differingPct": 4.289,
+        "avgDelta": 7.22,
+        "width": 240,
+        "height": 136,
+        "tolerance": 5
+      }
+    },
+    {
+      "name": "invalidation:edit",
+      "pass": true,
+      "measured": {
+        "differingPct": 9.256,
+        "avgDelta": 8.24,
+        "width": 240,
+        "height": 136
+      }
+    },
+    {
+      "name": "sharpness:exact-dpr",
+      "pass": true,
+      "measured": {
+        "count": 10,
+        "exactDpr": true,
+        "screenSlidesInRail": 0,
+        "report": {
+          "paints": 21,
+          "cancelled": 0,
+          "maxQueue": 10,
+          "paintMs": [
+            7.5999999940395355,
+            1.7000000029802322,
+            3.5,
+            15.700000002980232,
+            10.199999988079071,
+            5.299999997019768,
+            5.700000002980232,
+            6.100000008940697,
+            89.3999999910593,
+            12.900000005960464,
+            1.2999999970197678,
+            0.5999999940395355,
+            10,
+            3.4000000059604645,
+            3.0999999940395355,
+            3.8999999910593033,
+            0.9000000059604645,
+            1.9000000059604645,
+            10.800000011920929,
+            2.6000000089406967,
+            3.5999999940395355
+          ],
+          "paintMsAvg": 9.53,
+          "paintMsMax": 89.4,
+          "queued": 0
         }
       }
     },
     {
-      "id": 2,
-      "name": "Chart slide snapshot matches the live thumb pixels",
+      "name": "architecture:no-screen-slide-mounts",
       "pass": true,
       "measured": {
-        "liveState": {
-          "live": true,
-          "bitmap": false
-        },
-        "bitmapState": {
-          "live": false,
-          "bitmap": true
-        },
-        "diff": {
-          "differingPct": 0,
-          "avgDelta": 0,
-          "maxDelta": 1,
-          "w": 240,
-          "h": 136
+        "count": 10,
+        "exactDpr": true,
+        "screenSlidesInRail": 0,
+        "report": {
+          "paints": 21,
+          "cancelled": 0,
+          "maxQueue": 10,
+          "paintMs": [
+            7.5999999940395355,
+            1.7000000029802322,
+            3.5,
+            15.700000002980232,
+            10.199999988079071,
+            5.299999997019768,
+            5.700000002980232,
+            6.100000008940697,
+            89.3999999910593,
+            12.900000005960464,
+            1.2999999970197678,
+            0.5999999940395355,
+            10,
+            3.4000000059604645,
+            3.0999999940395355,
+            3.8999999910593033,
+            0.9000000059604645,
+            1.9000000059604645,
+            10.800000011920929,
+            2.6000000089406967,
+            3.5999999940395355
+          ],
+          "paintMsAvg": 9.53,
+          "paintMsMax": 89.4,
+          "queued": 0
         }
-      }
-    },
-    {
-      "id": 3,
-      "name": "SVG-heavy slide snapshot matches the live thumb pixels",
-      "pass": true,
-      "measured": {
-        "liveState": {
-          "live": true,
-          "bitmap": false
-        },
-        "bitmapState": {
-          "live": false,
-          "bitmap": true
-        },
-        "diff": {
-          "differingPct": 0.031,
-          "avgDelta": 0.02,
-          "maxDelta": 65,
-          "w": 240,
-          "h": 136
-        }
-      }
-    },
-    {
-      "id": 4,
-      "name": "Image slide snapshot matches the live thumb pixels",
-      "pass": true,
-      "measured": {
-        "liveState": {
-          "live": true,
-          "bitmap": false
-        },
-        "bitmapState": {
-          "live": false,
-          "bitmap": true
-        },
-        "diff": {
-          "differingPct": 1.072,
-          "avgDelta": 0.22,
-          "maxDelta": 21,
-          "w": 240,
-          "h": 136
-        }
-      }
-    },
-    {
-      "id": 5,
-      "name": "Table slide snapshot matches the live thumb pixels",
-      "pass": true,
-      "measured": {
-        "liveState": {
-          "live": true,
-          "bitmap": false
-        },
-        "bitmapState": {
-          "live": false,
-          "bitmap": true
-        },
-        "diff": {
-          "differingPct": 0,
-          "avgDelta": 0,
-          "maxDelta": 1,
-          "w": 240,
-          "h": 136
-        }
-      }
-    },
-    {
-      "id": 6,
-      "name": "Gradient background snapshot matches the live thumb pixels",
-      "pass": true,
-      "measured": {
-        "liveState": {
-          "live": true,
-          "bitmap": false
-        },
-        "bitmapState": {
-          "live": false,
-          "bitmap": true
-        },
-        "diff": {
-          "differingPct": 0,
-          "avgDelta": 0.27,
-          "maxDelta": 2,
-          "w": 240,
-          "h": 136
-        }
-      }
-    },
-    {
-      "id": 7,
-      "name": "Editing a slide invalidates its bitmap and remounts live ink",
-      "pass": true,
-      "measured": {
-        "bitmap": false,
-        "live": true,
-        "text": true
-      }
-    },
-    {
-      "id": 8,
-      "name": "Edited content never shows through the stale bitmap",
-      "pass": true,
-      "measured": {
-        "bitmap": false,
-        "live": true,
-        "text": true
-      }
-    },
-    {
-      "id": 9,
-      "name": "Theme change invalidates cached bitmaps",
-      "pass": true,
-      "measured": {
-        "bitmaps": 0,
-        "invalidated": 1
-      }
-    },
-    {
-      "id": 10,
-      "name": "Pane resize invalidates cached bitmaps",
-      "pass": true,
-      "measured": {
-        "beforeResize": 0,
-        "afterResize": {
-          "cached": 0,
-          "invalidated": 1
-        }
-      }
-    },
-    {
-      "id": 11,
-      "name": "Warm re-visit mounts no ScreenSlide",
-      "pass": true,
-      "measured": {
-        "mounts": 5,
-        "cached": 1
-      }
-    },
-    {
-      "id": 12,
-      "name": "Re-edited slide re-captures a fresh bitmap",
-      "pass": true,
-      "measured": {
-        "captures": 13,
-        "failed": 0,
-        "avgMs": 112
       }
     }
   ],
-  "stats": {
-    "hits": 6,
-    "misses": 201,
-    "captures": 13,
-    "failed": 0,
-    "hostileSkips": 0,
-    "evictions": 0,
-    "invalidated": 1,
-    "captureMs": [
-      238,
-      89,
-      196,
-      93,
-      146,
-      37,
-      49,
-      42,
-      245,
-      49,
-      106,
-      62,
-      104
+  "paint": {
+    "paints": 21,
+    "cancelled": 0,
+    "maxQueue": 10,
+    "paintMs": [
+      7.5999999940395355,
+      1.7000000029802322,
+      3.5,
+      15.700000002980232,
+      10.199999988079071,
+      5.299999997019768,
+      5.700000002980232,
+      6.100000008940697,
+      89.3999999910593,
+      12.900000005960464,
+      1.2999999970197678,
+      0.5999999940395355,
+      10,
+      3.4000000059604645,
+      3.0999999940395355,
+      3.8999999910593033,
+      0.9000000059604645,
+      1.9000000059604645,
+      10.800000011920929,
+      2.6000000089406967,
+      3.5999999940395355
     ],
-    "captureMsAvg": 112,
-    "captureMsMax": 245,
-    "cached": 1,
-    "hostile": 0
+    "paintMsAvg": 9.53,
+    "paintMsMax": 89.4,
+    "queued": 0
   }
 }

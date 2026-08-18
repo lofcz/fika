@@ -104,13 +104,16 @@ async function waitForHooks(page) {
   throw new Error('fika store / agentic hooks did not appear')
 }
 
-/** Rail DOM token: mounted thumbs + their text mass — changes when the rail re-renders. */
+/** Rail token: mounted thumbs plus painted backing-store area. */
 async function railToken(page) {
   return page.evaluate(() => {
     const hosts = [...document.querySelectorAll('[data-thumbnail-slide]')]
-    let text = 0
-    for (const host of hosts) text += (host.querySelector('.screen-slide')?.textContent || '').length
-    return hosts.length * 100000 + text
+    let pixels = 0
+    for (const host of hosts) {
+      const canvas = host.querySelector('canvas[data-canvas-painted]')
+      pixels += canvas ? canvas.width * canvas.height : 0
+    }
+    return hosts.length * 100000 + pixels
   })
 }
 
@@ -133,15 +136,15 @@ async function waitIdle(page) {
   return last
 }
 
-/** Tag every mounted thumb tree; returns how many are STILL the same node later. */
+/** Tag every mounted thumb canvas; returns how many are still the same node later. */
 async function tagThumbTrees(page) {
   return page.evaluate(() => {
     const key = String(Date.now())
     let tagged = 0
     for (const host of document.querySelectorAll('[data-thumbnail-slide]')) {
-      const slide = host.querySelector('.screen-slide')
-      if (slide) {
-        slide.dataset.e2eTree = key
+      const canvas = host.querySelector('canvas[data-canvas-painted]')
+      if (canvas) {
+        canvas.dataset.e2eTree = key
         tagged += 1
       }
     }
@@ -151,7 +154,7 @@ async function tagThumbTrees(page) {
 }
 
 async function countSurvivingTrees(page) {
-  return page.evaluate(() => document.querySelectorAll(`.screen-slide[data-e2e-tree="${window.__FIKA_TREE_KEY}"]`).length)
+  return page.evaluate(() => document.querySelectorAll(`canvas[data-e2e-tree="${window.__FIKA_TREE_KEY}"]`).length)
 }
 
 function fatSlide(index) {
@@ -270,13 +273,13 @@ async function waitRafPair(page) {
 async function thumbState(page) {
   return page.evaluate(() => {
     const hosts = [...document.querySelectorAll('[data-thumbnail-slide]')]
-    // A thumb is painted when it shows the live tree OR its captured
-    // snapshot bitmap (see thumbSnapshot.ts — pixel-equivalent by contract).
+    // A thumb is painted once its final-DPR canvas has completed a pass.
+    const painted = hosts.filter(host => host.querySelector('canvas[data-canvas-painted]'))
     return {
       mounted: hosts.length,
-      unmounted: hosts.filter(host => !host.querySelector('.screen-slide') && !host.querySelector('.thumb-snapshot')).length,
-      live: hosts.filter(host => host.querySelector('.screen-slide')).length,
-      bitmap: hosts.filter(host => host.querySelector('.thumb-snapshot')).length,
+      unmounted: hosts.length - painted.length,
+      live: painted.length,
+      bitmap: 0,
     }
   })
 }
@@ -504,7 +507,7 @@ async function run(page) {
       const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
         el.getAttribute('data-thumbnail-slide') === current?.id
       ))
-      return !!host?.querySelector('.screen-slide, .thumb-snapshot')
+      return !!host?.querySelector('canvas[data-canvas-painted]')
     })
     if (!farCurrentMounted) await page.waitForTimeout(150)
   }

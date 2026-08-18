@@ -1,3 +1,5 @@
+@use '../Screen/turningModes.scss' as turning;
+
 .mobile-player {
   transform-origin: 0 0;
   background-color: #1d1d1d;
@@ -7,6 +9,7 @@
   position: relative;
   width: 100%;
   height: 100%;
+  perspective: 1600px;
 }
 .mobile-player .slide-item {
   position: absolute;
@@ -14,55 +17,20 @@
   left: 0;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  @include turning.turning-slide-item;
 
-  &:not(.last, .next) {
-    z-index: -1;
+  &.before,
+  &.after {
+    pointer-events: none;
   }
 
-  &.current {
-    z-index: 2;
+  &:not(.last, .next, .current) {
+    z-index: -1;
   }
 
   &.hide {
     opacity: 0;
-  }
-
-  &.turning-mode-no {
-    &.before {
-      transform: translateY(-100%);
-    }
-    &.after {
-      transform: translateY(100%);
-    }
-  }
-  &.turning-mode-fade {
-    transition: opacity .75s;
-    &.before {
-      pointer-events: none;
-      opacity: 0;
-    }
-    &.after {
-      pointer-events: none;
-      opacity: 0;
-    }
-  }
-  &.turning-mode-slideX {
-    transition: transform .35s;
-    &.before {
-      transform: translateX(-100%);
-    }
-    &.after {
-      transform: translateX(100%);
-    }
-  }
-  &.turning-mode-slideY {
-    transition: transform .35s;
-    &.before {
-      transform: translateY(-100%);
-    }
-    &.after {
-      transform: translateY(100%);
-    }
   }
 }
 .mobile-player .slide-content {

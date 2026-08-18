@@ -1,21 +1,5 @@
-/**
- * Architecture guard for the live-DOM thumbnail rail + snapshot cache.
- *
- * Thumbnails ARE the slide: a mounted thumb renders the genuine ScreenSlide
- * tree scaled with a CSS transform — the same renderer the presenter uses —
- * so the rail cannot drift from the editor canvas. On top of that, a row
- * that leaves the virtualizer window is snapshotted from that same tree
- * (thumbSnapshot.ts) and re-enters as an <img>. Nothing is captured ahead
- * of the viewport. The bitmap is only ever displayed while its key (slide
- * object identity, theme, viewport geometry, thumb box) still matches the
- * store.
- * (The old Konva-painter pipeline was a re-implementation and was removed;
- * capture now happens through snapdom from the real tree, off the display
- * path, with only the USED font families embedded.)
- *
- * These asserts keep the properties that make it fast and faithful.
- */
-import { readFileSync } from 'node:fs'
+/** Architecture guard for model-driven, final-DPR canvas thumbnails. */
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -29,22 +13,27 @@ function read(rel) {
   return readFileSync(join(root, rel), 'utf8')
 }
 
-const liveThumb = read('src/views/components/ThumbnailSlide/LiveSlideThumb.tsx')
+const canvasThumb = read('src/views/components/ThumbnailSlide/CanvasSlideThumb.tsx')
 const thumbnail = read('src/views/components/ThumbnailSlide/index.tsx')
 const scss = read('src/views/components/ThumbnailSlide/index.module.scss')
+const painter = read('src/paint/slidePainter.ts')
+const textPainter = read('src/paint/textPainter.ts')
+const scheduler = read('src/paint/scheduler.ts')
 
-assert(liveThumb.includes("from '@/views/Screen/ScreenSlide'"), 'the thumbnail renders the genuine ScreenSlide tree')
-assert(liveThumb.includes('SlideCaptureContext.Provider'), 'thumbnails mark the tree with SlideCaptureContext (media render paused)')
-assert(liveThumb.includes('SlideScaleContext.Provider'), 'thumbnails provide SlideScaleContext like the editor canvas does')
-assert(liveThumb.includes('animationIndex={Number.MAX_SAFE_INTEGER}'), 'animated elements are visible in thumbnails')
-assert(liveThumb.includes('scale={scale}'), 'ScreenSlide scales itself (presenter path) — never a wrapper transform on top')
-assert(!liveThumb.includes('live-slide-thumb-scale'), 'no double-scaling wrapper: the viewport transform is applied exactly once')
-assert(liveThumb.includes('arePaintedSlideIdentitiesEqual'), 'thumbs re-render only when the slide object identity changes')
-
-assert(thumbnail.includes('LiveSlideThumb'), 'ThumbnailSlide displays the live slide DOM')
-assert(!thumbnail.includes('previewRaster'), 'ThumbnailSlide has no raster pipeline dependency')
-assert(!thumbnail.includes('data-raster-pending'), 'no raster-pending skeleton state remains')
+assert(canvasThumb.includes("from '@/paint/slidePainter'"), 'the thumbnail delegates to the model-driven canvas painter')
+assert(canvasThumb.includes('devicePixelRatio'), 'the canvas backing store follows the final device DPR')
+assert(canvasThumb.includes('EDIT_DEBOUNCE_MS'), 'slide edits repaint through a bounded debounce')
+assert(canvasThumb.includes('arePaintedSlideIdentitiesEqual'), 'thumbs re-render only when slide identity changes')
+assert(!canvasThumb.includes('ScreenSlide'), 'thumbnail paint never mounts the ScreenSlide DOM')
+assert(!canvasThumb.includes('snapdom'), 'thumbnail paint never captures DOM')
+assert(thumbnail.includes('CanvasSlideThumb'), 'ThumbnailSlide displays the direct canvas renderer')
 assert(scss.includes('pointer-events: none'), 'thumbnail content is not interactive')
+assert(painter.includes('paintSlideToCanvas'), 'the slide painter exposes one canvas entry point')
+assert(painter.includes('new Path2D'), 'SVG paths are parsed by the browser Path2D engine')
+assert(painter.includes('basePaths') && painter.includes('scaledPaths'), 'parsed and transformed paths are cached')
+assert(painter.includes('getCachedPreviewImageBitmap'), 'images reuse the existing preview ImageBitmap tier')
+assert(textPainter.includes('prepareRichInline') && textPainter.includes('paintRichText'), 'Pretext drives rich text wrapping and Canvas paints fragments')
+assert(scheduler.includes('FRAME_BUDGET_MS') && scheduler.includes('PaintPriority'), 'paint work is frame-budgeted and visibility-prioritized')
 
 const shape = read('src/views/components/element/ShapeElement/BaseShapeElement.tsx')
 const text = read('src/views/components/element/TextElement/BaseTextElement.tsx')
@@ -54,37 +43,39 @@ assert(text.includes('selectSlideById'), 'text contrast resolves the owning slid
 assert(chart.includes('selectSlideById'), 'chart contrast resolves the owning slide, not the editor current slide')
 assert(shape.includes('SlideIdContext') && text.includes('SlideIdContext') && chart.includes('SlideIdContext'), 'owning-slide resolution comes from SlideIdContext')
 
-const video = read('src/views/components/element/VideoElement/ScreenVideoElement.tsx')
-const audio = read('src/views/components/element/AudioElement/ScreenAudioElement.tsx')
-assert(video.includes('SlideCaptureContext') && audio.includes('SlideCaptureContext'), 'media players render for thumbnails')
-assert(video.includes('capture ? false : elementInfo.autoplay'), 'video autoplay never fires inside a thumbnail')
-assert(audio.includes('capture ? false : elementInfo.autoplay'), 'audio autoplay never fires inside a thumbnail')
-
-assert(read('src/types/injectKey.ts').includes('SlideCaptureContext'), 'SlideCaptureContext is a shared inject key')
 assert(read('src/store/slides.ts').includes('selectSlideById'), 'the store exposes per-id slide selection')
 
 const draggable = read('src/components/Draggable.tsx')
-assert(draggable.includes('LiveSlideThumb'), 'the drag ghost is the live slide DOM at thumb size')
+assert(draggable.includes('CanvasSlideThumb'), 'the drag ghost uses the same direct canvas renderer')
 assert(draggable.includes('overlayRender'), 'the slide drag ghost is opt-in — generic lists keep their own behavior')
 
 const pkg = read('package.json')
 assert(!pkg.includes('"konva"'), 'konva dependency is gone with the painter stack')
+assert(!pkg.includes('@zumer/snapdom'), 'SnapDOM is gone with whole-slide DOM capture')
 
 assert(!read('src/views/Editor/Thumbnails/index.tsx').includes('previewRaster'), 'the rail wires no raster subscription')
-assert(!read('src/views/Editor/Thumbnails/index.tsx').includes('ThumbSnapshotSweeper'), 'the rail does not pre-render slides outside the viewport')
+const virtualizer = read('src/views/Editor/Thumbnails/useThumbnailVirtualizer.ts')
+assert(!virtualizer.includes('teardownThumbSnapshot'), 'virtualizer teardown does no capture work')
+assert(!virtualizer.includes('MAX_PINNED_TEARDOWNS'), 'leaving rows are never pinned for raster capture')
 
-// --- snapshot cache invariants (see src/.../thumbSnapshot.ts) ---
-const snapshot = read('src/views/components/ThumbnailSlide/thumbSnapshot.ts')
-assert(snapshot.includes('MAX_SNAPSHOTS'), 'the snapshot cache is LRU-bounded')
-assert(snapshot.includes('revokeObjectURL'), 'evicted snapshot blob URLs are revoked')
-assert(snapshot.includes('depsEqual'), 'snapshots are keyed by full render identity (slide/theme/geometry/box)')
-assert(snapshot.includes('excludeFonts'), 'capture embeds ONLY used font families — unused declared families are excluded')
-assert(snapshot.includes('draining'), 'captures are single-flight through one idle queue')
-assert(snapshot.includes('teardownThumbSnapshot'), 'snapshots are taken when the virtualizer tears a row down')
-assert(snapshot.includes('HOSTILE_CAPTURE_MS'), 'slides whose capture measures slow are marked hostile, not retried forever')
-assert(!snapshot.includes('preCache'), 'snapdom preCache must not scan the whole document')
-assert(liveThumb.includes('snapshot ? ('), 'a row with a bitmap never mounts a live tree')
-assert(!liveThumb.includes('requestThumbCapture'), 'visible rows do not capture — only teardown does')
+const readOnlyConsumers = [
+  'src/views/Editor/Thumbnails/index.tsx',
+  'src/views/Screen/PresenterView.tsx',
+  'src/views/Screen/BottomThumbnails.tsx',
+  'src/views/Mobile/MobileThumbnails.tsx',
+  'src/views/Editor/Thumbnails/Templates.tsx',
+  'src/views/Editor/Thumbnails/LayoutPicker.tsx',
+  'src/views/Screen/PresenterToolbar.tsx',
+  'src/views/Screen/SlideThumbnails.tsx',
+  'src/views/Mobile/MobilePreview.tsx',
+  'src/views/Mobile/MobilePlayer.tsx',
+  'src/views/Editor/Canvas/LinkDialog.tsx',
+]
+for (const consumer of readOnlyConsumers) {
+  assert(read(consumer).includes('ThumbnailSlide'), `${consumer} uses the shared canvas-backed thumbnail`)
+}
+assert(!existsSync(join(root, 'src/views/components/ThumbnailSlide/LiveSlideThumb.tsx')), 'the live DOM thumbnail implementation is deleted')
+assert(!existsSync(join(root, 'src/views/components/ThumbnailSlide/thumbSnapshot.ts')), 'the SnapDOM snapshot pipeline is deleted')
 
 if (failures.length) {
   console.error(`check-preview-raster: ${failures.length} failure(s)`)

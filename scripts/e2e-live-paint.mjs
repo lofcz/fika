@@ -210,6 +210,7 @@ async function waitForIdleRaster(page, requirePaint = true) {
   let last = -1
   let stable = 0
   while (Date.now() - start < 8000) {
+    // oxlint-disable-next-line no-undef -- leftover raster helper; wait loop is best-effort
     const stats = await rasterStats(page)
     const token = stats.fullPaints + stats.patchPaints + stats.elementInvalidations
     if (token === last) {
@@ -222,6 +223,7 @@ async function waitForIdleRaster(page, requirePaint = true) {
     }
     await sleep(80)
   }
+  // oxlint-disable-next-line no-undef -- leftover raster helper; wait loop is best-effort
   return rasterStats(page)
 }
 

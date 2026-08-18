@@ -155,6 +155,14 @@ export interface FikaImportPptxOptions {
    * leave off for genuine user files.
    */
   fixContrast?: boolean;
+  /**
+   * Override imported transitions. A single mode applies to every slide;
+   * an array or 0-/1-based index map sets individual slides. Missing entries
+   * keep the file transition, or Rise when the file has none.
+   */
+  turningMode?: import('@/types/slides').TurningMode | Array<import('@/types/slides').TurningMode | null | undefined> | Record<number, import('@/types/slides').TurningMode>;
+  /** Fallback when a slide has no file transition and no per-slide override. */
+  defaultTurningMode?: import('@/types/slides').TurningMode;
 }
 
 /** Public embed controller: legacy host methods plus the generic command and domain APIs. */

@@ -4,7 +4,8 @@ const cx = bindStyles(styles)
 import { memo } from 'react';
 
 import type { PPTElementOutline } from '@/types/slides';
-import useElementOutline, { useOutlinePath } from '@/views/components/element/hooks/useElementOutline';
+import useElementOutline from '@/views/components/element/hooks/useElementOutline';
+import { resolveOutlineRadiusPx } from '@/utils/elementOutline';
 export type IElementOutlineProps = {
   width: number;
   height: number;
@@ -17,8 +18,26 @@ const ElementOutline = memo((props: IElementOutlineProps) => {
     outlineColor,
     strokeDashArray
   } = useElementOutline(outline);
-  const outlinePath = useOutlinePath(outline, width, height);
   if (!outline) return null;
-  return <svg className={cx('element-outline')} overflow='visible' viewBox={`0 0 ${width} ${height}`} preserveAspectRatio='none' width='100%' height='100%'><path vectorEffect='non-scaling-stroke' strokeLinecap='butt' strokeMiterlimit='8' fill='transparent' d={outlinePath} stroke={outlineColor} strokeWidth={outlineWidth} strokeDasharray={strokeDashArray} /></svg>;
+  const radius = resolveOutlineRadiusPx(outline.radius, width, height);
+  return (
+    <svg className={cx('element-outline')} overflow="visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" width="100%" height="100%">
+      <rect
+        vectorEffect="non-scaling-stroke"
+        strokeLinecap="butt"
+        strokeMiterlimit={8}
+        fill="transparent"
+        x={0}
+        y={0}
+        width={width}
+        height={height}
+        rx={radius}
+        ry={radius}
+        stroke={outlineColor}
+        strokeWidth={outlineWidth}
+        strokeDasharray={strokeDashArray}
+      />
+    </svg>
+  );
 });
 export default ElementOutline;

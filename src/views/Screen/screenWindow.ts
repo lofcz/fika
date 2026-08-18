@@ -1,4 +1,5 @@
-import { DEFAULT_TURNING_MODE, SLIDE_ANIMATIONS } from '@/configs/animation'
+import { DEFAULT_TURNING_MODE } from '@/configs/animation'
+import { RANDOM_TURNING_MODES } from '@/configs/transitions'
 import type { TurningMode } from '@/types/slides'
 
 /** Neighbors kept in the turning window (current ± 1). */
@@ -15,9 +16,7 @@ export const isInScreenWindow = (index: number, current: number, radius = SCREEN
   Math.abs(current - index) <= radius
 )
 
-const RANDOM_MODES = SLIDE_ANIMATIONS
-  .map(item => item.value)
-  .filter((value): value is Exclude<TurningMode, 'random' | 'no'> => value !== 'random' && value !== 'no')
+const RANDOM_MODES = RANDOM_TURNING_MODES
 
 const randomById = new Map<string, TurningMode>()
 

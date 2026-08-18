@@ -5,6 +5,7 @@ import { computePlaceholderSlotHeight } from '@/utils/placeholderLayout';
 import { isListPlaceholderType, TEXT_PRESET_LARGE_TITLE, TEXT_PRESET_SMALL_TITLE } from '@/configs/textPresets';
 import { DEFAULT_THEME_COLORS } from '@/configs/theme';
 import { preferredInk } from '@/utils/textContrast';
+import { DEFAULT_TURNING_MODE } from '@/configs/animation';
 export interface StarterPresentationOptions {
   title?: string;
   titlePlaceholder?: string;
@@ -307,9 +308,11 @@ export const buildTwoColumnSlide = (LL: TranslationFunctions, options: StarterPr
 };
 export const buildStarterPresentation = (LL: TranslationFunctions, options: StarterPresentationOptions = {}): StarterPresentationDocument => {
   const normalized = normalizeStarterOptions(LL, options);
+  const cover = buildTitleSlide(LL, options);
+  cover.turningMode = DEFAULT_TURNING_MODE;
   return {
     title: normalized.title,
-    slides: [buildTitleSlide(LL, options)],
+    slides: [cover],
     theme: {
       backgroundColor: normalized.backgroundColor,
       themeColors: defaultThemeColors,

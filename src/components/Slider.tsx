@@ -15,6 +15,7 @@ type SliderBaseProps = {
   step?: number
   className?: string
   style?: CSSProperties
+  tooltipSuffix?: string
   'data-tooltip'?: string
   'data-style-slider'?: string
 }
@@ -53,6 +54,7 @@ const Slider = memo((vrProps: ISliderProps) => {
     range = false,
     className,
     style,
+    tooltipSuffix = '',
     'data-tooltip': dataTooltip,
     'data-style-slider': dataStyleSlider,
   } = vrProps
@@ -113,9 +115,10 @@ const Slider = memo((vrProps: ISliderProps) => {
     return NP.plus(diff, min)
   }
 
-  const tooltipValue = getNewValue(percentage)
-  const tooltipRangeStartValue = getNewValue(start)
-  const tooltipRangeEndValue = getNewValue(end)
+  const formatTooltip = (next: number) => `${getNewValue(next)}${tooltipSuffix}`
+  const tooltipValue = formatTooltip(percentage)
+  const tooltipRangeStartValue = formatTooltip(start)
+  const tooltipRangeEndValue = formatTooltip(end)
 
   useEffect(() => {
     if (draggingRef.current || max === min) return

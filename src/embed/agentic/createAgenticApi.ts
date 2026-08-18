@@ -12,6 +12,8 @@ import { agentTextToHtmlBreaks } from '@/utils/agentText';
 import { markdownToHtml } from '@/utils/markdown';
 import { applySlideBackgroundWithContrast, resolveChartLabelColor } from '@/utils/textContrast';
 import { resolveImportApply, type ImportApplyOptions } from '@/utils/importApply';
+import { applyImportTransitions, isTurningMode as isImportTurningMode, parseImportTurningMode } from '@/utils/importTransition';
+import { DEFAULT_TURNING_MODE } from '@/configs/animation';
 import { assertKnownTemplateId, buildTemplateSlidesCatalog, listTemplateCatalog, loadTemplatePayload, resolveTemplateSlide, templateThemePatch } from './templates';
 import { buildLayoutSlide, layoutExpectsBody, listLayouts, type FikaLayoutBackgroundMode } from './layouts';
 import { pickNearestAnchor, sequenceComposition, toApiCompositionPlan, type CompositionAnchor } from './composition';
@@ -329,6 +331,13 @@ function importApplyOptionsFromPayload(payload: unknown): ImportApplyOptions {
   if (payload.mode === 'append' || payload.mode === 'replace') options.mode = payload.mode;
   if (payload.cover === true || payload.cover === false) options.cover = payload.cover;
   if (payload.confirm === true || payload.confirm === false) options.confirm = payload.confirm;
+  if (payload.turningMode !== undefined) options.turningMode = parseImportTurningMode(payload.turningMode);
+  if (payload.defaultTurningMode !== undefined) {
+    if (!isImportTurningMode(payload.defaultTurningMode)) {
+      throw new Error(`Invalid defaultTurningMode: ${String(payload.defaultTurningMode)}`);
+    }
+    options.defaultTurningMode = payload.defaultTurningMode;
+  }
   return options;
 }
 function requireDocumentRecord(value: unknown, path: string): JsonRecord {
@@ -1461,14 +1470,24 @@ export function createAgenticApi(options: {
   });
   const importDocument = (payload: unknown) => {
     const document = importDocumentFromPayload(payload);
+    const importOptions = importApplyOptionsFromPayload(payload);
     const apply = resolveImportApply(stores.slides.slides.length, {
-      ...importApplyOptionsFromPayload(payload),
+      ...importOptions,
       confirm: false
     }).apply;
+    const applied = applyImportTransitions(document.slides, {
+      turningMode: importOptions.turningMode,
+      defaultTurningMode: importOptions.defaultTurningMode ?? DEFAULT_TURNING_MODE,
+    });
+    if (typeof importOptions.turningMode === 'string') {
+      stores.slides.setDefaultTurningMode(importOptions.turningMode);
+    } else if (apply === 'replace') {
+      stores.slides.setDefaultTurningMode(DEFAULT_TURNING_MODE);
+    }
     if (apply === 'append') {
       const {
         slides
-      } = cloneSlidesWithRemappedIds(document.slides, {
+      } = cloneSlidesWithRemappedIds(applied.slides, {
         preserveExternalSlideLinks: true
       });
       stores.slides.addSlide(slides);
@@ -1476,7 +1495,10 @@ export function createAgenticApi(options: {
       stores.main.setActiveGroupElementId('');
       return documentFromStores(stores);
     }
-    restoreDocument(stores, document);
+    restoreDocument(stores, {
+      ...document,
+      slides: applied.slides,
+    });
     return documentFromStores(stores);
   };
   register('import.json', importDocument);

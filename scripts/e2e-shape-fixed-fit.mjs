@@ -1,8 +1,7 @@
 /**
  * Fixed-height (locked) text must render 1:1 between the editor canvas and the
- * rail thumbnail. The rail mounts the genuine ScreenSlide tree (LiveSlideThumb),
- * so parity is DOM-to-DOM: the same text rect in slide coordinates on both
- * sides. Covers shrink (fit var < 1), a pure move drag, and mixed-size runs.
+ * rail thumbnail. The rail uses the same Pretext fitting math before its
+ * final-DPR Canvas text paint. Covers shrink, a move drag, and mixed-size runs.
  *
  *   node scripts/e2e-shape-fixed-fit.mjs
  */
@@ -97,7 +96,7 @@ try {
 
   /**
    * Text geometry of one element's rendering, in slide coordinates.
-   * `where`: 'editor' (canvas element) or 'thumb' (rail LiveSlideThumb).
+   * `where`: 'editor' (canvas element) or 'thumb' (rail canvas thumbnail).
    */
   const textGeometry = (where) => page.evaluate(({ id, where, needle }) => {
     const slides = window.__FIKA_SLIDES__.getState()

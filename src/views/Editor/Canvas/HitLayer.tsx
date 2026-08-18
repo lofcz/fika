@@ -261,8 +261,10 @@ const HitLayer = memo((props: IHitLayerProps) => {
     if (retargetEditingEditor(e, id)) return
     if (absorbOccludedHit(e, hitRects.find(item => item.id === id))) return
     stopHitEvent(e)
-    const edit = clicksToEditText(element)
-    props.selectElement(e.nativeEvent, element, false, edit)
+    // Shift/ctrl clicks toggle selection membership — never enter text edit.
+    const toggleModifier = e.shiftKey || e.ctrlKey || e.metaKey
+    const edit = !toggleModifier && clicksToEditText(element)
+    props.selectElement(e.nativeEvent, element, toggleModifier, edit)
     if (edit) props.beginEdit(id, { left: e.clientX, top: e.clientY })
   }
 

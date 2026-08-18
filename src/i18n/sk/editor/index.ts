@@ -550,6 +550,10 @@ const sk_editor: NamespaceEditorTranslation = {
       replaceHint: 'Zahodiť existujúce snímky a použiť importovaný súbor.',
       appendTitle: 'Pridať na koniec',
       appendHint: 'Ponechať existujúce snímky a pripojiť importované.',
+      transitionLabel: 'Prechody',
+      transitionKeep: 'Zo súboru',
+      transitionKeepHint: 'Zachovať prechod každého snímku. Snímky bez prechodu dostanú Výstup.',
+      transitionAll: 'Rovnaký na všetkých snímkach',
     },
     localeTooltip: 'Jazyk',
     locales: {

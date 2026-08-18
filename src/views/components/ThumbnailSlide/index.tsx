@@ -6,7 +6,7 @@ import { memo } from 'react'
 import type { Slide } from '@/types/slides'
 import { useSlidesStore } from '@/store'
 import { usePreviewDestSize } from '@/views/Editor/Thumbnails/paneSize'
-import LiveSlideThumb from './LiveSlideThumb'
+import CanvasSlideThumb from './CanvasSlideThumb'
 import { arePaintedSlideIdentitiesEqual } from './paintedSlide'
 
 export type IThumbnailSlideProps = {
@@ -15,7 +15,7 @@ export type IThumbnailSlideProps = {
   visible?: boolean
   showPlaceholders?: boolean
   className?: string
-  /** Opt into the identity-keyed snapshot cache (editor rail only). */
+  /** @deprecated Canvas thumbnails no longer use snapshot capture. */
   snapshot?: boolean
 }
 
@@ -32,14 +32,9 @@ export function areThumbnailSlidePropsEqual(prev: IThumbnailSlideProps, next: IT
     )
 }
 
-/**
- * The thumbnail IS the slide: the real ScreenSlide DOM scaled into the thumb
- * box (see LiveSlideThumb). The rail stays faithful to the editor canvas by
- * construction and updates live while editing — no raster pipeline, no
- * per-element capture booths, nothing to fall behind.
- */
+/** Model-driven slide thumbnail painted directly at the final device DPR. */
 const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
-  const { slide, size, visible = true, className, snapshot } = props
+  const { slide, size, visible = true, className } = props
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const storeSlide = useSlidesStore(s => s.slides.find(item => item.id === slide.id))
   const full = storeSlide ?? ('elements' in slide ? slide : undefined)
@@ -52,7 +47,7 @@ const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
       data-thumbnail-slide={slide.id}
       style={{ width: width + 'px', height: width * viewportRatio + 'px' }}
     >
-      {visible && full ? <LiveSlideThumb slide={full} width={width} snapshot={snapshot} /> : null}
+      {visible && full ? <CanvasSlideThumb slide={full} width={width} /> : null}
     </div>
   )
 }, areThumbnailSlidePropsEqual)

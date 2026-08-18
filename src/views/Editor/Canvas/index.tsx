@@ -13,7 +13,8 @@ import type { AlignmentLineProps, CreateCustomShapeData } from '@/types/edit'
 import { SlideScaleContext } from '@/types/injectKey'
 import { removeAllRanges } from '@/utils/selection'
 import { clientToCanvas } from '@/utils/canvasPointer'
-import { clicksToEditText, collectVisualHitPlan, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInAnyVisualHitRect, retryPendingCaret, type ClientCoords } from '@/utils/canvasHitTest'
+import { clicksToEditText, collectVisualHitPlan, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInAnyVisualHitRect, pointInVisualHitRect, retryPendingCaret, type ClientCoords, type VisualHitRect } from '@/utils/canvasHitTest'
+import { layerStackAtPoint, nextSelectableLayer, type LayerStackEntry } from '@/utils/layerStack'
 import { drainCommitQueue, registerAfterCommitDrain } from '@/utils/commitQueue'
 import { richTextAttrsFromElement } from '@/utils/prosemirror/richTextAttrsFromElement'
 import { KEYS } from '@/configs/hotkey'
@@ -52,6 +53,7 @@ import ShapeCreateCanvas from './ShapeCreateCanvas'
 import MultiSelectOperate from './Operate/MultiSelectOperate'
 import Operate from './Operate/index'
 import HitLayer from './HitLayer'
+import LayerStackPanel from './LayerStackPanel'
 import LinkDialog from './LinkDialog'
 import Modal from '@/components/Modal'
 import message from '@/utils/message'
@@ -86,9 +88,35 @@ const isOperateChromeTarget = (target: EventTarget | null) => (
   target instanceof Element && !!target.closest(OPERATE_CHROME_SELECTOR)
 )
 
+/**
+ * Full-box surfaces of a selected element's operate chrome. They physically
+ * cover the hit layer, so shift/ctrl selection-toggle clicks aimed at other
+ * elements under or over the selected box must be arbitrated by z-order
+ * instead of being absorbed by the chrome. Handles/toolbars keep priority.
+ */
+const SELECTION_TOGGLE_SURFACE_SELECTOR = [
+  '.operate-drag-border',
+  '.operate-drag-body',
+  '.operate-edit-surface',
+].join(',')
+
+const isSelectionToggleSurface = (target: EventTarget | null) => (
+  target instanceof Element && target.matches(SELECTION_TOGGLE_SURFACE_SELECTOR)
+)
+
 const HIDDEN_STYLE: CSSProperties = { display: 'none' }
 
 const cloneElements = (elements: PPTElement[]): PPTElement[] => elements.slice()
+
+type LayerStackState = {
+  /** Canvas-root-relative anchor of the probed point, in px. */
+  anchor: { x: number; y: number }
+  entries: LayerStackEntry[]
+  activeIndex: number
+}
+
+/** Alt+Click within this distance still counts as a click, not a drag. */
+const LAYER_CYCLE_CLICK_SLOP_PX = 4
 
 const findViewportWrapper = (from: EventTarget | null, canvas: HTMLElement | null): HTMLElement | null => {
   if (from instanceof Element) {
@@ -246,11 +274,99 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     }
   }, [])
 
+  const [layerStack, setLayerStack] = useState<LayerStackState | null>(null)
+  const layerStackRef = useRef(layerStack)
+  layerStackRef.current = layerStack
+  const closeLayerStack = useCallback(() => setLayerStack(null), [])
+
+  const currentSlideId = currentSlide?.id
+  useEffect(() => {
+    setLayerStack(null)
+  }, [currentSlideId, canvasScale])
+
+  const applyLayerStackSelection = useCallback((entry: LayerStackEntry, memberIds: string[]) => {
+    const main = useMainStore.getState()
+    if (main.editingElementId) drainCommitQueue()
+    const attrs = richTextAttrsFromElement(entry.element)
+    useMainStore.setState({
+      editorAreaFocus: true,
+      activeElementIdList: memberIds,
+      handleElementId: entry.element.id,
+      ...(attrs ? { richTextAttrs: attrs } : {}),
+    })
+  }, [])
+
+  /**
+   * Alt+Click layer cycling: each clean click advances the selection one
+   * layer down the stack under the pointer (wrapping), and anchors the layer
+   * picker there. Owns the whole gesture so operate chrome, the hit layer,
+   * and blank-click flows never react to alt-modified clicks.
+   */
+  const handleLayerCycleMouseDown = useCallback((e: ReactMouseEvent): boolean => {
+    if (!(e.altKey || useKeyboardStore.getState().altKeyState)) return false
+    if (useKeyboardStore.getState().spaceKeyState) return false
+    if (e.target instanceof Element && e.target.closest('.ProseMirror, .is-editing')) return false
+    const main = useMainStore.getState()
+    if (main.creatingElement || main.creatingCustomShape) return false
+    const wrapper = findViewportWrapper(e.target, canvasRef.current)
+    if (!wrapper) return false
+    const bounds = wrapper.getBoundingClientRect()
+    const entries = layerStackAtPoint(
+      elementList,
+      main.canvasScale,
+      main.hiddenElementIdList,
+      e.clientX - bounds.left,
+      e.clientY - bounds.top,
+    )
+    if (!entries.length) {
+      if (layerStackRef.current) setLayerStack(null)
+      return false
+    }
+    e.preventDefault()
+    e.stopPropagation()
+    e.nativeEvent.stopPropagation()
+    const startX = e.clientX
+    const startY = e.clientY
+    const onUp = (up: MouseEvent) => {
+      document.removeEventListener('mouseup', onUp, true)
+      if (Math.abs(up.clientX - startX) > LAYER_CYCLE_CLICK_SLOP_PX || Math.abs(up.clientY - startY) > LAYER_CYCLE_CLICK_SLOP_PX) return
+      const canvasBounds = canvasRef.current?.getBoundingClientRect()
+      if (!canvasBounds) return
+      const activeIds = useMainStore.getState().activeElementIdList
+      const currentIndex = entries.findIndex(entry => !entry.locked && entry.memberIds.some(id => activeIds.includes(id)))
+      const nextIndex = nextSelectableLayer(entries, currentIndex)
+      if (nextIndex < 0) return
+      applyLayerStackSelection(entries[nextIndex], [...entries[nextIndex].memberIds])
+      setLayerStack({
+        anchor: { x: startX - canvasBounds.left, y: startY - canvasBounds.top },
+        entries,
+        activeIndex: nextIndex,
+      })
+    }
+    document.addEventListener('mouseup', onUp, true)
+    return true
+  }, [elementList, applyLayerStackSelection])
+
+  const pickLayerStackEntry = useCallback((index: number) => {
+    const stack = layerStackRef.current
+    if (!stack) return
+    const entry = stack.entries[index]
+    if (!entry || entry.locked) return
+    const liveIds = new Set(elementList.map(element => element.id))
+    const memberIds = entry.memberIds.filter(id => liveIds.has(id))
+    if (!memberIds.length || !liveIds.has(entry.element.id)) return
+    applyLayerStackSelection(entry, memberIds)
+    setLayerStack({ ...stack, activeIndex: index })
+  }, [elementList, applyLayerStackSelection])
+
   const handleCanvasHitSelect = useCallback((e: ReactMouseEvent) => {
     if (e.button !== 0) return
-    if (isOperateChromeTarget(e.target)) return
+    if (handleLayerCycleMouseDown(e)) return
+    const keyboard = useKeyboardStore.getState()
+    const toggleModifier = e.shiftKey || e.ctrlKey || e.metaKey || selectCtrlOrShiftKeyActive(keyboard)
+    if (isOperateChromeTarget(e.target) && !(toggleModifier && isSelectionToggleSurface(e.target))) return
     if (e.target instanceof Element && e.target.closest('.hit-rect, .hit-border, .hit-edit')) return
-    if (useKeyboardStore.getState().spaceKeyState) return
+    if (keyboard.spaceKeyState) return
     const main = useMainStore.getState()
     if (main.creatingElement || main.creatingCustomShape) return
 
@@ -270,8 +386,26 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     const bounds = wrapper.getBoundingClientRect()
     const x = e.clientX - bounds.left
     const y = e.clientY - bounds.top
-    if (pointInAnyVisualHitRect(x, y, occluderRects)) return
+    let topOccluder: VisualHitRect | null = null
+    for (const rect of occluderRects) {
+      if (!pointInVisualHitRect(x, y, rect)) continue
+      if (!topOccluder || rect.zIndex > topOccluder.zIndex) topOccluder = rect
+    }
     const hit = hitTestVisualRects(hitRects, x, y)
+    if (!toggleModifier) {
+      if (topOccluder) return
+    }
+    else if (topOccluder && (!hit || topOccluder.zIndex > hit.zIndex)) {
+      // Toggle click on the selected element the user sees at this point:
+      // route it to selectElement so its shift/ctrl branches deselect it.
+      if (topOccluder.id === editingElementId || topOccluder.id === main.clipingImageElementId) return
+      const occludedElement = byId.get(topOccluder.id)
+      if (!occludedElement || occludedElement.lock) return
+      e.stopPropagation()
+      e.nativeEvent.stopPropagation()
+      selectElement(e.nativeEvent, occludedElement, true)
+      return
+    }
     if (!hit) return
     const element = byId.get(hit.id)
     if (!element || element.lock) return
@@ -280,13 +414,13 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     e.nativeEvent.stopPropagation()
 
     let canMove = true
-    if (hasInteractiveSurface(element)) {
+    if (!toggleModifier && hasInteractiveSurface(element)) {
       canMove = hitTestOperateTarget(x, y, hit, { interactive: true }) !== 'edit'
     }
     const edit = !canMove && clicksToEditText(element)
     selectElement(e.nativeEvent, element, canMove, edit)
     if (edit) beginEdit(element.id, { left: e.clientX, top: e.clientY })
-  }, [elementList, editingElementId, selectElement, beginEdit])
+  }, [elementList, editingElementId, selectElement, beginEdit, handleLayerCycleMouseDown])
 
   const handleClickBlankArea = useCallback((e: MouseEvent) => {
     if (isOperateChromeTarget(e.target)) return
@@ -618,6 +752,15 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
             />
           ) : null}
         </div>
+        {layerStack ? (
+          <LayerStackPanel
+            anchor={layerStack.anchor}
+            entries={layerStack.entries}
+            activeIndex={layerStack.activeIndex}
+            onPick={pickLayerStackEntry}
+            onClose={closeLayerStack}
+          />
+        ) : null}
         {spaceKeyState ? <div className={cx('drag-mask')} /> : null}
         <CanvasScrollbars canvasRef={canvasRef} viewportStyles={viewportStyles} canvasScale={canvasScale} pan={panViewport} />
         {showRuler ? <Ruler viewportStyles={viewportStyles} elementList={elementList} /> : null}

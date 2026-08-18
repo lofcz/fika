@@ -66,6 +66,10 @@ const pl_canvas: NamespaceCanvasTranslation = {
   bubbleMenuDisabled: 'Menu bąbelkowe elementów wyłączone',
   openPanelOnTextSelectionEnabled: 'Panel stylu otworzy się po zaznaczeniu tekstu',
   openPanelOnTextSelectionDisabled: 'Panel stylu nie otworzy się przy zaznaczaniu tekstu',
+  layerStack: {
+    title: 'Warstwy',
+    hint: 'Alt + kliknięcie · następna warstwa',
+  },
   shapeCreate: {
     scribbleHint: 'Rysuj odręcznie · Enter zatwierdza · Esc odrzuca',
     scribbleAccept: 'Zastosuj',

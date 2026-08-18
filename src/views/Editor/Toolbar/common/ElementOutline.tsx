@@ -4,15 +4,19 @@ const cx = bindStyles(styles)
 import { memo, useState } from 'react'
 
 import { useSlidesStore } from '@/store'
-import { getHandleElement, useHandleElementSelect } from './handleElement'
+import { getHandleElement, useHandleElementSelect, useHandleElementShallow } from './handleElement'
 import type { LineStyleType, PPTElementOutline } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import SVGLine from './SVGLine'
 import PanelSection from './PanelSection'
 import ColorSwatches from '@/components/ColorSwatches'
-import NumberInput from '@/components/NumberInput'
 import SelectCustom from '@/components/SelectCustom'
+import Slider from '@/components/Slider'
+import { outlineRadiusToPercent, percentToOutlineRadius, resolveOutlineRadiusPx } from '@/utils/elementOutline'
 import { useI18nContext } from '@/i18n/useI18nContext'
+
+export const OUTLINE_WIDTH_MAX = 20
+export const OUTLINE_RADIUS_MAX = 100
 
 export type IElementOutlineProps = {
   fixed?: boolean
@@ -22,6 +26,7 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
   const { LL } = useI18nContext()
   const theme = useSlidesStore(s => s.theme)
   const outline = useHandleElementSelect(el => el && 'outline' in el ? el.outline : undefined)
+  const box = useHandleElementShallow(el => el ? { width: el.width, height: el.height } : { width: 0, height: 0 })
   const hasOutline = !!outline
   const [lineStyleOptions] = useState<LineStyleType[]>(['solid', 'dashed', 'dotted'])
   const { addHistorySnapshot } = useHistorySnapshot()
@@ -30,16 +35,20 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
     borderColor: outline.color || '#18181b',
     borderStyle: outline.style === 'dotted' ? 'dotted' : outline.style === 'dashed' ? 'dashed' : 'solid',
     borderWidth: `${Math.min(3, Math.max(1.5, outline.width || 2))}px`,
-    borderRadius: `${Math.min(8, outline.radius || 2)}px`,
+    borderRadius: `${Math.min(8, resolveOutlineRadiusPx(outline.radius, 24, 24) || 2)}px`,
   }
 
-  const updateOutline = (outlineProps: Partial<PPTElementOutline>) => {
+  const paintOutline = (outlineProps: Partial<PPTElementOutline>) => {
     const el = getHandleElement()
     if (!el) return
     useSlidesStore.getState().updateElement({
       id: el.id,
       props: { outline: { ...outline, ...outlineProps } },
     })
+  }
+
+  const updateOutline = (outlineProps: Partial<PPTElementOutline>) => {
+    paintOutline(outlineProps)
     addHistorySnapshot()
   }
 
@@ -89,20 +98,27 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
             customTitle={LL.editor.multiStyle.borderColor()}
             onUpdateModelValue={value => updateOutline({ color: value })}
           />
-          <div className={cx('metric-row')}>
-            <NumberInput
-              className={cx('metric-input')}
+          <div className="field">
+            <span className="field-label">{LL.editor.multiStyle.borderWidth()}</span>
+            <Slider
+              min={0}
+              max={Math.max(OUTLINE_WIDTH_MAX, outline.width || 0)}
+              step={1}
               value={outline.width || 0}
-              data-tooltip={LL.editor.multiStyle.borderWidth()}
+              onInput={value => paintOutline({ width: value })}
               onUpdateValue={value => updateOutline({ width: value })}
             />
-            <NumberInput
-              className={cx('metric-input')}
+          </div>
+          <div className="field">
+            <span className="field-label">{LL.editor.multiStyle.borderRadius()}</span>
+            <Slider
               min={0}
-              max={200}
-              value={outline.radius || 0}
-              data-tooltip={LL.editor.multiStyle.borderRadius()}
-              onUpdateValue={value => updateOutline({ radius: value })}
+              max={OUTLINE_RADIUS_MAX}
+              step={1}
+              tooltipSuffix="%"
+              value={outlineRadiusToPercent(outline.radius, box.width, box.height)}
+              onInput={value => paintOutline({ radius: percentToOutlineRadius(value) })}
+              onUpdateValue={value => updateOutline({ radius: percentToOutlineRadius(value) })}
             />
           </div>
         </>

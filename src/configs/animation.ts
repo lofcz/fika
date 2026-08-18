@@ -1,5 +1,6 @@
 import type { TurningMode } from '@/types/slides';
 import { getLL } from '@/i18n/getLL';
+import { SLIDE_TRANSITION_DEFS } from './transitions';
 export const ANIMATION_DEFAULT_DURATION = 1000;
 export const ANIMATION_DEFAULT_TRIGGER = 'click';
 export const ANIMATION_CLASS_PREFIX = 'animate__';
@@ -264,37 +265,13 @@ interface SlideAnimation {
   value: TurningMode;
 }
 
-/** Default slide-to-slide transition when a slide has no turningMode (PowerPoint-style: none). */
-export const DEFAULT_TURNING_MODE: TurningMode = 'no'
+/** Default slide-to-slide transition when a slide has no turningMode (Rise). */
+export const DEFAULT_TURNING_MODE: TurningMode = 'slideY'
 
 /** Locale-free slide transition values. Resolve labels via getSlideAnimations(). */
 export const SLIDE_ANIMATIONS: {
   value: TurningMode;
-}[] = [{
-  value: 'no'
-}, {
-  value: 'random'
-}, {
-  value: 'slideX'
-}, {
-  value: 'slideY'
-}, {
-  value: 'slideX3D'
-}, {
-  value: 'slideY3D'
-}, {
-  value: 'fade'
-}, {
-  value: 'rotate'
-}, {
-  value: 'scaleY'
-}, {
-  value: 'scaleX'
-}, {
-  value: 'scale'
-}, {
-  value: 'scaleReverse'
-}];
+}[] = SLIDE_TRANSITION_DEFS.map(def => ({ value: def.value }))
 
 /** Enter animations with labels in the active locale. */
 export function getEnterAnimations(): AnimationPresetGroup[] {

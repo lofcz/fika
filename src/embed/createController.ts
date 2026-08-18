@@ -99,6 +99,8 @@ export function createController(
         confirm: importOptions?.confirm ?? false,
         fixedViewport: importOptions?.fixedViewport ?? false,
         fixContrast: importOptions?.fixContrast ?? false,
+        turningMode: importOptions?.turningMode,
+        defaultTurningMode: importOptions?.defaultTurningMode,
       })
       if (ok) emitChange?.()
       return ok

@@ -11,7 +11,7 @@ export default (src: string, videoRef: { current: HTMLVideoElement | null }) => 
       type = 'normal';
     }
     if (type === 'hls') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       const Hls = (window as any).Hls;
       if (Hls?.isSupported()) {
         const hls = new Hls();
@@ -21,7 +21,7 @@ export default (src: string, videoRef: { current: HTMLVideoElement | null }) => 
       }
     }
     else if (type === 'flv') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       const flvjs = (window as any).flvjs;
       if (flvjs?.isSupported()) {
         const flvPlayer = flvjs.createPlayer({

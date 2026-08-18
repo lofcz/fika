@@ -1,9 +1,12 @@
+@use './turningModes.scss' as turning;
+
 .screen-slide-list {
   background: #1d1d1d;
   position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
+  perspective: 1600px;
 
   &.paper {
     background: transparent;
@@ -21,119 +24,19 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
+  @include turning.turning-slide-item;
 
-  &:not(.last, .next) {
-    z-index: -1;
+  &.before,
+  &.after {
+    pointer-events: none;
   }
 
-  &.current {
-    z-index: 2;
+  &:not(.last, .next, .current) {
+    z-index: -1;
   }
 
   &.hide {
     opacity: 0;
-  }
-
-  &.turning-mode-no {
-    &.before {
-      transform: translateY(-100%);
-    }
-    &.after {
-      transform: translateY(100%);
-    }
-  }
-  &.turning-mode-fade {
-    transition: opacity .22s ease-out;
-    &.before {
-      pointer-events: none;
-      opacity: 0;
-    }
-    &.after {
-      pointer-events: none;
-      opacity: 0;
-    }
-  }
-  &.turning-mode-slideX {
-    transition: transform .2s ease-out;
-    &.before {
-      transform: translateX(-100%);
-    }
-    &.after {
-      transform: translateX(100%);
-    }
-  }
-  &.turning-mode-slideY {
-    transition: transform .2s ease-out;
-    &.before {
-      transform: translateY(-100%);
-    }
-    &.after {
-      transform: translateY(100%);
-    }
-  }
-  &.turning-mode-slideX3D {
-    transition: transform .22s ease-out;
-    &.before {
-      transform: translateX(-100%) scale(.5);
-    }
-    &.after {
-      transform: translateX(100%) scale(.5);
-    }
-  }
-  &.turning-mode-slideY3D {
-    transition: transform .22s ease-out;
-    &.before {
-      transform: translateY(-100%) scale(.5);
-    }
-    &.after {
-      transform: translateY(100%) scale(.5);
-    }
-  }
-  &.turning-mode-rotate {
-    transition: transform .22s ease-out;
-    transform-origin: 0 0;
-    &.before {
-      transform: rotate(90deg);
-    }
-    &.after {
-      transform: rotate(-90deg);
-    }
-  }
-  &.turning-mode-scaleY {
-    transition: transform .22s ease-out;
-    &.before {
-      transform: scaleY(.1);
-    }
-    &.after {
-      transform: scaleY(.1);
-    }
-  }
-  &.turning-mode-scaleX {
-    transition: transform .22s ease-out;
-    &.before {
-      transform: scaleX(.1);
-    }
-    &.after {
-      transform: scaleX(.1);
-    }
-  }
-  &.turning-mode-scale {
-    transition: transform .22s ease-out;
-    &.before {
-      transform: scale(.25);
-    }
-    &.after {
-      transform: scale(.25);
-    }
-  }
-  &.turning-mode-scaleReverse {
-    transition: transform .22s ease-out;
-    &.before {
-      transform: scale(2);
-    }
-    &.after {
-      transform: scale(2);
-    }
   }
 }
 .slide-content {

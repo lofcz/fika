@@ -122,7 +122,7 @@ const ThumbnailRailItem = memo(function ThumbnailRailItem({
         onContextMenu={event => { event.preventDefault(); event.stopPropagation(); openContextmenu(event, handlersRef.current.contextmenusThumbnailItem) }}
       >
         <div className={cx('label', { 'offset-left': index >= 99 })}>{fillDigit(index + 1, 2)}</div>
-        <ThumbnailSlide className={cx('thumbnail')} slide={{ id: slideId }} size={thumbSize} snapshot />
+        <ThumbnailSlide className={cx('thumbnail')} slide={{ id: slideId }} size={thumbSize} />
         {slide?.notes && slide.notes.length ? (
           <div className={cx('note-flag')} onClick={() => handlersRef.current.openNotesPanel()}>{slide.notes.length}</div>
         ) : null}
@@ -143,8 +143,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
   const hasSection = useMemo(() => slides.some(item => item.sectionTag), [slides])
   const { scrollRef, virtualizer, virtualItems, dest } = useThumbnailVirtualizer(slides, hasSection)
 
-  // The separator's pointer session bounds the thumbnail content freeze (see
-  // LiveSlideThumb): no mid-drag commits flipping between scaled and crisp.
+  // Pane resize repaints canvases at their final backing-store dimensions.
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
       if ((event.target as HTMLElement | null)?.closest?.('.layout-separator')) beginPaneDrag()

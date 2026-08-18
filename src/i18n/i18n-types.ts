@@ -255,6 +255,16 @@ export type NamespaceCanvasTranslation = {
 	 * S​t​y​l​e​ ​p​a​n​e​l​ ​s​t​a​y​s​ ​c​l​o​s​e​d​ ​w​h​e​n​ ​s​e​l​e​c​t​i​n​g​ ​t​e​x​t
 	 */
 	openPanelOnTextSelectionDisabled: string
+	layerStack: {
+		/**
+		 * L​a​y​e​r​s
+		 */
+		title: string
+		/**
+		 * A​l​t​ ​+​ ​C​l​i​c​k​ ​·​ ​n​e​x​t​ ​l​a​y​e​r
+		 */
+		hint: string
+	}
 	shapeCreate: {
 		/**
 		 * D​r​a​w​ ​f​r​e​e​l​y​ ​·​ ​E​n​t​e​r​ ​t​o​ ​a​p​p​l​y​ ​·​ ​E​s​c​ ​t​o​ ​d​i​s​c​a​r​d
@@ -1299,49 +1309,99 @@ export type NamespaceConfigsTranslation = {
 			 */
 			no: string
 			/**
-			 * R​a​n​d​o​m
-			 */
-			random: string
-			/**
-			 * H​o​r​i​z​o​n​t​a​l​ ​s​l​i​d​e
-			 */
-			slideX: string
-			/**
-			 * V​e​r​t​i​c​a​l​ ​s​l​i​d​e
-			 */
-			slideY: string
-			/**
-			 * H​o​r​i​z​o​n​t​a​l​ ​s​l​i​d​e​ ​(​3​D​)
-			 */
-			slideX3D: string
-			/**
-			 * V​e​r​t​i​c​a​l​ ​s​l​i​d​e​ ​(​3​D​)
-			 */
-			slideY3D: string
-			/**
 			 * F​a​d​e
 			 */
 			fade: string
 			/**
-			 * R​o​t​a​t​e
+			 * T​h​r​o​u​g​h​ ​i​n​k
 			 */
-			rotate: string
+			throughInk: string
 			/**
-			 * V​e​r​t​i​c​a​l​ ​s​t​r​e​t​c​h
+			 * D​i​s​s​o​l​v​e
 			 */
-			scaleY: string
+			dissolve: string
 			/**
-			 * H​o​r​i​z​o​n​t​a​l​ ​s​t​r​e​t​c​h
+			 * P​u​s​h
 			 */
-			scaleX: string
+			slideX: string
 			/**
-			 * Z​o​o​m​ ​i​n
+			 * R​i​s​e
+			 */
+			slideY: string
+			/**
+			 * W​i​p​e
+			 */
+			wipe: string
+			/**
+			 * R​e​v​e​a​l
+			 */
+			reveal: string
+			/**
+			 * Z​o​o​m
 			 */
 			scale: string
 			/**
 			 * Z​o​o​m​ ​o​u​t
 			 */
 			scaleReverse: string
+			/**
+			 * M​o​r​p​h
+			 */
+			morph: string
+			/**
+			 * R​i​p​p​l​e
+			 */
+			ripple: string
+			/**
+			 * D​o​o​r​s
+			 */
+			doors: string
+			/**
+			 * D​i​v​e
+			 */
+			flythrough: string
+			/**
+			 * F​l​i​p
+			 */
+			slideX3D: string
+			/**
+			 * F​l​i​p​ ​v​e​r​t​i​c​a​l
+			 */
+			slideY3D: string
+			/**
+			 * P​i​v​o​t
+			 */
+			rotate: string
+			/**
+			 * S​t​r​e​t​c​h​ ​v​e​r​t​i​c​a​l
+			 */
+			scaleY: string
+			/**
+			 * S​t​r​e​t​c​h
+			 */
+			scaleX: string
+			/**
+			 * R​a​n​d​o​m
+			 */
+			random: string
+		}
+		slideGroups: {
+			/**
+			 * A​t​m​o​s​p​h​e​r​e
+			 */
+			atmosphere: string
+			/**
+			 * M​o​t​i​o​n
+			 */
+			motion: string
+			/**
+			 * D​e​p​t​h
+			 */
+			depth: string
+			/**
+			 * C​l​a​s​s​i​c
+			 */
+			classic: string
 		}
 	}
 	chart: {
@@ -1695,6 +1755,10 @@ export type NamespaceConfigsTranslation = {
 			 */
 			cycleFocusElement: string
 			/**
+			 * C​y​c​l​e​ ​l​a​y​e​r​s​ ​u​n​d​e​r​ ​t​h​e​ ​c​u​r​s​o​r
+			 */
+			cycleLayersAtPoint: string
+			/**
 			 * C​o​n​f​i​r​m​ ​i​m​a​g​e​ ​c​r​o​p
 			 */
 			confirmImageCrop: string
@@ -1820,6 +1884,10 @@ export type NamespaceConfigsTranslation = {
 			 * R​i​g​h​t​-​c​l​i​c​k
 			 */
 			rightClick: string
+			/**
+			 * A​l​t​ ​+​ ​c​l​i​c​k
+			 */
+			altClick: string
 			/**
 			 * L​ ​/​ ​r​i​g​h​t​-​c​l​i​c​k​ ​d​r​a​g
 			 */
@@ -2887,11 +2955,11 @@ export type NamespaceEditorTranslation = {
 	}
 	slideAnimation: {
 		/**
-		 * A​p​p​l​y​ ​t​o​ ​a​l​l​ ​s​l​i​d​e​s
+		 * U​s​e​ ​o​n​ ​e​v​e​r​y​ ​s​l​i​d​e
 		 */
 		applyToAll: string
 		/**
-		 * A​p​p​l​i​e​d​ ​t​o​ ​a​l​l​ ​s​l​i​d​e​s
+		 * O​n​ ​e​v​e​r​y​ ​s​l​i​d​e
 		 */
 		appliedToAll: string
 	}
@@ -3322,6 +3390,22 @@ export type NamespaceEditorTranslation = {
 			 * K​e​e​p​ ​c​u​r​r​e​n​t​ ​s​l​i​d​e​s​ ​a​n​d​ ​a​p​p​e​n​d​ ​t​h​e​ ​i​m​p​o​r​t​e​d​ ​o​n​e​s​.
 			 */
 			appendHint: string
+			/**
+			 * T​r​a​n​s​i​t​i​o​n​s
+			 */
+			transitionLabel: string
+			/**
+			 * F​r​o​m​ ​f​i​l​e
+			 */
+			transitionKeep: string
+			/**
+			 * K​e​e​p​ ​e​a​c​h​ ​s​l​i​d​e​’​s​ ​t​r​a​n​s​i​t​i​o​n​.​ ​S​l​i​d​e​s​ ​w​i​t​h​o​u​t​ ​o​n​e​ ​g​e​t​ ​R​i​s​e​.
+			 */
+			transitionKeepHint: string
+			/**
+			 * S​a​m​e​ ​o​n​ ​e​v​e​r​y​ ​s​l​i​d​e
+			 */
+			transitionAll: string
 		}
 		/**
 		 * L​a​n​g​u​a​g​e
@@ -5408,6 +5492,16 @@ export type TranslationFunctions = {
 		 * Style panel stays closed when selecting text
 		 */
 		openPanelOnTextSelectionDisabled: () => LocalizedString
+		layerStack: {
+			/**
+			 * Layers
+			 */
+			title: () => LocalizedString
+			/**
+			 * Alt + Click · next layer
+			 */
+			hint: () => LocalizedString
+		}
 		shapeCreate: {
 			/**
 			 * Draw freely · Enter to apply · Esc to discard
@@ -6443,49 +6537,99 @@ export type TranslationFunctions = {
 				 */
 				no: () => LocalizedString
 				/**
-				 * Random
-				 */
-				random: () => LocalizedString
-				/**
-				 * Horizontal slide
-				 */
-				slideX: () => LocalizedString
-				/**
-				 * Vertical slide
-				 */
-				slideY: () => LocalizedString
-				/**
-				 * Horizontal slide (3D)
-				 */
-				slideX3D: () => LocalizedString
-				/**
-				 * Vertical slide (3D)
-				 */
-				slideY3D: () => LocalizedString
-				/**
 				 * Fade
 				 */
 				fade: () => LocalizedString
 				/**
-				 * Rotate
+				 * Through ink
 				 */
-				rotate: () => LocalizedString
+				throughInk: () => LocalizedString
 				/**
-				 * Vertical stretch
+				 * Dissolve
 				 */
-				scaleY: () => LocalizedString
+				dissolve: () => LocalizedString
 				/**
-				 * Horizontal stretch
+				 * Push
 				 */
-				scaleX: () => LocalizedString
+				slideX: () => LocalizedString
 				/**
-				 * Zoom in
+				 * Rise
+				 */
+				slideY: () => LocalizedString
+				/**
+				 * Wipe
+				 */
+				wipe: () => LocalizedString
+				/**
+				 * Reveal
+				 */
+				reveal: () => LocalizedString
+				/**
+				 * Zoom
 				 */
 				scale: () => LocalizedString
 				/**
 				 * Zoom out
 				 */
 				scaleReverse: () => LocalizedString
+				/**
+				 * Morph
+				 */
+				morph: () => LocalizedString
+				/**
+				 * Ripple
+				 */
+				ripple: () => LocalizedString
+				/**
+				 * Doors
+				 */
+				doors: () => LocalizedString
+				/**
+				 * Dive
+				 */
+				flythrough: () => LocalizedString
+				/**
+				 * Flip
+				 */
+				slideX3D: () => LocalizedString
+				/**
+				 * Flip vertical
+				 */
+				slideY3D: () => LocalizedString
+				/**
+				 * Pivot
+				 */
+				rotate: () => LocalizedString
+				/**
+				 * Stretch vertical
+				 */
+				scaleY: () => LocalizedString
+				/**
+				 * Stretch
+				 */
+				scaleX: () => LocalizedString
+				/**
+				 * Random
+				 */
+				random: () => LocalizedString
+			}
+			slideGroups: {
+				/**
+				 * Atmosphere
+				 */
+				atmosphere: () => LocalizedString
+				/**
+				 * Motion
+				 */
+				motion: () => LocalizedString
+				/**
+				 * Depth
+				 */
+				depth: () => LocalizedString
+				/**
+				 * Classic
+				 */
+				classic: () => LocalizedString
 			}
 		}
 		chart: {
@@ -6839,6 +6983,10 @@ export type TranslationFunctions = {
 				 */
 				cycleFocusElement: () => LocalizedString
 				/**
+				 * Cycle layers under the cursor
+				 */
+				cycleLayersAtPoint: () => LocalizedString
+				/**
 				 * Confirm image crop
 				 */
 				confirmImageCrop: () => LocalizedString
@@ -6964,6 +7112,10 @@ export type TranslationFunctions = {
 				 * Right-click
 				 */
 				rightClick: () => LocalizedString
+				/**
+				 * Alt + click
+				 */
+				altClick: () => LocalizedString
 				/**
 				 * L / right-click drag
 				 */
@@ -8014,11 +8166,11 @@ export type TranslationFunctions = {
 		}
 		slideAnimation: {
 			/**
-			 * Apply to all slides
+			 * Use on every slide
 			 */
 			applyToAll: () => LocalizedString
 			/**
-			 * Applied to all slides
+			 * On every slide
 			 */
 			appliedToAll: () => LocalizedString
 		}
@@ -8440,6 +8592,22 @@ export type TranslationFunctions = {
 				 * Keep current slides and append the imported ones.
 				 */
 				appendHint: () => LocalizedString
+				/**
+				 * Transitions
+				 */
+				transitionLabel: () => LocalizedString
+				/**
+				 * From file
+				 */
+				transitionKeep: () => LocalizedString
+				/**
+				 * Keep each slide’s transition. Slides without one get Rise.
+				 */
+				transitionKeepHint: () => LocalizedString
+				/**
+				 * Same on every slide
+				 */
+				transitionAll: () => LocalizedString
 			}
 			/**
 			 * Language

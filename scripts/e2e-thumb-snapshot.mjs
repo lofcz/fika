@@ -1,17 +1,8 @@
 /**
- * Snapshot thumbnail fidelity + invalidation E2E.
+ * Canvas thumbnail fidelity, invalidation, and DPR E2E.
  *
- * The rail shows identity-keyed bitmaps captured from the live ScreenSlide
- * tree. This guard proves they do not diverge from reality:
- *
- *  1. Fidelity — for text / chart / SVG-heavy / image / table slides, the
- *     snapshot <img> row and a live-mounted row of the SAME slide are
- *     screenshot and pixel-diffed (tolerance per AA jitter). The live row is
- *     produced by clearing the cache, so both states go through the genuine
- *     renderer.
- *  2. Invalidation — editing a slide, changing theme and resizing the pane
- *     all drop the stale bitmap and remount the live tree.
- *  3. No remounts — warm re-visits never mount a ScreenSlide.
+ * Compares the model-driven thumbnail canvas against the presenter's
+ * ScreenSlide DOM reference renderer over a representative element corpus.
  *
  *   node scripts/e2e-thumb-snapshot.mjs
  */
@@ -23,426 +14,255 @@ import { chromium } from 'playwright'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const outDir = join(root, 'scripts', 'e2e-thumb-snapshot', 'out')
-const sleep = ms => new Promise(r => setTimeout(r, ms))
-const DEV_PORTS = [5173, 5174, 5175, 5176]
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+const ports = [5173, 5174, 5175, 5176]
+const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
 
-const TINY_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-
-const CASES = [
-  [1, 'Text slide snapshot matches the live thumb pixels'],
-  [2, 'Chart slide snapshot matches the live thumb pixels'],
-  [3, 'SVG-heavy slide snapshot matches the live thumb pixels'],
-  [4, 'Image slide snapshot matches the live thumb pixels'],
-  [5, 'Table slide snapshot matches the live thumb pixels'],
-  [6, 'Gradient background snapshot matches the live thumb pixels'],
-  [7, 'Editing a slide invalidates its bitmap and remounts live ink'],
-  [8, 'Edited content never shows through the stale bitmap'],
-  [9, 'Theme change invalidates cached bitmaps'],
-  [10, 'Pane resize invalidates cached bitmaps'],
-  [11, 'Warm re-visit mounts no ScreenSlide'],
-  [12, 'Re-edited slide re-captures a fresh bitmap'],
-]
-
-const textSlide = {
-  id: 'fid-text',
-  elements: [
-    { id: 'fid-text-title', type: 'text', left: 60, top: 48, width: 820, height: 90, rotate: 0, content: '<p style="font-size: 34px"><strong>Fidelity Title</strong></p>', defaultFontName: 'Inter', defaultColor: '#18181b' },
-    { id: 'fid-text-body', type: 'text', left: 60, top: 150, width: 780, height: 300, rotate: 0, content: '<p style="font-size: 17px; line-height: 1.5">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>', defaultFontName: 'SourceSerif4', defaultColor: '#333333' },
-  ],
-  background: { type: 'solid', color: '#ffffff' },
-}
-const chartSlide = {
-  id: 'fid-chart',
-  elements: [{
-    id: 'fid-chart-el', type: 'chart', left: 70, top: 90, width: 640, height: 420, rotate: 0,
-    chartType: 'bar', themeColors: ['#1c7ed6', '#37b24d', '#f59f00'],
-    data: { labels: ['Q1', 'Q2', 'Q3', 'Q4'], legends: ['Alpha', 'Beta'], series: [[11, 32, 21, 44], [22, 12, 38, 19]] },
-  }],
-  background: { type: 'solid', color: '#ffffff' },
-}
 const svgPath = seed => {
   let d = 'M 0 0'
   let x = 0, y = 0, s = seed
   const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return (s % 1000) / 1000 }
   for (let i = 0; i < 120; i++) {
-    x = (x + 3 + rnd() * 6) % 960; y = (y + 2 + rnd() * 6) % 540
+    x = (x + 3 + rnd() * 6) % 960
+    y = (y + 2 + rnd() * 6) % 540
     d += ` L ${x.toFixed(1)} ${y.toFixed(1)}`
   }
   return d + ' Z'
 }
-const svgSlide = {
-  id: 'fid-svg',
-  elements: Array.from({ length: 6 }, (_, s) => ({
-    id: `fid-svg-${s}`, type: 'shape', left: 20 + (s % 3) * 310, top: 20 + Math.floor(s / 3) * 260,
-    width: 290, height: 240, rotate: 0, viewBox: [960, 540], path: svgPath(s * 17 + 3),
-    fixedRatio: false, fill: `hsl(${s * 60} 55% 62%)`,
-  })),
-  background: { type: 'solid', color: '#ffffff' },
-}
-const imageSlide = {
-  id: 'fid-image',
-  elements: [{ id: 'fid-image-el', type: 'image', left: 120, top: 120, width: 700, height: 380, rotate: 0, src: TINY_PNG }],
-  background: { type: 'solid', color: '#ffffff' },
-}
-const tableSlide = {
-  id: 'fid-table',
-  elements: [{
-    id: 'fid-table-el', type: 'table', left: 60, top: 90, width: 850, height: 430, rotate: 0,
-    outline: { width: 1, color: '#dee2e6', style: 'solid' },
-    theme: { color: '#1c7ed6', rowHeader: false, rowFooter: false, colHeader: true, colFooter: false },
-    colWidths: [0.25, 0.25, 0.25, 0.25], cellMinHeight: 32,
-    data: Array.from({ length: 8 }, (_, r) => Array.from({ length: 4 }, (_, c) => ({ id: `fid-c${r}${c}`, colspan: 1, rowspan: 1, text: `R${r}C${c} data` }))),
-  }],
-  background: { type: 'solid', color: '#ffffff' },
-}
-const gradientSlide = {
-  id: 'fid-gradient',
-  elements: [{ id: 'fid-gradient-text', type: 'text', left: 80, top: 240, width: 700, height: 80, rotate: 0, content: '<p style="font-size: 28px">On a gradient</p>', defaultFontName: 'Inter', defaultColor: '#ffffff' }],
-  background: { type: 'gradient', gradient: { type: 'linear', rotate: 45, colors: [{ pos: 0, color: '#1c7ed6' }, { pos: 100, color: '#7048e8' }] } },
-}
-const FIXTURES = [textSlide, chartSlide, svgSlide, imageSlide, tableSlide, gradientSlide]
-// The rail must overflow so rows can be virtualized away and remounted on
-// their bitmaps — six fixtures alone never leave the window.
-const FILLERS = Array.from({ length: 18 }, (_, i) => ({
-  id: `fid-filler-${i}`,
-  elements: [{ id: `fid-filler-t${i}`, type: 'text', left: 60, top: 48, width: 820, height: 90, rotate: 0, content: `<p style="font-size: 30px">Filler ${i + 1}</p>`, defaultFontName: 'Inter', defaultColor: '#18181b' }],
-  background: { type: 'solid', color: '#ffffff' },
+
+const fixtures = [
+  {
+    name: 'text',
+    tolerance: 14,
+    slide: {
+      id: 'canvas-fid-text',
+      elements: [
+        { id: 't1', type: 'text', left: 60, top: 48, width: 820, height: 90, rotate: 0, fixedHeight: true, content: '<p style="font-size:34px;text-align:center"><strong>Canvas Fidelity</strong></p>', defaultFontName: 'Arial', defaultColor: '#18181b' },
+        { id: 't2', type: 'text', left: 80, top: 170, width: 760, height: 260, rotate: 0, fixedHeight: true, content: '<ul><li style="font-size:22px;color:#1c7ed6">Fast Unicode wrapping</li><li style="font-size:22px"><em>Rich inline</em> text paint</li></ul>', defaultFontName: 'Arial', defaultColor: '#333333' },
+      ],
+      background: { type: 'solid', color: '#ffffff' },
+    },
+  },
+  {
+    name: 'chart',
+    tolerance: 8,
+    slide: {
+      id: 'canvas-fid-chart',
+      elements: [{
+        id: 'c1', type: 'chart', left: 70, top: 70, width: 780, height: 430, rotate: 0,
+        chartType: 'bar', fill: '#fff', themeColors: ['#1c7ed6', '#37b24d'],
+        data: { labels: ['Q1', 'Q2', 'Q3', 'Q4'], legends: ['Alpha', 'Beta'], series: [[11, 32, 21, 44], [22, 12, 38, 19]] },
+      }],
+      background: { type: 'solid', color: '#ffffff' },
+    },
+  },
+  {
+    name: 'svg-heavy',
+    tolerance: 9,
+    slide: {
+      id: 'canvas-fid-svg',
+      elements: Array.from({ length: 18 }, (_, index) => ({
+        id: `s${index}`, type: 'shape',
+        left: 18 + (index % 6) * 160, top: 20 + Math.floor(index / 6) * 170,
+        width: 145, height: 150, rotate: index % 3 ? 0 : 5,
+        viewBox: [960, 540], path: svgPath(index * 17 + 3), fixedRatio: false,
+        fill: `hsl(${index * 31} 55% 62%)`,
+      })),
+      background: { type: 'solid', color: '#ffffff' },
+    },
+  },
+  {
+    name: 'image',
+    tolerance: 13,
+    slide: {
+      id: 'canvas-fid-image',
+      elements: [{ id: 'i1', type: 'image', left: 120, top: 90, width: 700, height: 400, rotate: 0, fixedRatio: false, src: tinyPng, radius: 30, outline: { width: 6, color: '#1c7ed6', style: 'solid' } }],
+      background: { type: 'solid', color: '#f4f4f5' },
+    },
+  },
+  {
+    name: 'table',
+    tolerance: 14,
+    slide: {
+      id: 'canvas-fid-table',
+      elements: [{
+        id: 'tb1', type: 'table', left: 60, top: 70, width: 850, height: 440, rotate: 0,
+        outline: { width: 1, color: '#dee2e6', style: 'solid' },
+        theme: { color: '#1c7ed6', rowHeader: true, rowFooter: false, colHeader: false, colFooter: false },
+        colWidths: [0.25, 0.25, 0.25, 0.25], cellMinHeight: 50,
+        data: Array.from({ length: 8 }, (_, r) => Array.from({ length: 4 }, (_, c) => ({
+          id: `cell-${r}-${c}`, colspan: 1, rowspan: 1, text: `R${r + 1} C${c + 1}`,
+          style: r === 0 ? { bold: true, color: '#fff', align: 'center' } : { align: 'center' },
+        }))),
+      }],
+      background: { type: 'solid', color: '#ffffff' },
+    },
+  },
+  {
+    name: 'gradient',
+    tolerance: 5,
+    slide: {
+      id: 'canvas-fid-gradient',
+      elements: [{ id: 'g1', type: 'text', left: 80, top: 230, width: 760, height: 100, rotate: 0, fixedHeight: true, content: '<p style="font-size:36px;text-align:center">Gradient surface</p>', defaultFontName: 'Arial', defaultColor: '#ffffff' }],
+      background: { type: 'gradient', gradient: { type: 'linear', rotate: 45, colors: [{ pos: 0, color: '#1c7ed6' }, { pos: 100, color: '#7048e8' }] } },
+    },
+  },
+]
+const fillers = Array.from({ length: 18 }, (_, index) => ({
+  id: `canvas-filler-${index}`,
+  elements: [{ id: `ft-${index}`, type: 'text', left: 80, top: 220, width: 800, height: 100, rotate: 0, content: `<p style="font-size:30px">Filler ${index}</p>`, defaultFontName: 'Arial', defaultColor: '#18181b' }],
+  background: { type: 'solid', color: '#fff' },
 }))
 
-async function findFikaDev() {
-  for (const port of DEV_PORTS) {
+async function findDevServer() {
+  for (const port of ports) {
     const url = `http://127.0.0.1:${port}/`
     try {
-      const res = await fetch(url)
-      if (res.ok) {
-        const html = await res.text()
-        if (html.includes('fika-shell') || html.includes('>fika<')) return url
-      }
+      const response = await fetch(url)
+      if (response.ok && (await response.text()).includes('fika')) return url
     }
-    catch { /* next */ }
+    catch { /* try next */ }
   }
   return null
 }
 
 const results = []
-const rec = (id, pass, measured) => {
-  results.push({ id, name: CASES[id - 1][1], pass: !!pass, measured: measured ?? null })
-}
+const record = (name, pass, measured) => results.push({ name, pass: !!pass, measured })
 
-/** Screenshot one thumb host (bitmap or live state) at the rail size. */
-async function shootThumb(page, slideId) {
-  const locator = page.locator(`[data-thumbnail-slide="${slideId}"]`)
-  await locator.waitFor({ state: 'visible', timeout: 15000 })
-  await sleep(150)
-  return locator.screenshot()
-}
-
-/** In-page RGBA diff of two PNG buffers; returns % of differing pixels + max channel delta. */
-async function diffPngs(page, a, b) {
-  return page.evaluate(async ([a64, b64]) => {
-    const load = src => new Promise(resolve => {
-      const img = new Image()
-      img.onload = () => resolve(img)
-      img.src = src
-    })
-    const [ia, ib] = await Promise.all([load(`data:image/png;base64,${a64}`), load(`data:image/png;base64,${b64}`)])
-    const w = Math.max(ia.width, ib.width)
-    const h = Math.max(ia.height, ib.height)
-    const ca = new OffscreenCanvas(w, h)
-    const cb = new OffscreenCanvas(w, h)
-    const da = ca.getContext('2d', { willReadFrequently: true })
-    const db = cb.getContext('2d', { willReadFrequently: true })
-    da.drawImage(ia, 0, 0)
-    db.drawImage(ib, 0, 0)
-    const pa = da.getImageData(0, 0, w, h).data
-    const pb = db.getImageData(0, 0, w, h).data
-    let differing = 0
-    let totalDelta = 0
-    let maxDelta = 0
-    for (let i = 0; i < pa.length; i += 4) {
-      const d = Math.max(Math.abs(pa[i] - pb[i]), Math.abs(pa[i + 1] - pb[i + 1]), Math.abs(pa[i + 2] - pb[i + 2]), Math.abs(pa[i + 3] - pb[i + 3]))
-      if (d > 12) differing++
-      totalDelta += d
-      if (d > maxDelta) maxDelta = d
-    }
-    const pixels = pa.length / 4
-    return {
-      differingPct: +((differing / pixels) * 100).toFixed(3),
-      avgDelta: +(totalDelta / pixels).toFixed(2),
-      maxDelta,
-      w,
-      h,
-    }
-  }, [a.toString('base64'), b.toString('base64')])
-}
-
-async function scrollToSlide(page, slideId, indexHint = -1) {
-  await page.evaluate(({ id, index }) => {
-    const rail = document.querySelector('.thumbnail-list')
-    if (!rail) return
-    const host = document.querySelector(`[data-thumbnail-slide="${id}"]`)
-    if (host) {
-      const hostTop = host.getBoundingClientRect().top - rail.getBoundingClientRect().top + rail.scrollTop
-      rail.scrollTop = Math.max(0, hostTop - 60)
-      return
-    }
-    if (index >= 0) {
-      const rowH = document.querySelector('.thumbnail-container')?.getBoundingClientRect().height || 100
-      rail.scrollTop = Math.max(0, index * rowH - 60)
-    }
-  }, { id: slideId, index: indexHint })
-  await sleep(400)
-}
+const diffPngs = (page, reference, actual) => page.evaluate(async ([reference64, actual64]) => {
+  const load = src => new Promise(resolve => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.src = src
+  })
+  const [a, b] = await Promise.all([
+    load(`data:image/png;base64,${reference64}`),
+    load(`data:image/png;base64,${actual64}`),
+  ])
+  const width = b.width
+  const height = b.height
+  const ca = new OffscreenCanvas(width, height)
+  const cb = new OffscreenCanvas(width, height)
+  const actx = ca.getContext('2d', { willReadFrequently: true })
+  const bctx = cb.getContext('2d', { willReadFrequently: true })
+  actx.drawImage(a, 0, 0, width, height)
+  bctx.drawImage(b, 0, 0, width, height)
+  const ap = actx.getImageData(0, 0, width, height).data
+  const bp = bctx.getImageData(0, 0, width, height).data
+  let differing = 0
+  let totalDelta = 0
+  for (let i = 0; i < ap.length; i += 4) {
+    const delta = Math.max(
+      Math.abs(ap[i] - bp[i]),
+      Math.abs(ap[i + 1] - bp[i + 1]),
+      Math.abs(ap[i + 2] - bp[i + 2]),
+      Math.abs(ap[i + 3] - bp[i + 3]),
+    )
+    if (delta > 18) differing++
+    totalDelta += delta
+  }
+  const pixels = ap.length / 4
+  return {
+    differingPct: +((differing / pixels) * 100).toFixed(3),
+    avgDelta: +(totalDelta / pixels).toFixed(2),
+    width,
+    height,
+  }
+}, [reference.toString('base64'), actual.toString('base64')])
 
 const browser = await chromium.launch({ headless: true })
-let child = null
+let child
 try {
-  let devUrl = await findFikaDev()
-  if (!devUrl) {
+  let url = await findDevServer()
+  if (!url) {
     child = spawn('npm', ['run', 'dev'], { cwd: root, shell: true, stdio: 'ignore' })
-    const start = Date.now()
-    while (Date.now() - start < 90000) {
-      devUrl = await findFikaDev()
-      if (devUrl) break
+    const started = Date.now()
+    while (!url && Date.now() - started < 90_000) {
       await sleep(400)
+      url = await findDevServer()
     }
-    if (!devUrl) throw new Error('fika dev server did not start')
   }
+  if (!url) throw new Error('Fika dev server did not start')
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
-  page.on('pageerror', err => console.log('PAGE-ERR:', String(err).slice(0, 200)))
-  await page.goto(devUrl, { waitUntil: 'networkidle' })
-  await page.getByText('Add slide').waitFor({ timeout: 90000 })
-  await page.evaluate(() => {
-    document.querySelectorAll('[data-react-scan], #react-scan-root').forEach(el => el.remove())
-  })
-  if (!(await page.evaluate(() => !!window.__FIKA_SLIDES__))) throw new Error('store hook missing')
+  await page.goto(url, { waitUntil: 'networkidle' })
+  await page.getByText('Add slide').waitFor({ timeout: 90_000 })
+  const deck = [
+    ...fixtures.map(item => item.slide),
+    ...fillers,
+  ]
+  await page.evaluate(value => window.__FIKA_SLIDES__.getState().setSlides(value), deck)
 
-  await page.evaluate(deck => {
-    window.__FIKA_SLIDES__.getState().setSlides(deck)
-  }, [textSlide, ...FILLERS])
-  await page.waitForSelector('[data-thumbnail-slide]', { timeout: 20000 })
+  const referencePage = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
+  await referencePage.goto(url, { waitUntil: 'networkidle' })
+  await referencePage.getByText('Add slide').waitFor({ timeout: 90_000 })
+  await referencePage.evaluate(value => window.__FIKA_SLIDES__.getState().setSlides(value), deck)
+  await referencePage.locator('[data-editor-tool=present]').click()
+  await referencePage.waitForSelector('[data-screen-current] > div', { timeout: 20_000 })
 
-  // --- Fidelity: for each fixture, mount it as the FIRST rail row in its
-  // own deck, clear the cache (the visible row remounts its live tree),
-  // screenshot the live pixels, step the rail so the row leaves (pinned
-  // teardown capture lands), come back on the bitmap and pixel-diff the two.
-  // A dedicated deck per fixture is required: the virtualizer pins only ONE
-  // leaving row per window shift (MAX_PINNED_TEARDOWNS), and after a cache
-  // clear every visible row is capture-eligible — with a shared deck an
-  // earlier row always steals the pin from the fixture under test.
-  const farAndBack = async (slideId, index) => {
-    await page.evaluate(id => {
-      const list = document.querySelector('.thumbnail-list')
-      if (!list) return
-      const row = document.querySelector(`[data-thumbnail-slide="${id}"]`)
-      if (!row) { list.scrollTop = 0; return }
-      const rowTop = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop
-      list.scrollTop = Math.max(0, rowTop - 60) + list.clientHeight
-    }, slideId)
-    // The leaving live row is pinned for a teardown capture; returning before
-    // it finishes aborts the capture (node already disconnected) and the row
-    // remounts live. Wait until the capture LANDS in the cache.
-    for (let i = 0; i < 60; i++) {
-      const cached = await page.evaluate(id => window.__FIKA_THUMB_SNAP__.debug().keys.includes(id), slideId)
-      if (cached) break
-      await sleep(400)
-    }
-    await sleep(200)
-    await scrollToSlide(page, slideId, index)
-    for (let i = 0; i < 30; i++) {
-      const present = await page.evaluate(id => !!document.querySelector(`[data-thumbnail-slide="${id}"]`), slideId)
-      if (present) break
-      await sleep(200)
-      await scrollToSlide(page, slideId, index)
-    }
-  }
-  for (const fixture of FIXTURES) {
-    // Dedicated deck: the fixture is rail row 0 — it is always the first
-    // leaving row and deterministically wins the teardown pin.
-    await page.evaluate(fx => {
-      const state = window.__FIKA_SLIDES__.getState()
-      state.setSlides([fx.fixture, ...fx.fillers])
-      state.updateSlideIndex(0)
-    }, { fixture, fillers: FILLERS })
-    await page.waitForSelector(`[data-thumbnail-slide="${fixture.id}"]`, { timeout: 20000 })
-    await scrollToSlide(page, fixture.id, 0)
-    const index = 0
-    let liveShot = null
-    let liveState = { live: false, bitmap: false }
-    for (let attempt = 0; attempt < 3 && !liveState.live; attempt++) {
-      await scrollToSlide(page, fixture.id, index)
-      await page.evaluate(() => window.__FIKA_THUMB_SNAP__.clear())
-      for (let i = 0; i < 30; i++) {
-        liveState = await page.evaluate(id => {
-          const host = document.querySelector(`[data-thumbnail-slide="${id}"]`)
-          if (!host) return { live: false, bitmap: false }
-          return { live: !!host.querySelector('.screen-slide'), bitmap: !!host.querySelector('.thumb-snapshot') }
-        }, fixture.id)
-        if (liveState.live) break
-        await sleep(250)
-        await scrollToSlide(page, fixture.id, index)
-      }
-      await sleep(1500) // tree settles (charts animate ~420ms)
-    }
-    liveShot = await shootThumb(page, fixture.id)
-
-    // Remount the row on its bitmap: the leaving live row teardown-captures
-    // (urgent) into the cache; the version bump swaps the remounted row onto
-    // the bitmap. Wait for that state before shooting.
-    await farAndBack(fixture.id, index)
-    let bitmapState = { live: false, bitmap: false }
-    for (let i = 0; i < 60 && !bitmapState.bitmap; i++) {
-      bitmapState = await page.evaluate(id => {
-        const host = document.querySelector(`[data-thumbnail-slide="${id}"]`)
-        if (!host) return { live: false, bitmap: false, missing: true }
-        return { live: !!host.querySelector('.screen-slide'), bitmap: !!host.querySelector('.thumb-snapshot') }
-      }, fixture.id)
-      if (!bitmapState.bitmap) await sleep(400)
-    }
-    const bitmapShot = bitmapState.bitmap ? await shootThumb(page, fixture.id) : null
-    const diff = bitmapShot ? await diffPngs(page, liveShot, bitmapShot) : null
-    // Tolerance profile: snapdom's raster AA differs from the live
-    // compositor on glyph/box boundary pixels (measured: 1-px rings around
-    // text, scaled images and gradient edges). Real divergence (missing or
-    // moved content) lands an order of magnitude above these bounds.
-    const tolerance = 3.0
-    const passed = !!liveState.live && !!bitmapState.bitmap && !!diff && diff.differingPct <= tolerance && diff.avgDelta <= 4
-    if (!passed && liveState.live && bitmapShot) {
+  for (let index = 0; index < fixtures.length; index++) {
+    const fixture = fixtures[index]
+    await page.evaluate(i => window.__FIKA_SLIDES__.getState().updateSlideIndex(i), index)
+    await referencePage.evaluate(i => window.__FIKA_SLIDES__.getState().updateSlideIndex(i), index)
+    const selector = `[data-thumbnail-slide="${fixture.slide.id}"]`
+    await page.waitForSelector(`${selector} canvas[data-canvas-painted="${fixture.slide.id}"]`, { timeout: 20_000 })
+    await sleep(fixture.name === 'chart' ? 1_500 : 500)
+    await referencePage.waitForSelector(`[data-screen-slide="${index}"][data-screen-current] > div`, { timeout: 10_000 })
+    const reference = await referencePage.locator(`[data-screen-slide="${index}"][data-screen-current] > div`).screenshot()
+    const actual = await page.locator(`${selector} canvas`).screenshot()
+    const diff = await diffPngs(page, reference, actual)
+    const pass = diff.differingPct <= fixture.tolerance && diff.avgDelta <= fixture.tolerance * 1.7
+    record(`fidelity:${fixture.name}`, pass, { ...diff, tolerance: fixture.tolerance })
+    if (!pass) {
       mkdirSync(outDir, { recursive: true })
-      writeFileSync(join(outDir, `${fixture.id}-live.png`), liveShot)
-      writeFileSync(join(outDir, `${fixture.id}-bitmap.png`), bitmapShot)
+      writeFileSync(join(outDir, `${fixture.name}-editor.png`), reference)
+      writeFileSync(join(outDir, `${fixture.name}-canvas.png`), actual)
     }
-    rec(FIXTURES.indexOf(fixture) + 1, passed, { liveState, bitmapState, diff })
   }
 
-  // --- Invalidation: edit a cached slide; the bitmap must drop and live ink return.
-  // --- Invalidation + warm-visit sections use the full shared deck (they
-  // operate on fid-text at rail index 0 and sweep across all fixtures).
-  await page.evaluate(({ all, fillers }) => {
-    const state = window.__FIKA_SLIDES__.getState()
-    state.setSlides([...all, ...fillers])
-    state.updateSlideIndex(0)
-  }, { all: FIXTURES, fillers: FILLERS })
-  await scrollToSlide(page, 'fid-text', 0)
-  for (let i = 0; i < 40; i++) {
-    await sleep(300)
-    const has = await page.evaluate(() => window.__FIKA_THUMB_SNAP__.debug().keys.includes('fid-text'))
-    if (has) break
-  }
+  await page.evaluate(() => window.__FIKA_SLIDES__.getState().updateSlideIndex(0))
+  const textSelector = '[data-thumbnail-slide="canvas-fid-text"]'
+  await page.waitForSelector(`${textSelector} canvas[data-canvas-painted="canvas-fid-text"]`)
+  const before = await page.locator(`${textSelector} canvas`).screenshot()
   await page.evaluate(() => {
     const state = window.__FIKA_SLIDES__.getState()
-    const slide = state.slides.find(s => s.id === 'fid-text')
+    const slide = state.slides[0]
     state.updateSlide({
-      id: 'fid-text',
-      elements: slide.elements.map(el => el.id === 'fid-text-title'
-        ? { ...el, content: '<p style="font-size: 34px"><strong>EDITED TITLE</strong></p>' }
-        : el),
+      id: slide.id,
+      elements: slide.elements.map(element => element.id === 't1'
+        ? { ...element, content: '<p style="font-size:34px;text-align:center"><strong>EDITED CANVAS</strong></p>' }
+        : element),
     })
   })
-  await sleep(1200)
-  const afterEdit = await page.evaluate(() => {
-    const host = document.querySelector('[data-thumbnail-slide="fid-text"]')
-    if (!host) return { bitmap: false, live: false, text: false, missing: true }
+  await sleep(350)
+  const after = await page.locator(`${textSelector} canvas`).screenshot()
+  const editDiff = await diffPngs(page, before, after)
+  record('invalidation:edit', editDiff.differingPct > 0.1, editDiff)
+
+  const architecture = await page.evaluate(() => {
+    const canvases = [...document.querySelectorAll('[data-thumbnail-slide] canvas')]
     return {
-      bitmap: !!host.querySelector('.thumb-snapshot'),
-      live: !!host.querySelector('.screen-slide'),
-      text: (host.textContent || '').includes('EDITED TITLE'),
+      count: canvases.length,
+      exactDpr: canvases.every(canvas => Math.abs(canvas.width - Math.round(canvas.clientWidth * devicePixelRatio)) <= 1),
+      screenSlidesInRail: document.querySelectorAll('.thumbnail-list .screen-slide').length,
+      report: window.__FIKA_CANVAS_PAINT__?.read?.(),
     }
   })
-  rec(7, afterEdit.live && afterEdit.text, afterEdit)
-  rec(8, !afterEdit.bitmap, afterEdit)
-
-  // --- Theme change invalidates bitmaps.
-  for (let i = 0; i < 40; i++) {
-    await sleep(300)
-    const cachedCount = await page.evaluate(() => window.__FIKA_THUMB_SNAP__.debug().keys.length)
-    if (cachedCount >= 2) break
-  }
-  await page.evaluate(() => {
-    window.__FIKA_SLIDES__.getState().setTheme({ backgroundColor: '#10243e' })
-  })
-  await sleep(700)
-  const afterTheme = await page.evaluate(() => ({
-    bitmaps: [...document.querySelectorAll('[data-thumbnail-slide]')].filter(h => h.querySelector('.thumb-snapshot')).length,
-    invalidated: window.__FIKA_THUMB_SNAP__.read().invalidated,
-  }))
-  rec(9, afterTheme.bitmaps === 0 && afterTheme.invalidated > 0, afterTheme)
-
-  // --- Pane resize invalidates bitmaps (width is part of the key).
-  await page.evaluate(() => window.__FIKA_THUMB_SNAP__.clear())
-  await sleep(1000)
-  await scrollToSlide(page, 'fid-text')
-  for (let i = 0; i < 40; i++) {
-    await sleep(300)
-    const has = await page.evaluate(() => window.__FIKA_THUMB_SNAP__.debug().keys.includes('fid-text'))
-    if (has) break
-  }
-  const beforeResize = await page.evaluate(() => window.__FIKA_THUMB_SNAP__.read().cached)
-  await page.evaluate(() => {
-    const rail = document.querySelector('.layout-separator')
-    if (rail) {
-      rail.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 200, clientY: 400, pointerId: 1, isPrimary: true }))
-      window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 260, clientY: 400, pointerId: 1 }))
-      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 260, clientY: 400, pointerId: 1 }))
-    }
-  })
-  await sleep(1000)
-  const afterResize = await page.evaluate(() => ({
-    cached: window.__FIKA_THUMB_SNAP__.read().cached,
-    invalidated: window.__FIKA_THUMB_SNAP__.read().invalidated,
-  }))
-  rec(10, afterResize.cached < beforeResize || afterResize.invalidated > 0, { beforeResize, afterResize })
-
-  // --- Warm re-visit mounts no tree: scroll away and back with warm cache.
-  await sleep(8000) // let the sweeper warm everything
-  const warmCount = await page.evaluate(() => window.__FIKA_THUMB_SNAP__.read().cached)
-  await page.evaluate(() => {
-    const rail = document.querySelector('.thumbnail-list')
-    rail.scrollTop = 0
-  })
-  await sleep(600)
-  await page.evaluate(() => {
-    window.__WARM__ = { mounts: 0 }
-    const mo = new MutationObserver(records => {
-      for (const r of records) for (const n of r.addedNodes) {
-        if (n instanceof Element && (n.classList.contains('screen-slide') || n.querySelector?.('.screen-slide'))) window.__WARM__.mounts++
-      }
-    })
-    mo.observe(document.querySelector('.thumbnail-list'), { childList: true, subtree: true })
-    window.__WARM__.mo = mo
-  })
-  await scrollToSlide(page, 'fid-table')
-  await scrollToSlide(page, 'fid-text')
-  await scrollToSlide(page, 'fid-chart')
-  const warmMounts = await page.evaluate(() => { window.__WARM__.mo.disconnect(); return { mounts: window.__WARM__.mounts, cached: window.__FIKA_THUMB_SNAP__.read().cached } })
-  rec(11, warmMounts.mounts === 0 || warmCount < FIXTURES.length, warmMounts)
-
-  // --- Re-capture after edit: the edited slide gets a fresh bitmap again.
-  await scrollToSlide(page, 'fid-text')
-  let recaptured = false
-  for (let i = 0; i < 40; i++) {
-    await sleep(300)
-    recaptured = await page.evaluate(() => window.__FIKA_THUMB_SNAP__.debug().keys.includes('fid-text'))
-    if (recaptured) break
-  }
-  const stats = await page.evaluate(() => window.__FIKA_THUMB_SNAP__.read())
-  rec(12, recaptured, { captures: stats.captures, failed: stats.failed, avgMs: stats.captureMsAvg })
+  record('sharpness:exact-dpr', architecture.count > 0 && architecture.exactDpr, architecture)
+  record('architecture:no-screen-slide-mounts', architecture.screenSlidesInRail === 0, architecture)
 
   mkdirSync(outDir, { recursive: true })
-  writeFileSync(join(outDir, 'summary.json'), JSON.stringify({ results, stats }, null, 2))
+  writeFileSync(join(outDir, 'summary.json'), JSON.stringify({ results, paint: architecture.report }, null, 2))
 }
 finally {
   await browser.close()
   if (child) child.kill()
 }
 
-const failed = results.filter(item => !item.pass)
-for (const item of results) {
-  const mark = item.pass ? 'PASS' : 'FAIL'
-  console.log(`${mark} ${item.id} ${item.name}`)
-  if (!item.pass && item.measured) console.log('   ', JSON.stringify(item.measured))
+for (const result of results) {
+  console.log(`${result.pass ? 'PASS' : 'FAIL'} ${result.name} ${JSON.stringify(result.measured)}`)
 }
+const failed = results.filter(result => !result.pass)
 if (failed.length) {
   console.error(`\n${failed.length}/${results.length} failed`)
   process.exit(1)

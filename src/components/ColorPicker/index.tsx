@@ -122,7 +122,7 @@ const ColorPicker = memo((vrProps: IColorPickerProps) => {
       duration: 0
     });
 
-    // eslint-disable-next-line
+    // oxlint-disable-next-line typescript/no-explicit-any
     const eyeDropper = new (window as any).EyeDropper();
     eyeDropper.open().then((result: {
       sRGBHex: string;

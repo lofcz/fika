@@ -11,12 +11,14 @@ import { useFonts, fontSizeToPx, parseFontSize } from '@/configs/font'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import SVGLine from './common/SVGLine'
 import PanelSection from './common/PanelSection'
+import { OUTLINE_RADIUS_MAX, OUTLINE_WIDTH_MAX } from './common/ElementOutline'
 import ColorSwatches, { HIGHLIGHT_SWATCHES } from '@/components/ColorSwatches'
 import FontSizeControl from '@/components/FontSizeControl'
 import FormatChip from '@/components/FormatChip'
-import NumberInput from '@/components/NumberInput'
 import Select from '@/components/Select'
 import SelectCustom from '@/components/SelectCustom'
+import Slider from '@/components/Slider'
+import { outlineRadiusToPercent, percentToOutlineRadius } from '@/utils/elementOutline'
 import { Icon } from '@/components/Icon'
 import { useI18nContext } from '@/i18n/useI18nContext'
 
@@ -52,7 +54,7 @@ const MultiStylePanel = memo(function MultiStylePanel() {
     setFill(value)
   }
 
-  const updateOutline = (outlineProps: Partial<PPTElementOutline>) => {
+  const paintOutline = (outlineProps: Partial<PPTElementOutline>) => {
     for (const el of activeElements()) {
       if (
         el.type === 'text' ||
@@ -62,11 +64,16 @@ const MultiStylePanel = memo(function MultiStylePanel() {
         el.type === 'chart'
       ) {
         const current = el.outline || { width: 2, color: '#000', style: 'solid' }
-        updateElement(el.id, { outline: { ...current, ...outlineProps } })
+        useSlidesStore.getState().updateElement({ id: el.id, props: { outline: { ...current, ...outlineProps } } })
       }
-      if (el.type === 'line') updateElement(el.id, outlineProps)
+      if (el.type === 'line') useSlidesStore.getState().updateElement({ id: el.id, props: outlineProps })
     }
     setOutline(prev => ({ ...prev, ...outlineProps }))
+  }
+
+  const updateOutline = (outlineProps: Partial<PPTElementOutline>) => {
+    paintOutline(outlineProps)
+    addHistorySnapshot()
   }
 
   const updateFontStyle = (command: string, value: string) => {
@@ -111,11 +118,26 @@ const MultiStylePanel = memo(function MultiStylePanel() {
         />
         <div className="field">
           <span className="field-label">{LL.editor.multiStyle.borderWidth()}</span>
-          <NumberInput value={outline.width || 0} onUpdateValue={value => updateOutline({ width: value })} />
+          <Slider
+            min={0}
+            max={Math.max(OUTLINE_WIDTH_MAX, outline.width || 0)}
+            step={1}
+            value={outline.width || 0}
+            onInput={value => paintOutline({ width: value })}
+            onUpdateValue={value => updateOutline({ width: value })}
+          />
         </div>
         <div className="field">
           <span className="field-label">{LL.editor.multiStyle.borderRadius()}</span>
-          <NumberInput min={0} max={200} value={outline.radius || 0} onUpdateValue={value => updateOutline({ radius: value })} />
+          <Slider
+            min={0}
+            max={OUTLINE_RADIUS_MAX}
+            step={1}
+            tooltipSuffix="%"
+            value={outlineRadiusToPercent(outline.radius, 0, 0)}
+            onInput={value => paintOutline({ radius: percentToOutlineRadius(value) })}
+            onUpdateValue={value => updateOutline({ radius: percentToOutlineRadius(value) })}
+          />
         </div>
       </PanelSection>
 

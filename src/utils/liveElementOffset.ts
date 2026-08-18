@@ -11,11 +11,11 @@
  *   `.viewport-wrapper` (already sized to the *visual* slide). Position
  *   here is slide × canvasScale.
  *
- * Never use CSS `translate` on the painted box. Auto-size text measures
- * and rasterizes differently under a transform than under `left`/`top`,
- * so the glyphs shift on pointerup when the transform is removed. Write
- * the same `left`/`top` the store will commit — drag and drop are one
- * paint path. Scale already does this (`applyLiveSize`).
+ * Most elements use `left` / `top` so auto-size text keeps the same
+ * measurement and rasterization path during and after the gesture. Complex
+ * transparent surfaces can opt into `data-live-translate3d`; those keep
+ * their raster on a compositor layer while dragging, then settle to the
+ * committed `left` / `top` on pointerup.
  */
 
 export type LiveOffsetPosition = {
@@ -43,6 +43,8 @@ export const livePositionCss = (left: number, top: number, canvasScale: number):
   visualLeft: `${left * canvasScale}px`,
   visualTop: `${top * canvasScale}px`,
 })
+
+export const liveTranslate3dCss = (dx: number, dy: number) => `translate3d(${dx}px, ${dy}px, 0)`
 
 export const applyLivePositionStyles = (
   nodes: LiveOffsetNodes,
@@ -72,6 +74,17 @@ const editableBox = (id: string) => (
   document.getElementById(`editable-element-${id}`)?.firstElementChild as HTMLElement | null
 )
 
+const usesGpuDrag = (box: HTMLElement | null) => box?.dataset.liveTranslate3d !== undefined
+
+const applyGpuDrag = (box: HTMLElement, dx: number, dy: number) => {
+  box.style.transform = liveTranslate3dCss(dx, dy)
+}
+
+const clearGpuDrag = (box: HTMLElement | null) => {
+  if (!box || !usesGpuDrag(box)) return
+  box.style.transform = ''
+}
+
 const operateBox = (id: string) => document.getElementById(`operate-element-${id}`)
 
 const multiSelectBox = () => document.querySelector('.multi-select-operate') as HTMLElement | null
@@ -93,8 +106,16 @@ export const setLiveElementOffset = (
   multiOrigin?: { left: number; top: number } | null,
 ) => {
   for (const origin of origins) {
+    const box = editableBox(origin.id)
+    if (box && usesGpuDrag(box)) {
+      applyGpuDrag(box, dxSlide, dySlide)
+      applyLivePositionStyles({
+        operate: operateBox(origin.id),
+      }, origin.left + dxSlide, origin.top + dySlide, canvasScale)
+      continue
+    }
     applyLivePositionStyles({
-      box: editableBox(origin.id),
+      box,
       operate: operateBox(origin.id),
     }, origin.left + dxSlide, origin.top + dySlide, canvasScale)
   }
@@ -111,6 +132,7 @@ export const clearLiveElementOffset = (
   multiOrigin?: { left: number; top: number } | null,
 ) => {
   setLiveElementOffset(origins, 0, 0, canvasScale, multiOrigin)
+  for (const { id } of origins) clearGpuDrag(editableBox(id))
 }
 
 export const settleLiveElementOffset = (
@@ -118,9 +140,11 @@ export const settleLiveElementOffset = (
   canvasScale: number,
 ) => {
   for (const { id, left, top } of positions) {
+    const box = editableBox(id)
     applyLivePositionStyles({
-      box: editableBox(id),
+      box,
       operate: operateBox(id),
     }, left, top, canvasScale)
+    clearGpuDrag(box)
   }
 }

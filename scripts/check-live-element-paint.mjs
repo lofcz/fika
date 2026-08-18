@@ -22,8 +22,9 @@ const bgPaint = slidePanel.slice(slidePanel.indexOf('const paintGradientBackgrou
 assert(slidePanel.includes('applyLiveBackgroundGradient'), 'slide background sliders live-paint CSS')
 assert(!bgPaint.includes('updateSlide'), 'background paintGradient must not write the store')
 
-const liveThumb = readFileSync(join(root, 'src/views/components/ThumbnailSlide/LiveSlideThumb.tsx'), 'utf8')
-assert(liveThumb.includes('ScreenSlide'), 'the thumb renders the live slide DOM — gesture writes appear without any raster patch layer')
+const canvasThumb = readFileSync(join(root, 'src/views/components/ThumbnailSlide/CanvasSlideThumb.tsx'), 'utf8')
+assert(canvasThumb.includes('paintSlideToCanvas'), 'the thumb repaints committed model changes through the direct canvas painter')
+assert(canvasThumb.includes('EDIT_DEBOUNCE_MS'), 'thumbnail repainting is bounded during edit gestures')
 
 const livePaint = readFileSync(join(root, 'src/utils/liveElementPaint.ts'), 'utf8')
 assert(livePaint.includes('export const syncGradientDef'), 'stop nodes have a single imperative writer')

@@ -18,35 +18,47 @@ function read(rel) {
 const TRANSITION_IMPORT_MAP = {
   none: 'no',
   fade: 'fade',
-  fadeThroughBlack: 'fade',
+  fadeThroughBlack: 'throughInk',
   push: 'slideX',
-  wipe: 'slideX',
+  wipe: 'wipe',
   cover: 'slideX',
-  uncover: 'slideX',
-  pull: 'slideX',
-  split: 'slideY',
+  uncover: 'reveal',
+  pull: 'reveal',
+  split: 'doors',
   blinds: 'slideY',
   random: 'random',
   cut: 'no',
-  dissolve: 'fade',
+  dissolve: 'dissolve',
   wheel: 'rotate',
   zoom: 'scale',
-  warp: 'scale',
+  warp: 'scaleX',
   flip: 'slideX3D',
   ferris: 'rotate',
-  morph: 'fade',
+  morph: 'morph',
+  ripple: 'ripple',
+  reveal: 'reveal',
+  doors: 'doors',
+  flythrough: 'flythrough',
 }
 
 function mapPptxTransitionToTurningMode(transition) {
   if (!transition?.type || transition.type === 'none') return undefined
   const type = transition.type.replace(/^p\d{0,2}:/, '')
   const dir = (transition.direction || '').toLowerCase()
-  if (type === 'push' || type === 'wipe' || type === 'cover' || type === 'uncover' || type === 'pull') {
+  if (type === 'fade' && (dir === 'black' || dir === 'thrublk' || dir === 'throughblack')) return 'throughInk'
+  if (type === 'push') {
     if (dir === 'u' || dir === 'd') return 'slideY'
     return 'slideX'
   }
+  if (type === 'wipe') return 'wipe'
+  if (type === 'cover') {
+    if (dir === 'u' || dir === 'd') return 'slideY'
+    return 'slideX'
+  }
+  if (type === 'uncover' || type === 'pull') return 'reveal'
+  if (type === 'split' || type === 'doors' || type === 'window') return 'doors'
   if (type === 'zoom') return dir === 'out' ? 'scaleReverse' : 'scale'
-  if (type === 'warp') return dir === 'out' ? 'scaleReverse' : 'scale'
+  if (type === 'warp') return dir === 'out' ? 'scaleReverse' : 'scaleX'
   if (type === 'flip') return (dir === 'u' || dir === 'd') ? 'slideY3D' : 'slideX3D'
   return TRANSITION_IMPORT_MAP[type]
 }
@@ -172,8 +184,15 @@ function extractCNvPrIdentitiesFromSlideXml(xml, partPath) {
 }
 
 assert(mapPptxTransitionToTurningMode({ type: 'fade' }) === 'fade', 'fade → fade')
+assert(mapPptxTransitionToTurningMode({ type: 'fadeThroughBlack' }) === 'throughInk', 'fade through black')
 assert(mapPptxTransitionToTurningMode({ type: 'push', direction: 'l' }) === 'slideX', 'push l → slideX')
 assert(mapPptxTransitionToTurningMode({ type: 'push', direction: 'u' }) === 'slideY', 'push u → slideY')
+assert(mapPptxTransitionToTurningMode({ type: 'wipe', direction: 'l' }) === 'wipe', 'wipe → wipe')
+assert(mapPptxTransitionToTurningMode({ type: 'morph' }) === 'morph', 'morph → morph')
+assert(mapPptxTransitionToTurningMode({ type: 'ripple' }) === 'ripple', 'ripple → ripple')
+assert(mapPptxTransitionToTurningMode({ type: 'doors' }) === 'doors', 'doors → doors')
+assert(mapPptxTransitionToTurningMode({ type: 'flythrough' }) === 'flythrough', 'flythrough → flythrough')
+assert(mapPptxTransitionToTurningMode({ type: 'dissolve' }) === 'dissolve', 'dissolve → dissolve')
 assert(mapPptxTransitionToTurningMode({ type: 'zoom', direction: 'out' }) === 'scaleReverse', 'zoom out')
 assert(mapPptxTransitionToTurningMode({ type: 'none' }) === undefined, 'none → undefined')
 assert(mapPptxTransitionToTurningMode(null) === undefined, 'null transition')

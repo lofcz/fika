@@ -81,6 +81,9 @@ assert(normalizeImportApplyOptions().mode === undefined, 'missing options stay e
   assert(dialog.includes('useImportConfirmStore.getState().register()'), 'confirm dialog registers on mount via getState')
   assert(!dialog.includes('useMemo(() => confirmStore.register()'), 'confirm dialog must not register in useMemo')
   assert(controller.includes('getImportApi()') && controller.includes('confirm: importOptions?.confirm ?? false'), 'embed importPptx skips confirm by default')
+  assert(controller.includes('turningMode: importOptions?.turningMode'), 'embed importPptx forwards turningMode')
+  assert(importHook.includes('applyImportTransitions'), 'file import applies configurable transitions')
+  assert(dialog.includes('transitionKeep') && dialog.includes('transitionAll'), 'confirm dialog can keep or override transitions')
   assert(importHook.includes('resetEditorSelection'), 'file import clears selection before swapping slides')
   assert(importHook.includes('drainCommitQueue()'), 'file import drains the live editor instead of clearing editing beside it')
   assert(importHook.includes('updateSelectedSlidesIndex([])'), 'file import drops multi-selected thumbnail indexes')
@@ -102,8 +105,9 @@ assert(normalizeImportApplyOptions().mode === undefined, 'missing options stay e
   const unregister = live().register()
   const pending = live().request(6)
   assert(live().visible === true && live().slideCount === 6, 'confirm opens with the current slide count')
-  live().settle('append')
-  assert(await pending === 'append', 'append choice is returned to import')
+  live().settle({ apply: 'append', turningMode: 'keep' })
+  const chosen = await pending
+  assert(chosen?.apply === 'append' && chosen?.turningMode === 'keep', 'append choice is returned to import')
   assert(live().visible === false, 'confirm closes after a choice')
 
   const cancelled = live().request(3)

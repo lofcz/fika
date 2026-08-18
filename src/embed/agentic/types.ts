@@ -49,6 +49,13 @@ export interface FikaImportDocumentOptions {
    * Ignored on the agentic JSON path (never shows a dialog).
    */
   confirm?: boolean;
+  /**
+   * Override imported transitions. A single mode applies to every slide;
+   * an array or 0-/1-based index map sets individual slides.
+   */
+  turningMode?: TurningMode | Array<TurningMode | null | undefined> | Record<number, TurningMode>;
+  /** Fallback when a slide has no transition and no per-slide override. Defaults to Rise. */
+  defaultTurningMode?: TurningMode;
 }
 export type FikaDocumentImportPayload = FikaDeckInput | ({
   document: FikaDeckInput;

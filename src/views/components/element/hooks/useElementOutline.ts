@@ -1,6 +1,6 @@
 
 import type { PPTElementOutline } from '@/types/slides';
-import { clampOutlineRadius, roundedRectOutlinePath } from '@/utils/elementOutline';
+import { outlineRadiusCss, roundedRectOutlinePath } from '@/utils/elementOutline';
 
 export default (outline: any) => {
   const outlineWidth = outline?.width ?? 0;
@@ -25,7 +25,5 @@ export const useOutlinePath = (outline: any, width: any, height: any) => {
   return roundedRectOutlinePath(width, height, outline?.radius ?? 0)
 }
 export const useOutlineRadiusCss = (outline: any, width: any, height: any) => {
-  const radius = outline?.radius
-  if (!radius) return undefined
-  return `${clampOutlineRadius(radius, width, height)}px`
+  return outlineRadiusCss(outline?.radius, width, height)
 }

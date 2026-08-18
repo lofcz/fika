@@ -66,6 +66,8 @@ export const e2eScripts = [
   'scripts/e2e-fixed-fit-never-clips.mjs',
   'scripts/e2e-height-mode-swap.mjs',
   'scripts/e2e-gutter-drag.mjs',
+  'scripts/e2e-layer-cycle.mjs',
+  'scripts/e2e-shift-select.mjs',
   'scripts/e2e-slide-reorder.mjs',
   'scripts/e2e-slide-mutate.mjs',
   'scripts/e2e-thumb-snapshot.mjs',

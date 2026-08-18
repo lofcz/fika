@@ -6,6 +6,7 @@ import { rememberTableStyleTarget, tableStyleTarget } from '@/utils/tableStyleTa
 
 export { rememberTableStyleTarget, tableStyleTarget } from '@/utils/tableStyleTarget'
 
+// oxlint-disable-next-line react/rules-of-hooks -- zustand snapshot helper, not a React hook
 const history = useHistorySnapshot()
 
 const cloneGrid = (data: TableCell[][]) => JSON.parse(JSON.stringify(data)) as TableCell[][]

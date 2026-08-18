@@ -140,7 +140,7 @@ async function readChartPaint(page) {
       while (Date.now() - start < 5000) {
         const host = document.querySelector('[data-thumb-active] [data-thumbnail-slide]')
           || document.querySelector('[data-thumbnail-slide]')
-        if (host?.querySelector('.screen-slide svg')) return host
+        if (host?.querySelector('canvas[data-canvas-painted]')) return host
         await sleep(80)
       }
       return document.querySelector('[data-thumb-active] [data-thumbnail-slide]')
@@ -148,7 +148,10 @@ async function readChartPaint(page) {
     }
 
     const host = await waitPaint()
-    const thumbSvg = host?.querySelector('.screen-slide svg') || null
+    const thumbCanvas = host?.querySelector('canvas[data-canvas-painted]') || null
+    const state = window.__FIKA_SLIDES__.getState()
+    const slide = state.slides[state.slideIndex]
+    const chart = slide?.elements.find(el => el.type === 'chart')
     const live = document.querySelector('[class*=viewport-wrapper] [data-element-type=chart] [data-live-box]')
     const liveType = live?.getAttribute('data-chart-type') || ''
     const liveCount = document.querySelectorAll('[class*=viewport-wrapper] [data-element-type=chart]').length
@@ -169,7 +172,7 @@ async function readChartPaint(page) {
       liveCount,
       liveSeries0,
       liveSeries1,
-      pending: !host || !thumbSvg,
+      pending: !host || !thumbCanvas,
       ink: 0,
       series0: 0,
       series1: 0,
@@ -181,20 +184,11 @@ async function readChartPaint(page) {
       centerWhite: true,
       distinct: 0,
     }
-    if (!thumbSvg) return empty
+    if (!thumbCanvas || !chart) return empty
 
-    // The thumb renders the same echarts SVG as the canvas — rasterize it and
-    // run the pixel analysis unchanged.
+    // Crop the chart region from the final-DPR slide canvas and run the same
+    // pixel analysis used for the live chart.
     const SIZE = 180
-    const xml = new XMLSerializer().serializeToString(thumbSvg)
-    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
-    const img = new Image()
-    await new Promise((resolve, reject) => {
-      img.onload = resolve
-      img.onerror = reject
-      img.src = url
-    })
-    URL.revokeObjectURL(url)
     const raster = document.createElement('canvas')
     raster.width = SIZE
     raster.height = SIZE
@@ -202,14 +196,24 @@ async function readChartPaint(page) {
     rctx.fillStyle = '#ffffff'
     rctx.fillRect(0, 0, SIZE, SIZE)
     rctx.imageSmoothingEnabled = true
-    rctx.drawImage(img, 0, 0, SIZE, SIZE)
+    const slideW = state.viewportSize
+    const slideH = state.viewportSize * state.viewportRatio
+    rctx.drawImage(
+      thumbCanvas,
+      chart.left / slideW * thumbCanvas.width,
+      chart.top / slideH * thumbCanvas.height,
+      chart.width / slideW * thumbCanvas.width,
+      chart.height / slideH * thumbCanvas.height,
+      0,
+      0,
+      SIZE,
+      SIZE,
+    )
     const { data, width, height } = rctx.getImageData(0, 0, SIZE, SIZE)
     const x0 = Math.floor(width * 0.30)
     const x1 = Math.max(x0 + 1, Math.floor(width * 0.70))
     const y0 = Math.floor(height * 0.14)
     const y1 = Math.max(y0 + 1, Math.floor(height * 0.86))
-    const cx = Math.floor(width * 0.50)
-    const cy = Math.floor(height * 0.47)
     let ink = 0
     let series0 = 0
     let series1 = 0
@@ -252,7 +256,7 @@ async function readChartPaint(page) {
       liveCount,
       liveSeries0,
       liveSeries1,
-      pending: !thumbSvg,
+      pending: !thumbCanvas,
       ink,
       series0,
       series1,
@@ -394,7 +398,7 @@ try {
   const session = await page.evaluate(() => {
     const state = window.__FIKA_SLIDES__.getState()
     const types = state.slides.flatMap(slide => slide.elements.filter(el => el.type === 'chart').map(el => el.chartType))
-    const pending = [...document.querySelectorAll('[data-thumbnail-slide]')].filter(host => !host.querySelector('.screen-slide')).length
+    const pending = [...document.querySelectorAll('[data-thumbnail-slide]')].filter(host => !host.querySelector('canvas[data-canvas-painted]')).length
     const live = document.querySelectorAll('[class*=viewport-wrapper] [data-element-type=chart]').length
     return { types, pending, live }
   })
@@ -408,25 +412,14 @@ try {
     const STUB = [248, 250, 252]
     const near = (r, g, b, t, tol = 22) => Math.abs(r - t[0]) <= tol && Math.abs(g - t[1]) <= tol && Math.abs(b - t[2]) <= tol
     const state = window.__FIKA_SLIDES__.getState()
-    const typeOf = (slideId) => {
-      const slide = state.slides.find(item => item.id === slideId)
-      return slide?.elements.find(el => el.type === 'chart')?.chartType || ''
-    }
     const out = []
     for (const host of document.querySelectorAll('[data-thumbnail-slide]')) {
-      const key = typeOf(host.getAttribute('data-thumbnail-slide'))
-      const svg = host.querySelector('.screen-slide svg')
-      if (!key || !svg) { out.push({ key, stubRatio: 1, series: 0, ink: 0 }); continue }
+      const slide = state.slides.find(item => item.id === host.getAttribute('data-thumbnail-slide'))
+      const chart = slide?.elements.find(el => el.type === 'chart')
+      const key = chart?.chartType || ''
+      const canvas = host.querySelector('canvas[data-canvas-painted]')
+      if (!key || !canvas || !chart) { out.push({ key, stubRatio: 1, series: 0, ink: 0 }); continue }
       const SIZE = 180
-      const xml = new XMLSerializer().serializeToString(svg)
-      const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
-      const img = new Image()
-      await new Promise((resolve, reject) => {
-        img.onload = resolve
-        img.onerror = reject
-        img.src = url
-      })
-      URL.revokeObjectURL(url)
       const raster = document.createElement('canvas')
       raster.width = SIZE
       raster.height = SIZE
@@ -434,7 +427,19 @@ try {
       rctx.fillStyle = '#ffffff'
       rctx.fillRect(0, 0, SIZE, SIZE)
       rctx.imageSmoothingEnabled = true
-      rctx.drawImage(img, 0, 0, SIZE, SIZE)
+      const slideW = state.viewportSize
+      const slideH = state.viewportSize * state.viewportRatio
+      rctx.drawImage(
+        canvas,
+        chart.left / slideW * canvas.width,
+        chart.top / slideH * canvas.height,
+        chart.width / slideW * canvas.width,
+        chart.height / slideH * canvas.height,
+        0,
+        0,
+        SIZE,
+        SIZE,
+      )
       const { data } = rctx.getImageData(0, 0, SIZE, SIZE)
       let stub = 0
       let pix = 0

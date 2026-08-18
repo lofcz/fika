@@ -127,7 +127,8 @@ export const setPreviewPaneWidth = (width: number) => {
   paneWidth = next
   // Chrome (row boxes, numbers, spacing) tracks the pointer LIVE via the
   // synchronous notify; the heavy thumbnail CONTENT freezes itself against
-  // paneLive (see LiveSlideThumb) so only light components re-render.
+  // paneLive lets thumbnail shells resize immediately while backing canvases
+  // repaint through the frame-budgeted scheduler.
   notifyPaneLive()
   if (!notifyLayout()) return
   schedulePaneDestCommit()

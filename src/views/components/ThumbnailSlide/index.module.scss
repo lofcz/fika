@@ -5,21 +5,14 @@
   user-select: none;
 }
 
-.live-slide-thumb {
+.canvas-slide-thumb {
   position: relative;
   overflow: hidden;
   pointer-events: none;
-}
 
-// Snapshot bitmap shown for already-seen rows until the store invalidates
-// them (see thumbSnapshot.ts). Absolute inset keeps it layout-neutral.
-.thumb-snapshot {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: fill;
-  pointer-events: none;
-  border: 0;
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
 }

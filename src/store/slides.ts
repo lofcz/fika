@@ -2,7 +2,8 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { setAutoFreeze } from 'immer'
 import { omit } from '@/utils/object'
-import type { Slide, SlideTheme, PPTElement, PPTAnimation, SlideTemplate, ImportedSlideTemplate } from '@/types/slides'
+import type { Slide, SlideTheme, PPTElement, PPTAnimation, SlideTemplate, ImportedSlideTemplate, TurningMode } from '@/types/slides'
+import { DEFAULT_TURNING_MODE } from '@/configs/animation'
 import { getLL } from '@/i18n/getLL'
 import { markSourcePackageDirty } from '@/utils/pptxSourcePackage'
 import { collectSlidesFonts, loadGoogleFonts } from '@/utils/font'
@@ -59,6 +60,8 @@ export interface SlidesState {
   viewportRatio: number
   templates: SlideTemplate[]
   importedTemplates: ImportedSlideTemplate[]
+  /** Used for newly added slides after "Use on every slide". Defaults to Rise. */
+  defaultTurningMode: TurningMode
 }
 
 export interface SlidesActions {
@@ -77,6 +80,7 @@ export interface SlidesActions {
   moveSlide: (fromIndex: number, toIndex: number) => void
   reorderSlides: (oldIndex: number, newIndex: number) => void
   updateSlideIndex: (index: number) => void
+  setDefaultTurningMode: (mode: TurningMode) => void
   addElement: (element: PPTElement | PPTElement[]) => void
   deleteElement: (elementId: string | string[]) => void
   updateElement: (data: UpdateElementData) => void
@@ -172,6 +176,7 @@ export const useSlidesStore = create<SlidesStore>()(
     viewportRatio: 0.5625,
     templates: buildDefaultTemplates(),
     importedTemplates: [],
+    defaultTurningMode: DEFAULT_TURNING_MODE,
 
     setTitle(title) {
       set((state) => {
@@ -229,13 +234,23 @@ export const useSlidesStore = create<SlidesStore>()(
       markSourcePackageDirty()
     },
 
+    setDefaultTurningMode(mode) {
+      set((state) => {
+        state.defaultTurningMode = mode
+      })
+    },
+
     addSlide(slide, options) {
       const incoming = Array.isArray(slide) ? slide : [slide]
       if (!incoming.length) return
+      const defaultTurningMode = get().defaultTurningMode
       if (!options?.keepSectionTag) {
         for (const item of incoming) {
           if (item.sectionTag) delete item.sectionTag
         }
+      }
+      for (const item of incoming) {
+        if (!item.turningMode) item.turningMode = defaultTurningMode
       }
       const current = get()
       const addIndex = Math.max(0, Math.min(options?.index ?? current.slideIndex + 1, current.slides.length))
