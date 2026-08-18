@@ -26,7 +26,7 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
   const { LL } = useI18nContext()
   const theme = useSlidesStore(s => s.theme)
   const outline = useHandleElementSelect(el => el && 'outline' in el ? el.outline : undefined)
-  const box = useHandleElementShallow(el => el ? { width: el.width, height: el.height } : { width: 0, height: 0 })
+  const box = useHandleElementShallow(el => el ? { width: el.width, height: 'height' in el ? el.height : 0 } : { width: 0, height: 0 })
   const hasOutline = !!outline
   const [lineStyleOptions] = useState<LineStyleType[]>(['solid', 'dashed', 'dotted'])
   const { addHistorySnapshot } = useHistorySnapshot()

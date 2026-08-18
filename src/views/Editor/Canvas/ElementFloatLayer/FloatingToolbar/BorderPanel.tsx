@@ -37,7 +37,7 @@ const BorderPanel = memo(() => {
   }, outlineEqual)
   const box = useToolbarStoreSelect(() => {
     const el = findSlideElement(useSlidesStore.getState(), useMainStore.getState().handleElementId)
-    return el ? { width: el.width, height: el.height } : { width: 0, height: 0 }
+    return el ? { width: el.width, height: 'height' in el ? el.height : 0 } : { width: 0, height: 0 }
   }, (prev, next) => prev.width === next.width && prev.height === next.height)
   const lineStyleOptions: LineStyleType[] = ['solid', 'dashed', 'dotted']
   const { addHistorySnapshot } = useHistorySnapshot()

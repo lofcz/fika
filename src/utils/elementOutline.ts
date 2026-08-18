@@ -133,7 +133,7 @@ export const shapePropsForOutlineRadius = (el: PPTShapeElement, radius: number):
 };
 
 export const outlineElementPatch = (
-  el: { type: string } & Partial<PPTShapeElement>,
+  el: { type: string },
   outline: PPTElementOutline,
   radiusChanged = false,
 ): { outline: PPTElementOutline } & Partial<PPTShapeElement> => {
