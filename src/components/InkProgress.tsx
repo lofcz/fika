@@ -72,7 +72,7 @@ const InkProgress = memo((props: IInkProgressProps) => {
 
   return (
     <div className={cx('ink-progress')} role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
-      <svg className={cx('ring')} viewBox="0 0 96 96" aria-hidden>
+      <svg className={cx('ink-ring')} viewBox="0 0 96 96" aria-hidden>
         <circle className={cx('track')} cx="48" cy="48" r="40" />
         <circle className={cx('fill')} cx="48" cy="48" r="40" strokeDasharray={RING} strokeDashoffset={ringOffset} />
       </svg>

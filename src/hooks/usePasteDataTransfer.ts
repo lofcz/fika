@@ -1,5 +1,6 @@
 import { MIME_MAP } from '@/configs/mime'
 import { getImageDataURL } from '@/utils/image'
+import { registerMediaBlob } from '@/utils/mediaIntern'
 import useCreateElement from './useCreateElement'
 import useImport from './useImport'
 
@@ -26,6 +27,7 @@ export default () => {
           const videoFile = item.getAsFile()
           if (videoFile) {
             const videoURL = URL.createObjectURL(videoFile)
+            registerMediaBlob(videoURL, videoFile)
             const ext = MIME_MAP[videoFile.type] || ''
             createVideoElement(videoURL, ext)
             isFile = true
@@ -35,6 +37,7 @@ export default () => {
           const audioFile = item.getAsFile()
           if (audioFile) {
             const audioURL = URL.createObjectURL(audioFile)
+            registerMediaBlob(audioURL, audioFile)
             const ext = MIME_MAP[audioFile.type] || ''
             createAudioElement(audioURL, ext)
             isFile = true

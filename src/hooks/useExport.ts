@@ -25,6 +25,7 @@ import { resolveChartLabelColor } from '@/utils/textContrast';
 import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
 import { getFikaExportMediaResolver } from '@/configs/exportMediaResolver';
+import { getInternedBlob, isBlobUrl, persistableMediaSrc } from '@/utils/mediaIntern';
 import { transitionExportForMode } from '@/configs/transitions';
 import { createJobProgress, slideJobProgress } from '@/utils/jobProgress';
 const exportJob = createJobProgress();
@@ -1070,6 +1071,31 @@ export default () => {
     if (!src) return src;
     if (isInlineDataUrl(src)) return src;
     if (!isForeignSource(src)) return src;
+    // blob: srcs are session-scoped. Resolve them through the intern registry
+    // (durable data URL or live Blob) instead of `fetch`: a blob URL from a
+    // previous session is unrecoverable and fetching it only spams the console.
+    if (isBlobUrl(src)) {
+      const durable = persistableMediaSrc(src);
+      if (durable !== src) return durable;
+      const live = getInternedBlob(src);
+      if (live) {
+        try {
+          return await blobToDataUrl(live);
+        } catch {
+        }
+      }
+      // A blob URL minted by another origin can never be fetched from here.
+      let foreignOrigin = false;
+      try {
+        foreignOrigin = new URL(src.slice('blob:'.length)).origin !== location.origin;
+      } catch {
+        foreignOrigin = true;
+      }
+      if (foreignOrigin) {
+        failed.add(src);
+        return EMPTY_IMAGE_DATA_URL;
+      }
+    }
     const tryBlob = async (blob: Blob): Promise<string> => {
       if (!blob.type || /^(text\/html|text\/plain|application\/json)/i.test(blob.type)) {
         throw new Error(`unexpected mime: ${blob.type || 'empty'}`);

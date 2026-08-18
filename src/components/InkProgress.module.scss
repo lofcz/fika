@@ -3,11 +3,15 @@
   width: 132px;
   height: 132px;
 }
-.ring {
+.ink-ring {
   display: block;
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
+  box-shadow: none;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-inset-ring-shadow: 0 0 #0000;
 
   circle {
     fill: none;

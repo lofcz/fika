@@ -19,6 +19,15 @@
   justify-content: center;
   align-items: center;
   gap: 22px;
+
+  :global(.ring),
+  :global(.ring-1),
+  svg {
+    --tw-ring-shadow: 0 0 #0000;
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-inset-ring-shadow: 0 0 #0000;
+    box-shadow: none;
+  }
 }
 .text {
   max-width: 240px;

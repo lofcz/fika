@@ -6,6 +6,7 @@ import { applyLocale } from './localeBridge'
 import type { Locales } from '@/i18n/locale'
 import { createAgenticApi } from './agentic/createAgenticApi'
 import { debounce } from '@/utils/debounce'
+import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern'
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
@@ -39,7 +40,11 @@ export function createController(
         const slidesStore = useSlidesStore.getState()
         options.onChange?.({
           title: slidesStore.title,
-          slides: JSON.parse(JSON.stringify(slidesStore.slides)) as FikaDocument['slides'],
+          // Never hand session-scoped blob: URLs to the host: they die with
+          // the session and persisting them loses the media permanently.
+          slides: rewritePersistableMediaSrcs(
+            JSON.parse(JSON.stringify(slidesStore.slides)) as FikaDocument['slides'],
+          ),
           theme: { ...slidesStore.theme },
           viewport: {
             size: slidesStore.viewportSize,

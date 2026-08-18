@@ -4,7 +4,9 @@ import {
   internMediaSrc,
   internSlidesMedia,
   isDataUrl,
+  persistableMediaSrc,
   resetMediaInternForTests,
+  rewritePersistableMediaSrcs,
 } from '../src/utils/mediaIntern'
 
 const PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
@@ -27,7 +29,7 @@ describe('media intern', () => {
     expect(second).toBe(first)
   })
 
-  it('rewrites slide pictures, backgrounds, and patterns in place', async () => {
+  it('warms the blob alias without touching slide srcs (documents stay durable)', async () => {
     const slides = [{
       id: 's',
       elements: [
@@ -40,6 +42,23 @@ describe('media intern', () => {
     const srcs = collectSlideMediaSrcs(slides as never)
     expect(srcs).toHaveLength(3)
     expect(new Set(srcs).size).toBe(1)
-    expect(srcs[0].startsWith('blob:')).toBe(true)
+    expect(srcs[0]).toBe(PIXEL)
+  })
+
+  it('maps a live blob alias back to its data URL for persistence', async () => {
+    const blobUrl = await internMediaSrc(PIXEL)
+    expect(blobUrl.startsWith('blob:')).toBe(true)
+    expect(persistableMediaSrc(blobUrl)).toBe(PIXEL)
+    expect(persistableMediaSrc('blob:https://dead.example/1')).toBe('blob:https://dead.example/1')
+
+    const slides = [{
+      id: 's',
+      elements: [
+        { id: 'img', type: 'image', src: blobUrl, width: 10, height: 10, left: 0, top: 0, rotate: 0 },
+      ],
+      background: { type: 'solid', color: '#fff' },
+    }]
+    rewritePersistableMediaSrcs(slides as never)
+    expect(collectSlideMediaSrcs(slides as never)).toEqual([PIXEL])
   })
 })

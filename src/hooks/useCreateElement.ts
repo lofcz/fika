@@ -116,6 +116,8 @@ export default () => {
    * @param src Image address
    */
   const createImageElement = (src: string) => {
+    // Warm the blob alias for fast painting, but persist the durable src:
+    // blob: URLs die with the session and must never enter the document.
     internMediaSrc(src).then(interned => probeImageSize(interned).then(({
       width,
       height
@@ -125,7 +127,7 @@ export default () => {
       createElement({
         type: 'image',
         id: nanoid(10),
-        src: interned,
+        src,
         width: size.width,
         height: size.height,
         left: (viewportSize - size.width) / 2,
@@ -139,9 +141,10 @@ export default () => {
     kind: FikaMediaKind;
   }>) => {
     if (!items.length) return;
+    // Warm blob aliases for painting/probing; elements keep the durable src.
     const internedItems = await Promise.all(items.map(async item => ({
       ...item,
-      src: await internMediaSrc(item.src),
+      interned: await internMediaSrc(item.src),
     })));
     const { theme, viewportRatio, viewportSize } = getSlideEnv();
     const canvasWidth = viewportSize;
@@ -149,7 +152,7 @@ export default () => {
     const naturalBoxes: MediaBox[] = [];
     for (const item of internedItems) {
       if (item.kind === 'image') {
-        const probed = await probeImageSize(item.src);
+        const probed = await probeImageSize(item.interned);
         naturalBoxes.push(items.length === 1 ? fitImageToViewport(probed.width, probed.height) : probed);
       } else if (item.kind === 'video') {
         naturalBoxes.push({

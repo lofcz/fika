@@ -1,8 +1,10 @@
 import type { Slide } from '@/types/slides'
 
 const DATA_URL_RE = /^data:/i
+const BLOB_URL_RE = /^blob:/i
 
 export const isDataUrl = (src: string) => DATA_URL_RE.test(src)
+export const isBlobUrl = (src: string) => BLOB_URL_RE.test(src)
 
 const blobUrlByDataUrl = new Map<string, string>()
 const dataUrlByBlob = new Map<string, string>()
@@ -37,6 +39,42 @@ export const getInternedBlob = (src: string): Blob | undefined => {
   if (direct) return direct
   const interned = blobUrlByDataUrl.get(src)
   return interned ? blobByUrl.get(interned) : undefined
+}
+
+/** Live interned data URL for a blob: src, or the original if it is already persistable. */
+export const persistableMediaSrc = (src: string) => {
+  if (!src || !isBlobUrl(src)) return src
+  return dataUrlByBlob.get(src) ?? src
+}
+
+/**
+ * Record an object URL created outside the intern layer (e.g. pasted video)
+ * so `getInternedBlob` can still inline its bytes during export.
+ */
+export const registerMediaBlob = (url: string, blob: Blob) => {
+  blobByUrl.set(url, blob)
+}
+
+const rewriteSrc = (src: string, map?: Map<string, string>) => {
+  if (map?.has(src)) return map.get(src) as string
+  return persistableMediaSrc(src)
+}
+
+export const rewritePersistableMediaSrcs = <T extends Slide>(slides: T[]): T[] => {
+  for (const slide of slides) {
+    if (slide.background?.type === 'image' && slide.background.image) {
+      slide.background.image.src = rewriteSrc(slide.background.image.src)
+    }
+    for (const element of slide.elements || []) {
+      if (element.type === 'image' && element.src) element.src = rewriteSrc(element.src)
+      if (element.type === 'shape' && element.pattern) element.pattern = rewriteSrc(element.pattern)
+      if (element.type === 'video' || element.type === 'audio') {
+        if (element.src) element.src = rewriteSrc(element.src)
+        if (element.type === 'video' && element.poster) element.poster = rewriteSrc(element.poster)
+      }
+    }
+  }
+  return slides
 }
 
 export const startInternSlideMedia = (slide: Slide) => {
@@ -91,8 +129,6 @@ export const collectSlideMediaSrcs = (slides: readonly Slide[]): string[] => {
   return srcs
 }
 
-const rewrite = (src: string, map: Map<string, string>) => map.get(src) ?? src
-
 export const internSlidesMedia = async (slides: Slide[]) => {
   const unique = new Set<string>()
   for (const slide of slides) {
@@ -101,23 +137,7 @@ export const internSlidesMedia = async (slides: Slide[]) => {
     })
   }
   if (!unique.size) return
-  const map = new Map<string, string>()
-  await Promise.all([...unique].map(async src => {
-    map.set(src, await internMediaSrc(src))
-  }))
-  for (const slide of slides) {
-    if (slide.background?.type === 'image' && slide.background.image) {
-      slide.background.image.src = rewrite(slide.background.image.src, map)
-    }
-    for (const element of slide.elements) {
-      if (element.type === 'image' && element.src) element.src = rewrite(element.src, map)
-      if (element.type === 'shape' && element.pattern) element.pattern = rewrite(element.pattern, map)
-      if (element.type === 'video' || element.type === 'audio') {
-        if (element.src) element.src = rewrite(element.src, map)
-        if (element.poster) element.poster = rewrite(element.poster, map)
-      }
-    }
-  }
+  await Promise.all([...unique].map(src => internMediaSrc(src)))
 }
 
 export const resetMediaInternForTests = () => {

@@ -21,6 +21,17 @@
   max-height: none;
 }
 
+/* Host Tailwind `.ring` / `.ring-1` match leaked CSS-module tokens and paint a square. */
+:global(.fika-embed-root) :global(.ring),
+:global(.fika-embed-root) :global(.ring-1),
+:global(.fika-embed-portal) :global(.ring),
+:global(.fika-embed-portal) :global(.ring-1) {
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-inset-ring-shadow: 0 0 #0000;
+  box-shadow: none;
+}
+
 :global(.fika-embed-root) :global(.ProseMirror) img,
 :global(.fika-embed-root) :global(.ProseMirror-static) img {
   display: inline;

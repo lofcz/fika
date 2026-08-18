@@ -140,7 +140,7 @@
     "tippy.js": "^6.3.7",
     "txml": "^6.0.0",
     "use-sync-external-store": "^1.6.0",
-    "wawoff2": "^2.0.1",
+    "woff-lib": "^0.0.3",
     "zustand": "^5.0.15"
   },
   "peerDependencies": {
@@ -148,7 +148,6 @@
     "react-dom": ">19.2.0"
   },
   "devDependencies": {
-    "1dxway": "^0.1.24",
     "@rsbuild/core": "^2.1.0",
     "@rsbuild/plugin-node-polyfill": "^1.4.3",
     "@rsbuild/plugin-react": "^2.1.0",
@@ -163,6 +162,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/tinycolor2": "^1.4.6",
+    "1dxway": "^0.1.24",
     "ink": "^7.1.1",
     "npm-run-all2": "^9.0.3",
     "oxlint": "^1.78.0",

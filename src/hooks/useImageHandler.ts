@@ -17,7 +17,10 @@ export default () => {
     const imageElement = handleImageElement;
     const imageElementId = handleElementId;
     if (!imageFile || !imageElement || imageElement.type !== 'image' || !imageElementId) return;
-    getImageDataURL(imageFile).then(dataURL => internMediaSrc(dataURL)).then(dataURL => {
+    getImageDataURL(imageFile).then(dataURL => {
+      // Warm the render alias, but persist the data URL: blob: URLs die with
+      // the session and must never enter the document.
+      void internMediaSrc(dataURL);
       const originWidth = imageElement.width;
       const originHeight = imageElement.height;
       const originLeft = imageElement.left;

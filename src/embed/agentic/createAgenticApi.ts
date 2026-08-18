@@ -7,6 +7,7 @@ import { createStores } from '@/store/accessors';
 import type { ChartData, ChartOptions, ChartType, Gradient, Note, NoteReply, PPTAnimation, PPTAudioElement, PPTChartElement, PPTElement, PPTElementOutline, PPTElementShadow, PPTImageElement, PPTLatexElement, PPTLineElement, PPTShapeElement, PPTTableElement, PPTTextElement, PPTVideoElement, Slide, SlideBackground, SlideTheme, SlideTemplate, ShapeText, TableCell, TableCellStyle, TurningMode } from '@/types/slides';
 import { applyLocale } from '../localeBridge';
 import { inferViewportFromSlides } from '../inferViewport';
+import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern';
 import { clampIndex, cloneElementsWithRemappedIds, clonePatch, clonePlain, cloneSlidesWithRemappedIds, createId, createIssue, createTableCell, ensureElementOnSlide, ensureSlide, findElement, findSlideLinkReferences, insertIndex, isCanonicalCommandType, mergeShapeElement, mergeTheme, normalizeAnimation, normalizeAudioElement, normalizeAudioPatch, deriveLatexGeometry, normalizeElement, normalizeElementLink, normalizeLatexElement, normalizeLineElement, normalizeNote, normalizeNotePatch, normalizeReply, normalizeShapeElement, normalizeSlide, normalizeTableElementPatch, resolveMediaAsset, toIdList, updateLineElement } from './helpers';
 import { agentTextToHtmlBreaks } from '@/utils/agentText';
 import { markdownToHtml } from '@/utils/markdown';
@@ -243,7 +244,9 @@ function applyViewport(stores: Stores, viewport?: Partial<FikaDeckViewport>) {
 function documentFromStores(stores: Stores): FikaDeckDocument {
   return {
     title: stores.slides.title,
-    slides: clonePlain(stores.slides.slides),
+    // Session-scoped blob: aliases must never leave the editor: map any back
+    // to their durable data URLs before the host persists the document.
+    slides: rewritePersistableMediaSrcs(clonePlain(stores.slides.slides)),
     theme: clonePlain(stores.slides.theme),
     viewport: viewportFromStores(stores),
     templates: clonePlain(stores.slides.templates)

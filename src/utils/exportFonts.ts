@@ -3,9 +3,13 @@
  *
  * Collects the non-system font families actually used in the deck, fetches their
  * woff2 bytes (bundled via `new URL(...)` so Vite emits them), decompresses
- * woff2 → TTF (via wawoff2), and returns `AddFontOptions[]` for `pptx.addFont()`.
- * PPTX embeds fonts as EOT-wrapped data and pptxgenjs handles TTF/OTF directly,
- * so the only required step is woff2 → TTF decompression.
+ * woff2 → TTF (via woff-lib, pure TS), and returns `AddFontOptions[]` for
+ * `pptx.addFont()`. PPTX embeds fonts as EOT-wrapped data and pptxgenjs handles
+ * TTF/OTF directly, so the only required step is woff2 → TTF decompression.
+ *
+ * woff-lib replaced wawoff2 here: wawoff2 is a Node-targeted Emscripten binary
+ * whose `onRuntimeInitialized` promise never resolves when the runtime fails to
+ * boot inside a bundled web build, hanging exports forever with no error.
  */
 import type pptxgen from 'pptxgenjs-plus';
 import { isSystemFont } from '@/utils/font';
@@ -36,18 +40,17 @@ const FONT_FACE_NAMES: Record<string, string> = {
   sourcesanspro: 'SourceSansPro',
   sourceserif4: 'SourceSerif4'
 };
-interface Woff2Tool {
-  compress: (buf: Uint8Array) => Promise<Uint8Array>;
-  decompress: (buf: Uint8Array) => Promise<Uint8Array>;
-}
-let woff2Module: Woff2Tool | null = null;
-const loadWoff2 = async (): Promise<Woff2Tool> => {
-  if (woff2Module) return woff2Module;
-  const mod = (await import('wawoff2')) as unknown as Woff2Tool & {
-    default?: Woff2Tool;
-  };
-  woff2Module = mod.default ?? mod;
-  return woff2Module;
+/** A single font decompression must never block the export pipeline. */
+const FONT_DECODE_TIMEOUT_MS = 15000;
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); }
+    );
+  });
 };
 
 /** Normalize a CSS font-family token to a comparable lowercase key. */
@@ -85,8 +88,8 @@ export const collectEmbeddedFonts = async (usedFamilies: string[]): Promise<AddF
         const res = await fetch(fileUrl);
         if (!res.ok) continue;
         const woff2 = new Uint8Array(await res.arrayBuffer());
-        const woff2Tool = await loadWoff2();
-        const ttf = await woff2Tool.decompress(woff2);
+        const { woff2Decode } = await import('woff-lib/woff2/decode');
+        const ttf = await withTimeout(woff2Decode(woff2), FONT_DECODE_TIMEOUT_MS, `woff2 decode ${family}`);
         const fontFile = new Uint8Array(ttf).buffer;
         out.push({
           fontFace: FONT_FACE_NAMES[family] ?? FONT_FACE_NAMES[family.replace(/\s+/g, '')] ?? family,

@@ -10,8 +10,8 @@ const ROOT = join(__dirname, '../..')
 const OUT = join(__dirname, 'out')
 mkdirSync(OUT, { recursive: true })
 
-const { decompress } = await import('wawoff2')
-const fontFile = new Uint8Array(await decompress(new Uint8Array(readFileSync(join(ROOT, 'src/assets/fonts/Roboto.woff2'))))).buffer
+const { woff2Decode } = await import('woff-lib/woff2/decode')
+const fontFile = new Uint8Array(await woff2Decode(new Uint8Array(readFileSync(join(ROOT, 'src/assets/fonts/Roboto.woff2'))))).buffer
 
 async function build(name, { font = false, anim = false, chart = false, gradBg = false, gradShape = false, theme = false } = {}) {
   const pptx = new pptxgen()

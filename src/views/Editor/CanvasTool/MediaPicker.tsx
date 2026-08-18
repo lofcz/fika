@@ -212,7 +212,7 @@ export default function MediaPicker(props: IMediaPickerProps) {
                   {item.kind === 'image' ? <img src={item.previewUrl} alt={item.file.name} />
                     : item.kind === 'video' ? <video src={item.previewUrl} muted playsInline />
                       : <div className={cx('audio-thumb')}><Icon icon="music" /></div>}
-                  {item.status === 'uploading' || item.status === 'processing' || item.status === 'queued' ? <div className={cx('ring')} /> : null}
+                  {item.status === 'uploading' || item.status === 'processing' || item.status === 'queued' ? <div className={cx('progress-ring')} /> : null}
                   <div className={cx('badge')}>{kindLabel(item.kind)}</div>
                   {item.status === 'ready' ? <div className={cx('ready-check')}><Icon icon="circle-check" /></div> : null}
                 </div>

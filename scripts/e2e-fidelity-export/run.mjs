@@ -161,8 +161,8 @@ applyPPTXTheme(pptx, {
 }
 
 {
-  const { decompress } = await import('wawoff2')
-  const ttf = await decompress(new Uint8Array(readFileSync(join(ROOT, 'src/assets/fonts/Roboto.woff2'))))
+  const { woff2Decode } = await import('woff-lib/woff2/decode')
+  const ttf = await woff2Decode(new Uint8Array(readFileSync(join(ROOT, 'src/assets/fonts/Roboto.woff2'))))
   await pptx.addFont({ fontFace: 'Roboto', fontFile: new Uint8Array(ttf).buffer, fontType: 'ttf' })
 }
 
