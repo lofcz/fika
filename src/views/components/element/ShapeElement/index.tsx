@@ -13,6 +13,7 @@ import useElementFlip from '@/views/components/element/hooks/useElementFlip';
 import useElementFill from '@/views/components/element/hooks/useElementFill';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 import { resolveElementDefaultFontColor, resolveLiveTextPaint } from '@/utils/textContrast';
+import { resolveShapePaintPath } from '@/utils/elementOutline'
 import { serializeRichTextHtml } from '@/utils/prosemirror';
 import GradientDefs from './GradientDefs';
 import PatternDefs from './PatternDefs';
@@ -126,7 +127,7 @@ const ShapeElement = memo((props: IShapeElementProps) => {
     const svg = svgRef.current;
     if (!svg) return;
     syncShapePaint(svg, elementInfo.width, elementInfo.height, elementInfo.viewBox);
-  }, [elementInfo.width, elementInfo.height, elementInfo.viewBox, elementInfo.path]);
+  }, [elementInfo.width, elementInfo.height, elementInfo.viewBox, elementInfo.path, elementInfo.outline]);
   const { textFitPaintStyle, setLiveContent } = useTextFit(elementInfo, liveContentRef, textFitHostRef);
   const updateText = useCallback((content: string, ignore = false) => {
     const info = elementInfoRef.current;
@@ -207,7 +208,7 @@ const ShapeElement = memo((props: IShapeElementProps) => {
         handleSelectElement($event);
       }} onDoubleClick={() => {
         startEdit();
-      }}><svg ref={svgRef} overflow='visible' width={elementInfo.width} height={elementInfo.height}><defs>{elementInfo.pattern ? <PatternDefs id={`editable-pattern-${elementInfo.id}`} src={elementInfo.pattern} /> : elementInfo.gradient ? <GradientDefs id={`editable-gradient-${elementInfo.id}`} type={elementInfo.gradient.type} colors={elementInfo.gradient.colors} rotate={elementInfo.gradient.rotate} /> : null}</defs><g key={`${elementInfo.width}:${elementInfo.height}:${elementInfo.viewBox[0]}:${elementInfo.viewBox[1]}`} transform={`scale(${elementInfo.width / elementInfo.viewBox[0]}, ${elementInfo.height / elementInfo.viewBox[1]}) translate(0,0) matrix(1,0,0,1,0,0)`}><path className={cx('shape-path')} vectorEffect='non-scaling-stroke' strokeLinecap='butt' strokeMiterlimit='8' d={elementInfo.path} fill={fill} stroke={outlineColor} strokeWidth={outlineWidth} strokeDasharray={strokeDashArray} /></g></svg><div ref={textHostRef} className={cx('shape-text', [text.align, {
+      }}><svg ref={svgRef} overflow='visible' width={elementInfo.width} height={elementInfo.height}><defs>{elementInfo.pattern ? <PatternDefs id={`editable-pattern-${elementInfo.id}`} src={elementInfo.pattern} /> : elementInfo.gradient ? <GradientDefs id={`editable-gradient-${elementInfo.id}`} type={elementInfo.gradient.type} colors={elementInfo.gradient.colors} rotate={elementInfo.gradient.rotate} /> : null}</defs><g key={`${elementInfo.width}:${elementInfo.height}:${elementInfo.viewBox[0]}:${elementInfo.viewBox[1]}`} transform={`scale(${elementInfo.width / elementInfo.viewBox[0]}, ${elementInfo.height / elementInfo.viewBox[1]}) translate(0,0) matrix(1,0,0,1,0,0)`}><path className={cx('shape-path')} vectorEffect='non-scaling-stroke' strokeLinecap='butt' strokeLinejoin={elementInfo.outline?.radius ? 'round' : 'miter'} strokeMiterlimit='8' d={resolveShapePaintPath(elementInfo)} fill={fill} stroke={outlineColor} strokeWidth={outlineWidth} strokeDasharray={strokeDashArray} /></g></svg><div ref={textHostRef} className={cx('shape-text', [text.align, {
           'editable': editable || text.content
         }])} style={{
           lineHeight: text.lineHeight,

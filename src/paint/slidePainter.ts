@@ -18,7 +18,7 @@ import type {
 import { CLIPPATHS, ClipPathTypes } from '@/configs/imageClip'
 import { DEFAULT_CHART_LINE_COLOR } from '@/configs/chart'
 import { getLineElementRenderPath, getTableThemeColors } from '@/utils/element'
-import { resolveOutlineRadiusPx } from '@/utils/elementOutline'
+import { resolveOutlineRadiusPx, resolveShapePaintPath } from '@/utils/elementOutline'
 import {
   getCachedPreviewImageBitmap,
   loadPreviewImageBitmap,
@@ -295,7 +295,7 @@ const paintShape = (
   theme: SlideTheme,
   invalidate: () => void,
 ) => withRectTransform(ctx, element, () => {
-  const path = scaledPath(element.path, element.width, element.height, element.viewBox)
+  const path = scaledPath(resolveShapePaintPath(element), element.width, element.height, element.viewBox)
   ctx.save()
   ctx.globalAlpha *= element.opacity ?? 1
   applyShadow(ctx, element.shadow)

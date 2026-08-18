@@ -16,7 +16,7 @@ import ColorButton from '@/components/ColorButton'
 import ColorPicker from '@/components/ColorPicker/index'
 import SelectCustom from '@/components/SelectCustom'
 import Slider from '@/components/Slider'
-import { outlineRadiusToPercent, percentToOutlineRadius } from '@/utils/elementOutline'
+import { outlineElementPatch, outlineRadiusToPercent, percentToOutlineRadius } from '@/utils/elementOutline'
 import { findSlideElement } from '../floatCompare'
 
 function outlineEqual(prev?: PPTElementOutline, next?: PPTElementOutline) {
@@ -51,7 +51,7 @@ const BorderPanel = memo(() => {
     const newOutline: PPTElementOutline = { ...baseOutline, ...outlineProps }
     slides.updateElement({
       id,
-      props: { outline: newOutline },
+      props: outlineElementPatch(el || { type: 'text' }, newOutline, 'radius' in outlineProps),
     })
   }, [])
 

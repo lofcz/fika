@@ -18,7 +18,7 @@ import FormatChip from '@/components/FormatChip'
 import Select from '@/components/Select'
 import SelectCustom from '@/components/SelectCustom'
 import Slider from '@/components/Slider'
-import { outlineRadiusToPercent, percentToOutlineRadius } from '@/utils/elementOutline'
+import { outlineElementPatch, outlineRadiusToPercent, percentToOutlineRadius } from '@/utils/elementOutline'
 import { Icon } from '@/components/Icon'
 import { useI18nContext } from '@/i18n/useI18nContext'
 
@@ -64,7 +64,11 @@ const MultiStylePanel = memo(function MultiStylePanel() {
         el.type === 'chart'
       ) {
         const current = el.outline || { width: 2, color: '#000', style: 'solid' }
-        useSlidesStore.getState().updateElement({ id: el.id, props: { outline: { ...current, ...outlineProps } } })
+        const nextOutline = { ...current, ...outlineProps }
+        useSlidesStore.getState().updateElement({
+          id: el.id,
+          props: outlineElementPatch(el, nextOutline, 'radius' in outlineProps),
+        })
       }
       if (el.type === 'line') useSlidesStore.getState().updateElement({ id: el.id, props: outlineProps })
     }

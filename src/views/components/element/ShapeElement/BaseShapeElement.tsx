@@ -12,6 +12,7 @@ import useElementFlip from '@/views/components/element/hooks/useElementFlip';
 import useElementFill from '@/views/components/element/hooks/useElementFill';
 import useTextFit from '@/views/components/element/hooks/useTextFit';
 import { resolveLiveTextPaint } from '@/utils/textContrast';
+import { resolveShapePaintPath } from '@/utils/elementOutline';
 import { shapePathTransform } from '@/utils/shapePaint';
 import { serializeRichTextHtml } from '@/utils/prosemirror';
 import GradientDefs from './GradientDefs';
@@ -67,7 +68,7 @@ const BaseShapeElement = memo((props: IBaseShapeElementProps) => {
         transform: flipStyle,
         color: text.defaultColor,
         fontFamily: text.defaultFontName
-      }}><svg overflow='visible' width={elementInfo.width} height={elementInfo.height}><defs>{elementInfo.pattern ? <PatternDefs id={`base-pattern-${elementInfo.id}`} src={elementInfo.pattern} /> : elementInfo.gradient ? <GradientDefs id={`base-gradient-${elementInfo.id}`} type={elementInfo.gradient.type} colors={elementInfo.gradient.colors} rotate={elementInfo.gradient.rotate} /> : null}</defs><g transform={`${shapePathTransform(elementInfo)} translate(0,0) matrix(1,0,0,1,0,0)`}><path vectorEffect='non-scaling-stroke' strokeLinecap='butt' strokeMiterlimit='8' d={elementInfo.path} fill={fill} stroke={outlineColor} strokeWidth={outlineWidth} strokeDasharray={strokeDashArray} /></g></svg><div className={cx('shape-text', text.align)} style={{
+      }}><svg overflow='visible' width={elementInfo.width} height={elementInfo.height}><defs>{elementInfo.pattern ? <PatternDefs id={`base-pattern-${elementInfo.id}`} src={elementInfo.pattern} /> : elementInfo.gradient ? <GradientDefs id={`base-gradient-${elementInfo.id}`} type={elementInfo.gradient.type} colors={elementInfo.gradient.colors} rotate={elementInfo.gradient.rotate} /> : null}</defs><g transform={`${shapePathTransform(elementInfo)} translate(0,0) matrix(1,0,0,1,0,0)`}><path vectorEffect='non-scaling-stroke' strokeLinecap='butt' strokeLinejoin={elementInfo.outline?.radius ? 'round' : 'miter'} strokeMiterlimit='8' d={resolveShapePaintPath(elementInfo)} fill={fill} stroke={outlineColor} strokeWidth={outlineWidth} strokeDasharray={strokeDashArray} /></g></svg><div className={cx('shape-text', text.align)} style={{
           lineHeight: text.lineHeight,
           letterSpacing: (text.wordSpace || 0) + 'px',
           padding: `${inset[0]}px ${inset[1]}px ${inset[2]}px ${inset[3]}px`,

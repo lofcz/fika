@@ -1,4 +1,5 @@
 import type { PPTShapeElement } from '@/types/slides'
+import { resolveShapePaintPath } from '@/utils/elementOutline'
 
 const escapeBoothText = (value: string) => (
   value
@@ -41,7 +42,8 @@ export const shapePaintHtml = (
   const stroke = outline?.width ? escapeBoothText(outline.color || '#18181b') : 'none'
   const strokeWidth = outline?.width || 0
   const dash = outline?.style === 'dashed' ? '4 4' : outline?.style === 'dotted' ? '1 3' : ''
-  const svg = `<svg overflow="visible" width="${element.width}" height="${element.height}"><g transform="${shapePathTransform(element)}"><path vector-effect="non-scaling-stroke" stroke-linecap="butt" stroke-miterlimit="8" d="${escapeBoothText(element.path)}" fill="${escapeBoothText(svgFill(element))}" stroke="${stroke}" stroke-width="${strokeWidth}"${dash ? ` stroke-dasharray="${dash}"` : ''}/></g></svg>`
+  const join = outline?.radius ? 'round' : 'miter'
+  const svg = `<svg overflow="visible" width="${element.width}" height="${element.height}"><g transform="${shapePathTransform(element)}"><path vector-effect="non-scaling-stroke" stroke-linecap="butt" stroke-linejoin="${join}" stroke-miterlimit="8" d="${escapeBoothText(resolveShapePaintPath(element))}" fill="${escapeBoothText(svgFill(element))}" stroke="${stroke}" stroke-width="${strokeWidth}"${dash ? ` stroke-dasharray="${dash}"` : ''}/></g></svg>`
   if (!text?.body) {
     return `<div data-fika-shape-paint="svg" style="width:${element.width}px;height:${element.height}px;position:relative;opacity:${element.opacity ?? 1}">${svg}</div>`
   }

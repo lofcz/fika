@@ -1,6 +1,7 @@
 import tinycolor from 'tinycolor2';
 import type { Gradient, PPTElement, PPTShapeElement, PPTTableElement, PPTTextElement, Slide, SlideBackground } from '@/types/slides';
 import { getElementRange, getTableThemeColors } from '@/utils/element';
+import { resolveShapePaintPath } from '@/utils/elementOutline';
 import { toPoints } from '@/utils/svgPathParser';
 
 /**
@@ -294,7 +295,7 @@ const shapeCoversPoint = (el: PPTShapeElement, x: number, y: number): boolean =>
   const local = canvasPointToPath(el, x, y);
   if (!local) return false;
   if (!el.path) return true;
-  return pathContainsPoint(el.path, local.x, local.y);
+  return pathContainsPoint(resolveShapePaintPath(el), local.x, local.y);
 };
 
 /** The element's own background paint (what its text sits directly on). */

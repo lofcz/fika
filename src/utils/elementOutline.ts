@@ -1,7 +1,19 @@
-import type { LineStyleType, PPTElementOutline } from '@/types/slides';
+import { ShapePathFormulasKeys, type LineStyleType, type PPTElementOutline, type PPTShapeElement } from '@/types/slides';
+import { isAxisAlignedRectPath } from '@/utils/simpleShape';
 
 /** Values `<= 1` are a 0–1 fraction of max rounding (ECMA-376 / pptxgenjs `rectRadius`). Values `> 1` are legacy px. */
 const isOutlineRadiusFraction = (radius: number) => radius <= 1;
+
+const RECT_FAMILY_FORMULAS = new Set<string>([
+  ShapePathFormulasKeys.ROUND_RECT,
+  ShapePathFormulasKeys.ROUND_RECT_DIAGONAL,
+  ShapePathFormulasKeys.ROUND_RECT_SINGLE,
+  ShapePathFormulasKeys.ROUND_RECT_SAMESIDE,
+  ShapePathFormulasKeys.CUT_RECT_DIAGONAL,
+  ShapePathFormulasKeys.CUT_RECT_SINGLE,
+  ShapePathFormulasKeys.CUT_RECT_SAMESIDE,
+  ShapePathFormulasKeys.CUT_ROUND_RECT,
+]);
 
 /** Clamp a resolved pixel corner radius to half the shorter box side. */
 export const clampOutlineRadius = (radius: number, width: number, height: number): number => {
@@ -37,13 +49,96 @@ export const outlineRadiusCss = (radius: number | undefined, width: number, heig
   return `${px}px`;
 };
 
+const pathNum = (n: number) => {
+  const rounded = Math.round(n * 1000) / 1000;
+  return Object.is(rounded, -0) ? '0' : String(rounded);
+};
+
+/**
+ * Rounded rect in local units. `rx`/`ry` are elliptical radii of that space
+ * (circular after a matching non-uniform scale). Skips zero-length edges so
+ * 100% rounding is a pill/circle instead of collapsed quadratic chamfers.
+ */
+export const roundedRectEllipsePath = (width: number, height: number, rx: number, ry: number): string => {
+  const x = Math.max(0, Math.min(rx, width / 2));
+  const y = Math.max(0, Math.min(ry, height / 2));
+  if (x <= 0 || y <= 0) return `M 0 0 L ${pathNum(width)} 0 L ${pathNum(width)} ${pathNum(height)} L 0 ${pathNum(height)} Z`;
+  const right = width - x;
+  const bottom = height - y;
+  const horiz = width - 2 * x;
+  const vert = height - 2 * y;
+  const arc = (px: number, py: number) => `A ${pathNum(x)} ${pathNum(y)} 0 0 1 ${pathNum(px)} ${pathNum(py)}`;
+  const parts = [`M ${pathNum(x)} 0`];
+  if (horiz > 0.001) parts.push(`L ${pathNum(right)} 0`);
+  parts.push(arc(width, y));
+  if (vert > 0.001) parts.push(`L ${pathNum(width)} ${pathNum(bottom)}`);
+  parts.push(arc(right, height));
+  if (horiz > 0.001) parts.push(`L ${pathNum(x)} ${pathNum(height)}`);
+  parts.push(arc(0, bottom));
+  if (vert > 0.001) parts.push(`L 0 ${pathNum(y)}`);
+  parts.push(arc(x, 0));
+  parts.push('Z');
+  return parts.join(' ');
+};
+
+/** Circular-corner rounded rect in pixel space. 100% radius → pill / circle. */
+export const roundedRectArcPath = (width: number, height: number, radiusPx: number): string => {
+  const r = clampOutlineRadius(radiusPx, width, height);
+  return roundedRectEllipsePath(width, height, r, r);
+};
+
 /** SVG path for a rectangular outline (optionally rounded). */
-export const roundedRectOutlinePath = (width: number, height: number, radius = 0): string => {
-  const r = resolveOutlineRadiusPx(radius, width, height);
-  if (r <= 0) {
-    return `M0,0 L${width},0 L${width},${height} L0,${height} Z`;
+export const roundedRectOutlinePath = (width: number, height: number, radius = 0): string => (
+  roundedRectArcPath(width, height, resolveOutlineRadiusPx(radius, width, height))
+);
+
+/** Rectangles and rectangle-family formulas the border-radius slider can round. */
+export const isRoundableRectShape = (el: Pick<PPTShapeElement, 'path' | 'viewBox' | 'pathFormula'>): boolean => {
+  if (!el.pathFormula) return isAxisAlignedRectPath(el.path, el.viewBox);
+  return RECT_FAMILY_FORMULAS.has(el.pathFormula);
+};
+
+/**
+ * Path the editor / painter / hit-test should use. Outline radius is a 0–1
+ * fraction of max rounding; viewBox scale keeps the corners circular.
+ */
+export const resolveShapePaintPath = (el: PPTShapeElement): string => {
+  if (!el.outline?.radius || !isRoundableRectShape(el)) return el.path;
+  const rPx = resolveOutlineRadiusPx(el.outline.radius, el.width, el.height);
+  if (rPx <= 0) return el.path;
+  const [vw, vh] = el.viewBox;
+  if (!vw || !vh) return roundedRectArcPath(el.width, el.height, rPx);
+  return roundedRectEllipsePath(vw, vh, rPx * vw / el.width, rPx * vh / el.height);
+};
+
+/** Keep ROUND_RECT keypoints / path in sync when the radius slider moves. */
+export const shapePropsForOutlineRadius = (el: PPTShapeElement, radius: number): Partial<PPTShapeElement> => {
+  if (!isRoundableRectShape(el)) return {};
+  const rPx = resolveOutlineRadiusPx(radius, el.width, el.height);
+  if (rPx <= 0) {
+    return {
+      pathFormula: undefined,
+      keypoints: undefined,
+      viewBox: [el.width, el.height],
+      path: roundedRectArcPath(el.width, el.height, 0),
+    };
   }
-  return [`M${r},0`, `L${width - r},0`, `Q${width},0 ${width},${r}`, `L${width},${height - r}`, `Q${width},${height} ${width - r},${height}`, `L${r},${height}`, `Q0,${height} 0,${height - r}`, `L0,${r}`, `Q0,0 ${r},0`, 'Z'].join(' ');
+  const minSide = Math.min(el.width, el.height);
+  return {
+    pathFormula: ShapePathFormulasKeys.ROUND_RECT,
+    keypoints: [minSide > 0 ? rPx / minSide : 0],
+    viewBox: [el.width, el.height],
+    path: roundedRectArcPath(el.width, el.height, rPx),
+  };
+};
+
+export const outlineElementPatch = (
+  el: { type: string } & Partial<PPTShapeElement>,
+  outline: PPTElementOutline,
+  radiusChanged = false,
+): { outline: PPTElementOutline } & Partial<PPTShapeElement> => {
+  if (!radiusChanged || el.type !== 'shape') return { outline };
+  return { outline, ...shapePropsForOutlineRadius(el as PPTShapeElement, outline.radius ?? 0) };
 };
 
 /**

@@ -6,7 +6,7 @@ import tinycolor from 'tinycolor2';
 import { toPng, toJpeg } from 'html-to-image';
 import { useSlidesStore } from '@/store';
 import type { Gradient, PPTAnimation, PPTElementEffects, PPTElementOutline, PPTElementShadow, PPTElementLink, PPTTextElement, Slide } from '@/types/slides';
-import { outlineRadiusToPptxRectRadius } from '@/utils/elementOutline';
+import { outlineRadiusToPptxRectRadius, resolveShapePaintPath } from '@/utils/elementOutline';
 import { getElementRange, getLineElementPath, getTableThemeColors } from '@/utils/element';
 import { type AST, toAST } from '@/utils/htmlParser';
 import { type SvgPoints, toPoints } from '@/utils/svgPathParser';
@@ -1525,7 +1525,7 @@ export default () => {
                   x: el.width / el.viewBox[0],
                   y: el.height / el.viewBox[1]
                 };
-                const points = formatPoints(toPoints(el.path), scale);
+                const points = formatPoints(toPoints(resolveShapePaintPath(el)), scale);
                 let fillColor = formatColor(el.fill);
                 const gradientFill = el.gradient ? gradientToPptxFill(el.gradient) : null;
                 if (el.gradient && !gradientFill) {
@@ -1553,6 +1553,7 @@ export default () => {
                 if (el.shadow) options.shadow = getShadowOption(el.shadow);
                 applyEffectsOption(options as Record<string, unknown>, el.effects);
                 if (el.outline?.width) options.line = getOutlineOption(el.outline);
+                if (el.outline?.radius) options.rectRadius = outlineRadiusToPptxRectRadius(el.outline.radius, el.width, el.height);
                 if (el.rotate) options.rotate = el.rotate;
                 if (el.link) {
                   const linkOption = getLinkOption(el.link);

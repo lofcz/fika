@@ -12,7 +12,7 @@ import PanelSection from './PanelSection'
 import ColorSwatches from '@/components/ColorSwatches'
 import SelectCustom from '@/components/SelectCustom'
 import Slider from '@/components/Slider'
-import { outlineRadiusToPercent, percentToOutlineRadius, resolveOutlineRadiusPx } from '@/utils/elementOutline'
+import { outlineElementPatch, outlineRadiusToPercent, percentToOutlineRadius, resolveOutlineRadiusPx } from '@/utils/elementOutline'
 import { useI18nContext } from '@/i18n/useI18nContext'
 
 export const OUTLINE_WIDTH_MAX = 20
@@ -41,9 +41,10 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
   const paintOutline = (outlineProps: Partial<PPTElementOutline>) => {
     const el = getHandleElement()
     if (!el) return
+    const nextOutline = { ...outline, ...outlineProps }
     useSlidesStore.getState().updateElement({
       id: el.id,
-      props: { outline: { ...outline, ...outlineProps } },
+      props: outlineElementPatch(el, nextOutline, 'radius' in outlineProps),
     })
   }
 

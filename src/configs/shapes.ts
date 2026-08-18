@@ -2,6 +2,7 @@
 
 
 import { ShapePathFormulasKeys } from '@/types/slides';
+import { roundedRectArcPath } from '@/utils/elementOutline';
 export type ShapeCategoryKey = 'rectangle' | 'common' | 'arrow' | 'other' | 'line';
 export interface ShapePoolItem {
   viewBox: [number, number];
@@ -38,7 +39,7 @@ export const SHAPE_PATH_FORMULAS: Record<string, ShapePathFormula> = {
     getBaseSize: [(width, height) => Math.min(width, height)],
     formula: (width, height, values) => {
       const radius = Math.min(width, height) * values![0];
-      return `M ${radius} 0 L ${width - radius} 0 Q ${width} 0 ${width} ${radius} L ${width} ${height - radius} Q ${width} ${height} ${width - radius} ${height} L ${radius} ${height} Q 0 ${height} 0 ${height - radius} L 0 ${radius} Q 0 0 ${radius} 0 Z`;
+      return roundedRectArcPath(width, height, radius);
     }
   },
   [ShapePathFormulasKeys.CUT_RECT_DIAGONAL]: {
@@ -280,7 +281,7 @@ const SHAPE_LIST_BASE: ShapeListItemBase[] = [{
     pptxShapeType: 'rect'
   }, {
     viewBox: [200, 200],
-    path: 'M 50 0 L 150 0 Q 200 0 200 50 L 200 150 Q 200 200 150 200 L 50 200 Q 0 200 0 150 L 0 50 Q 0 0 50 0 Z',
+    path: roundedRectArcPath(200, 200, 50),
     pathFormula: ShapePathFormulasKeys.ROUND_RECT,
     pptxShapeType: 'roundRect'
   }, {

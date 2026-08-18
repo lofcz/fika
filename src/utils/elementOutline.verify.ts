@@ -4,6 +4,7 @@ import {
   outlineRadiusToPptxRectRadius,
   percentToOutlineRadius,
   resolveOutlineRadiusPx,
+  roundedRectArcPath,
 } from './elementOutline'
 
 const box = { width: 200, height: 100 }
@@ -36,3 +37,11 @@ const imported = importOutlineFromPptx({
   height: 100,
 }, 1)
 if (imported.radius !== 0.334) throw new Error('pptxtojson adj / 50000 must stay a 0–1 fraction')
+
+const pill = roundedRectArcPath(200, 100, 50)
+if (!pill.includes('A 50 50')) throw new Error('100% radius must use circular arcs')
+if (pill.includes('Q')) throw new Error('rounded rect must not use quadratic chamfers')
+if (/L 200 50 L 200 50/.test(pill)) throw new Error('100% radius must not emit a collapsed edge')
+
+const squareCircle = roundedRectArcPath(100, 100, 50)
+if (squareCircle.includes('L 50 0 L')) throw new Error('a fully rounded square is a circle (no top edge)')
