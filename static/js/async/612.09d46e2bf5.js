@@ -1,0 +1,1 @@
+"use strict";(self.rspackChunkfika_editor=self.rspackChunkfika_editor||[]).push([[612],{13327(e,r,s){var a=s(73263);s(4954),s.d(r,{createPacketServices:()=>a.$})}}]);

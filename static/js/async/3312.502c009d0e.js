@@ -1,0 +1,1 @@
+"use strict";(self.rspackChunkfika_editor=self.rspackChunkfika_editor||[]).push([[3312],{52355(e,r,s){var i=s(82688);s(4954),s.d(r,{createEventModelingServices:()=>i.g})}}]);

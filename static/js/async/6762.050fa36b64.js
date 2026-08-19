@@ -1,0 +1,1 @@
+"use strict";(self.rspackChunkfika_editor=self.rspackChunkfika_editor||[]).push([[6762],{37089(e,r,s){var c=s(45796);s(4954),s.d(r,{createArchitectureServices:()=>c.S})}}]);
