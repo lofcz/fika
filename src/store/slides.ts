@@ -124,18 +124,54 @@ export const selectElementById = (id: string) => (state: SlidesState): PPTElemen
 const EMPTY_ANIMATIONS: PPTAnimation[] = []
 const EMPTY_FORMATED_ANIMATIONS: FormatedAnimation[] = []
 
-export const selectCurrentSlideAnimations = (state: SlidesState) => {
-  const currentSlide = state.slides[state.slideIndex]
-  if (!currentSlide?.animations) return EMPTY_ANIMATIONS
-  const elIds = currentSlide.elements.map(el => el.id)
-  return currentSlide.animations.filter(animation => elIds.includes(animation.elId))
+/**
+ * Identity-keyed selector caches. Both selectors used to allocate fresh
+ * arrays/objects per call, which made every `getSnapshot` unstable and could
+ * loop React's external-store sync (e.g. on presentation start). Store writes
+ * go through immer, so array identity is a reliable change key.
+ */
+let currentAnimationsCache: {
+  animations: PPTAnimation[]
+  elements: PPTElement[]
+  result: PPTAnimation[]
+} | null = null
+
+let formatedAnimationsCache: {
+  source: PPTAnimation[]
+  result: FormatedAnimation[]
+} | null = null
+
+const sameAnimationRefs = (a: PPTAnimation[], b: PPTAnimation[]) => {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
 }
 
-export const selectFormatedAnimations = (state: SlidesState) => {
+export const selectCurrentSlideAnimations = (state: SlidesState) => {
   const currentSlide = state.slides[state.slideIndex]
-  if (!currentSlide?.animations) return EMPTY_FORMATED_ANIMATIONS
-  const elIds = currentSlide.elements.map(el => el.id)
-  const animations = currentSlide.animations.filter(animation => elIds.includes(animation.elId))
+  const animations = currentSlide?.animations
+  const elements = currentSlide?.elements
+  if (!animations?.length || !elements) return EMPTY_ANIMATIONS
+  const cache = currentAnimationsCache
+  if (cache && cache.animations === animations && cache.elements === elements) return cache.result
+
+  // Drop animations that point at deleted elements.
+  const elIds = new Set(elements.map(el => el.id))
+  const filtered = animations.filter(animation => elIds.has(animation.elId))
+  const result = filtered.length === animations.length
+    ? animations // nothing orphaned — reuse the store array's identity
+    : filtered.length === 0
+      ? EMPTY_ANIMATIONS
+      : cache && sameAnimationRefs(cache.result, filtered)
+        ? cache.result // element edit didn't change membership — keep identity
+        : filtered
+  currentAnimationsCache = { animations, elements, result }
+  return result
+}
+
+const buildFormatedAnimations = (animations: PPTAnimation[]): FormatedAnimation[] => {
   const formatedAnimations: FormatedAnimation[] = []
   for (const animation of animations) {
     if (animation.trigger === 'click' || !formatedAnimations.length) {
@@ -145,16 +181,37 @@ export const selectFormatedAnimations = (state: SlidesState) => {
       const last = formatedAnimations[formatedAnimations.length - 1]
       last.animations = last.animations.filter(item => item.elId !== animation.elId)
       last.animations.push(animation)
-      formatedAnimations[formatedAnimations.length - 1] = last
     }
     else if (animation.trigger === 'auto') {
       const last = formatedAnimations[formatedAnimations.length - 1]
       last.autoNext = true
-      formatedAnimations[formatedAnimations.length - 1] = last
       formatedAnimations.push({ animations: [animation], autoNext: false })
     }
   }
   return formatedAnimations
+}
+
+export const selectFormatedAnimations = (state: SlidesState) => {
+  const animations = selectCurrentSlideAnimations(state)
+  if (!animations.length) return EMPTY_FORMATED_ANIMATIONS
+  // Grouping depends only on the filtered animations, so keying on that array
+  // keeps group identity stable across unrelated element edits.
+  if (formatedAnimationsCache?.source === animations) return formatedAnimationsCache.result
+  const result = buildFormatedAnimations(animations)
+  formatedAnimationsCache = { source: animations, result }
+  return result
+}
+
+/** Whether this element is still waiting for an unplayed enter animation. */
+export const selectElementWaitsForInAnimation = (
+  state: SlidesState,
+  elementId: string,
+  animationIndex: number,
+) => {
+  const groups = selectFormatedAnimations(state)
+  const groupIndex = groups.findIndex(item => item.animations.some(animation => animation.elId === elementId))
+  if (groupIndex === -1 || groupIndex < animationIndex) return false
+  return groups[groupIndex].animations.find(animation => animation.elId === elementId)?.type === 'in'
 }
 
 setAutoFreeze(false)

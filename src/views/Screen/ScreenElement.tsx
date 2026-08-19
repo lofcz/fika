@@ -3,7 +3,7 @@ import styles from './ScreenElement.module.scss'
 const cx = bindStyles(styles)
 import { useCallback, memo, lazy, createElement, Suspense, type ComponentType } from 'react';
 
-import { useSlidesStore, useFormatedAnimations } from '@/store';
+import { useSlidesStore, selectElementWaitsForInAnimation } from '@/store';
 import { ElementTypes, type PPTElement, type Slide, type SlideBackground } from '@/types/slides';
 import BaseImageElement from '@/views/components/element/ImageElement/BaseImageElement';
 import BaseTextElement from '@/views/components/element/TextElement/BaseTextElement';
@@ -44,23 +44,11 @@ const ScreenElement = memo((props: IScreenElementProps) => {
     };
     return elementTypeMap[elementInfo.type] || null;
   })();
-  const formatedAnimations = useFormatedAnimations();
-  const theme = useSlidesStore(s => s.theme);;
-
-  const needWaitAnimation = (() => {
-    const elementIndexInAnimation = formatedAnimations.findIndex(item => {
-      const elIds = item.animations.map(item => item.elId);
-      return elIds.includes(elementInfo.id);
-    });
-
-    if (elementIndexInAnimation === -1) return false;
-
-    if (elementIndexInAnimation < animationIndex) return false;
-
-    const firstAnimation = formatedAnimations[elementIndexInAnimation].animations.find(item => item.elId === elementInfo.id);
-    if (firstAnimation?.type === 'in') return true;
-    return false;
-  })();
+  const theme = useSlidesStore(s => s.theme)
+  const needWaitAnimation = useSlidesStore(useCallback(
+    s => selectElementWaitsForInAnimation(s, elementInfo.id, animationIndex),
+    [elementInfo.id, animationIndex],
+  ))
 
   const openLink = useCallback((e: MouseEvent) => {
     if ((e.target as HTMLElement).tagName === 'A') {

@@ -1,14 +1,14 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useMainStore, selectHandleElement, selectActiveElementList } from './main'
-import { useSlidesStore, selectCurrentSlide, selectSlideById, selectCurrentSlideAnimations, selectFormatedAnimations, selectSlideId, selectElementById, selectIsEmptySlide } from './slides'
+import { useSlidesStore, selectCurrentSlide, selectSlideById, selectCurrentSlideAnimations, selectFormatedAnimations, selectElementWaitsForInAnimation, selectSlideId, selectElementById, selectIsEmptySlide } from './slides'
 import { useSnapshotStore, selectCanUndo, selectCanRedo } from './snapshot'
 import { useKeyboardStore, selectCtrlOrShiftKeyActive, syncPointerModifiers } from './keyboard'
 import { useScreenStore } from './screen'
 import { useImportConfirmStore } from './importConfirm'
 
 export const useActiveElementList = () => useMainStore(useShallow(selectActiveElementList))
-export const useCurrentSlideAnimations = () => useSlidesStore(useShallow(selectCurrentSlideAnimations))
-export const useFormatedAnimations = () => useSlidesStore(useShallow(selectFormatedAnimations))
+export const useCurrentSlideAnimations = () => useSlidesStore(selectCurrentSlideAnimations)
+export const useFormatedAnimations = () => useSlidesStore(selectFormatedAnimations)
 
 export {
   useMainStore,
@@ -20,6 +20,7 @@ export {
   selectIsEmptySlide,
   selectCurrentSlideAnimations,
   selectFormatedAnimations,
+  selectElementWaitsForInAnimation,
   selectSlideId,
   selectElementById,
   useSnapshotStore,
