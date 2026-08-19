@@ -166,7 +166,9 @@ const ElementAnimationPanel = memo(function ElementAnimationPanel() {
   }
 
   const runAnimation = (elId: string, effect: string, duration: number) => {
-    const elRef = queryFika<HTMLElement>(`#editable-element-${elId} [class^=editable-element-]`)
+    // `class*=`, not `class^=`: cssm emits the hashed module class before the
+    // plain `editable-element-*` token, so a prefix match never hits.
+    const elRef = queryFika<HTMLElement>(`#editable-element-${elId} [class*=editable-element-]`)
     if (!elRef) return
     const animationName = `${ANIMATION_CLASS_PREFIX}${effect}`
     elRef.style.setProperty('--animate-duration', `${duration}ms`)

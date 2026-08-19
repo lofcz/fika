@@ -107,7 +107,9 @@ export default () => {
     let endAnimationCount = 0
 
     for (const animation of animations) {
-      const elRef = queryFika<HTMLElement>(`#screen-element-${animation.elId} [class^=base-element-]`)
+      // `class*=`, not `class^=`: cssm emits the hashed module class before the
+      // plain `base-element-*` token, so a prefix match never hits.
+      const elRef = queryFika<HTMLElement>(`#screen-element-${animation.elId} [class*=base-element-]`)
       if (!elRef) {
         endAnimationCount += 1
         continue
@@ -153,7 +155,7 @@ export default () => {
       const { animations } = currentFormated[i]
       for (const animation of animations) {
         if (animation.type !== 'out') continue
-        const elRef = queryFika<HTMLElement>(`#screen-element-${animation.elId} [class^=base-element-]`)
+        const elRef = queryFika<HTMLElement>(`#screen-element-${animation.elId} [class*=base-element-]`)
         if (!elRef) continue
         const animationName = `${ANIMATION_CLASS_PREFIX}${animation.effect}`
         elRef.style.setProperty('--animate-duration', '0ms')
@@ -171,7 +173,7 @@ export default () => {
     const { animations } = getFormatedAnimations()[nextIndex]
 
     for (const animation of animations) {
-      const elRef = queryFika<HTMLElement>(`#screen-element-${animation.elId} [class^=base-element-]`)
+      const elRef = queryFika<HTMLElement>(`#screen-element-${animation.elId} [class*=base-element-]`)
       if (!elRef) continue
 
       elRef.style.removeProperty('--animate-duration')
