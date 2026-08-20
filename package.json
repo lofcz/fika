@@ -117,7 +117,7 @@
     "overlayscrollbars": "^2.16.0",
     "parse5": "^8.0.1",
     "perfect-freehand": "^1.2.3",
-    "pptxgenjs-plus": "^4.1.18",
+    "pptxgenjs-plus": "^4.1.19",
     "pptxtojson": "npm:@lofcz/pptxtojson@^2.2.5",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-dropcursor": "^1.8.3",
@@ -174,7 +174,7 @@
     "react-doctor": "^0.9.12",
     "react-dom": "^19.2.8",
     "react-scan": "^0.5.7",
-    "sass": "^1.100.0",
+    "sass": "^1.103.0",
     "typesafe-i18n": "npm:@lofcz/typesafe-i18n@5.27.4",
     "typescript": "^7.0.2"
   },
