@@ -291,7 +291,14 @@ export async function renderCodeElementPng(el: CodeRasterInput & {
       width: el.width,
       height: el.height,
       pixelRatio: 2,
-      cacheBust: true
+      cacheBust: true,
+      // The clone inherits the host's computed offscreen position, which
+      // would shift the capture out of view — pin it back for the snapshot.
+      style: {
+        position: 'static',
+        left: '0',
+        top: '0'
+      }
     });
   } finally {
     host.remove();

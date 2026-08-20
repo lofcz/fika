@@ -35,7 +35,7 @@ import {
 import { isUnfilledPlaceholder, placeholderPromptHtml } from '@/utils/placeholderPaint'
 import { placeholderPromptSizeOf } from '@/configs/textPresets'
 import { paintRichText } from './textPainter'
-import { getChartRaster, getCodeRaster, getMermaidRaster } from './rasterResources'
+import { getChartRaster, getCodeRaster, getLatexRaster, getMermaidRaster } from './rasterResources'
 
 export type PaintSlideOptions = {
   slide: Slide
@@ -479,8 +479,16 @@ const paintLine = (ctx: CanvasRenderingContext2D, element: PPTLineElement) => {
   ctx.restore()
 }
 
-const paintLatex = (ctx: CanvasRenderingContext2D, element: PPTLatexElement) => (
+const paintLatex = (ctx: CanvasRenderingContext2D, element: PPTLatexElement, invalidate: () => void) => (
   withRectTransform(ctx, element, () => {
+    // The main canvas typesets with MathLive and the editor saves `path: ''`,
+    // so the MathLive raster is the source of truth. The legacy hfmath path
+    // (imports, agentic creates) doubles as the interim while the raster bakes.
+    const raster = getLatexRaster(element, invalidate)
+    if (raster) {
+      ctx.drawImage(raster, 0, 0, element.width, element.height)
+      return
+    }
     if (!element.path) return
     const path = scaledPath(element.path, element.width, element.height, element.viewBox)
     ctx.fillStyle = element.color
@@ -674,7 +682,7 @@ const paintElement = (
     case 'image': paintImage(ctx, element, invalidate); break
     case 'text': paintTextElement(ctx, element, slide, theme, showPlaceholders); break
     case 'table': paintTable(ctx, element, theme); break
-    case 'latex': paintLatex(ctx, element); break
+    case 'latex': paintLatex(ctx, element, invalidate); break
     case 'chart':
     case 'mermaid':
     case 'code': paintRasterElement(ctx, element, slide, theme, invalidate); break

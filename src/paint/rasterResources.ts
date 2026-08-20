@@ -3,11 +3,12 @@ import { BarChart, LineChart, PieChart, RadarChart, ScatterChart } from 'echarts
 import { GridComponent, LegendComponent, RadarComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 
-import type { PPTChartElement, PPTCodeElement, PPTMermaidElement } from '@/types/slides'
+import type { PPTChartElement, PPTCodeElement, PPTLatexElement, PPTMermaidElement } from '@/types/slides'
 import { getChartOption, expandChartThemeColors } from '@/views/components/element/ChartElement/chartOption'
-import { highlightCodeBlock } from '@/utils/codeHighlight'
+import { codeElementToBoothHtml } from '@/utils/codeHighlight'
 import { isLightCodeTheme } from '@/configs/code'
 import { renderMermaid } from '@/utils/mermaid'
+import { LATEX_ELEMENT_FONT_SIZE, ensureMathliveReady, renderLatexElementHtml } from '@/utils/math'
 
 echarts.use([
   BarChart,
@@ -110,12 +111,30 @@ const canvas = (width: number, height: number) => {
   return node
 }
 
-const svgBitmap = async (svg: string): Promise<ImageBitmap | null> => {
+/**
+ * Decode an SVG string through an `<img>` and draw it onto a canvas.
+ * `createImageBitmap` rejects SVG blobs in Chromium, so an image element is
+ * the only reliable rasterization path.
+ */
+const svgToCanvas = async (svg: string, width: number, height: number): Promise<Raster | null> => {
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }))
   try {
-    return await createImageBitmap(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }))
+    const image = new Image()
+    image.decoding = 'async'
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve()
+      image.onerror = () => reject(new Error('SVG decode failed'))
+      image.src = url
+    })
+    const result = canvas(width, height)
+    result.getContext('2d')?.drawImage(image, 0, 0, result.width, result.height)
+    return result
   }
   catch {
     return null
+  }
+  finally {
+    URL.revokeObjectURL(url)
   }
 }
 
@@ -196,13 +215,17 @@ export const getMermaidRaster = (
   invalidate: () => void,
 ): Raster | undefined => {
   const key = `mermaid:${hash(`${element.code}\0${element.width}\0${element.height}`)}`
+  const width = Math.max(1, Math.round(element.width))
+  const height = Math.max(1, Math.round(element.height))
   return requestRaster(key, async () => {
     const raw = await renderMermaid(element.code, `canvas-${hash(element.id + element.code)}`)
-    const svg = raw.replace(
-      /<svg\b/,
-      `<svg width="${Math.max(1, element.width)}" height="${Math.max(1, element.height)}"`,
-    )
-    return svgBitmap(svg)
+    // renderMermaid already emits width/height="100%"; rewrite them via the DOM
+    // (string-splicing duplicates the attributes, which is unparseable XML).
+    const doc = new DOMParser().parseFromString(raw, 'image/svg+xml')
+    const root = doc.documentElement
+    root.setAttribute('width', String(width))
+    root.setAttribute('height', String(height))
+    return svgToCanvas(new XMLSerializer().serializeToString(root), width, height)
   }, invalidate)
 }
 
@@ -217,28 +240,97 @@ export const getCodeRaster = (
 ): Raster | undefined => {
   const payload = `${element.code}\0${element.language}\0${element.theme}\0${element.fontSize}\0${element.showLineNumbers}\0${element.width}\0${element.height}`
   const key = `code:${hash(payload)}`
+  const width = Math.max(1, Math.round(element.width))
+  const height = Math.max(1, Math.round(element.height))
   return requestRaster(key, async () => {
-    let html: string
-    let bg = isLightCodeTheme(element.theme) ? '#ffffff' : '#0d1117'
-    let fg = isLightCodeTheme(element.theme) ? '#24292f' : '#e6edf3'
+    let booth: string
     try {
-      const highlighted = await highlightCodeBlock(element.code, element.language, element.theme)
-      html = highlighted.html
-      bg = highlighted.bg
-      fg = highlighted.fg
+      // Same Shiki booth markup the export path uses: inline styles only and
+      // real gutter spans, so it survives the SVG foreignObject round-trip.
+      booth = await codeElementToBoothHtml(element)
     }
     catch {
-      html = `<pre>${escapeXml(element.code)}</pre>`
+      const bg = isLightCodeTheme(element.theme) ? '#ffffff' : '#0d1117'
+      const fg = isLightCodeTheme(element.theme) ? '#24292f' : '#e6edf3'
+      booth = `<div style="box-sizing:border-box;width:100%;height:100%;overflow:hidden;border-radius:10px;padding:12px 16px;background:${bg};color:${fg};font:${element.fontSize}px/1.5 ui-monospace,Consolas,monospace;white-space:pre">${escapeXml(element.code)}</div>`
     }
-    const gutter = element.showLineNumbers ? 'counter-reset:line; .line:before{counter-increment:line;content:counter(line);display:inline-block;width:3em;color:#8b949e}' : ''
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${element.width}" height="${element.height}">
-      <foreignObject width="100%" height="100%">
-        <div xmlns="http://www.w3.org/1999/xhtml" style="box-sizing:border-box;width:100%;height:100%;overflow:hidden;padding:12px;background:${bg};color:${fg};font:${element.fontSize}px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;">
-          <style>pre{margin:0;font:inherit} ${gutter}</style>${html}
-        </div>
-      </foreignObject>
-    </svg>`
-    return svgBitmap(svg)
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%">${booth}</div></foreignObject></svg>`
+    return svgToCanvas(svg, width, height)
+  }, invalidate)
+}
+
+/**
+ * MathLive fonts inlined as data URLs, computed once. Without this cache
+ * html-to-image would re-parse every stylesheet and re-fetch the font files
+ * for each formula capture.
+ */
+let latexFontCssPromise: Promise<string> | null = null
+const latexFontEmbedCss = (host: HTMLElement) => {
+  latexFontCssPromise ??= import('html-to-image')
+    .then(mod => mod.getFontEmbedCSS(host))
+    .catch(() => {
+      latexFontCssPromise = null
+      return ''
+    })
+  return latexFontCssPromise
+}
+
+/**
+ * MathLive typeset of a formula element, mirroring `LatexContent`'s DOM
+ * (flex-centered box, 36px stage scaled uniformly into the authored box).
+ * html-to-image is used instead of a bare foreignObject because SVG-as-image
+ * cannot load the MathLive web fonts.
+ */
+export const getLatexRaster = (
+  element: PPTLatexElement,
+  invalidate: () => void,
+): Raster | undefined => {
+  const width = Math.max(1, Math.ceil(element.width))
+  const height = Math.max(1, Math.ceil(element.height))
+  const key = `latex:${hash(`${element.latex}\0${width}\0${height}\0${element.color}`)}`
+  return requestRaster(key, async () => {
+    await ensureMathliveReady()
+    try {
+      await document.fonts.ready
+    }
+    catch {
+      // Fonts that fail to load still produce a legible fallback raster.
+    }
+    const host = document.createElement('div')
+    host.style.cssText = `position:fixed;left:-99999px;top:0;width:${width}px;height:${height}px;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;color:${element.color}`
+    const stage = document.createElement('div')
+    stage.style.cssText = `width:max-content;line-height:normal;font-size:${LATEX_ELEMENT_FONT_SIZE}px;transform-origin:center center;color:inherit`
+    stage.innerHTML = renderLatexElementHtml(element.latex)
+    const formula = stage.firstElementChild as HTMLElement | null
+    if (formula) {
+      formula.style.display = 'block'
+      formula.style.margin = '0'
+      formula.style.color = 'inherit'
+    }
+    host.appendChild(stage)
+    document.body.appendChild(host)
+    try {
+      const naturalWidth = stage.offsetWidth
+      const naturalHeight = stage.offsetHeight
+      if (!(naturalWidth > 0) || !(naturalHeight > 0)) return null
+      stage.style.transform = `scale(${Math.min(width / naturalWidth, height / naturalHeight)})`
+      const [{ toCanvas }, fontEmbedCSS] = await Promise.all([import('html-to-image'), latexFontEmbedCss(host)])
+      return await toCanvas(host, {
+        width,
+        height,
+        pixelRatio: 1,
+        fontEmbedCSS,
+        // The clone inherits the host's computed offscreen position, which
+        // would shift the capture out of view — pin it back for the snapshot.
+        style: { position: 'static', left: '0', top: '0' },
+      })
+    }
+    catch {
+      return null
+    }
+    finally {
+      host.remove()
+    }
   }, invalidate)
 }
 

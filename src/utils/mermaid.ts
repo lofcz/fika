@@ -25,7 +25,12 @@ let purifyPromise: Promise<DOMPurifyAPI> | null = null;
 let readyPromise: Promise<[MermaidAPI, DOMPurifyAPI]> | null = null;
 let mermaidReady = false;
 let renderIndex = 0;
-let renderToken = 0;
+/**
+ * Supersede tokens are per render `key` (element id, editor, thumbnail hash).
+ * A single global token would make concurrent consumers — several thumbnails,
+ * the on-canvas element, the editor preview — cancel each other's renders.
+ */
+const renderTokens = new Map<string, number>();
 let exclusive: Promise<unknown> = Promise.resolve();
 
 /** Lazily load + configure mermaid (kept out of the initial embed graph). */
@@ -80,16 +85,17 @@ const paintSvg = (svg: string, DOMPurify: DOMPurifyAPI) => {
 }
 
 export const renderMermaid = async (code: string, key = 'diagram') => {
-  const mine = ++renderToken
+  const mine = (renderTokens.get(key) ?? 0) + 1
+  renderTokens.set(key, mine)
   const [mermaid, DOMPurify] = await whenMermaidReady()
-  if (mine !== renderToken) throw new MermaidRenderSuperseded()
+  if (mine !== renderTokens.get(key)) throw new MermaidRenderSuperseded()
 
   const run = exclusive.then(async () => {
-    if (mine !== renderToken) throw new MermaidRenderSuperseded()
+    if (mine !== renderTokens.get(key)) throw new MermaidRenderSuperseded()
     const safeKey = key.replace(/[^a-zA-Z0-9]/g, '') || 'diagram'
     const id = `mermaid${safeKey}${renderIndex++}`
     const { svg } = await mermaid.render(id, code)
-    if (mine !== renderToken) throw new MermaidRenderSuperseded()
+    if (mine !== renderTokens.get(key)) throw new MermaidRenderSuperseded()
     return paintSvg(svg, DOMPurify)
   })
   exclusive = run.then(() => undefined, () => undefined)
