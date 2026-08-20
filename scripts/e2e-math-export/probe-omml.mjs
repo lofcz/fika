@@ -1,5 +1,5 @@
 import { convertLatexToMathMl } from 'mathlive'
-import { mml2omml } from 'mathml2omml'
+import { mml2omml } from 'mathml2omml-plus'
 
 const mml = convertLatexToMathMl('v = \\frac{s}{t}')
 console.log('MML:', mml.slice(0, 400))

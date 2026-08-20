@@ -24,6 +24,15 @@
   &:not([data-live-auto-height]) > .paint-clip {
     height: 100%;
   }
+  &[data-live-auto-height] {
+    display: flex;
+    flex-direction: column;
+
+    > .paint-clip {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+  }
 
   &.v-align-box {
     .text-fit-host,

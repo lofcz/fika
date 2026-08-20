@@ -41,6 +41,8 @@ const cs_editor: NamespaceEditorTranslation = {
       contentTitle: 'Název obsahového snímku',
       itemTitle: 'Klíčový bod',
       itemBody: 'Doplňující detail',
+      statValue: 'XX %',
+      statLabel: 'Co toto číslo znamená a proč je důležité',
       thankYou: 'Děkujeme',
       welcome: 'Vítejte',
       title1: 'Nadpis 1',
@@ -335,10 +337,10 @@ const cs_editor: NamespaceEditorTranslation = {
     slideCounter: 'Snímek {current} / {total}',
     layouts: {
       cover: 'Titulní snímek',
-      contents: 'Obsah',
-      transition: 'Oddíl',
       content: 'Nadpis a text',
       twoColumn: 'Dva sloupce',
+      threeColumn: 'Tři sloupce',
+      stat: 'Klíčové číslo',
       end: 'Závěr',
     },
     contextMenu: {

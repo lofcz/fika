@@ -44,6 +44,15 @@
   &:not([data-live-auto-height]) > .paint-clip {
     height: 100%;
   }
+  &[data-live-auto-height] {
+    display: flex;
+    flex-direction: column;
+
+    > .paint-clip {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+  }
 
   // Flex lives on the padded paint box so inset never changes when locking
   // height. Children stay content-sized; do not flex .ProseMirror itself.

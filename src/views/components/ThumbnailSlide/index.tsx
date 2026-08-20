@@ -34,7 +34,7 @@ export function areThumbnailSlidePropsEqual(prev: IThumbnailSlideProps, next: IT
 
 /** Model-driven slide thumbnail painted directly at the final device DPR. */
 const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
-  const { slide, size, visible = true, className } = props
+  const { slide, size, visible = true, showPlaceholders = false, className } = props
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const storeSlide = useSlidesStore(s => s.slides.find(item => item.id === slide.id))
   const full = storeSlide ?? ('elements' in slide ? slide : undefined)
@@ -47,7 +47,7 @@ const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
       data-thumbnail-slide={slide.id}
       style={{ width: width + 'px', height: width * viewportRatio + 'px' }}
     >
-      {visible && full ? <CanvasSlideThumb slide={full} width={width} /> : null}
+      {visible && full ? <CanvasSlideThumb slide={full} width={width} showPlaceholders={showPlaceholders} /> : null}
     </div>
   )
 }, areThumbnailSlidePropsEqual)

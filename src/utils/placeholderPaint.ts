@@ -7,6 +7,7 @@ import {
   placeholderBoxTypography,
   placeholderPromptSizeOf,
   placeholderTypedSizeOf,
+  placeholderWeightOf,
 } from '@/configs/textPresets'
 import type { PlaceholderStyleOptions } from '@/utils/prosemirror/commands/applyPlaceholderStyles'
 
@@ -46,6 +47,38 @@ export const repairFilledPlaceholderHtml = (
 export const isListPlaceholder = (el: { placeholder?: string; textType?: string }) => (
   !!el.placeholder && isListPlaceholderType(el.textType)
 )
+
+const escapePromptText = (text: string) => text
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+
+/**
+ * Ghost prompt markup for previews that render unfilled placeholders (layout
+ * picker cards). Typography mirrors the empty-phase CSS prompt: prompt size,
+ * prompt weight, normal style, slot align, resolved placeholder ink.
+ */
+export const placeholderPromptHtml = (
+  el: {
+    placeholder?: string
+    textType?: string
+    placeholderFontSize?: number
+    placeholderAlign?: TextAlign
+  },
+  color: string,
+) => {
+  const css = [
+    `font-size:${placeholderPromptSizeOf(el)}px`,
+    `font-weight:${placeholderWeightOf(el, true)}`,
+    'font-style:normal',
+    `text-align:${placeholderAlignOf(el)}`,
+    `color:${color}`,
+  ].join(';')
+  const text = escapePromptText(el.placeholder || '')
+  return isListPlaceholder(el)
+    ? `<ul><li><p style="${css}">${text}</p></li></ul>`
+    : `<p style="${css}">${text}</p>`
+}
 
 export const emptyPlaceholderHtml = (el: { placeholder?: string; textType?: string }) => (
   isListPlaceholder(el) ? EMPTY_LIST_HTML : EMPTY_PARA_HTML

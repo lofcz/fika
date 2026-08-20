@@ -102,6 +102,19 @@ function assertOnDisk() {
       'fika-embed.js still contains new URL("./", import.meta.url) — host bundlers fail with Can\'t resolve \'./\'',
     )
   }
+
+  const embedCss = join(root, 'dist/embed/fika-embed.css')
+  if (existsSync(embedCss)) {
+    const css = readFileSync(embedCss, 'utf8')
+    assert(
+      css.includes('transition-property:transform,visibility,opacity') &&
+        css.includes('[data-animation=scale][data-state=hidden]'),
+      'fika-embed.css is missing tippy transition styles — initial CSS chunks must be merged into the embed stylesheet',
+    )
+
+    const orphanCss = readdirSync(dirname(embedCss)).filter(fileName => fileName.endsWith('.css') && fileName !== 'fika-embed.css')
+    assert(orphanCss.length === 0, `orphan initial embed CSS chunks present: ${orphanCss.join(', ')}`)
+  }
 }
 
 function assertTarball(tarball) {

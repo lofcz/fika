@@ -31,6 +31,8 @@ const pl_editor: NamespaceEditorTranslation = {
       contentTitle: 'Tytuł slajdu z treścią',
       itemTitle: 'Kluczowy punkt',
       itemBody: 'Dodatkowy szczegół',
+      statValue: 'XX%',
+      statLabel: 'Co oznacza ta liczba i dlaczego jest ważna',
       thankYou: 'Dziękujemy',
       welcome: 'Witamy',
       title1: 'Tytuł 1',
@@ -293,10 +295,10 @@ const pl_editor: NamespaceEditorTranslation = {
     slideCounter: 'Slajd {current} / {total}',
     layouts: {
       cover: 'Slajd tytułowy',
-      contents: 'Spis treści',
-      transition: 'Nagłówek sekcji',
       content: 'Tytuł i treść',
       twoColumn: 'Dwie kolumny',
+      threeColumn: 'Trzy kolumny',
+      stat: 'Kluczowa liczba',
       end: 'Zakończenie',
     },
     contextMenu: {

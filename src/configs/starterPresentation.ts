@@ -176,69 +176,81 @@ export const buildContentSlide = (LL: TranslationFunctions, options: StarterPres
     })]
   };
 };
-export const buildContentsSlide = (LL: TranslationFunctions, options: StarterPresentationOptions = {}): Slide => {
+export const buildThreeColumnSlide = (LL: TranslationFunctions, options: StarterPresentationOptions = {}): Slide => {
   const normalized = normalizeStarterOptions(LL, options);
-  const itemPlaceholder = LL.editor.templates.placeholderText.contentsItem;
+  const columnWidth = 266;
+  const columnGap = 16;
   return {
     id: nanoid(10),
-    type: 'contents',
+    type: 'content',
     background: {
       type: 'solid',
       color: normalized.backgroundColor
     },
-    elements: [textPlaceholder('title', LL.editor.templates.placeholderText.contentsTitle(), {
+    elements: [textPlaceholder('title', normalized.titlePlaceholder, {
       left: 85,
       top: 55,
       width: 830,
+      lines: 2,
       fontSize: normalized.contentTitleFontSize,
       color: normalized.placeholderColor,
       fontColor: normalized.fontColor,
       fontName: normalized.fontName,
       align: 'left',
       vAlign: 'middle'
-    }), ...[1, 2, 3, 4].map((index, i) => textPlaceholder('item', itemPlaceholder({
-      index
-    }), {
+    }), ...[0, 1, 2].map(i => textPlaceholder('content', normalized.bodyPlaceholder, {
+      left: 85 + i * (columnWidth + columnGap),
+      top: 165,
+      width: columnWidth,
+      lines: 11,
+      fontSize: normalized.bodyFontSize,
+      color: normalized.placeholderColor,
+      fontColor: normalized.fontColor,
+      fontName: normalized.fontName,
+      align: 'left'
+    }))]
+  };
+};
+export const buildStatSlide = (LL: TranslationFunctions, options: StarterPresentationOptions = {}): Slide => {
+  const normalized = normalizeStarterOptions(LL, options);
+  const copy = LL.editor.templates.placeholderText;
+  return {
+    id: nanoid(10),
+    type: 'content',
+    background: {
+      type: 'solid',
+      color: normalized.backgroundColor
+    },
+    elements: [textPlaceholder('title', normalized.titlePlaceholder, {
       left: 85,
-      top: 165 + i * 72,
+      top: 55,
       width: 830,
-      fontSize: 24,
+      lines: 2,
+      fontSize: normalized.contentTitleFontSize,
       color: normalized.placeholderColor,
       fontColor: normalized.fontColor,
       fontName: normalized.fontName,
       align: 'left',
       vAlign: 'middle'
-    }))]
-  };
-};
-export const buildTransitionSlide = (LL: TranslationFunctions, options: StarterPresentationOptions = {}): Slide => {
-  const normalized = normalizeStarterOptions(LL, options);
-  const copy = LL.editor.templates.placeholderText;
-  return {
-    id: nanoid(10),
-    type: 'transition',
-    background: {
-      type: 'solid',
-      color: normalized.backgroundColor
-    },
-    elements: [textPlaceholder('title', copy.sectionTitle(), {
-      left: 120,
-      top: 200,
-      width: 760,
-      fontSize: normalized.titleFontSize,
+    }), textPlaceholder('subtitle', copy.statValue(), {
+      left: 85,
+      top: 220,
+      width: 240,
+      fontSize: 80,
       color: normalized.placeholderColor,
       fontColor: normalized.fontColor,
       fontName: normalized.fontName,
-      align: TEXT_PRESET_LARGE_TITLE.align
-    }), textPlaceholder('subtitle', copy.sectionBody(), {
-      left: 120,
-      top: 320,
-      width: 760,
-      fontSize: normalized.subtitleFontSize,
+      align: 'center'
+    }), textPlaceholder('content', copy.statLabel(), {
+      left: 405,
+      top: 220,
+      width: 510,
+      lines: 6,
+      fontSize: normalized.bodyFontSize,
       color: normalized.placeholderColor,
       fontColor: normalized.fontColor,
       fontName: normalized.fontName,
-      align: TEXT_PRESET_SMALL_TITLE.align
+      align: 'left'
     })]
   };
 };

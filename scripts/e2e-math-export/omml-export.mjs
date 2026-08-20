@@ -9,7 +9,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadPptx } from '../lib/pptx-inspect.mjs'
 import { convertLatexToMathMl } from 'mathlive'
-import { mml2omml } from 'mathml2omml'
+import { mml2omml } from 'mathml2omml-plus'
 import pptxgen from 'pptxgenjs-plus'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))

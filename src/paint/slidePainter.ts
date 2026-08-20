@@ -27,9 +27,13 @@ import { elementLocksTextBox, resolveTextBoxLayout } from '@/utils/placeholderLa
 import {
   resolveChartElementSeriesColors,
   resolveChartLabelColor,
+  resolveElementSurfaces,
   resolveLiveTextPaint,
+  resolvePlaceholderColor,
   resolveTableCellFill,
 } from '@/utils/textContrast'
+import { isUnfilledPlaceholder, placeholderPromptHtml } from '@/utils/placeholderPaint'
+import { placeholderPromptSizeOf } from '@/configs/textPresets'
 import { paintRichText } from './textPainter'
 import { getChartRaster, getCodeRaster, getMermaidRaster } from './rasterResources'
 
@@ -42,6 +46,8 @@ export type PaintSlideOptions = {
   cssHeight?: number
   dpr?: number
   invalidate: () => void
+  /** Paint unfilled placeholder prompts (layout picker cards). Slide thumbnails keep them hidden. */
+  showPlaceholders?: boolean
 }
 
 const PATH_CACHE_MAX = 1800
@@ -346,6 +352,7 @@ const paintTextElement = (
   element: PPTTextElement,
   slide: Slide,
   theme: SlideTheme,
+  showPlaceholders: boolean,
 ) => withRectTransform(ctx, element, () => {
   const box = roundRectPath(element.width, element.height, resolveOutlineRadiusPx(element.outline?.radius, element.width, element.height))
   ctx.save()
@@ -355,7 +362,8 @@ const paintTextElement = (
     ctx.fill(box)
   }
   paintOutline(ctx, box, element.outline)
-  const painted = resolveLiveTextPaint(element.defaultColor || theme.fontColor, element.content, {
+  const showPrompt = showPlaceholders && isUnfilledPlaceholder(element)
+  const painted = showPrompt ? undefined : resolveLiveTextPaint(element.defaultColor || theme.fontColor, element.content, {
     element,
     elements: slide.elements,
     fill: element.fill,
@@ -363,16 +371,30 @@ const paintTextElement = (
     fallbackSurface: theme.backgroundColor,
     themeFontColor: theme.fontColor,
   })
+  const html = showPrompt
+    ? placeholderPromptHtml(element, resolvePlaceholderColor({
+        author: element.placeholderColor,
+        surfaces: resolveElementSurfaces({
+          fill: element.fill,
+          background: slide.background,
+          fallbackSurface: theme.backgroundColor,
+        }),
+      }))
+    : painted!.html
   const layout = resolveTextBoxLayout(element, slide.type)
   paintRichText(ctx, {
-    html: painted.html,
+    html,
     x: 0,
     y: 0,
     width: element.width,
     height: element.height,
     defaultFontFamily: element.defaultFontName || theme.fontName,
-    defaultColor: painted.ink,
-    defaultSize: element.placeholder ? element.placeholderFontSize : undefined,
+    defaultColor: showPrompt
+      ? element.defaultColor || theme.fontColor
+      : painted!.ink,
+    defaultSize: showPrompt
+      ? placeholderPromptSizeOf(element)
+      : element.placeholder ? element.placeholderFontSize : undefined,
     lineHeight: element.lineHeight,
     letterSpacing: element.wordSpace,
     paragraphSpace: element.paragraphSpace,
@@ -644,12 +666,13 @@ const paintElement = (
   slide: Slide,
   theme: SlideTheme,
   invalidate: () => void,
+  showPlaceholders: boolean,
 ) => {
   switch (element.type) {
     case 'shape': paintShape(ctx, element, slide, theme, invalidate); break
     case 'line': paintLine(ctx, element); break
     case 'image': paintImage(ctx, element, invalidate); break
-    case 'text': paintTextElement(ctx, element, slide, theme); break
+    case 'text': paintTextElement(ctx, element, slide, theme, showPlaceholders); break
     case 'table': paintTable(ctx, element, theme); break
     case 'latex': paintLatex(ctx, element); break
     case 'chart':
@@ -684,7 +707,7 @@ export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlid
   paintBackground(ctx, options.slide, logicalWidth, logicalHeight, options.invalidate)
   for (const element of options.slide.elements) {
     try {
-      paintElement(ctx, element, options.slide, options.theme, options.invalidate)
+      paintElement(ctx, element, options.slide, options.theme, options.invalidate, !!options.showPlaceholders)
     }
     catch (error) {
       if (import.meta.env.MODE === 'development') {

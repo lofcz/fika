@@ -4026,6 +4026,14 @@ export type NamespaceEditorTranslation = {
 			 */
 			itemBody: string
 			/**
+			 * X​X​%
+			 */
+			statValue: string
+			/**
+			 * W​h​a​t​ ​t​h​i​s​ ​n​u​m​b​e​r​ ​m​e​a​n​s​ ​a​n​d​ ​w​h​y​ ​i​t​ ​m​a​t​t​e​r​s
+			 */
+			statLabel: string
+			/**
 			 * T​h​a​n​k​ ​y​o​u
 			 */
 			thankYou: string
@@ -4306,14 +4314,6 @@ export type NamespaceEditorTranslation = {
 			 */
 			cover: string
 			/**
-			 * C​o​n​t​e​n​t​s
-			 */
-			contents: string
-			/**
-			 * S​e​c​t​i​o​n​ ​h​e​a​d​e​r
-			 */
-			transition: string
-			/**
 			 * T​i​t​l​e​ ​a​n​d​ ​c​o​n​t​e​n​t
 			 */
 			content: string
@@ -4321,6 +4321,14 @@ export type NamespaceEditorTranslation = {
 			 * T​w​o​ ​c​o​l​u​m​n​s
 			 */
 			twoColumn: string
+			/**
+			 * T​h​r​e​e​ ​c​o​l​u​m​n​s
+			 */
+			threeColumn: string
+			/**
+			 * K​e​y​ ​n​u​m​b​e​r
+			 */
+			stat: string
 			/**
 			 * C​l​o​s​i​n​g
 			 */
@@ -9223,6 +9231,14 @@ export type TranslationFunctions = {
 				 */
 				itemBody: () => LocalizedString
 				/**
+				 * XX%
+				 */
+				statValue: () => LocalizedString
+				/**
+				 * What this number means and why it matters
+				 */
+				statLabel: () => LocalizedString
+				/**
 				 * Thank you
 				 */
 				thankYou: () => LocalizedString
@@ -9497,14 +9513,6 @@ export type TranslationFunctions = {
 				 */
 				cover: () => LocalizedString
 				/**
-				 * Contents
-				 */
-				contents: () => LocalizedString
-				/**
-				 * Section header
-				 */
-				transition: () => LocalizedString
-				/**
 				 * Title and content
 				 */
 				content: () => LocalizedString
@@ -9512,6 +9520,14 @@ export type TranslationFunctions = {
 				 * Two columns
 				 */
 				twoColumn: () => LocalizedString
+				/**
+				 * Three columns
+				 */
+				threeColumn: () => LocalizedString
+				/**
+				 * Key number
+				 */
+				stat: () => LocalizedString
 				/**
 				 * Closing
 				 */

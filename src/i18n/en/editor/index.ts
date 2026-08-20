@@ -537,6 +537,8 @@ const en_editor: BaseTranslation = {
       contentTitle: 'Content page title',
       itemTitle: 'Key point',
       itemBody: 'Supporting detail',
+      statValue: 'XX%',
+      statLabel: 'What this number means and why it matters',
       thankYou: 'Thank you',
       welcome: 'Welcome',
       title1: 'Title 1',
@@ -616,10 +618,10 @@ const en_editor: BaseTranslation = {
     slideCounter: 'Slide {current:number} / {total:number}',
     layouts: {
       cover: 'Title slide',
-      contents: 'Contents',
-      transition: 'Section header',
       content: 'Title and content',
       twoColumn: 'Two columns',
+      threeColumn: 'Three columns',
+      stat: 'Key number',
       end: 'Closing',
     },
     contextMenu: {

@@ -13,6 +13,7 @@ const cx = bindStyles(styles)
 export type ICanvasSlideThumbProps = {
   slide: Slide
   width: number
+  showPlaceholders?: boolean
 }
 
 const EDIT_DEBOUNCE_MS = 100
@@ -21,17 +22,17 @@ const EDIT_DEBOUNCE_MS = 100
  * A final-DPR Canvas2D projection of Slide JSON. Existing pixels remain in the
  * backing store while an edit is debounced or an async asset resolves.
  */
-const CanvasSlideThumb = memo(({ slide, width }: ICanvasSlideThumbProps) => {
+const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanvasSlideThumbProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const paintKey = useId()
   const viewportSize = useSlidesStore(s => s.viewportSize)
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const theme = useSlidesStore(s => s.theme)
-  const latest = useRef({ slide, width, viewportSize, viewportRatio, theme })
+  const latest = useRef({ slide, width, showPlaceholders, viewportSize, viewportRatio, theme })
   const priority = useRef<PaintPriority>('visible')
   const mounted = useRef(true)
-  latest.current = { slide, width, viewportSize, viewportRatio, theme }
+  latest.current = { slide, width, showPlaceholders, viewportSize, viewportRatio, theme }
 
   const schedule = useCallback(() => scheduleSlidePaint(paintKey, () => {
     const canvas = canvasRef.current
@@ -45,6 +46,7 @@ const CanvasSlideThumb = memo(({ slide, width }: ICanvasSlideThumbProps) => {
       cssWidth: value.width,
       cssHeight: value.width * value.viewportRatio,
       dpr: window.devicePixelRatio || 1,
+      showPlaceholders: value.showPlaceholders,
       invalidate: () => {
         if (mounted.current) schedule()
       },
@@ -65,7 +67,7 @@ const CanvasSlideThumb = memo(({ slide, width }: ICanvasSlideThumbProps) => {
     if (firstPaint) return schedule()
     const timer = window.setTimeout(schedule, EDIT_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [slide, theme, viewportSize, viewportRatio, width, schedule])
+  }, [slide, theme, viewportSize, viewportRatio, width, showPlaceholders, schedule])
 
   useEffect(() => {
     const host = hostRef.current
@@ -104,6 +106,7 @@ const CanvasSlideThumb = memo(({ slide, width }: ICanvasSlideThumbProps) => {
   )
 }, (prev, next) => (
   prev.width === next.width
+  && (prev.showPlaceholders ?? false) === (next.showPlaceholders ?? false)
   && arePaintedSlideIdentitiesEqual(prev.slide as PaintedSlide, next.slide as PaintedSlide)
 ))
 

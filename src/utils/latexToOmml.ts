@@ -1,10 +1,10 @@
 /**
- * LaTeX → MathML (MathLive) → OMML (mathml2omml) for native PowerPoint equations.
+ * LaTeX → MathML (MathLive) → OMML (mathml2omml-plus) for native PowerPoint equations.
  * No hand-rolled math grammar — conversion is entirely library-based.
  */
 
 import tinycolor from 'tinycolor2';
-import { mml2omml } from 'mathml2omml';
+import { mml2omml } from 'mathml2omml-plus';
 import { convertLatexToMathMlSync, ensureMathliveReady } from '@/utils/math';
 const MATH_NS = 'http://www.w3.org/1998/Math/MathML';
 function wrapMathMl(fragment: string): string {

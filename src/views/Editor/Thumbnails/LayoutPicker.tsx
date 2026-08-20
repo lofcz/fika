@@ -7,10 +7,10 @@ import { useSlidesStore } from '@/store'
 import type { Slide } from '@/types/slides'
 import {
   buildContentSlide,
-  buildContentsSlide,
   buildEndSlide,
+  buildStatSlide,
   buildTitleSlide,
-  buildTransitionSlide,
+  buildThreeColumnSlide,
   buildTwoColumnSlide,
 } from '@/configs/starterPresentation'
 import { applyPresetToLayoutSlide, matchPresetTheme } from '@/configs/theme'
@@ -39,10 +39,10 @@ const LayoutPicker = memo((props: ILayoutPickerProps) => {
     const preset = matchPresetTheme(theme.themeColors)
     const items = [
       { id: 'cover', name: names.cover(), index: 0, slide: buildTitleSlide(LL, options) },
-      { id: 'contents', name: names.contents(), index: 0, slide: buildContentsSlide(LL, options) },
-      { id: 'transition', name: names.transition(), index: 0, slide: buildTransitionSlide(LL, options) },
       { id: 'content', name: names.content(), index: 1, slide: buildContentSlide(LL, options) },
       { id: 'twoColumn', name: names.twoColumn(), index: 2, slide: buildTwoColumnSlide(LL, options) },
+      { id: 'threeColumn', name: names.threeColumn(), index: 3, slide: buildThreeColumnSlide(LL, options) },
+      { id: 'stat', name: names.stat(), index: 0, slide: buildStatSlide(LL, options) },
       { id: 'end', name: names.end(), index: 0, slide: buildEndSlide(LL, options) },
     ]
 
@@ -70,7 +70,7 @@ const LayoutPicker = memo((props: ILayoutPickerProps) => {
           onMouseDown={event => event.preventDefault()}
           onClick={() => pick(item.slide)}
         >
-          <ThumbnailSlide className={cx('thumbnail')} slide={item.slide} size={168} />
+          <ThumbnailSlide className={cx('thumbnail')} slide={item.slide} size={168} showPlaceholders />
           <span className={cx('layout-name')}>{item.name}</span>
         </button>
       ))}
