@@ -39,7 +39,7 @@
         "markdown-it": "^15.0.0",
         "markdown-it-texmath": "^1.0.0",
         "mathlive": "npm:@lofcz/mathlive@^0.110.2",
-        "mathml2omml-plus": "^0.6.0",
+        "mathml2omml-plus": "^0.6.3",
         "mermaid": "^11.17.0",
         "mitt": "^3.0.1",
         "nanoid": "^6.0.1",
@@ -1263,7 +1263,7 @@
 
     "mathlive": ["@lofcz/mathlive@0.110.6", "", { "dependencies": { "@cortex-js/compute-engine": "0.58.0" } }, "sha512-ot6p99LyT/UJ2s8E/SmunPPX27q/eO5BUxuGD2XOOvBlR9NwloOOW1EJA4m03phOEnm0FWBhigUj8Tiup5IUuw=="],
 
-    "mathml2omml-plus": ["mathml2omml-plus@0.6.0", "", {}, "sha512-7JuUl0H12YTv56dbpyLkqXW8EmZDtvp+/mTmgTPDBXDl4RZxwrnOGG9b+iZOSKLzwoRdywwYSjuzcnpcJI6Nfg=="],
+    "mathml2omml-plus": ["mathml2omml-plus@0.6.3", "", {}, "sha512-TGM00qSPeznGOAOTqPUe3M0PG7V5/LVxTgGk3LyHS4UnQ/7ALw/ZNN8sqByzTlBY05GuLV5a1basmy0bpRPHCw=="],
 
     "md5.js": ["md5.js@1.3.5", "", { "dependencies": { "hash-base": "^3.0.0", "inherits": "^2.0.1", "safe-buffer": "^5.1.2" } }, "sha512-xitP+WxNPcTTOgnTJcrhM0xvdPepipPSf3I8EIpGKeFLjt3PlJLIDG3u8EX53ZIubkb+5U2+3rELYpEhHhzdkg=="],
 
