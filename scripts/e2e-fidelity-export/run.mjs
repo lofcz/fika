@@ -4,13 +4,14 @@
  * src/hooks/useExport.ts and asserts the emitted PPTX XML contains native
  * gradients, theme colors, animations, font embedding, and image polish.
  *
- * Deck layout (6 slides, one per feature group) so PowerPoint visual review is easy:
+ * Deck layout (7 slides, one per feature group) so PowerPoint visual review is easy:
  *  1. gradient background + gradient shape
  *  2. animations (text / shape / image each animated)
  *  3. theme colors + font embedding (Roboto text)
  *  4. chart (legend names + grouped bars)
  *  5. image polish (rectRadius + outline + shadow)
  *  6. master placeholder (title/body with valign/margin)
+ *  7. 4.2 DrawingML: picture fill, line ends, recolor, overflow, locks
  *
  * Run: node scripts/e2e-fidelity-export/run.mjs
  */
@@ -70,6 +71,7 @@ const applyPPTXTheme = (pptx, t) => {
     bodyFontFace: t.fontName || 'Calibri',
     themeColors: [dk1, lt1, dk2, lt2, accents[0], accents[1], accents[2], accents[3], accents[4], accents[5], '0563C1', '954F72'],
   }
+  pptx.recentColors = [dk1, lt1, ...accents.slice(0, 6)]
 }
 
 const ANIMATION_EFFECT_MAP = {
@@ -95,6 +97,9 @@ const TRANSPARENT_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
 
 const pptx = new pptxgen()
+pptx.title = 'Fika fidelity'
+pptx.author = 'Fika'
+pptx.slideSizeType = 'screen16x9'
 applyPPTXTheme(pptx, {
   themeColors: ['#5b9bd5', '#ed7d31', '#a5a5a5', '#ffc000', '#4472c4', '#70ad47'],
   fontColor: '#333333',
@@ -161,6 +166,37 @@ applyPPTXTheme(pptx, {
 }
 
 {
+  const s = pptx.addSlide()
+  s.addShape('rect', {
+    x: 0.5, y: 0.5, w: 3, h: 2,
+    objectName: 'Pattern Box',
+    hidden: true,
+    lock: { noMove: true, noResize: true },
+    fill: { type: 'image', image: { data: TRANSPARENT_PNG, sizing: 'stretch' } },
+    line: { color: '000000', width: 1.5 },
+  })
+  s.addShape(pptx.ShapeType.line, {
+    x: 4, y: 1, w: 3, h: 0,
+    line: {
+      color: '000000',
+      width: 2,
+      beginArrowType: 'arrow',
+      endArrowType: 'oval',
+    },
+  })
+  s.addImage({
+    data: TRANSPARENT_PNG,
+    x: 4, y: 2, w: 2, h: 2,
+    recolor: { grayscale: true, brightness: -10, contrast: 10 },
+  })
+  s.addText('clipped box', {
+    x: 0.5, y: 3, w: 3, h: 1,
+    vertOverflow: 'clip',
+    fontSize: 14,
+  })
+}
+
+{
   const { woff2Decode } = await import('woff-lib/woff2/decode')
   const ttf = await woff2Decode(new Uint8Array(readFileSync(join(ROOT, 'src/assets/fonts/Roboto.woff2'))))
   await pptx.addFont({ fontFace: 'Roboto', fontFile: new Uint8Array(ttf).buffer, fontType: 'ttf' })
@@ -174,8 +210,10 @@ const presXml = await readPptxPart(deck, 'ppt/presentation.xml')
 const slide1 = deck.slides[0].xml
 const slide2 = deck.slides[1].xml
 const slide6 = deck.slides[5].xml
+const slide7 = deck.slides[6].xml
 const themeXml = await readPptxPart(deck, 'ppt/theme/theme1.xml')
 const chart1 = await readPptxPart(deck, 'ppt/charts/chart1.xml')
+const coreXml = await readPptxPart(deck, 'docProps/core.xml')
 
 check('slide background emits <p:bg> with gradient', /<p:bg>/.test(slide1) && /<a:gradFill/.test(slide1))
 check('gradient stops + angle', /<a:gs pos="0"/.test(slide1) && /<a:gs pos="100000"/.test(slide1) && /<a:lin ang="2700000"/.test(slide1))
@@ -194,6 +232,14 @@ check('defaultTextStyle intact (no corruption)', presXml.includes('<p:defaultTex
   check('master named ScioBot (layout name)', scioLayout)
 }
 check('placeholder on slide6', /<p:ph[\s\S]*?type="title"/.test(slide6) && /<p:ph[\s\S]*?type="body"/.test(slide6))
+check('core title + author', coreXml.includes('Fika fidelity') && coreXml.includes('Fika'))
+check('slide size type 16x9', /<p:sldSz[^>]*type="screen16x9"/.test(presXml))
+check('recent colors on presentationPr', /<p:clrMru>/.test(await readPptxPart(deck, 'ppt/presProps.xml')))
+check('picture fill on shape', /<a:blipFill/.test(slide7))
+check('hidden + lock + objectName', /name="Pattern Box"/.test(slide7) && /hidden="1"/.test(slide7) && /noMove="1"/.test(slide7))
+check('line oval end', /<a:tailEnd type="oval"/.test(slide7))
+check('image recolor grayscale', /<a:grayscl\/>/.test(slide7))
+check('text vertOverflow clip', /vertOverflow="clip"/.test(slide7))
 
 {
   const fnt = zip.file(/ppt\/fonts\/\d+\.fntdata/)[0]
@@ -204,5 +250,5 @@ check('placeholder on slide6', /<p:ph[\s\S]*?type="title"/.test(slide6) && /<p:p
 }
 
 writeFileSync(join(OUT, 'summary.json'), JSON.stringify({ failures }, null, 2))
-console.log(failures === 0 ? '\nALL PASS (6 slides written)' : `\n${failures} FAIL`)
+console.log(failures === 0 ? '\nALL PASS (7 slides written)' : `\n${failures} FAIL`)
 process.exit(failures === 0 ? 0 : 1)

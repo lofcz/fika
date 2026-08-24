@@ -4,8 +4,8 @@ import { saveAs } from 'file-saver';
 import pptxgen from 'pptxgenjs-plus';
 import tinycolor from 'tinycolor2';
 import { toPng, toJpeg } from 'html-to-image';
-import { useSlidesStore } from '@/store';
-import type { Gradient, PPTAnimation, PPTElementEffects, PPTElementOutline, PPTElementShadow, PPTElementLink, PPTTextElement, Slide } from '@/types/slides';
+import { useMainStore, useSlidesStore } from '@/store';
+import type { Gradient, ImageElementFilters, LinePoint, PPTAnimation, PPTElementEffects, PPTElementOutline, PPTElementShadow, PPTElementLink, PPTTextElement, Slide } from '@/types/slides';
 import { outlineRadiusToPptxRectRadius, resolveShapePaintPath } from '@/utils/elementOutline';
 import { getElementRange, getLineElementPath, getTableThemeColors } from '@/utils/element';
 import { type AST, toAST } from '@/utils/htmlParser';
@@ -110,6 +110,7 @@ export default () => {
       bodyFontFace: t.fontName || 'Calibri',
       themeColors: [dk1, lt1, dk2, lt2, accents[0], accents[1], accents[2], accents[3], accents[4], accents[5], '0563C1', '954F72']
     };
+    pptx.recentColors = [dk1, lt1, ...accents.slice(0, 6)];
   };
   const setPPTXLayout = (pptx: pptxgen) => {
     if (viewportRatio === 0.625) pptx.layout = 'LAYOUT_16x10';else if (viewportRatio === 0.75) pptx.layout = 'LAYOUT_4x3';else {
@@ -150,6 +151,7 @@ export default () => {
     const gen = exportJob.start(0);
     setTimeout(() => {
       const pptx = new pptxgen();
+      applyPresentationMeta(pptx);
       setPPTXLayout(pptx);
       const config: ExportImageConfig = {
         quality: 1,
@@ -988,6 +990,71 @@ export default () => {
     };
   };
 
+  const lineArrowType = (point: LinePoint): 'none' | 'arrow' | 'oval' => {
+    if (point === 'arrow') return 'arrow';
+    if (point === 'dot') return 'oval';
+    return 'none';
+  };
+
+  const parseCssPercent = (value?: string): number | undefined => {
+    if (!value) return undefined;
+    const n = parseFloat(value);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  const imageRecolorFromFilters = (filters?: ImageElementFilters): pptxgen.ImageRecolorProps | undefined => {
+    if (!filters) return undefined;
+    const recolor: pptxgen.ImageRecolorProps = {};
+    const gray = parseCssPercent(filters.grayscale);
+    if (gray !== undefined && gray >= 50) recolor.grayscale = true;
+    const bright = parseCssPercent(filters.brightness);
+    if (bright !== undefined && bright !== 100) recolor.brightness = Math.max(-100, Math.min(100, bright - 100));
+    const contrast = parseCssPercent(filters.contrast);
+    if (contrast !== undefined && contrast !== 100) recolor.contrast = Math.max(-100, Math.min(100, contrast - 100));
+    return Object.keys(recolor).length ? recolor : undefined;
+  };
+
+  const patternFill = (src: string): pptxgen.ShapeFillProps => ({
+    type: 'image',
+    image: /^data:/i.test(src) ? { data: src, sizing: 'stretch' } : { path: src, sizing: 'stretch' }
+  });
+
+  const mediaContentType = (src: string, extn?: string): string | undefined => {
+    const dataMatch = src.match(/^data:([^;,]+)/i);
+    if (dataMatch) return dataMatch[1];
+    const mime: Record<string, string> = {
+      mp4: 'video/mp4',
+      m4v: 'video/mp4',
+      mov: 'video/quicktime',
+      wmv: 'video/x-ms-wmv',
+      avi: 'video/x-msvideo',
+      mp3: 'audio/mpeg',
+      m4a: 'audio/mp4',
+      wav: 'audio/wav',
+      wma: 'audio/x-ms-wma'
+    };
+    return extn ? mime[extn.toLowerCase()] : undefined;
+  };
+
+  const applyObjectMeta = (options: Record<string, unknown>, el: { id: string; name?: string; lock?: boolean }, hiddenIds: Set<string>, textLock = false) => {
+    if (el.name) options.objectName = el.name;
+    if (hiddenIds.has(el.id)) options.hidden = true;
+    if (el.lock) {
+      options.lock = textLock
+        ? { noSelect: true, noMove: true, noResize: true, noTextEdit: true }
+        : { noSelect: true, noMove: true, noResize: true };
+    }
+  };
+
+  const applyPresentationMeta = (pptx: pptxgen) => {
+    if (title) pptx.title = title;
+    pptx.author = 'Fika';
+    if (viewportRatio === 0.5625) pptx.slideSizeType = 'screen16x9';
+    else if (viewportRatio === 0.625) pptx.slideSizeType = 'screen16x10';
+    else if (viewportRatio === 0.75) pptx.slideSizeType = 'screen4x3';
+    else pptx.slideSizeType = 'custom';
+  };
+
   const getLinkOption = (link: PPTElementLink): pptxgen.HyperlinkProps | null => {
     const {
       type,
@@ -1237,7 +1304,9 @@ export default () => {
         }
       }
       const pptx = new pptxgen();
+      applyPresentationMeta(pptx);
       applyPPTXTheme(pptx);
+      const hiddenIds = new Set(useMainStore.getState().hiddenElementIdList);
       const failedSources = new Set<string>();
       let sources: Map<string, string> = new Map();
       try {
@@ -1474,8 +1543,10 @@ export default () => {
               if (el.opacity !== undefined) options.transparency = (1 - el.opacity) * 100;
               if (el.paragraphSpace !== undefined) options.paraSpaceBefore = el.paragraphSpace / ratioPx2Pt;
               if (el.vertical) options.vert = 'eaVert';
+              if (el.fixedHeight) options.vertOverflow = 'clip';
               if (phName) options.placeholder = phName;
               if (!el.fixedHeight && !phName && !el.placeholder) options.fit = 'resize';
+              applyObjectMeta(options as Record<string, unknown>, el, hiddenIds, true);
               const animation = animationForElement(el.id, slide.animations);
               if (animation) options.animation = animation;
               pptxSlide.addText(textProps, options);
@@ -1496,10 +1567,13 @@ export default () => {
                 if (linkOption) options.hyperlink = linkOption;
               }
               if (el.filters?.opacity) options.transparency = 100 - parseInt(el.filters?.opacity);
+              const recolor = imageRecolorFromFilters(el.filters);
+              if (recolor) options.recolor = recolor;
               if (el.radius) options.rectRadius = outlineRadiusToPptxRectRadius(el.radius, el.width, el.height);
               if (el.outline?.width) options.line = getOutlineOption(el.outline);
               if (el.shadow) options.shadow = getShadowOption(el.shadow);
               applyEffectsOption(options as Record<string, unknown>, el.effects);
+              applyObjectMeta(options as Record<string, unknown>, el, hiddenIds);
               if (el.clip) {
                 if (el.clip.shape === 'ellipse') options.rounding = true;
                 const crop = getPPTXImageCrop(el.width, el.height, el.clip.range, ratioPx2Inch);
@@ -1539,6 +1613,7 @@ export default () => {
                 if (el.flipV) options.flipV = el.flipV;
                 if (el.shadow) options.shadow = getShadowOption(el.shadow);
                 applyEffectsOption(options as Record<string, unknown>, el.effects);
+                applyObjectMeta(options as Record<string, unknown>, el, hiddenIds);
                 if (el.link) {
                   const linkOption = getLinkOption(el.link);
                   if (linkOption) options.hyperlink = linkOption;
@@ -1561,14 +1636,14 @@ export default () => {
                   const color = tinycolor.mix(color1, color2).toHexString();
                   fillColor = formatColor(color);
                 }
-                if (el.pattern) fillColor = formatColor('#00000000');
                 const opacity = el.opacity === undefined ? 1 : el.opacity;
+                const patternSrc = el.pattern ? sources.get(el.pattern) ?? el.pattern : '';
                 const options: pptxgen.ShapeProps = {
                   x: el.left / ratioPx2Inch,
                   y: el.top / ratioPx2Inch,
                   w: el.width / ratioPx2Inch,
                   h: el.height / ratioPx2Inch,
-                  fill: gradientFill ?? {
+                  fill: patternSrc ? patternFill(patternSrc) : gradientFill ?? {
                     color: fillColor.color,
                     transparency: (1 - fillColor.alpha * opacity) * 100
                   },
@@ -1578,6 +1653,7 @@ export default () => {
                 if (el.flipV) options.flipV = el.flipV;
                 if (el.shadow) options.shadow = getShadowOption(el.shadow);
                 applyEffectsOption(options as Record<string, unknown>, el.effects);
+                applyObjectMeta(options as Record<string, unknown>, el, hiddenIds, !!el.text);
                 if (el.outline?.width) options.line = getOutlineOption(el.outline);
                 if (el.outline?.radius) options.rectRadius = outlineRadiusToPptxRectRadius(el.outline.radius, el.width, el.height);
                 if (el.rotate) options.rotate = el.rotate;
@@ -1612,25 +1688,8 @@ export default () => {
                 if (el.rotate) options.rotate = el.rotate;
                 if (shapeDefaultColor) options.color = shapeDefaultColor;
                 if (el.text.defaultFontName) options.fontFace = el.text.defaultFontName;
+                if (el.text.fixedHeight) options.vertOverflow = 'clip';
                 pptxSlide.addText(textProps, options);
-              }
-              if (el.pattern) {
-                const options: pptxgen.ImageProps = {
-                  x: el.left / ratioPx2Inch,
-                  y: el.top / ratioPx2Inch,
-                  w: el.width / ratioPx2Inch,
-                  h: el.height / ratioPx2Inch
-                };
-                const patternSrc = sources.get(el.pattern) ?? el.pattern;
-                if (isBase64Image(patternSrc)) options.data = patternSrc;else options.path = patternSrc;
-                if (el.flipH) options.flipH = el.flipH;
-                if (el.flipV) options.flipV = el.flipV;
-                if (el.rotate) options.rotate = el.rotate;
-                if (el.link) {
-                  const linkOption = getLinkOption(el.link);
-                  if (linkOption) options.hyperlink = linkOption;
-                }
-                pptxSlide.addImage(options);
               }
             } else if (el.type === 'line') {
               const path = getLineElementPath(el);
@@ -1652,12 +1711,13 @@ export default () => {
                   transparency: (1 - c.alpha) * 100,
                   width: el.width / ratioPx2Pt,
                   dashType: dashTypeMap[el.style] as 'solid' | 'dash' | 'sysDot',
-                  beginArrowType: el.points[0] ? 'arrow' : 'none',
-                  endArrowType: el.points[1] ? 'arrow' : 'none'
+                  beginArrowType: lineArrowType(el.points[0]),
+                  endArrowType: lineArrowType(el.points[1])
                 },
                 points
               };
               if (el.shadow) options.shadow = getShadowOption(el.shadow);
+              applyObjectMeta(options as Record<string, unknown>, el, hiddenIds);
               const animation = animationForElement(el.id, slide.animations);
               if (animation) options.animation = animation;
               pptxSlide.addShape('custGeom' as pptxgen.ShapeType, options);
@@ -1742,6 +1802,7 @@ export default () => {
                 type = pptx.ChartType.doughnut;
                 options.holeSize = 60;
               }
+              applyObjectMeta(options as Record<string, unknown>, el, hiddenIds);
               pptxSlide.addChart(type, chartData, options);
             } else if (el.type === 'table') {
               const hiddenCells = [];
@@ -1829,6 +1890,7 @@ export default () => {
               }
               const animation = animationForElement(el.id, slide.animations);
               if (animation) options.animation = animation;
+              applyObjectMeta(options as Record<string, unknown>, el, hiddenIds);
               pptxSlide.addTable(tableData, options);
             } else if (el.type === 'latex') {
               const color = formatColor(el.color || '#000000').color;
@@ -1852,6 +1914,7 @@ export default () => {
                 const linkOption = getLinkOption(el.link);
                 if (linkOption) options.hyperlink = linkOption;
               }
+              applyObjectMeta(options as Record<string, unknown>, el, hiddenIds, true);
               const animation = animationForElement(el.id, slide.animations);
               if (animation) options.animation = animation;
               if (omml) {
@@ -1886,6 +1949,7 @@ export default () => {
                   const linkOption = getLinkOption(el.link);
                   if (linkOption) options.hyperlink = linkOption;
                 }
+                applyObjectMeta(options as Record<string, unknown>, el, hiddenIds);
                 const animation = animationForElement(el.id, slide.animations);
                 if (animation) options.animation = animation;
                 pptxSlide.addImage(options);
@@ -1897,6 +1961,7 @@ export default () => {
                 const linkOption = getLinkOption(el.link);
                 if (linkOption) options.hyperlink = linkOption;
               }
+              applyObjectMeta(options as Record<string, unknown>, el, hiddenIds, true);
               const animation = animationForElement(el.id, slide.animations);
               if (animation) options.animation = animation;
               pptxSlide.addText(painted.runs, options);
@@ -1919,6 +1984,11 @@ export default () => {
               if (el.type === 'audio' && el.loop) options.loop = true;
               const extMatch = el.src.match(/\.([a-zA-Z0-9]+)(?:[\?#]|$)/);
               if (extMatch && extMatch[1]) options.extn = extMatch[1];else if (el.ext) options.extn = el.ext;
+              if (el.type === 'audio' && options.extn === 'wav') options.type = 'wav';
+              const contentType = mediaContentType(mediaSrc, options.extn);
+              if (contentType) options.contentType = contentType;
+              options.userDrawn = true;
+              applyObjectMeta(options as unknown as Record<string, unknown>, el, hiddenIds);
               const videoExts = ['avi', 'mp4', 'm4v', 'mov', 'wmv'];
               const audioExts = ['mp3', 'm4a', 'mp4', 'wav', 'wma'];
               if (options.extn && [...videoExts, ...audioExts].includes(options.extn)) {
