@@ -173,13 +173,18 @@ applyPPTXTheme(pptx, {
     hidden: true,
     lock: { noMove: true, noResize: true },
     fill: { type: 'image', image: { data: TRANSPARENT_PNG, sizing: 'stretch' } },
-    line: { color: '000000', width: 1.5 },
+    line: { color: '000000', width: 1.5, cap: 'flat', join: 'miter', miterLimit: 800 },
+  })
+  s.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 2.6, w: 2, h: 0.6,
+    fill: { color: { scheme: 'accent1' } },
   })
   s.addShape(pptx.ShapeType.line, {
     x: 4, y: 1, w: 3, h: 0,
     line: {
       color: '000000',
       width: 2,
+      join: 'round',
       beginArrowType: 'arrow',
       endArrowType: 'oval',
     },
@@ -237,7 +242,8 @@ check('slide size type 16x9', /<p:sldSz[^>]*type="screen16x9"/.test(presXml))
 check('recent colors on presentationPr', /<p:clrMru>/.test(await readPptxPart(deck, 'ppt/presProps.xml')))
 check('picture fill on shape', /<a:blipFill/.test(slide7))
 check('hidden + lock + objectName', /name="Pattern Box"/.test(slide7) && /hidden="1"/.test(slide7) && /noMove="1"/.test(slide7))
-check('line oval end', /<a:tailEnd type="oval"/.test(slide7))
+check('line join + oval end', /<a:round\/>/.test(slide7) && /<a:tailEnd type="oval"/.test(slide7))
+check('theme scheme color object', /<a:schemeClr val="accent1"\/>/.test(slide7))
 check('image recolor grayscale', /<a:grayscl\/>/.test(slide7))
 check('text vertOverflow clip', /vertOverflow="clip"/.test(slide7))
 

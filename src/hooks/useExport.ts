@@ -96,7 +96,8 @@ export default () => {
   const tickExportProgress = exportJob.tick;
   const pptxDefaultFontFace = () => theme.fontName || 'Calibri';
 
-  const applyPPTXTheme = (pptx: pptxgen) => {
+  type SchemeSlot = 'dk1' | 'lt1' | 'dk2' | 'lt2' | 'accent1' | 'accent2' | 'accent3' | 'accent4' | 'accent5' | 'accent6' | 'hlink' | 'folHlink';
+  const themeColorSlots = (): Array<{ hex: string; scheme: SchemeSlot }> => {
     const hex = (c: string) => tinycolor(c).toHexString().replace('#', '').toUpperCase();
     const t = theme;
     const accents = t.themeColors.map(hex);
@@ -105,12 +106,37 @@ export default () => {
     const lt1 = hex(t.backgroundColor || '#FFFFFF');
     const dk2 = tinycolor(dk1).isLight() ? tinycolor(dk1).darken(35).toHexString().replace('#', '').toUpperCase() : '44546A';
     const lt2 = tinycolor(lt1).isDark() ? tinycolor(lt1).lighten(35).toHexString().replace('#', '').toUpperCase() : 'E7E6E6';
+    return [
+      { hex: dk1, scheme: 'dk1' },
+      { hex: lt1, scheme: 'lt1' },
+      { hex: dk2, scheme: 'dk2' },
+      { hex: lt2, scheme: 'lt2' },
+      { hex: accents[0], scheme: 'accent1' },
+      { hex: accents[1], scheme: 'accent2' },
+      { hex: accents[2], scheme: 'accent3' },
+      { hex: accents[3], scheme: 'accent4' },
+      { hex: accents[4], scheme: 'accent5' },
+      { hex: accents[5], scheme: 'accent6' },
+      { hex: '0563C1', scheme: 'hlink' },
+      { hex: '954F72', scheme: 'folHlink' }
+    ];
+  };
+
+  const pptxColor = (color: string, alpha = 1): pptxgen.Color => {
+    const hex = color.replace('#', '').toUpperCase();
+    const scheme = themeColorSlots().find(slot => slot.hex === hex)?.scheme;
+    if (scheme) return alpha < 1 ? { scheme, alpha: Math.round(alpha * 100) } : { scheme };
+    return alpha < 1 ? { hex, alpha: Math.round(alpha * 100) } : hex;
+  };
+
+  const applyPPTXTheme = (pptx: pptxgen) => {
+    const slots = themeColorSlots();
     pptx.theme = {
-      headFontFace: t.fontName || 'Calibri Light',
-      bodyFontFace: t.fontName || 'Calibri',
-      themeColors: [dk1, lt1, dk2, lt2, accents[0], accents[1], accents[2], accents[3], accents[4], accents[5], '0563C1', '954F72']
+      headFontFace: theme.fontName || 'Calibri Light',
+      bodyFontFace: theme.fontName || 'Calibri',
+      themeColors: slots.map(slot => slot.hex)
     };
-    pptx.recentColors = [dk1, lt1, ...accents.slice(0, 6)];
+    pptx.recentColors = slots.slice(0, 8).map(slot => ({ scheme: slot.scheme }));
   };
   const setPPTXLayout = (pptx: pptxgen) => {
     if (viewportRatio === 0.625) pptx.layout = 'LAYOUT_16x10';else if (viewportRatio === 0.75) pptx.layout = 'LAYOUT_4x3';else {
@@ -245,10 +271,7 @@ export default () => {
         } = formatColor(c.color);
         return {
           pos: c.pos,
-          color: color.replace('#', ''),
-          ...(alpha < 1 ? {
-            transparency: (1 - alpha) * 100
-          } : {})
+          color: pptxColor(color, alpha)
         };
       })
     };
@@ -982,11 +1005,14 @@ export default () => {
 
   const getOutlineOption = (outline: PPTElementOutline): pptxgen.ShapeLineProps => {
     const c = formatColor(outline?.color || '#000000');
+    const rounded = !!outline.radius;
     return {
-      color: c.color,
-      transparency: (1 - c.alpha) * 100,
+      color: pptxColor(c.color, c.alpha),
       width: (outline.width || 1) / ratioPx2Pt,
-      dashType: outline.style ? dashTypeMap[outline.style] as 'solid' | 'dash' | 'sysDot' : 'solid'
+      dashType: outline.style ? dashTypeMap[outline.style] as 'solid' | 'dash' | 'sysDot' : 'solid',
+      cap: 'flat',
+      join: rounded ? 'round' : 'miter',
+      ...(rounded ? {} : { miterLimit: 800 })
     };
   };
 
@@ -1502,7 +1528,8 @@ export default () => {
               const inset = el.inset || [10, 10, 10, 10];
               const baseFontSizePx = el.placeholderFontSize ?? defaultFontSize;
               const baseFontSizePt = baseFontSizePx / ratioPx2Pt;
-              const defaultColor = el.defaultColor ? formatColor(el.defaultColor).color : undefined;
+              const defaultColorFmt = el.defaultColor ? formatColor(el.defaultColor) : undefined;
+              const defaultColor = defaultColorFmt ? defaultColorFmt.color : undefined;
               const textProps = formatHTML(el.content, {
                 color: defaultColor,
                 fontSizePt: baseFontSizePt
@@ -1527,11 +1554,10 @@ export default () => {
                 const c = formatColor(el.fill);
                 const opacity = el.opacity === undefined ? 1 : el.opacity;
                 options.fill = {
-                  color: c.color,
-                  transparency: (1 - c.alpha * opacity) * 100
+                  color: pptxColor(c.color, c.alpha * opacity)
                 };
               }
-              if (defaultColor) options.color = defaultColor;
+              if (defaultColorFmt) options.color = pptxColor(defaultColorFmt.color, defaultColorFmt.alpha);
               if (el.defaultFontName) options.fontFace = el.defaultFontName;
               if (el.placeholderAlign) options.align = el.placeholderAlign;
               if (el.shadow) options.shadow = getShadowOption(el.shadow);
@@ -1644,8 +1670,7 @@ export default () => {
                   w: el.width / ratioPx2Inch,
                   h: el.height / ratioPx2Inch,
                   fill: patternSrc ? patternFill(patternSrc) : gradientFill ?? {
-                    color: fillColor.color,
-                    transparency: (1 - fillColor.alpha * opacity) * 100
+                    color: pptxColor(fillColor.color, fillColor.alpha * opacity)
                   },
                   points
                 };
@@ -1707,10 +1732,11 @@ export default () => {
                 w: (maxX - minX) / ratioPx2Inch,
                 h: (maxY - minY) / ratioPx2Inch,
                 line: {
-                  color: c.color,
-                  transparency: (1 - c.alpha) * 100,
+                  color: pptxColor(c.color, c.alpha),
                   width: el.width / ratioPx2Pt,
                   dashType: dashTypeMap[el.style] as 'solid' | 'dash' | 'sysDot',
+                  cap: 'flat',
+                  join: 'round',
                   beginArrowType: lineArrowType(el.points[0]),
                   endArrowType: lineArrowType(el.points[1])
                 },
