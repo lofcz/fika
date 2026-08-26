@@ -206,9 +206,10 @@ export function htmlContainsMath(html: string): boolean {
 }
 
 /** True when a stored deck needs MathLive CSS to paint stacked fractions. */
-export function deckHasMath(slides: Array<{ elements?: Array<Record<string, unknown>> }>): boolean {
+export function deckHasMath(slides: ReadonlyArray<{ elements?: ReadonlyArray<unknown> }>): boolean {
   for (const slide of slides ?? []) {
-    for (const el of slide.elements ?? []) {
+    for (const raw of slide.elements ?? []) {
+      const el = raw as Record<string, unknown>;
       if (el.type === 'latex') return true;
       if (typeof el.content === 'string' && htmlContainsMath(el.content)) return true;
       const text = el.text as { content?: string } | undefined;
@@ -226,7 +227,7 @@ export function deckHasMath(slides: Array<{ elements?: Array<Record<string, unkn
 }
 
 /** Load MathLive CSS/fonts when the deck already has typeset math. */
-export function ensureMathStylesForSlides(slides: Array<{ elements?: Array<Record<string, unknown>> }>) {
+export function ensureMathStylesForSlides(slides: ReadonlyArray<{ elements?: ReadonlyArray<unknown> }>) {
   if (!deckHasMath(slides)) return;
   void ensureMathliveReady().catch(() => {});
 }

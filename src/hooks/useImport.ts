@@ -132,7 +132,7 @@ const convertBareLatexBlocks = (doc: Document) => {
     if (el.closest('.fika-math, .omml-math') || el.querySelector('.fika-math, .omml-math')) continue;
     const latex = (el.textContent || '').trim();
     if (!BARE_LATEX_RE.test(latex)) continue;
-    if (!Array.from(el.childNodes).every(node => node.nodeType === Node.TEXT_NODE || (node as Element).tagName === 'BR')) continue;
+    if (!Array.from(el.childNodes).every(node => node.nodeType === Node.TEXT_NODE || (node as HTMLElement).tagName === 'BR')) continue;
     const template = document.createElement('template');
     template.innerHTML = renderMathToHtml(latex);
     el.replaceChildren(template.content);
