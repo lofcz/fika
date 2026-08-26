@@ -124,6 +124,21 @@ const convertOmmlMathSpans = (doc: Document) => {
   }
 };
 
+const BARE_LATEX_RE = /^\\(?:frac|dfrac|tfrac|binom)\b/;
+
+/** Typeset text boxes whose entire contents are a LaTeX fraction (agent wrote source, not OMML). */
+const convertBareLatexBlocks = (doc: Document) => {
+  for (const el of Array.from(doc.body.querySelectorAll('p, span, div'))) {
+    if (el.closest('.fika-math, .omml-math') || el.querySelector('.fika-math, .omml-math')) continue;
+    const latex = (el.textContent || '').trim();
+    if (!BARE_LATEX_RE.test(latex)) continue;
+    if (!Array.from(el.childNodes).every(node => node.nodeType === Node.TEXT_NODE || (node as Element).tagName === 'BR')) continue;
+    const template = document.createElement('template');
+    template.innerHTML = renderMathToHtml(latex);
+    el.replaceChildren(template.content);
+  }
+};
+
 /** Recursively check parsed pptxtojson elements for inline OMML math markup. */
 const elementsContainOmmlMath = (elements?: Element[]): boolean => {
   if (!elements) return false;
@@ -134,13 +149,23 @@ const elementsContainOmmlMath = (elements?: Element[]): boolean => {
   }
   return false;
 };
+const elementsContainBareLatex = (elements?: Element[]): boolean => {
+  if (!elements) return false;
+  for (const el of elements) {
+    if (el.type === 'group' && elementsContainBareLatex(el.elements)) return true;
+    if ('content' in el && typeof el.content === 'string' && /\\(?:frac|dfrac|tfrac|binom)\{/.test(el.content)) return true;
+  }
+  return false;
+};
 const finalizeImportedHtml = (html: string) => {
   const hasList = /<(ul|ol)\b/i.test(html) && (/font-size\s*:/i.test(html) || /color\s*:/i.test(html));
   const hasOmmlMath = html.includes('omml-math');
-  if (!hasList && !hasOmmlMath) return html;
+  const hasBareLatex = /\\(?:frac|dfrac|tfrac|binom)\{/.test(html);
+  if (!hasList && !hasOmmlMath && !hasBareLatex) return html;
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
   if (hasOmmlMath) convertOmmlMathSpans(doc);
+  if (hasBareLatex) convertBareLatexBlocks(doc);
   if (hasList) promoteListTextStyle(doc);
   return doc.body.innerHTML;
 };
@@ -643,7 +668,7 @@ export function getImportApi() {
       }
       if (json.usedFonts && json.usedFonts.length) loadGoogleFonts(json.usedFonts);
 
-      if (json.slides.some(item => elementsContainOmmlMath(item.elements) || elementsContainOmmlMath(item.layoutElements))) {
+      if (json.slides.some(item => elementsContainOmmlMath(item.elements) || elementsContainOmmlMath(item.layoutElements) || elementsContainBareLatex(item.elements) || elementsContainBareLatex(item.layoutElements))) {
         try {
           await ensureMathliveReady();
         } catch {}

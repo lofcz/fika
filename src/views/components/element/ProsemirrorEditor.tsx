@@ -31,6 +31,7 @@ import { KEYS } from '@/configs/hotkey';
 import { useI18nContext } from '@/i18n/useI18nContext';
 import { resolveFikaPortalTarget } from '@/utils/portal';
 import { followHyperlinkModifier, hyperlinkAnchorFromEvent, hyperlinkTooltipFromAnchor, isFollowHyperlinkClick, isSafeHyperlinkHref, openHyperlink, type HyperlinkHoverTooltip } from '@/utils/hyperlinkFollow';
+import { ensureMathliveReady, htmlContainsMath } from '@/utils/math';
 
 type HostFallthrough = Omit<HTMLAttributes<HTMLDivElement>, 'className' | 'onFocus' | 'onBlur' | 'onMouseDown' | 'children' | 'dangerouslySetInnerHTML'>;
 
@@ -295,6 +296,9 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
   }, [callbacksRef]);
 
   const skipValueWatchRef = useRef(true);
+  useEffect(() => {
+    if (htmlContainsMath(value)) void ensureMathliveReady().catch(() => {});
+  }, [value]);
   useEffect(() => {
     if (skipValueWatchRef.current) {
       skipValueWatchRef.current = false;

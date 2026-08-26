@@ -204,3 +204,29 @@ const MATH_HTML_RE = /class=["']?fika-math|data-latex=|<eq[\s>]|<eqn[\s>]/i;
 export function htmlContainsMath(html: string): boolean {
   return !!html && MATH_HTML_RE.test(html);
 }
+
+/** True when a stored deck needs MathLive CSS to paint stacked fractions. */
+export function deckHasMath(slides: Array<{ elements?: Array<Record<string, unknown>> }>): boolean {
+  for (const slide of slides ?? []) {
+    for (const el of slide.elements ?? []) {
+      if (el.type === 'latex') return true;
+      if (typeof el.content === 'string' && htmlContainsMath(el.content)) return true;
+      const text = el.text as { content?: string } | undefined;
+      if (typeof text?.content === 'string' && htmlContainsMath(text.content)) return true;
+      if (el.type === 'table' && Array.isArray(el.data)) {
+        for (const row of el.data as Array<Array<{ text?: string }>>) {
+          for (const cell of row ?? []) {
+            if (cell?.text && htmlContainsMath(cell.text)) return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/** Load MathLive CSS/fonts when the deck already has typeset math. */
+export function ensureMathStylesForSlides(slides: Array<{ elements?: Array<Record<string, unknown>> }>) {
+  if (!deckHasMath(slides)) return;
+  void ensureMathliveReady().catch(() => {});
+}

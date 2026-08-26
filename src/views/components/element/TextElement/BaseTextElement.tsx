@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './BaseTextElement.module.scss'
 const cx = bindStyles(styles)
-import { useRef, memo, useContext, type CSSProperties } from 'react';
+import { useRef, memo, useContext, useEffect, type CSSProperties } from 'react';
 import type { CSSPropertiesWithVars } from '@/types/css';
 
 import type { PPTTextElement, Slide, SlideBackground } from '@/types/slides';
@@ -13,6 +13,7 @@ import { resolveTextBoxLayout, textBoxFlexColumn, textBoxJustify, textBoxLiveMod
 import { emptyPlaceholderHtml, isEmptyRichText, placeholderBoxVars } from '@/utils/placeholderPaint';
 import { resolveElementSurfaces, resolveLiveTextPaint, resolvePlaceholderColor } from '@/utils/textContrast';
 import { serializeRichTextHtml } from '@/utils/prosemirror';
+import { ensureMathliveReady, htmlContainsMath } from '@/utils/math';
 import { selectSlideById, useSlidesStore } from '@/store';
 import { SlideIdContext } from '@/types/injectKey';
 export type IBaseTextElementProps = {
@@ -70,6 +71,9 @@ const BaseTextElement = memo((vrProps: IBaseTextElementProps) => {
   const paintedHtml = showPlaceholderPreview
     ? emptyPlaceholderHtml(elementInfo)
     : serializeRichTextHtml(contrastedHtml);
+  useEffect(() => {
+    if (htmlContainsMath(paintedHtml)) void ensureMathliveReady().catch(() => {});
+  }, [paintedHtml]);
   const { shadowStyle } = useElementShadow(elementInfo.shadow);
   const inset = elementInfo.inset || [10, 10, 10, 10];
   const textFitHostRef = useRef<HTMLDivElement | null>(null);

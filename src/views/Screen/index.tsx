@@ -4,6 +4,8 @@ import { getFikaPortalTarget } from '@/utils/portal'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { useSlidesStore } from '@/store'
+import { ensureMathStylesForSlides } from '@/utils/math'
 import { KEYS } from '@/configs/hotkey'
 import useScreening from '@/hooks/useScreening'
 import './screen-portal.scss'
@@ -27,12 +29,17 @@ export default function Screen() {
   }
 
   useEffect(() => {
+    ensureMathStylesForSlides(useSlidesStore.getState().slides)
+    const unsubMath = useSlidesStore.subscribe(state => {
+      ensureMathStylesForSlides(state.slides)
+    })
     const keydownListener = (e: KeyboardEvent) => {
       const key = e.key.toUpperCase()
       if (key === KEYS.ESC) exitScreening()
     }
     if (!isAudienceMode) document.addEventListener('keydown', keydownListener)
     return () => {
+      unsubMath()
       if (!isAudienceMode) document.removeEventListener('keydown', keydownListener)
       syncChannelRef.current?.close()
     }

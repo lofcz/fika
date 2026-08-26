@@ -29,6 +29,7 @@ import { Icon } from '@/components/Icon'
 import { getEnabledExportTabs } from '@/configs/exportTabs'
 import { PREVIEW_DEFAULT_PANE, PREVIEW_MAX_PANE, PREVIEW_MIN_PANE, setPreviewPaneWidth, setPreviewViewportRatio } from './Thumbnails/paneSize'
 import { clampRightPaneWidth, readRightPanePreference, readRightPaneWidth, RIGHT_PANE_MAX, RIGHT_PANE_MIN, scalePreferredPx, scaleRightPaneWidth, writeRightPaneWidth, type PaneSizePreference } from './Toolbar/paneSize'
+import { ensureMathStylesForSlides } from '@/utils/math'
 
 const clampLeftPaneWidth = (width: number) => (
   Math.round(Math.min(PREVIEW_MAX_PANE, Math.max(PREVIEW_MIN_PANE, width)))
@@ -192,8 +193,12 @@ const Editor = memo(() => {
 
   useEffect(() => {
     setPreviewViewportRatio(useSlidesStore.getState().viewportRatio)
+    ensureMathStylesForSlides(useSlidesStore.getState().slides)
     const unsubViewportRatio = useSlidesStore.subscribe(state => {
       setPreviewViewportRatio(state.viewportRatio)
+    })
+    const unsubMath = useSlidesStore.subscribe(state => {
+      ensureMathStylesForSlides(state.slides)
     })
     const onHostResize = () => {
       if (!panelMotionReadyRef.current) return
@@ -229,6 +234,7 @@ const Editor = memo(() => {
     return () => {
       cancelled = true
       unsubViewportRatio()
+      unsubMath()
       editorResizeObserver?.disconnect()
       editorResizeObserver = null
       window.clearTimeout(hostResizeIdleRef.current)

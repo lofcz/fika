@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './BaseView.module.scss'
 const cx = bindStyles(styles)
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useHoldAfterOpen } from '@/hooks/useHoldAfterOpen'
 import { useSlidesStore } from '@/store'
 import type { ContextmenuItem } from '@/components/Contextmenu/types'
@@ -19,11 +19,15 @@ import BottomThumbnails from './BottomThumbnails'
 import LaserTrailOverlay from './LaserTrailOverlay'
 import PresenterToolbar from './PresenterToolbar'
 import { useI18nContext } from '@/i18n/useI18nContext'
+import { ensureMathStylesForSlides } from '@/utils/math'
 
 export default function BaseView({ changeViewMode }: { changeViewMode: (mode: 'base' | 'presenter') => void }) {
   const { LL } = useI18nContext()
   const slides = useSlidesStore(s => s.slides);
   const slideIndex = useSlidesStore(s => s.slideIndex);
+  useEffect(() => {
+    ensureMathStylesForSlides(slides)
+  }, [slides])
   const {
     autoPlayTimer,
     autoPlay,
