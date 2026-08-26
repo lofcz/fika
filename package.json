@@ -108,7 +108,7 @@
     "lucide-react": "^1.33.0",
     "markdown-it": "^15.0.0",
     "markdown-it-texmath": "^1.0.0",
-    "mathlive": "npm:@lofcz/mathlive@^0.110.2",
+    "mathlive": "npm:@lofcz/mathlive@^0.110.6",
     "mathml2omml-plus": "^0.6.4",
     "mermaid": "^11.17.0",
     "mitt": "^3.0.1",

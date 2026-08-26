@@ -13,6 +13,7 @@ import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
 import { getSvgPathRange, toPoints } from '@/utils/svgPathParser';
 import { loadGoogleFonts } from '@/utils/font';
+import { containsTexSource, isTexFormulaSource, tokenizeMath } from '@/utils/markdown';
 import { ensureMathliveReady, renderMathToHtml } from '@/utils/math';
 import { importOutlineFromPptx, pptxBorderColorToString, type PptxBorderColor } from '@/utils/elementOutline';
 import { fixSlideTextContrast, resolveChartLabelColor } from '@/utils/textContrast';
@@ -124,17 +125,24 @@ const convertOmmlMathSpans = (doc: Document) => {
   }
 };
 
-const BARE_LATEX_RE = /^\\(?:frac|dfrac|tfrac|binom)\b/;
+const escapeImportedText = (text: string) =>
+  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** Typeset text boxes whose entire contents are a LaTeX fraction (agent wrote source, not OMML). */
+/** Typeset leftover TeX source with MathLive — any control word, not a command list. */
 const convertBareLatexBlocks = (doc: Document) => {
   for (const el of Array.from(doc.body.querySelectorAll('p, span, div'))) {
     if (el.closest('.fika-math, .omml-math') || el.querySelector('.fika-math, .omml-math')) continue;
-    const latex = (el.textContent || '').trim();
-    if (!BARE_LATEX_RE.test(latex)) continue;
     if (!Array.from(el.childNodes).every(node => node.nodeType === Node.TEXT_NODE || (node as HTMLElement).tagName === 'BR')) continue;
+    const raw = (el.textContent || '').trim();
+    if (!raw || !containsTexSource(raw)) continue;
     const template = document.createElement('template');
-    template.innerHTML = renderMathToHtml(latex);
+    if (isTexFormulaSource(raw)) {
+      template.innerHTML = renderMathToHtml(raw);
+    } else {
+      template.innerHTML = tokenizeMath(raw).map((segment) => (
+        segment.type === 'math' ? renderMathToHtml(segment.value, segment.display) : escapeImportedText(segment.value)
+      )).join('');
+    }
     el.replaceChildren(template.content);
   }
 };
@@ -153,14 +161,14 @@ const elementsContainBareLatex = (elements?: Element[]): boolean => {
   if (!elements) return false;
   for (const el of elements) {
     if (el.type === 'group' && elementsContainBareLatex(el.elements)) return true;
-    if ('content' in el && typeof el.content === 'string' && /\\(?:frac|dfrac|tfrac|binom)\{/.test(el.content)) return true;
+    if ('content' in el && typeof el.content === 'string' && containsTexSource(el.content)) return true;
   }
   return false;
 };
 const finalizeImportedHtml = (html: string) => {
   const hasList = /<(ul|ol)\b/i.test(html) && (/font-size\s*:/i.test(html) || /color\s*:/i.test(html));
   const hasOmmlMath = html.includes('omml-math');
-  const hasBareLatex = /\\(?:frac|dfrac|tfrac|binom)\{/.test(html);
+  const hasBareLatex = containsTexSource(html);
   if (!hasList && !hasOmmlMath && !hasBareLatex) return html;
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');

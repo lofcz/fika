@@ -72,7 +72,7 @@ export const mathReady = { value: false };
 /** Lazily import MathLive and configure it for a bundled (offline) font setup. */
 export function ensureMathliveReady(): Promise<MathliveModule> {
   if (mathlivePromise) return mathlivePromise;
-  mathlivePromise = Promise.all([import('mathlive'), import('mathlive/static.css'), import('mathlive/fonts.css')]).then(([mod]) => {
+  mathlivePromise = import('mathlive').then((mod) => {
     const resolved = mod as unknown as MathliveModule;
     try {
       resolved.MathfieldElement.fontsDirectory = null;

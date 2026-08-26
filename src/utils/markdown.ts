@@ -49,6 +49,24 @@ export function containsMath(source: string): boolean {
   return MATH_RE.test(source);
 }
 
+/** A TeX control word (`\frac`, `\sqrt`, `\sum`, …), not a symbol allowlist. */
+const TEX_CONTROL_RE = /\\[a-zA-Z]/;
+
+/** Delimited math or any TeX control sequence in the source. */
+export function containsTexSource(source: string): boolean {
+  return !!source && (containsMath(source) || TEX_CONTROL_RE.test(source));
+}
+
+/** The whole string is a TeX formula MathLive can typeset as-is. */
+export function isTexFormulaSource(source: string): boolean {
+  const text = source.trim();
+  if (!text) return false;
+  if (containsMath(text)) {
+    return tokenizeMath(text).every((segment) => segment.type === 'math' || !segment.value.trim());
+  }
+  return /^\\[a-zA-Z]/.test(text);
+}
+
 
 /**
  * A run of either plain text or a single math span, in source order. `raw` is
