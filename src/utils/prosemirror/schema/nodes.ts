@@ -1,7 +1,7 @@
 import { nodes } from 'prosemirror-schema-basic';
 import type { Node, NodeSpec } from 'prosemirror-model';
 import { listItem as _listItem } from 'prosemirror-schema-list';
-import { buildMathElement } from '@/utils/math';
+import { buildMathElement, normalizeImportedLatex } from '@/utils/math';
 type Attr = Record<string, number | string>;
 function listAttrsFromDOM(dom: HTMLElement, extra?: Attr): Attr {
   const attr: Attr = {
@@ -200,7 +200,7 @@ const math: NodeSpec = {
     getAttrs: dom => {
       const el = dom as HTMLElement;
       return {
-        latex: el.getAttribute('data-latex') || '',
+        latex: normalizeImportedLatex(el.getAttribute('data-latex') || ''),
         html: el.innerHTML,
         display: el.getAttribute('data-display') === 'true'
       };
@@ -212,7 +212,9 @@ const math: NodeSpec = {
       const el = dom as HTMLElement;
       if (el.querySelector('.fika-math')) return false;
       const annotation = el.querySelector('annotation[encoding="application/x-tex"]');
-      const latex = (annotation?.textContent || el.getAttribute('data-latex') || '').trim();
+      const latex = normalizeImportedLatex(
+        (annotation?.textContent || el.getAttribute('data-latex') || '').trim()
+      );
       if (!latex) return false;
       return {
         latex,
@@ -226,7 +228,9 @@ const math: NodeSpec = {
       const el = dom as HTMLElement;
       if (el.querySelector('.fika-math')) return false;
       const annotation = el.querySelector('annotation[encoding="application/x-tex"]');
-      const latex = (annotation?.textContent || el.getAttribute('data-latex') || '').trim();
+      const latex = normalizeImportedLatex(
+        (annotation?.textContent || el.getAttribute('data-latex') || '').trim()
+      );
       if (!latex) return false;
       return {
         latex,

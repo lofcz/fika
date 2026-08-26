@@ -13,6 +13,7 @@
  * opens, so decks without math never pull it into the bundle.
  */
 
+import { decodeXML } from 'entities';
 import { getFikaPortalTarget } from '@/utils/portal';
 
 export const MATH_CLASS = 'fika-math';
@@ -95,6 +96,16 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
   return mathlivePromise;
 }
 
+/**
+ * Recover LaTeX that passed through XML/HTML entity encoding.
+ * `entities.decodeXML` turns `&lt;` into `<`. A leftover `\<` is the
+ * `&lt;` → `\&lt;` → HTML-decode artifact, not a TeX control sequence.
+ */
+export function normalizeImportedLatex(latex: string): string {
+  if (!latex) return latex;
+  return decodeXML(latex).replace(/\\([<>])/g, '$1');
+}
+
 /** Escape a string for safe inclusion in a double-quoted HTML attribute. */
 export function escapeLatexAttr(latex: string): string {
   return latex.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -111,6 +122,7 @@ function escapeHtml(text: string): string {
  * pipeline and editor await it; tables fall back to literal source until ready).
  */
 export function renderMathToHtml(latex: string, display = false): string {
+  latex = normalizeImportedLatex(latex);
   const attrs = `class="${MATH_CLASS}" data-latex="${escapeLatexAttr(latex)}"${display ? ' data-display="true"' : ''}`;
   if (!mathlive) {
     return `<span ${attrs} data-pending="true">${escapeHtml(latex)}</span>`;
@@ -127,12 +139,19 @@ export function renderMathToHtml(latex: string, display = false): string {
  * on edit) is the same canonical wrapper the parser reads back.
  */
 export function buildMathElement(latex: string, html: string, display = false): HTMLSpanElement {
+  latex = normalizeImportedLatex(latex);
   const span = document.createElement('span');
   span.className = MATH_CLASS;
   span.setAttribute('data-latex', latex);
   if (display) span.setAttribute('data-display', 'true');
   span.setAttribute('contenteditable', 'false');
-  span.innerHTML = html || escapeHtml(latex);
+  if (mathlive) {
+    span.innerHTML = mathlive.convertLatexToMarkup(latex, {
+      defaultMode: display ? 'math' : 'inline-math'
+    });
+  } else {
+    span.innerHTML = html || escapeHtml(latex);
+  }
   return span;
 }
 
@@ -199,10 +218,11 @@ export async function measureLatexElement(latex: string): Promise<{
   };
 }
 const MATH_HTML_RE = /class=["']?fika-math|data-latex=|<eq[\s>]|<eqn[\s>]/i;
+const TEX_CONTROL_RE = /\\[a-zA-Z]/;
 
 /** True when an HTML string already contains rendered/wrapped math. */
 export function htmlContainsMath(html: string): boolean {
-  return !!html && MATH_HTML_RE.test(html);
+  return !!html && (MATH_HTML_RE.test(html) || TEX_CONTROL_RE.test(html));
 }
 
 /** True when a stored deck needs MathLive CSS to paint stacked fractions. */

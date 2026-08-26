@@ -26,6 +26,7 @@
         "dexie": "^4.4.4",
         "dompurify": "^3.4.14",
         "echarts": "^6.1.0",
+        "entities": "^8.0.0",
         "events": "^3.3.0",
         "fast-average-color": "^9.5.2",
         "fast-equals": "^6.0.2",

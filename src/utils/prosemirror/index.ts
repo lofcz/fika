@@ -1,6 +1,7 @@
 import { EditorState } from 'prosemirror-state';
 import { type DirectEditorProps, EditorView } from 'prosemirror-view';
 import { Schema, DOMParser, DOMSerializer } from 'prosemirror-model';
+import { typesetImportedTex } from '@/utils/importedTex';
 import { buildPlugins, type PluginOptions } from './plugins/index';
 import { schemaNodes, schemaMarks } from './schema/index';
 const schema = new Schema({
@@ -15,7 +16,7 @@ export const normalizeFittedFontSizes = (html: string) => (
   html && html.includes('--text-fit-scale') ? html.replace(FITTED_FONT_RE, '$1px') : html
 );
 export const createDocument = (content: string) => {
-  const htmlString = `<div>${normalizeFittedFontSizes(content)}</div>`;
+  const htmlString = `<div>${typesetImportedTex(normalizeFittedFontSizes(content))}</div>`;
   const parser = new window.DOMParser();
   const element = parser.parseFromString(htmlString, 'text/html').body.firstElementChild;
   return DOMParser.fromSchema(schema).parse(element as Element);

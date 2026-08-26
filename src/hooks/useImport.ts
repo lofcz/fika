@@ -13,8 +13,9 @@ import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
 import { getSvgPathRange, toPoints } from '@/utils/svgPathParser';
 import { loadGoogleFonts } from '@/utils/font';
-import { containsTexSource, isTexFormulaSource, tokenizeMath } from '@/utils/markdown';
-import { ensureMathliveReady, renderMathToHtml } from '@/utils/math';
+import { containsTexSource } from '@/utils/markdown';
+import { convertBareLatexBlocks, convertOmmlMathSpans } from '@/utils/importedTex';
+import { ensureMathliveReady, normalizeImportedLatex } from '@/utils/math';
 import { importOutlineFromPptx, pptxBorderColorToString, type PptxBorderColor } from '@/utils/elementOutline';
 import { fixSlideTextContrast, resolveChartLabelColor } from '@/utils/textContrast';
 import { sampleImagePaintsForSlide } from '@/utils/imagePaintSample';
@@ -93,58 +94,6 @@ const getListItemStyleValue = (li: HTMLLIElement, styleProp: 'fontSize' | 'color
     currentNode = walker.nextNode();
   }
   return hasTextContent && styleSpan ? styleSpan.style[styleProp] : '';
-};
-
-/**
- * The pptxtojson fork emits inline OMML equations as `span.omml-math` carrying
- * bare LaTeX in `data-latex`. Re-typeset them into the canonical
- * `span.fika-math` wrapper so they render and stay editable like all other
- * in-text math. MathLive is awaited up-front when the deck contains math; if
- * it failed to load the wrapper is emitted with `data-pending` and re-typeset
- * once the engine arrives.
- */
-const convertOmmlMathSpans = (doc: Document) => {
-  for (const span of Array.from(doc.body.querySelectorAll('span.omml-math'))) {
-    const latex = (span.getAttribute('data-latex') || span.textContent || '').trim();
-    if (!latex) {
-      span.remove();
-      continue;
-    }
-    const template = document.createElement('template');
-    template.innerHTML = renderMathToHtml(latex);
-
-    const styleText = span.getAttribute('style');
-    if (styleText) {
-      const wrapper = doc.createElement('span');
-      wrapper.setAttribute('style', styleText);
-      wrapper.append(template.content);
-      span.replaceWith(wrapper);
-    } else {
-      span.replaceWith(template.content);
-    }
-  }
-};
-
-const escapeImportedText = (text: string) =>
-  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-/** Typeset leftover TeX source with MathLive — any control word, not a command list. */
-const convertBareLatexBlocks = (doc: Document) => {
-  for (const el of Array.from(doc.body.querySelectorAll('p, span, div'))) {
-    if (el.closest('.fika-math, .omml-math') || el.querySelector('.fika-math, .omml-math')) continue;
-    if (!Array.from(el.childNodes).every(node => node.nodeType === Node.TEXT_NODE || (node as HTMLElement).tagName === 'BR')) continue;
-    const raw = (el.textContent || '').trim();
-    if (!raw || !containsTexSource(raw)) continue;
-    const template = document.createElement('template');
-    if (isTexFormulaSource(raw)) {
-      template.innerHTML = renderMathToHtml(raw);
-    } else {
-      template.innerHTML = tokenizeMath(raw).map((segment) => (
-        segment.type === 'math' ? renderMathToHtml(segment.value, segment.display) : escapeImportedText(segment.value)
-      )).join('');
-    }
-    el.replaceChildren(template.content);
-  }
 };
 
 /** Recursively check parsed pptxtojson elements for inline OMML math markup. */
@@ -1097,7 +1046,9 @@ export function getImportApi() {
                     let textDiv: HTMLDivElement | null = document.createElement('div');
                     textDiv.innerHTML = cellData.text;
                     for (const mathSpan of Array.from(textDiv.querySelectorAll('span.omml-math'))) {
-                      const latex = (mathSpan.getAttribute('data-latex') || mathSpan.textContent || '').trim();
+                      const latex = normalizeImportedLatex(
+                        (mathSpan.getAttribute('data-latex') || mathSpan.textContent || '').trim()
+                      );
                       mathSpan.replaceWith(document.createTextNode(latex ? `$${latex}$` : ''));
                     }
                     const p = textDiv.querySelector('p');

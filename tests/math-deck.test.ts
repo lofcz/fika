@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@rstest/core'
 import { containsTexSource, isTexFormulaSource } from '@/utils/markdown'
-import { deckHasMath, htmlContainsMath } from '@/utils/math'
+import { deckHasMath, htmlContainsMath, normalizeImportedLatex } from '@/utils/math'
 
 describe('deck math detection', () => {
   it('finds typeset fractions in text boxes', () => {
@@ -23,5 +23,15 @@ describe('tex source', () => {
     expect(containsTexSource(String.raw`see \int_0^1 x\,dx`)).toBe(true)
     expect(isTexFormulaSource('3/8')).toBe(false)
     expect(containsTexSource('porovnávání zlomků')).toBe(false)
+  })
+})
+
+describe('normalizeImportedLatex', () => {
+  it('decodes XML entities with the entities decoder', () => {
+    expect(normalizeImportedLatex('\\frac{3}{8}&lt;\\frac{5}{8}')).toBe('\\frac{3}{8}<\\frac{5}{8}')
+  })
+
+  it('unwraps the \\< artifact left by encoding & then HTML-decoding', () => {
+    expect(normalizeImportedLatex('\\frac{3}{8}\\<\\frac{5}{8}')).toBe('\\frac{3}{8}<\\frac{5}{8}')
   })
 })
