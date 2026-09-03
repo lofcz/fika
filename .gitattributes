@@ -1,0 +1,5 @@
+# The repository stores LF; working trees check out CRLF.
+* text=auto eol=crlf
+
+# Shell scripts must stay LF to run on Linux/macOS.
+*.sh text eol=lf
