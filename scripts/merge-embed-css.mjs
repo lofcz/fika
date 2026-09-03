@@ -12,10 +12,17 @@ if (!existsSync(entryPath)) {
   process.exit(1)
 }
 
-const vendorCssFiles = readdirSync(embedDir, { withFileTypes: true })
-  .filter(entry => entry.isFile() && entry.name.endsWith('.css') && entry.name !== entryName)
-  .map(entry => entry.name)
-  .sort()
+function listCssFiles(dir) {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) return listCssFiles(full)
+    if (entry.isFile() && entry.name.endsWith('.css') && full !== entryPath) return [full]
+    return []
+  }).sort()
+}
+
+const vendorCssFiles = listCssFiles(embedDir)
 
 if (vendorCssFiles.length === 0) {
   console.log('No initial embed CSS chunks to merge')
@@ -23,13 +30,13 @@ if (vendorCssFiles.length === 0) {
 }
 
 const merged = [
-  ...vendorCssFiles.map(fileName => readFileSync(join(embedDir, fileName), 'utf8')),
+  ...vendorCssFiles.map((filePath) => readFileSync(filePath, 'utf8')),
   readFileSync(entryPath, 'utf8'),
 ].join('\n')
 
 writeFileSync(entryPath, merged)
-for (const fileName of vendorCssFiles) {
-  rmSync(join(embedDir, fileName))
+for (const filePath of vendorCssFiles) {
+  rmSync(filePath)
 }
 
-console.log(`Merged ${vendorCssFiles.length} initial embed CSS chunks into ${entryName}: ${vendorCssFiles.join(', ')}`)
+console.log(`Merged ${vendorCssFiles.length} embed CSS chunks into ${entryName}`)
