@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type MouseEventHandler, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEventHandler, type PointerEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DndContext,
   DragOverlay,
@@ -12,6 +13,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useSlidesStore } from '@/store'
+import { resolveFikaPortalTarget } from '@/utils/portal'
 import CanvasSlideThumb from '@/views/components/ThumbnailSlide/CanvasSlideThumb'
 import type { ThumbnailVirtualizerApi } from '@/views/Editor/Thumbnails/useThumbnailVirtualizer'
 import {
@@ -105,6 +107,21 @@ export default function Draggable({
   const [activeId, setActiveId] = useState<string | null>(null)
   const [overlay, setOverlay] = useState<OverlayPaint | null>(null)
 
+  // dnd-kit positions DragOverlay with `position: fixed` in viewport coordinates
+  // and renders it inline. Any ancestor that is a fixed-position containing
+  // block (host `contain: layout|paint`, transforms, OverlayScrollbars
+  // viewports) shifts the ghost away from the pointer and skews collision
+  // rects. Mount it in Fika's overlay root, like every other Fika overlay.
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [overlayHost, setOverlayHost] = useState<HTMLElement | null>(null)
+  const setRootRef = (node: HTMLDivElement | null) => {
+    rootRef.current = node
+    if (scrollRef) scrollRef.current = node
+  }
+  useLayoutEffect(() => {
+    setOverlayHost(resolveFikaPortalTarget(rootRef.current))
+  }, [])
+
   const clearDrag = () => {
     setActiveId(null)
     setOverlay(null)
@@ -160,6 +177,12 @@ export default function Draggable({
     ? rows.map(row => ({ element: items[row.index], index: row.index, row }))
     : items.map((element, index) => ({ element, index, row: null as VirtualRow | null }))
 
+  const dragOverlay = (
+    <DragOverlay dropAnimation={null} style={{ pointerEvents: 'none', zIndex: 40 }}>
+      {overlay && overlayRender ? overlayRender(overlay) : null}
+    </DragOverlay>
+  )
+
   return (
     <DndContext
       sensors={sensors}
@@ -170,7 +193,7 @@ export default function Draggable({
       onDragCancel={clearDrag}
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        <div ref={scrollRef} className={className} onContextMenu={onContextMenu}>
+        <div ref={setRootRef} className={className} onContextMenu={onContextMenu}>
           {item ? (
             <div style={virtualItems ? { height: totalSize, position: 'relative' } : undefined}>
               {mounted.map(({ element, index, row }) => (
@@ -191,9 +214,7 @@ export default function Draggable({
           ) : children}
         </div>
       </SortableContext>
-      <DragOverlay dropAnimation={null} style={{ pointerEvents: 'none', zIndex: 40 }}>
-        {overlay && overlayRender ? overlayRender(overlay) : null}
-      </DragOverlay>
+      {overlayHost ? createPortal(dragOverlay, overlayHost) : dragOverlay}
     </DndContext>
   )
 }
