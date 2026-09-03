@@ -57,7 +57,8 @@ export default function BaseView({ changeViewMode }: { changeViewMode: (mode: 'b
     closePenSession,
     broadcastExit,
   } = useExecPlay()
-  const { slideWidth, slideHeight } = useSlideSize()
+  const slideListWrapRef = useRef<HTMLDivElement | null>(null)
+  const { slideWidth, slideHeight } = useSlideSize(slideListWrapRef)
   const { exitScreening: _exitScreening } = useScreening()
   const { fullscreenState, manualExitFullscreen } = useFullscreen()
   const [timerlVisible, setTimerlVisible] = useState(false)
@@ -116,7 +117,7 @@ export default function BaseView({ changeViewMode }: { changeViewMode: (mode: 'b
   }
 
   return (
-    <div className={cx('base-view', laserActive && 'laser-pen')}>
+    <div ref={slideListWrapRef} className={cx('base-view', laserActive && 'laser-pen')}>
       <ScreenSlideList
         slideWidth={slideWidth}
         slideHeight={slideHeight}

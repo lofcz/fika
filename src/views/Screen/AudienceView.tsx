@@ -15,7 +15,8 @@ export default function AudienceView() {
   const setViewportSize = useSlidesStore(s => s.setViewportSize)
   const setViewportRatio = useSlidesStore(s => s.setViewportRatio)
   const setSlides = useSlidesStore(s => s.setSlides)
-  const { slideWidth, slideHeight } = useSlideSize()
+  const slideListWrapRef = useRef<HTMLDivElement | null>(null)
+  const { slideWidth, slideHeight } = useSlideSize(slideListWrapRef)
   const {
     execNext,
     execPrev,
@@ -130,7 +131,7 @@ export default function AudienceView() {
   }, [])
 
   return (
-    <div className={cx('audience-view')}>
+    <div ref={slideListWrapRef} className={cx('audience-view')}>
       <ScreenSlideList
         slideWidth={slideWidth}
         slideHeight={slideHeight}
