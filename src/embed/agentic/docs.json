@@ -59,7 +59,7 @@
     },
     "layouts": {
       "title": "Layouts",
-      "summary": "Compositional slide recipes (title, section, closing, bullets, twoColumn, imageText, imageFull, bigStat, quote, chart, comparison, cards, numbered), each with 1–4 visual VARIANTS that share slots but compose them differently (different anchor, background treatment, motif placement). layouts.catalog lists each layout's variants and content slots; slides.createFromLayout builds a themed, positioned slide from a layout id + variantId + slots.",
+      "summary": "Compositional slide recipes (title, section, closing, bullets, twoColumn, imageText, imageFull, bigStat, quote, chart, comparison, cards, numbered, diagram), each with 1–4 visual VARIANTS that share slots but compose them differently (different anchor, background treatment, motif placement). layouts.catalog lists each layout's variants and content slots; slides.createFromLayout builds a themed, positioned slide from a layout id + variantId + slots.",
       "whenToUse": "After deck.setup (or applyStyle + planComposition), once per slide. Pick the layout whose composition matches the slide's job, then pick the VARIANT whose anchor matches the planned anchor for that slide position (this is what keeps consecutive slides from looking identical). Fill its slots with content. The engine themes, positions and auto-fits text to each box, so focus on clear, concise content rather than exact character counts."
     },
     "templates": {
@@ -623,7 +623,8 @@
         "controller.elements.create({ slideId, element: { type:'text', left:40, top:40, width:920, height:90, rotate:0, content:'<p><span style=\"font-size:40px;color:#1F4E79\"><strong>Action title</strong></span></p>', defaultFontName:'Arial', defaultColor:'#1F4E79' } })"
       ],
       "tips": [
-        "Text font size lives in inline HTML styles inside content, not in a fontSize field."
+        "Text font size lives in inline HTML styles inside content, not in a fontSize field.",
+        "For a flowchart, mindmap, sequence or cycle use type:'mermaid' with the Mermaid source in `code` — do NOT assemble boxes and arrows from shapes + lines. slides.createFromLayout({ layoutId:'diagram', slots:{ title, code } }) titles the slide and fills the body. PlantUML (@startuml …) in the same `code` field is rendered by the host to an image."
       ],
       "related": [
         "text.create",

@@ -28,7 +28,7 @@
  * path — any slot accepts mixed prose + formulas (e.g. a bullet `Příklad: $\\frac{3}{8} > \\frac{1}{8}$`).
  */
 import { measureTextBlocksHeight } from '@/utils/textFit';
-import type { ChartData, ChartType, PPTChartElement, PPTImageElement, PPTShapeElement, PPTTableElement, PPTTextElement, Slide, SlideBackground, TableCell, TableCellStyle, TextAlignVertical } from '@/types/slides';
+import type { ChartData, ChartType, PPTChartElement, PPTImageElement, PPTMermaidElement, PPTShapeElement, PPTTableElement, PPTTextElement, Slide, SlideBackground, TableCell, TableCellStyle, TextAlignVertical } from '@/types/slides';
 import { containsMath, ensureInlineMathReady, normalizeAgentText, renderInlineMarkdown, splitLinesPreservingMath } from '@/utils/markdown';
 import { scaleStylePreset, type FikaStyleMotif, type FikaStylePreset } from './styles';
 import type { CompositionAnchor } from './composition';
@@ -48,12 +48,14 @@ export type FikaLayoutElementInput = (Partial<PPTTextElement> & {
   type: 'chart';
 }) | (Partial<PPTTableElement> & {
   type: 'table';
+}) | (Partial<PPTMermaidElement> & {
+  type: 'mermaid';
 });
 export type FikaLayoutBackgroundMode = 'auto' | 'feature' | 'plain';
 export interface FikaLayoutSlotDef {
   name: string;
   /** Coarse shape of the value the agent should pass for this slot. */
-  type: 'text' | 'bullets' | 'image' | 'chart' | 'stats' | 'rows' | 'cards' | 'steps';
+  type: 'text' | 'bullets' | 'image' | 'chart' | 'stats' | 'rows' | 'cards' | 'steps' | 'diagram';
   required: boolean;
   description: string;
 }
@@ -129,7 +131,8 @@ function paragraphsHtml(value: string, style: ParagraphStyle): string {
 function bulletsHtml(items: string[], style: SpanStyle, ordered = false): string {
   const tag = ordered ? 'ol' : 'ul';
   const lis = items.map(item => `<li>${spanHtml(item, style)}</li>`).join('');
-  return `<${tag}>${lis}</${tag}>`;
+  const pad = round(style.size * 1.2);
+  return `<${tag} style="padding-inline-start:${pad}px;color:${style.color};font-size:${round(style.size)}px">${lis}</${tag}>`;
 }
 
 /**
@@ -291,7 +294,9 @@ function looksLikeMarkdownList(text: string): boolean {
   if (!lines.length) return false;
   if (lines.length === 1) return LEADING_LIST_MARKER_RE.test(lines[0]);
   const listish = lines.filter(line => LEADING_LIST_MARKER_RE.test(line)).length;
-  return listish >= Math.ceil(lines.length * 0.6);
+  if (listish >= Math.ceil(lines.length * 0.6)) return true;
+  // Agent dumped a list into a body slot without markers (3+ short lines).
+  return lines.length >= 3 && lines.every(line => wordCount(line) > 0 && wordCount(line) <= 16);
 }
 
 /** Height needed to comfortably show `lines` lines at `size` (incl. inset). */
@@ -1719,6 +1724,50 @@ function buildImageFull(ctx: LayoutCtx, slots: Slots, warnings: string[]): FikaL
   return elements;
 }
 
+function looksLikePlantUml(code: string): boolean {
+  const head = code.trim().slice(0, 80).toLowerCase();
+  return /@start(uml|mindmap|wbs|gantt|json|yaml|salt|flow|ditaa|nwdiag|wire|board|ebnf|regex|smetana|activity)/.test(head);
+}
+
+function buildDiagram(ctx: LayoutCtx, slots: Slots, warnings: string[]): FikaLayoutElementInput[] {
+  const { elements, contentTop } = buildHeader(ctx, slots, 'diagram');
+  const code = optStr(slots, 'code') ?? '';
+  const image = resolveImageSlot(slots);
+  if (!code && !image.src) {
+    throw new Error('Layout "diagram" requires a "code" slot (Mermaid or PlantUML source) or a pre-rendered "image".');
+  }
+  const kind = (optStr(slots, 'kind') ?? (looksLikePlantUml(code) ? 'plantuml' : 'mermaid')).toLowerCase();
+  if (kind === 'plantuml' && !image.src) {
+    warnings.push('PlantUML cannot render inside the layout builder — the host should pre-render it to an image and pass slots.image. Falling back to an empty diagram region.');
+  }
+  const top = contentTop;
+  const height = ctx.H - ctx.m - top;
+  if (image.src) {
+    elements.push({
+      type: 'image',
+      left: ctx.m,
+      top,
+      width: ctx.cw,
+      height,
+      rotate: 0,
+      src: image.src,
+      fixedRatio: false,
+      ...(image.sourceUrl ? { link: { type: 'web', target: image.sourceUrl } } : {})
+    } as Partial<PPTImageElement> & { type: 'image' });
+  } else if (code && kind !== 'plantuml') {
+    elements.push({
+      type: 'mermaid',
+      left: ctx.m,
+      top,
+      width: ctx.cw,
+      height,
+      rotate: 0,
+      code
+    } as Partial<PPTMermaidElement> & { type: 'mermaid' });
+  }
+  return elements;
+}
+
 
 const LAYOUT_BUILDERS: Record<string, LayoutBuilder> = {
   title: (ctx, slots) => buildFeature(ctx, slots, 'title', ctx.preset.scale.display),
@@ -1733,7 +1782,8 @@ const LAYOUT_BUILDERS: Record<string, LayoutBuilder> = {
   comparison: buildComparison,
   cards: buildCards,
   numbered: buildNumbered,
-  imageFull: buildImageFull
+  imageFull: buildImageFull,
+  diagram: buildDiagram
 };
 
 /** Shorthand for a feature slide's single centered variant. */
@@ -2214,6 +2264,44 @@ export const PPTX_LAYOUTS: FikaLayout[] = [{
     anchor: 'fullBleed',
     summary: 'Image fills the slide with a bottom title band — the loud visual moment.'
   }]
+}, {
+  id: 'diagram',
+  label: 'Diagram',
+  summary: 'Title + a rendered Mermaid (or pre-rendered PlantUML) diagram filling the body.',
+  bestFor: 'Flows, cycles, actors, mindmaps, sequences, org charts — any relationship a box-and-arrow collage would butcher.',
+  feature: false,
+  slots: [{
+    name: 'title',
+    type: 'text',
+    required: true,
+    description: 'Slide title.'
+  }, {
+    name: 'code',
+    type: 'diagram',
+    required: false,
+    description: 'Mermaid source (flowchart, mindmap, sequence, class, state, …). Required unless image is set.'
+  }, {
+    name: 'kind',
+    type: 'text',
+    required: false,
+    description: "'mermaid' (default) or 'plantuml'. PlantUML must be pre-rendered by the host into the image slot."
+  }, {
+    name: 'image',
+    type: 'image',
+    required: false,
+    description: 'Pre-rendered diagram (PlantUML SVG/PNG). Wins over code when both are set.'
+  }, {
+    name: 'eyebrow',
+    type: 'text',
+    required: false,
+    description: 'Small kicker above the title.'
+  }],
+  variants: [{
+    id: 'standard',
+    label: 'Full width',
+    anchor: 'centered',
+    summary: 'Diagram fills the body under the title.'
+  }]
 }];
 const LAYOUTS_BY_ID = new Map(PPTX_LAYOUTS.map(layout => [layout.id, layout]));
 export function listLayouts(): FikaLayout[] {
@@ -2238,7 +2326,7 @@ export function layoutExpectsBody(layoutId: string): boolean {
   const layout = LAYOUTS_BY_ID.get(layoutId);
   if (!layout) return false;
   if (layoutId === 'bigStat') return false;
-  const BODY_SLOT_TYPES = new Set(['bullets', 'rows', 'cards', 'steps', 'chart']);
+  const BODY_SLOT_TYPES = new Set(['bullets', 'rows', 'cards', 'steps', 'chart', 'diagram']);
   return layout.slots.some(slot => BODY_SLOT_TYPES.has(slot.type));
 }
 
@@ -2310,6 +2398,10 @@ const SLOT_ALIASES: Record<string, string> = {
   url: 'image',
   photo: 'image',
   picture: 'image',
+  mermaid: 'code',
+  plantuml: 'code',
+  diagram: 'code',
+  sourceCode: 'code',
   attribution: 'attribution',
   author: 'attribution',
   source: 'attribution',

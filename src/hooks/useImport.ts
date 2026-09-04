@@ -21,7 +21,7 @@ import { fixSlideTextContrast, resolveChartLabelColor } from '@/utils/textContra
 import { sampleImagePaintsForSlide } from '@/utils/imagePaintSample';
 import { getPPTXImportScale } from '@/utils/pptxUnit';
 import { pptxImageClip, pptxPictureSource } from '@/utils/pptxImportPicture';
-import { PPTX_HYPERLINK_COLOR, linkifyPlainUrls, styleImportedHyperlinks, wrapHangingIndentParagraphsAsLists } from '@/utils/pptxImportText';
+import { PPTX_HYPERLINK_COLOR, ensureListMarkerGutter, linkifyPlainUrls, styleImportedHyperlinks, wrapHangingIndentParagraphsAsLists } from '@/utils/pptxImportText';
 import { importedParagraphMetrics, scalePptxTextInset } from '@/utils/pptxImportMetrics';
 import { markSourcePackageDirty, retainSourcePackage } from '@/utils/pptxSourcePackage';
 import { htmlToStructuredText } from '@/utils/pptxStructuredText';
@@ -183,7 +183,7 @@ const normalizeIndentValue = (indent: string, ratio: number) => {
 };
 const convertTextContent = (html: string, ratio: number) => {
   if (!html) return '';
-  const listedHtml = wrapHangingIndentParagraphsAsLists(html, ratio);
+  const listedHtml = ensureListMarkerGutter(wrapHangingIndentParagraphsAsLists(html, ratio));
   const processedHtml = listedHtml.replace(/font-size:\s*([\d.]+)pt/g, (match, p1) => {
     return `font-size: ${Math.floor(parseFloat(p1) * ratio)}px`;
   }).replace(/&nbsp;/g, ' ').replace(/style="([^"]*)"/g, (match, styleStr: string) => {

@@ -51,12 +51,12 @@
 
   ul, ol {
     margin: 0;
-    list-style-position: outside;
-    padding-inline-start: 1em;
+    list-style-position: inside;
+    padding-inline-start: 0;
 
     li {
       display: list-item;
-      list-style-position: outside;
+      list-style-position: inside;
       margin: 0;
       padding-inline-start: 0.4em;
     }
