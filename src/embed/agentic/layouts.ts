@@ -227,7 +227,19 @@ function measureBlocksHeight(blocks: string[], size: number, innerWidth: number,
 }
 
 /** Absolute floor — below this, prefer clipping over illegible type. */
-const HARD_LEGIBILITY_FLOOR = 10;
+const HARD_LEGIBILITY_FLOOR = 12;
+
+/**
+ * Auto-fit results that landed BELOW the size a slot asked for. Collected per
+ * `buildLayoutSlide` call and surfaced as one warning so the agent learns the
+ * slide is overloaded (the legacy behaviour shrank silently down to 10px, which
+ * is how production decks ended up with 12px body copy).
+ */
+interface ShrinkReport {
+  requestedMin: number;
+  actual: number;
+}
+let shrinkReports: ShrinkReport[] | null = null;
 
 /**
  * Pick the largest font size (<= maxSize, >= minSize) at which `blocks` fit the
@@ -239,7 +251,10 @@ const HARD_LEGIBILITY_FLOOR = 10;
  */
 function fitFontSize(input: FitInput): number {
   const max = Math.max(1, round(input.maxSize));
-  const requestedMin = Math.max(1, Math.min(max, round(input.minSize ?? Math.min(max, 12))));
+  // A slot may shrink at most ~30% below its designed size before the slide
+  // counts as overloaded; the per-slot minSize can only raise that floor.
+  const policyMin = round(max * 0.7);
+  const requestedMin = Math.max(1, Math.min(max, Math.max(policyMin, round(input.minSize ?? 0), HARD_LEGIBILITY_FLOOR)));
   const min = Math.min(requestedMin, HARD_LEGIBILITY_FLOOR);
   const blocks = input.blocks.map(block => block.trim()).filter(Boolean);
   const innerWidth = input.width - TEXT_PAD * 2 - (input.bulletIndent ?? 0);
@@ -257,6 +272,9 @@ function fitFontSize(input: FitInput): number {
         best = mid;
         lo = mid + 1;
       } else hi = mid - 1;
+    }
+    if (best < requestedMin && shrinkReports) {
+      shrinkReports.push({ requestedMin, actual: best });
     }
     return best;
   } catch {
@@ -2605,7 +2623,19 @@ export async function buildLayoutSlide(layoutId: string, slots: Slots, preset: F
   if (unknownRequested) {
     warnings.push(`Unknown variant "${effectiveVariantId}" for layout "${layoutId}" — using the default variant "${variant.id}". Valid variant ids: ${layout.variants.map(v => v.id).join(', ')}.`);
   }
-  const elements = builder(ctx, safeSlots, warnings);
+  shrinkReports = [];
+  let elements: FikaLayoutElementInput[];
+  try {
+    elements = builder(ctx, safeSlots, warnings);
+  } finally {
+    const reports = shrinkReports;
+    shrinkReports = null;
+    if (reports && reports.length) {
+      const smallest = Math.min(...reports.map(r => r.actual));
+      const floor = Math.max(...reports.map(r => r.requestedMin));
+      warnings.push(`[textShrunk] ${reports.length} text block${reports.length === 1 ? '' : 's'} auto-fit BELOW the legibility floor (smallest ${smallest}px, floor ${floor}px). The slide is overloaded — split it into two slides or cut the copy (fewer bullets, shorter cards) and re-issue createFromLayout with index to replace it. Do not leave text this small.`);
+    }
+  }
   if (layoutId === 'imageFull' && !elements.some(el => el.type === 'image')) {
     feature = true;
   }

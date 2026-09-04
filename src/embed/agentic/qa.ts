@@ -74,7 +74,7 @@ function contrastRatio(a: string, b: string): number {
 const AA_NORMAL = 4.5;
 const AA_LARGE = 3.0;
 /** Smallest acceptable rendered font size, in px, before we flag legibility. */
-const LEGIBILITY_FLOOR_PX = 11;
+const LEGIBILITY_FLOOR_PX = 14;
 /** Max bullets per list before the slide reads as a wall of text. */
 const MAX_BULLETS = 6;
 /** Max words per bullet before it stops being a bullet. */

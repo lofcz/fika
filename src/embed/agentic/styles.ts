@@ -147,12 +147,12 @@ export const PPTX_STYLE_PRESETS: FikaStylePreset[] = [{
     featureAccent: '#7FB2E0'
   },
   scale: {
-    display: 60,
-    title: 38,
-    sectionHeader: 28,
-    body: 22,
-    label: 16,
-    caption: 13
+    display: 62,
+    title: 40,
+    sectionHeader: 30,
+    body: 24,
+    label: 17,
+    caption: 14
   },
   chartColors: ['#2E6FB0', '#4FAE9F', '#E0A458', '#9B6FB0', '#C95B5B', '#6C7A89'],
   motif: {
@@ -186,12 +186,12 @@ export const PPTX_STYLE_PRESETS: FikaStylePreset[] = [{
     featureAccent: '#5B8DEF'
   },
   scale: {
-    display: 64,
-    title: 40,
-    sectionHeader: 28,
-    body: 22,
-    label: 16,
-    caption: 13
+    display: 66,
+    title: 42,
+    sectionHeader: 30,
+    body: 24,
+    label: 17,
+    caption: 14
   },
   chartColors: ['#2563EB', '#141414', '#8A8A8A', '#5B8DEF', '#B9C4D6', '#3D3D3D'],
   motif: {
@@ -225,12 +225,12 @@ export const PPTX_STYLE_PRESETS: FikaStylePreset[] = [{
     featureAccent: '#F2542D'
   },
   scale: {
-    display: 72,
-    title: 44,
-    sectionHeader: 32,
-    body: 24,
-    label: 17,
-    caption: 13
+    display: 74,
+    title: 46,
+    sectionHeader: 33,
+    body: 26,
+    label: 18,
+    caption: 14
   },
   chartColors: ['#F2542D', '#1E2A38', '#F2A65A', '#3B7A57', '#5B7DB1', '#8C5E58'],
   motif: {
@@ -264,12 +264,12 @@ export const PPTX_STYLE_PRESETS: FikaStylePreset[] = [{
     featureAccent: '#F4845F'
   },
   scale: {
-    display: 62,
-    title: 40,
-    sectionHeader: 30,
-    body: 23,
-    label: 16,
-    caption: 13
+    display: 64,
+    title: 42,
+    sectionHeader: 31,
+    body: 25,
+    label: 17,
+    caption: 14
   },
   chartColors: ['#F4845F', '#2BB3A3', '#F2C14E', '#5BA3D0', '#B07BAC', '#7FB069'],
   motif: {
