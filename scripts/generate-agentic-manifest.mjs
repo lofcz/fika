@@ -24,6 +24,8 @@ const AGENTIC_AUX_DTS = [
   join(root, 'dist/types/embed/agentic/templates.d.ts'),
   join(root, 'dist/types/embed/agentic/styles.d.ts'),
   join(root, 'dist/types/embed/agentic/layouts.d.ts'),
+  // `TextRunStyle` (text.create / text.setMarkdown `style`) lives with the markdown renderer.
+  join(root, 'dist/types/utils/markdown.d.ts'),
 ]
 const DOCS = join(root, 'src/embed/agentic/docs.json')
 const PKG = join(root, 'package.json')
@@ -337,6 +339,48 @@ function referencedTypes(text, declIndex) {
   return found
 }
 
+/**
+ * Per-layout slot / variant cheatsheet, read off the `PPTX_LAYOUTS` source.
+ *
+ * Formatting-tolerant: layout objects are found by their top-level
+ * `id: '…'` at two-space indent (slots' `name:` sit at four, variants' `id:`
+ * at four as well but only ever follow a `variants:` key), so a formatter
+ * re-flowing braces cannot silently empty the list again.
+ */
+function extractLayoutCheatsheet(layoutsSrc) {
+  const src = layoutsSrc.replace(/\r\n?/g, '\n')
+  const arrayStart = src.indexOf('export const PPTX_LAYOUTS')
+  if (arrayStart < 0) return []
+  const arrayEnd = src.indexOf('\n}];', arrayStart)
+  const body = src.slice(arrayStart, arrayEnd < 0 ? src.length : arrayEnd + 4)
+  const idRe = /^  id: '([a-zA-Z][a-zA-Z0-9_]*)',/gm
+  const starts = []
+  let m
+  while ((m = idRe.exec(body))) starts.push({ id: m[1], at: m.index })
+  const out = []
+  for (let i = 0; i < starts.length; i++) {
+    const block = body.slice(starts[i].at, i + 1 < starts.length ? starts[i + 1].at : body.length)
+    const slots = []
+    const slotRe = /name: '([a-zA-Z0-9_]+)',\s*type: '([a-zA-Z]+)',\s*required: (true|false)/g
+    let sm
+    while ((sm = slotRe.exec(block))) slots.push(`${sm[1]}${sm[3] === 'true' ? '*' : ''}:${sm[2]}`)
+    const variants = []
+    const variantsAt = block.indexOf('variants:')
+    if (variantsAt >= 0) {
+      const tail = block.slice(variantsAt)
+      if (/^variants:\s*centeredVariant\(/.test(tail)) {
+        variants.push('centered(centered)')
+      } else {
+        const variantRe = /id: '([a-zA-Z0-9_]+)',\s*label: '[^']*',\s*anchor: '([a-zA-Z]+)'/g
+        let vm
+        while ((vm = variantRe.exec(tail))) variants.push(`${vm[1]}(${vm[2]})`)
+      }
+    }
+    out.push({ id: starts[i].id, slots, variants })
+  }
+  return out
+}
+
 function main() {
   if (!existsSync(AGENTIC_DTS) || !existsSync(SLIDES_DTS)) {
     console.error('dist/types missing — run `bun run build:types` first.')
@@ -426,30 +470,12 @@ function main() {
   }
 
   const LAYOUTS_SRC_PATH = join(root, 'src/embed/agentic/layouts.ts')
-  const layoutCheatsheet = []
-  if (existsSync(LAYOUTS_SRC_PATH)) {
-    const layoutsSrc = read(LAYOUTS_SRC_PATH)
-    const blockRe = /^  \{\n    id: '([a-zA-Z]+)',/gm
-    const starts = []
-    let bm
-    while ((bm = blockRe.exec(layoutsSrc))) starts.push({ id: bm[1], at: bm.index })
-    for (let li = 0; li < starts.length; li++) {
-      const from = starts[li].at
-      const to = li + 1 < starts.length ? starts[li + 1].at : layoutsSrc.indexOf('\n]\n', from)
-      const block = layoutsSrc.slice(from, to < 0 ? layoutsSrc.length : to)
-      const slotRe = /\{ name: '([a-zA-Z0-9_]+)', type: '([a-zA-Z]+)'(?:, required: (true))?/g
-      const slots = []
-      let sm
-      while ((sm = slotRe.exec(block))) slots.push(`${sm[1]}${sm[3] ? '*' : ''}:${sm[2]}`)
-      const variantRe = /\{ id: '([a-zA-Z0-9_]+)', label: '[^']*', anchor: '([a-zA-Z]+)'/g
-      const variants = []
-      let vm
-      while ((vm = variantRe.exec(block))) variants.push(`${vm[1]}(${vm[2]})`)
-      if (variants.length === 0 && /variants:\s*centeredVariant\(/.test(block)) {
-        variants.push('centered(centered)')
-      }
-      layoutCheatsheet.push({ id: starts[li].id, slots, variants })
-    }
+  const layoutCheatsheet = extractLayoutCheatsheet(existsSync(LAYOUTS_SRC_PATH) ? read(LAYOUTS_SRC_PATH) : '')
+  if (layoutCheatsheet.length === 0) {
+    // The pinned agent prompt depends on this list; an empty one means the
+    // agent has to re-learn slot names every session. Fail loudly.
+    console.error('generate-agentic-manifest: extracted 0 layouts from PPTX_LAYOUTS — the source shape changed, fix extractLayoutCheatsheet.')
+    process.exit(1)
   }
 
   const manifest = {

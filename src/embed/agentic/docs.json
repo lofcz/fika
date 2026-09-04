@@ -634,8 +634,8 @@
       ]
     },
     "text.create": {
-      "summary": "Create a text element (manual placement). Author content as Markdown via `markdown` (recommended) or plain text via `content`.",
-      "details": "Pass `markdown` for formatted copy (the bridge converts it to the HTML Fika stores). Markdown supports inline math: $…$ (inline) and $$…$$ (display) typeset via MathML, so mix prose and formulas freely (e.g. 'Plocha je $\\pi r^2$'). `content` is treated as literal markup — pass plain text there, or intentional HTML only when you specifically want to render markup (e.g. a code snippet). Do NOT type raw HTML tags into `markdown`: they are escaped and appear as literal text (the bridge warns when it detects this). The fallback color/font come from defaultColor/defaultFontName.",
+      "summary": "Create a text element (manual placement). Author content as Markdown via `markdown` (recommended) plus an optional `style` (fontSize / fontName / color / bold / align), or plain text via `content`.",
+      "details": "Pass `markdown` for formatted copy (the bridge converts it to the HTML Fika stores) and `style` to set the run typography — this is how you match an existing deck's look (e.g. `style:{ fontSize:44, fontName:'Calibri', color:'#0F172A', bold:true }`) WITHOUT writing HTML. Markdown supports inline math: $…$ (inline) and $$…$$ (display) typeset via MathML, so mix prose and formulas freely (e.g. 'Plocha je $\\pi r^2$'). `content` is treated as literal markup — pass plain text there, or intentional HTML only when you specifically want to render markup (e.g. a code snippet). Do NOT type raw HTML tags into `markdown`: they are escaped and appear as literal text (the bridge warns when it detects this). The fallback color/font come from style, then defaultColor/defaultFontName.",
       "params": [
         {
           "name": "slideId",
@@ -648,6 +648,12 @@
           "type": "string",
           "required": false,
           "description": "Markdown content (recommended). Converted to HTML."
+        },
+        {
+          "name": "style",
+          "type": "{ fontSize?: number; fontName?: string; color?: string; bold?: boolean; align?: 'left'|'center'|'right'|'justify' }",
+          "required": false,
+          "description": "Run style for the rendered Markdown: font size in canvas px, font family, color, bold, paragraph alignment. Use it to match the typography of neighbouring slides (read a sibling element's summary for its font/size/color) instead of hand-writing <span style> HTML into `content`."
         },
         {
           "name": "content",
@@ -664,11 +670,12 @@
       ],
       "examples": [
         "controller.text.create({ slideId, markdown: '**Key finding:** treated group improved 18%', element: { left:520, top:130, width:440, height:300, rotate:0, defaultColor:'#2D2D2D' } })",
+        "controller.text.create({ slideId, markdown: 'Jak program běží', style: { fontSize:44, fontName:'Calibri', color:'#0F172A', bold:true }, element: { left:77, top:50, width:1126, height:56, rotate:0 } })",
         "controller.text.create({ slideId, markdown: '- First point\\n- Second point\\n- Third point', element:{ left:40, top:140, width:920, height:300, rotate:0 } })",
         "controller.text.create({ slideId, markdown: 'Vertically centered, never overflows', element:{ left:80, top:120, width:360, height:200, rotate:0, fixedHeight:true, vAlign:'middle' } })"
       ],
       "tips": [
-        "Prefer slides.insertFromTemplate for whole slides. Markdown flavor: markdown-it + markdown-it-texmath (KaTeX). Write Markdown, not HTML.",
+        "Prefer slides.insertFromTemplate for whole slides. Markdown flavor: markdown-it + markdown-it-texmath (KaTeX). Write Markdown + `style`, not HTML — `style` covers font, size, color, bold and alignment, which is everything needed to match hand-styled neighbouring slides.",
         "For a box that must stay a fixed size, set fixedHeight:true so the text auto-shrinks to fit instead of overflowing."
       ],
       "related": [
@@ -679,10 +686,11 @@
       ]
     },
     "text.setMarkdown": {
-      "summary": "Replace a text element's content from a Markdown string (converted to HTML).",
-      "details": "Author in Markdown. Raw HTML tags are escaped (they would render as literal text) and trigger a warning — use Markdown syntax instead.",
+      "summary": "Replace a text element's content from a Markdown string (converted to HTML), optionally with a run `style`.",
+      "details": "Author in Markdown. Raw HTML tags are escaped (they would render as literal text) and trigger a warning — use Markdown syntax instead. Pass `style` ({ fontSize, fontName, color, bold, align }) to keep or set the typography of the box; without it the element's default font/color apply.",
       "examples": [
-        "controller.text.setMarkdown(elementId, '- First point\\n- Second point\\n- Third point')"
+        "controller.text.setMarkdown(elementId, '- First point\\n- Second point\\n- Third point')",
+        "controller.text.setMarkdown(elementId, 'Nový nadpis', { style: { fontSize: 44, fontName: 'Calibri', color: '#0F172A', bold: true } })"
       ],
       "related": [
         "text.setContent",

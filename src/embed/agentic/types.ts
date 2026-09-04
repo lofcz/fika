@@ -7,6 +7,8 @@ import type { FikaLayout, FikaLayoutBackgroundMode } from './layouts';
 import type { FikaStyleMotif, FikaStyleSummary } from './styles';
 import type { CompositionAnchor, CompositionPlan, CompositionSlideHint } from './composition';
 import type { FikaAgenticDocs, FikaCommandDescription, FikaDesignGuide, FikaDomainSummary } from './manifestDocs';
+import type { TextRunStyle } from '@/utils/markdown';
+export type { TextRunStyle } from '@/utils/markdown';
 export type { FikaAgenticDocs, FikaCommandDescription, FikaCommandDoc, FikaDesignGuide, FikaDesignSystem, FikaDocParam, FikaDomainDoc, FikaDomainSummary } from './manifestDocs';
 export type { FikaTemplateSummary, FikaTemplateSlideEntry, FikaTemplateSlidesCatalog, FikaTemplateSlidesCatalogResult } from './templates';
 export type { FikaLayout, FikaLayoutSlotDef, FikaLayoutBackgroundMode, FikaLayoutVariant } from './layouts';
@@ -314,6 +316,8 @@ export interface FikaCreateTextInput {
   content?: string;
   /** Markdown content; converted to HTML by the bridge. */
   markdown?: string;
+  /** Run style (fontSize / fontName / color / bold / align) applied to `markdown`. */
+  style?: TextRunStyle;
   element?: Partial<PPTTextElement>;
   select?: boolean;
 }
@@ -744,9 +748,10 @@ export interface FikaAgentTextApi {
   setContent(elementId: string, content: string, meta?: FikaCommandMeta & {
     slideId?: string;
   }): Promise<FikaCommandResult<PPTTextElement>>;
-  /** Replace content from a Markdown string (converted to HTML). */
+  /** Replace content from a Markdown string (converted to HTML), optionally with a run `style`. */
   setMarkdown(elementId: string, markdown: string, meta?: FikaCommandMeta & {
     slideId?: string;
+    style?: TextRunStyle;
   }): Promise<FikaCommandResult<PPTTextElement>>;
   updateContent(elementId: string, update: FikaTextContentUpdateInput, meta?: FikaCommandMeta & {
     slideId?: string;
@@ -1431,6 +1436,7 @@ export interface FikaCommandPayloadMap {
     elementId: string;
     slideId?: string;
     markdown: string;
+    style?: TextRunStyle;
   };
   'text.updateContent': {
     elementId: string;

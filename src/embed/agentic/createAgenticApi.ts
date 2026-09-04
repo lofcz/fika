@@ -10,7 +10,7 @@ import { inferViewportFromSlides } from '../inferViewport';
 import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern';
 import { clampIndex, cloneElementsWithRemappedIds, clonePatch, clonePlain, cloneSlidesWithRemappedIds, createId, createIssue, createTableCell, ensureElementOnSlide, ensureSlide, findElement, findSlideLinkReferences, insertIndex, isCanonicalCommandType, mergeShapeElement, mergeTheme, normalizeAnimation, normalizeAudioElement, normalizeAudioPatch, deriveLatexGeometry, normalizeElement, normalizeElementLink, normalizeLatexElement, normalizeLineElement, normalizeNote, normalizeNotePatch, normalizeReply, normalizeShapeElement, normalizeSlide, normalizeTableElementPatch, resolveMediaAsset, toIdList, updateLineElement } from './helpers';
 import { agentTextToHtmlBreaks } from '@/utils/agentText';
-import { markdownToHtml } from '@/utils/markdown';
+import { applyTextRunStyle, markdownToHtml, type TextRunStyle } from '@/utils/markdown';
 import { applySlideBackgroundWithContrast, resolveChartLabelColor } from '@/utils/textContrast';
 import { resolveImportApply, type ImportApplyOptions } from '@/utils/importApply';
 import { applyImportTransitions, isTurningMode as isImportTurningMode, parseImportTurningMode } from '@/utils/importTransition';
@@ -1116,6 +1116,13 @@ export function createAgenticApi(options: {
   let currentWarnings: FikaCommandIssue[] | null = null;
   let lastAnchor: CompositionAnchor | undefined;
   /**
+   * Composition anchor of every slide built by createFromLayout this session,
+   * by slide id. `anchorRepeat` compares against the slide that will actually
+   * precede the new one — not against whatever was built last, which is
+   * wrong for mid-deck inserts and for replacing a slide.
+   */
+  const anchorBySlideId = new Map<string, CompositionAnchor>();
+  /**
    * Layout ids of the body slides built this session, newest last. Anchors
    * catch same-composition repeats; this catches the duller failure of the
    * same LAYOUT (cards, cards, cards…) under different variants.
@@ -1775,6 +1782,7 @@ export function createAgenticApi(options: {
       }
       applySlideSelection(stores, 0);
       lastAnchor = built.anchor;
+      anchorBySlideId.set(slide.id, built.anchor);
       titleSlideId = slide.id;
       titleBuilt = true;
     }
@@ -1905,9 +1913,10 @@ export function createAgenticApi(options: {
     const slide = normalizeSlideForInsert(built.slide);
 
     const feature = slide.background?.type === 'solid' && slide.background.color === preset.palette.featureBackground;
+    const precedingSlide = index > 0 ? currentSlides[index - 1] : undefined;
     const qaIssues = validateSlide(slide, preset, {
       anchor: built.anchor,
-      previousAnchor: lastAnchor,
+      previousAnchor: precedingSlide ? anchorBySlideId.get(precedingSlide.id) : undefined,
       feature,
       expectsBody: layoutExpectsBody(payload.layoutId),
       layoutId: payload.layoutId
@@ -1916,6 +1925,7 @@ export function createAgenticApi(options: {
       addWarning(createIssue(issue.severity === 'error' ? 'SlideQualityError' : 'SlideQuality', `[${issue.code}] ${issue.message}`, issue.elementIds?.length ? `elements.${issue.elementIds.join(',')}` : undefined, issue.severity !== 'error'));
     }
     lastAnchor = built.anchor;
+    anchorBySlideId.set(slide.id, built.anchor);
     ensureSlideIdAvailable(currentSlides, slide.id, replacing ? currentSlides[index]?.id : undefined);
     if (replacing && currentSlides[index]) {
       stores.slides.replaceSlide(slide, currentSlides[index].id);
@@ -2780,6 +2790,8 @@ export function createAgenticApi(options: {
     index?: number;
     content?: string;
     markdown?: string;
+    /** Run style applied to `markdown` (size / font / color / bold / align) — no hand-written HTML needed. */
+    style?: TextRunStyle;
     element?: Partial<PPTTextElement>;
     select?: boolean;
   } = {}) => {
@@ -2789,13 +2801,13 @@ export function createAgenticApi(options: {
     } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
     if (payload.element?.content == null && payload.content == null) warnLiteralHtml(payload.markdown, 'payload.markdown');
     const rawHtmlContent = payload.element?.content ?? payload.content;
-    const resolvedContent = rawHtmlContent != null ? agentTextToHtmlBreaks(rawHtmlContent) : payload.markdown != null ? await markdownToHtml(payload.markdown) : '';
+    const resolvedContent = rawHtmlContent != null ? agentTextToHtmlBreaks(rawHtmlContent) : payload.markdown != null ? applyTextRunStyle(await markdownToHtml(payload.markdown), payload.style) : '';
     const element = normalizeElement({
       ...payload.element,
       type: 'text',
       content: resolvedContent,
-      defaultFontName: payload.element?.defaultFontName ?? stores.slides.theme.fontName ?? '',
-      defaultColor: payload.element?.defaultColor ?? stores.slides.theme.fontColor ?? '#000000'
+      defaultFontName: payload.element?.defaultFontName ?? payload.style?.fontName ?? stores.slides.theme.fontName ?? '',
+      defaultColor: payload.element?.defaultColor ?? payload.style?.color ?? stores.slides.theme.fontColor ?? '#000000'
     }) as PPTTextElement;
     const elements = clonePlain(slide.elements);
     elements.splice(insertIndex(payload.index, elements.length), 0, element);
@@ -2856,10 +2868,12 @@ export function createAgenticApi(options: {
     elementId: string;
     slideId?: string;
     markdown: string;
+    /** Run style applied to the rendered Markdown (size / font / color / bold / align). */
+    style?: TextRunStyle;
   }) => {
     warnLiteralHtml(payload.markdown, 'payload.markdown');
     return updateTextElement(payload.elementId, payload.slideId, {
-      content: await markdownToHtml(payload.markdown)
+      content: applyTextRunStyle(await markdownToHtml(payload.markdown), payload.style)
     });
   });
   register('text.updateContent', (payload: {
@@ -4871,7 +4885,8 @@ export function createAgenticApi(options: {
       setMarkdown: (elementId, markdown, meta) => command('text.setMarkdown', {
         elementId,
         slideId: meta?.slideId,
-        markdown
+        markdown,
+        ...(meta?.style ? { style: meta.style } : {})
       }, meta),
       updateContent: (elementId, update, meta) => command('text.updateContent', {
         elementId,

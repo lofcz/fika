@@ -98,7 +98,9 @@ export function assertColorFields(value: unknown, path = 'value'): void {
   }
   for (const [key, child] of Object.entries(value)) {
     const childPath = `${path}.${key}`;
-    if (COLOR_KEYS.has(key) && child !== undefined) {
+    // `""` is how the importer and the editor spell "no fill / inherit" (and
+    // exactly what a read returns), so a read → write round-trip must accept it.
+    if (COLOR_KEYS.has(key) && child !== undefined && child !== '') {
       assertColorString(child, childPath);
     } else if (key === 'themeColors' && Array.isArray(child)) {
       child.forEach((color, index) => assertColorString(color, `${childPath}[${index}]`));

@@ -491,6 +491,23 @@ function rectElement(opts: {
     fill: opts.fill
   };
 }
+/** Natural (intrinsic) pixel size of a bitmap, when the host or the probe knows it. */
+export interface ImageNaturalSize {
+  width: number;
+  height: number;
+}
+
+/**
+ * Place a bitmap into a layout box WITHOUT distorting it.
+ *
+ * - `contain` (diagrams, screenshots): shrink the box to the image's aspect
+ *   and center it inside the original box.
+ * - `cover` (photos): keep the box and center-crop the overflowing axis via
+ *   `clip.range` (percentages of the source image).
+ *
+ * When the natural size is unknown the box is used as-is; `fixedRatio` then
+ * stays `false` because the box aspect is not the image's.
+ */
 function imageElement(opts: {
   left: number;
   top: number;
@@ -498,21 +515,53 @@ function imageElement(opts: {
   height: number;
   src: string;
   sourceUrl?: string;
+  natural?: ImageNaturalSize;
+  fit?: 'cover' | 'contain';
 }): Partial<PPTImageElement> & {
   type: 'image';
 } {
+  let { left, top, width, height } = opts;
+  let clip: PPTImageElement['clip'] | undefined;
+  const natural = opts.natural;
+  const known = !!natural && natural.width > 0 && natural.height > 0 && width > 0 && height > 0;
+  if (known) {
+    const boxRatio = width / height;
+    const imgRatio = natural.width / natural.height;
+    if (Math.abs(imgRatio - boxRatio) > 0.005) {
+      if ((opts.fit ?? 'cover') === 'contain') {
+        if (imgRatio > boxRatio) {
+          const fitted = width / imgRatio;
+          top += (height - fitted) / 2;
+          height = fitted;
+        } else {
+          const fitted = height * imgRatio;
+          left += (width - fitted) / 2;
+          width = fitted;
+        }
+      } else if (imgRatio > boxRatio) {
+        const keep = boxRatio / imgRatio * 100;
+        const start = (100 - keep) / 2;
+        clip = { shape: 'rect', range: [[round2(start), 0], [round2(start + keep), 100]] };
+      } else {
+        const keep = imgRatio / boxRatio * 100;
+        const start = (100 - keep) / 2;
+        clip = { shape: 'rect', range: [[0, round2(start)], [100, round2(start + keep)]] };
+      }
+    }
+  }
   const element: Partial<PPTImageElement> & {
     type: 'image';
   } = {
     type: 'image',
-    left: round(opts.left),
-    top: round(opts.top),
-    width: round(opts.width),
-    height: round(opts.height),
+    left: round(left),
+    top: round(top),
+    width: round(width),
+    height: round(height),
     rotate: 0,
     src: opts.src,
-    fixedRatio: false
+    fixedRatio: known
   };
+  if (clip) element.clip = clip;
   const sourceUrl = opts.sourceUrl?.trim();
   if (sourceUrl) element.link = {
     type: 'web',
@@ -520,11 +569,44 @@ function imageElement(opts: {
   };
   return element;
 }
+const round2 = (value: number) => Math.round(value * 100) / 100;
 
-/** Resolve an image slot that may be a URL string or `{ src, sourceUrl }`. */
+/**
+ * Best-effort natural size of a bitmap. Browser only; resolves `undefined`
+ * on error or after `timeoutMs` so a slow CDN never blocks slide creation.
+ */
+export function probeImageNaturalSize(src: string, timeoutMs = 4000): Promise<ImageNaturalSize | undefined> {
+  if (typeof Image === 'undefined') return Promise.resolve(undefined);
+  return new Promise(resolve => {
+    const img = new Image();
+    let settled = false;
+    const done = (value: ImageNaturalSize | undefined) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      img.onload = null;
+      img.onerror = null;
+      resolve(value);
+    };
+    const timer = setTimeout(() => done(undefined), timeoutMs);
+    img.onload = () => done(img.naturalWidth > 0 && img.naturalHeight > 0 ? { width: img.naturalWidth, height: img.naturalHeight } : undefined);
+    img.onerror = () => done(undefined);
+    img.src = src;
+  });
+}
+
+function readNaturalSize(obj: Record<string, unknown>): ImageNaturalSize | undefined {
+  const width = Number(obj.width ?? obj.naturalWidth);
+  const height = Number(obj.height ?? obj.naturalHeight);
+  if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) return { width, height };
+  return undefined;
+}
+
+/** Resolve an image slot that may be a URL string or `{ src, sourceUrl, width, height }`. */
 function resolveImageSlot(slots: Slots): {
   src?: string;
   sourceUrl?: string;
+  natural?: ImageNaturalSize;
 } {
   const raw = slots.image ?? slots.imageSrc ?? slots.src;
   const siblingSource = String(slots.sourceUrl ?? slots.href ?? '').trim();
@@ -549,12 +631,16 @@ function resolveImageSlot(slots: Slots): {
     const obj = raw as Record<string, unknown>;
     const src = String(obj.src ?? obj.url ?? obj.image ?? '').trim();
     const sourceUrl = String(obj.sourceUrl ?? obj.href ?? siblingSource ?? '').trim();
+    const natural = readNaturalSize(obj);
     return {
       ...(src ? {
         src
       } : {}),
       ...(sourceUrl ? {
         sourceUrl
+      } : {}),
+      ...(natural ? {
+        natural
       } : {})
     };
   }
@@ -1073,7 +1159,9 @@ function buildImageText(ctx: LayoutCtx, slots: Slots, warnings: string[]): FikaL
     width: imageWidth,
     height: imageHeight,
     src,
-    sourceUrl: image.sourceUrl
+    sourceUrl: image.sourceUrl,
+    natural: image.natural,
+    fit: 'cover'
   }));
   if (caption) {
     elements.push(paragraphsElement({
@@ -1670,7 +1758,9 @@ function buildImageFull(ctx: LayoutCtx, slots: Slots, warnings: string[]): FikaL
     width: ctx.W,
     height: ctx.H,
     src,
-    sourceUrl: image.sourceUrl
+    sourceUrl: image.sourceUrl,
+    natural: image.natural,
+    fit: 'cover'
   }));
   const title = reqStr(slots, 'title', 'imageFull');
   const subtitle = optStr(slots, 'subtitle') ?? optStr(slots, 'caption');
@@ -1739,20 +1829,26 @@ function buildDiagram(ctx: LayoutCtx, slots: Slots, warnings: string[]): FikaLay
   if (kind === 'plantuml' && !image.src) {
     warnings.push('PlantUML cannot render inside the layout builder — the host should pre-render it to an image and pass slots.image. Falling back to an empty diagram region.');
   }
-  const top = contentTop;
-  const height = ctx.H - ctx.m - top;
+  // Diagrams are usually taller than the header leaves room for, so pull the
+  // region up under the title and run it almost to the bottom edge: a
+  // portrait flow chart contain-fitted into this box is height-bound, and
+  // every px of height is diagram size.
+  const top = contentTop - round(ctx.m * 0.25);
+  const height = ctx.H - round(ctx.m * 0.5) - top;
   if (image.src) {
-    elements.push({
-      type: 'image',
+    // Diagrams must never be stretched to the slot: contain-fit and center
+    // them (needs the natural size — the host passes it or buildLayoutSlide
+    // probes it in the browser).
+    elements.push(imageElement({
       left: ctx.m,
       top,
       width: ctx.cw,
       height,
-      rotate: 0,
       src: image.src,
-      fixedRatio: false,
-      ...(image.sourceUrl ? { link: { type: 'web', target: image.sourceUrl } } : {})
-    } as Partial<PPTImageElement> & { type: 'image' });
+      sourceUrl: image.sourceUrl,
+      natural: image.natural,
+      fit: 'contain'
+    }));
   } else if (code && kind !== 'plantuml') {
     elements.push({
       type: 'mermaid',
@@ -2693,6 +2789,19 @@ export async function buildLayoutSlide(layoutId: string, slots: Slots, preset: F
   warnings.push(...normalized.warnings);
   const safeSlots = normalized.slots;
   if (slotsContainMath(safeSlots)) await ensureInlineMathReady();
+  if (layout.slots.some(slot => slot.type === 'image')) {
+    const image = resolveImageSlot(safeSlots);
+    if (image.src && !image.natural) {
+      const natural = await probeImageNaturalSize(image.src);
+      if (natural) {
+        safeSlots.image = {
+          src: image.src,
+          ...(image.sourceUrl ? { sourceUrl: image.sourceUrl } : {}),
+          ...natural
+        };
+      }
+    }
+  }
   const builder = LAYOUT_BUILDERS[layoutId];
   const W = viewport.width;
   const H = viewport.height;

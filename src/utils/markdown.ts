@@ -2,6 +2,7 @@ import MarkdownItCtor from 'markdown-it';
 import type { MarkdownIt } from 'markdown-it';
 import { decodeHtmlEntities, unescapeAgentNewlines } from './agentText';
 import { ensureMathliveReady, texmathEngine } from './math';
+import { defaultTreeAdapter, html, parseFragment, serialize, type DefaultTreeAdapterTypes } from 'parse5';
 
 /**
  * Fika stores text-like content as HTML (`text.content`, shape
@@ -337,4 +338,148 @@ export function renderInlineMarkdown(markdown: string): string {
     return stripOuterParagraph(mathMarkdownParser.render(source).trim());
   }
   return markdownParser.renderInline(source).trim();
+}
+
+/** Typographic run style applied on top of Markdown-rendered HTML. */
+export interface TextRunStyle {
+  /** Font size in px (the deck's canvas px). */
+  fontSize?: number;
+  /** CSS font-family name, e.g. "Calibri". */
+  fontName?: string;
+  /** CSS color (hex / rgb). */
+  color?: string;
+  bold?: boolean;
+  align?: 'left' | 'center' | 'right' | 'justify';
+}
+
+/** Blocks whose inline content receives the run span. */
+const RUN_BLOCK_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+const LIST_TAGS = new Set(['ul', 'ol']);
+/** `<li>` children that are blocks in their own right and must not be pulled into the item's run span. */
+const LI_BLOCK_CHILD_TAGS = new Set(['p', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'table', 'blockquote']);
+
+type P5Node = DefaultTreeAdapterTypes.ChildNode;
+type P5Element = DefaultTreeAdapterTypes.Element;
+type P5Parent = DefaultTreeAdapterTypes.ParentNode;
+
+function isElement(node: P5Node): node is P5Element {
+  return defaultTreeAdapter.isElementNode(node);
+}
+
+function getAttr(el: P5Element, name: string): string | undefined {
+  return el.attrs.find(a => a.name === name)?.value;
+}
+
+function setAttr(el: P5Element, name: string, value: string): void {
+  const attr = el.attrs.find(a => a.name === name);
+  if (attr) attr.value = value;
+  else el.attrs.push({ name, value });
+}
+
+function createElement(tagName: string, style?: string): P5Element {
+  return defaultTreeAdapter.createElement(tagName, html.NS.HTML, style ? [{ name: 'style', value: style }] : []);
+}
+
+/**
+ * Move `nodes` (all children of `parent`) into a fresh run span (and an inner
+ * `<strong>` when bold) inserted where the first of them stood.
+ */
+function isBlankText(node: P5Node): boolean {
+  return defaultTreeAdapter.isTextNode(node) && !node.value.trim();
+}
+
+function wrapRun(parent: P5Parent, run: P5Node[], declText: string, bold: boolean): void {
+  // Leave leading / trailing whitespace-only text (markdown-it's newlines
+  // before a nested list) outside the span so serialisation stays tidy.
+  let from = 0;
+  let to = run.length;
+  while (from < to && isBlankText(run[from])) from++;
+  while (to > from && isBlankText(run[to - 1])) to--;
+  const nodes = run.slice(from, to);
+  if (nodes.length === 0) return;
+  // Trailing whitespace inside the last text node ("Parent\n" before a nested
+  // list) is split off and re-inserted after the span for the same reason.
+  const last = nodes[nodes.length - 1];
+  let tail = '';
+  if (defaultTreeAdapter.isTextNode(last)) {
+    const trailing = /\s+$/.exec(last.value)?.[0] ?? '';
+    if (trailing && trailing.length < last.value.length) {
+      tail = trailing;
+      last.value = last.value.slice(0, -trailing.length);
+    }
+  }
+  const outer = declText ? createElement('span', declText) : createElement('strong');
+  const inner = declText && bold ? createElement('strong') : outer;
+  if (inner !== outer) defaultTreeAdapter.appendChild(outer, inner);
+  defaultTreeAdapter.insertBefore(parent, outer, nodes[0]);
+  for (const node of nodes) {
+    defaultTreeAdapter.detachNode(node);
+    defaultTreeAdapter.appendChild(inner, node);
+  }
+  if (tail) {
+    const next = parent.childNodes[parent.childNodes.indexOf(outer) + 1];
+    if (next) defaultTreeAdapter.insertTextBefore(parent, tail, next);
+    else defaultTreeAdapter.insertText(parent, tail);
+  }
+}
+
+function applyRunStyleToTree(node: P5Node, declText: string, listDecl: string, style: TextRunStyle): void {
+  if (!isElement(node)) return;
+  const tag = node.tagName;
+  const children = node.childNodes.slice();
+  if (RUN_BLOCK_TAGS.has(tag)) {
+    if (style.align) {
+      const existing = getAttr(node, 'style') ?? '';
+      if (!/text-align\s*:/i.test(existing)) {
+        setAttr(node, 'style', existing ? `text-align:${style.align};${existing}` : `text-align:${style.align}`);
+      }
+    }
+    if (declText || style.bold) wrapRun(node, children, declText, !!style.bold);
+    return;
+  }
+  if (tag === 'li') {
+    // Wrap the item's own inline runs; nested lists / paragraphs are handled
+    // by their own visit below.
+    let run: P5Node[] = [];
+    const flushRun = () => {
+      if (declText || style.bold) wrapRun(node, run, declText, !!style.bold);
+      run = [];
+    };
+    for (const child of children) {
+      if (isElement(child) && LI_BLOCK_CHILD_TAGS.has(child.tagName)) {
+        flushRun();
+        applyRunStyleToTree(child, declText, listDecl, style);
+      } else {
+        run.push(child);
+      }
+    }
+    flushRun();
+    return;
+  }
+  if (LIST_TAGS.has(tag) && listDecl && getAttr(node, 'style') === undefined) {
+    setAttr(node, 'style', listDecl);
+  }
+  for (const child of children) applyRunStyleToTree(child, declText, listDecl, style);
+}
+
+/**
+ * Apply one run style (size / font / color / bold / align) to Markdown output
+ * so agents get styled copy from `text.create({ markdown, style })` without
+ * hand-writing `<span style>` HTML. Parses the HTML with parse5, wraps each
+ * block's inline content in a single styled span (the shape the editor and
+ * the pptx importer produce) and mirrors size / color onto list containers so
+ * bullet markers match.
+ */
+export function applyTextRunStyle(htmlText: string, style: TextRunStyle | undefined): string {
+  if (!style || !htmlText) return htmlText;
+  const decl: string[] = [];
+  if (typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) && style.fontSize > 0) decl.push(`font-size:${Math.round(style.fontSize)}px`);
+  if (style.fontName?.trim()) decl.push(`font-family:${style.fontName.trim()}`);
+  if (style.color?.trim()) decl.push(`color:${style.color.trim()}`);
+  const declText = decl.join(';');
+  if (!declText && !style.bold && !style.align) return htmlText;
+  const listDecl = decl.filter(d => !d.startsWith('font-family')).join(';');
+  const fragment = parseFragment(htmlText);
+  for (const child of fragment.childNodes.slice()) applyRunStyleToTree(child, declText, listDecl, style);
+  return serialize(fragment);
 }

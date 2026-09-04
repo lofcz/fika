@@ -24,57 +24,69 @@ interface Run {
 const SIZE_RE = /font-size:\s*(?:calc\(var\(--text-fit-scale,\s*1\)\s*\*\s*)?([0-9.]+)px/i;
 const FONT_RE = /font-family:\s*([^;"']+)/i;
 const COLOR_RE = /(?:^|[^-])color:\s*(#[0-9a-f]{3,8}|rgba?\([^)]*\))/i;
-const SPAN_RE = /<span([^>]*)>([\s\S]*?)<\/span>/gi;
+/** Any HTML tag: `<name attrs>`, `</name>` or `<name attrs/>`. */
+const TAG_RE = /<(\/?)([a-zA-Z][\w:-]*)\b([^>]*?)(\/?)>/g;
+/** Tags that never wrap text, so they must not push onto the style stack. */
+const VOID_TAGS = new Set(['br', 'hr', 'img', 'input', 'wbr', 'area', 'base', 'col', 'embed', 'link', 'meta', 'param', 'source', 'track']);
 
 function textLength(html: string): number {
   return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim().length;
 }
 
-/** Flatten a text element into styled runs weighted by visible character count. */
+/**
+ * Flatten a text element into styled runs weighted by visible character count.
+ *
+ * Walks the markup with a stack of open tags so a run's size / font / color
+ * resolve from the INNERMOST tag outwards. The pptx importer (and the editor
+ * itself) nest one `<span>` per property — `<span font-size><span
+ * font-family><span color>text</span></span></span>` — so a flat "innermost
+ * span only" regex saw zero runs on imported decks and the style fell back to
+ * the default preset.
+ */
 function runsOf(el: PPTTextElement): Run[] {
   const runs: Run[] = [];
   const html = el.content || '';
-  let match: RegExpExecArray | null;
-  SPAN_RE.lastIndex = 0;
-  while ((match = SPAN_RE.exec(html))) {
-    const attrs = match[1];
-    const inner = match[2];
-    // Nested spans: only count the innermost text so a size on the outer span
-    // does not double-weight the same characters.
-    if (/<span/i.test(inner)) continue;
-    const weight = textLength(inner);
-    if (!weight) continue;
-    const size = Number(SIZE_RE.exec(attrs)?.[1]);
-    // Walk outwards for attributes the innermost span did not set.
-    const context = html.slice(0, match.index);
-    const font = FONT_RE.exec(attrs)?.[1] ?? lastMatch(FONT_RE, context) ?? el.defaultFontName;
-    const color = COLOR_RE.exec(attrs)?.[1] ?? lastMatch(COLOR_RE, context) ?? el.defaultColor;
+  const stack: string[] = [];
+
+  const flush = (text: string) => {
+    const weight = textLength(text);
+    if (!weight) return;
+    let size: number | undefined;
+    let font: string | undefined;
+    let color: string | undefined;
+    for (let i = stack.length - 1; i >= 0; i--) {
+      const attrs = stack[i];
+      if (size === undefined) {
+        const parsed = Number(SIZE_RE.exec(attrs)?.[1]);
+        if (Number.isFinite(parsed) && parsed > 0) size = parsed;
+      }
+      if (font === undefined) font = FONT_RE.exec(attrs)?.[1];
+      if (color === undefined) color = COLOR_RE.exec(attrs)?.[1];
+      if (size !== undefined && font !== undefined && color !== undefined) break;
+    }
     runs.push({
-      size: Number.isFinite(size) && size > 0 ? size : lastSize(context) ?? 0,
-      font: cleanFont(font),
-      color: normalizeColor(color),
+      size: size ?? 0,
+      font: cleanFont(font ?? el.defaultFontName),
+      color: normalizeColor(color ?? el.defaultColor),
       weight,
     });
+  };
+
+  let last = 0;
+  let match: RegExpExecArray | null;
+  TAG_RE.lastIndex = 0;
+  while ((match = TAG_RE.exec(html))) {
+    flush(html.slice(last, match.index));
+    last = match.index + match[0].length;
+    const closing = match[1] === '/';
+    const name = match[2].toLowerCase();
+    const selfClosing = match[4] === '/';
+    if (VOID_TAGS.has(name) || selfClosing) continue;
+    if (closing) stack.pop();
+    else stack.push(match[3]);
   }
-  if (!runs.length) {
-    const weight = textLength(html);
-    if (weight) runs.push({ size: 0, font: cleanFont(el.defaultFontName), color: normalizeColor(el.defaultColor), weight });
-  }
+  flush(html.slice(last));
   return runs;
-}
-
-function lastMatch(re: RegExp, text: string): string | undefined {
-  const global = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
-  let found: string | undefined;
-  let m: RegExpExecArray | null;
-  while ((m = global.exec(text))) found = m[1];
-  return found;
-}
-
-function lastSize(text: string): number | undefined {
-  const value = lastMatch(SIZE_RE, text);
-  const size = Number(value);
-  return Number.isFinite(size) && size > 0 ? size : undefined;
 }
 
 function cleanFont(font?: string): string | undefined {
@@ -179,22 +191,38 @@ export function inferStylePresetFromDeck(slides: Slide[], theme: Partial<SlideTh
   const backgrounds = new Map<string, number>();
   const fills = new Map<string, number>();
   const allRuns: Run[] = [];
+  const titleRuns: Run[] = [];
+  const bodyRuns: Run[] = [];
 
   for (const slide of slides) {
     const bg = slide.background;
     if (bg?.type === 'solid' && bg.color) bump(backgrounds, normalizeColor(bg.color), 1);
     else if (bg?.type === 'gradient' && bg.gradient?.colors?.[0]?.color) bump(backgrounds, normalizeColor(bg.gradient.colors[0].color), 1);
     else if (!bg || !bg.type) bump(backgrounds, normalizeColor(theme?.backgroundColor) ?? '#FFFFFF', 1);
+    const slideRuns: Run[] = [];
     for (const el of slide.elements as PPTElement[]) {
       if (el.type === 'text' && !el.placeholder) {
-        allRuns.push(...runsOf(el));
+        slideRuns.push(...runsOf(el));
       } else if (el.type === 'shape') {
         const fill = normalizeColor(el.fill);
         if (fill) bump(fills, fill, Math.sqrt(Math.max(1, el.width * el.height)) / 100);
         if (el.text?.content) {
-          allRuns.push(...runsOf({ ...el, type: 'text', content: el.text.content, defaultFontName: el.text.defaultFontName, defaultColor: el.text.defaultColor } as PPTTextElement));
+          slideRuns.push(...runsOf({ ...el, type: 'text', content: el.text.content, defaultFontName: el.text.defaultFontName, defaultColor: el.text.defaultColor } as PPTTextElement));
         }
       }
+    }
+    allRuns.push(...slideRuns);
+    // Classify PER SLIDE: the largest type on a slide is its title, everything
+    // clearly smaller is body. A deck-wide threshold misfiles 28px body copy as
+    // "title" next to 44px headings and then reads the body size off captions.
+    const sized = slideRuns.filter(r => r.size > 0);
+    const slideMax = sized.reduce((m, r) => Math.max(m, r.size), 0);
+    const isTitleSize = (size: number) => size >= slideMax * 0.85;
+    // A slide of uniform small text (a body-only slide) has no title to read.
+    const hasHierarchy = sized.some(r => !isTitleSize(r.size));
+    for (const run of sized) {
+      if (slideMax >= 24 && isTitleSize(run.size) && (hasHierarchy || slideMax >= 32)) titleRuns.push(run);
+      else bodyRuns.push(run);
     }
   }
 
@@ -210,10 +238,6 @@ export function inferStylePresetFromDeck(slides: Slide[], theme: Partial<SlideTh
     }
   }
 
-  const sized = allRuns.filter(r => r.size > 0);
-  const maxSize = sized.reduce((m, r) => Math.max(m, r.size), 0);
-  const titleRuns = sized.filter(r => r.size >= maxSize * 0.62 && r.size >= 24);
-  const bodyRuns = sized.filter(r => r.size < maxSize * 0.62 || maxSize < 24);
   const pickFont = (runs: Run[], fallback: string) => {
     const counter = new Map<string, number>();
     for (const r of runs) bump(counter, r.font, r.weight);
