@@ -7,6 +7,7 @@ import type { Locales } from '@/i18n/locale'
 import { createAgenticApi } from './agentic/createAgenticApi'
 import { debounce } from '@/utils/debounce'
 import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern'
+import { renderDeckAtlas, renderSlideImage } from './render'
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
@@ -119,6 +120,31 @@ export function createController(
     async setLocale(locale: Locales) {
       if (destroyed) return
       await assertLegacyCommand(agentic.api.view.setLocale(locale))
+    },
+
+    async renderSlide(slideIdOrIndex, options) {
+      if (destroyed) return null
+      const state = useSlidesStore.getState()
+      const index = slideIdOrIndex === undefined ? state.slideIndex : resolveSlideIndex(slideIdOrIndex)
+      const slide = state.slides[index]
+      if (!slide) return null
+      return renderSlideImage({
+        slide,
+        theme: state.theme,
+        viewportSize: state.viewportSize,
+        viewportRatio: state.viewportRatio,
+      }, options)
+    },
+
+    async renderAtlas(options) {
+      if (destroyed) return []
+      const state = useSlidesStore.getState()
+      return renderDeckAtlas({
+        slides: state.slides,
+        theme: state.theme,
+        viewportSize: state.viewportSize,
+        viewportRatio: state.viewportRatio,
+      }, options)
     },
 
     goToSlide(slideIdOrIndex: string | number) {

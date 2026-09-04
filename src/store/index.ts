@@ -47,6 +47,20 @@ if (typeof window !== 'undefined' && import.meta.env.MODE === 'development') {
       },
     })
   })
+  void import('@/embed/render').then(({ renderDeckAtlas, renderSlideImage }) => {
+    Object.assign(window, {
+      __FIKA_RENDER__: {
+        atlas: (options?: Parameters<typeof renderDeckAtlas>[1]) => {
+          const s = useSlidesStore.getState()
+          return renderDeckAtlas({ slides: s.slides, theme: s.theme, viewportSize: s.viewportSize, viewportRatio: s.viewportRatio }, options)
+        },
+        slide: (index: number, options?: Parameters<typeof renderSlideImage>[1]) => {
+          const s = useSlidesStore.getState()
+          return renderSlideImage({ slide: s.slides[index], theme: s.theme, viewportSize: s.viewportSize, viewportRatio: s.viewportRatio }, options)
+        },
+      },
+    })
+  })
   void import('@/embed/agentic/createAgenticApi').then(({ createAgenticApi }) => {
     const runtime = createAgenticApi()
     const toCommand = (commandOrType: string | Record<string, unknown>, payload?: unknown) => {

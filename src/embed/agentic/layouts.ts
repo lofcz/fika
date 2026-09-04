@@ -30,7 +30,7 @@
 import { measureTextBlocksHeight } from '@/utils/textFit';
 import type { ChartData, ChartType, PPTChartElement, PPTImageElement, PPTShapeElement, PPTTableElement, PPTTextElement, Slide, SlideBackground, TableCell, TableCellStyle, TextAlignVertical } from '@/types/slides';
 import { containsMath, ensureInlineMathReady, normalizeAgentText, renderInlineMarkdown, splitLinesPreservingMath } from '@/utils/markdown';
-import type { FikaStyleMotif, FikaStylePreset } from './styles';
+import { scaleStylePreset, type FikaStyleMotif, type FikaStylePreset } from './styles';
 import type { CompositionAnchor } from './composition';
 
 /**
@@ -2589,12 +2589,15 @@ export async function buildLayoutSlide(layoutId: string, slots: Slots, preset: F
   const H = viewport.height;
   const margin = round(W * 0.06);
   let feature = backgroundMode === 'feature' ? true : backgroundMode === 'plain' ? false : layout.feature;
+  // Type scales are authored for a 1000px canvas; keep text the same physical
+  // size on wider imported decks instead of shrinking with the viewport.
+  const scaledPreset = scaleStylePreset(preset, W);
   const ctx: LayoutCtx = {
     W,
     H,
     m: margin,
     cw: W - margin * 2,
-    preset,
+    preset: scaledPreset,
     feature,
     anchor: variant.anchor,
     variantId: variant.id

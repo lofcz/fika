@@ -13,6 +13,12 @@ export type {
   FikaImportApplyMode,
   FikaViewMode,
 } from './types'
+export type {
+  FikaDeckAtlasOptions,
+  FikaDeckAtlasSheet,
+  FikaDeckAtlasTile,
+  FikaRenderSlideOptions,
+} from './render'
 export type { ExportTabId, FikaExportTabsConfig } from '@/configs/exportTabs'
 export type { FikaExportMediaResolver } from '@/configs/exportMediaResolver'
 export {

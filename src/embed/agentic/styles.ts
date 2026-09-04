@@ -310,6 +310,36 @@ export function listStylePresets(): FikaStyleSummary[] {
   }));
 }
 
+/** Canvas width the preset type scales and motif sizes are authored for. */
+export const STYLE_REFERENCE_WIDTH = 1000;
+
+/**
+ * Rescale a preset's px-based type scale and motif for a canvas of `width`
+ * px. Presets are authored for the 1000px default viewport; an imported
+ * 1280px deck would otherwise get 22px body copy that reads 22% smaller than
+ * designed. Returns the same object when no scaling is needed.
+ */
+export function scaleStylePreset(preset: FikaStylePreset, width: number): FikaStylePreset {
+  const factor = width / STYLE_REFERENCE_WIDTH;
+  if (!Number.isFinite(factor) || factor <= 0 || Math.abs(factor - 1) < 0.01) return preset;
+  const scale = (value: number) => Math.round(value * factor);
+  return {
+    ...preset,
+    scale: {
+      display: scale(preset.scale.display),
+      title: scale(preset.scale.title),
+      sectionHeader: scale(preset.scale.sectionHeader),
+      body: scale(preset.scale.body),
+      label: scale(preset.scale.label),
+      caption: scale(preset.scale.caption)
+    },
+    motif: {
+      ...preset.motif,
+      size: scale(preset.motif.size)
+    }
+  };
+}
+
 /**
  * Build the deck-theme patch for a preset. Sets the inheritable defaults that
  * manually-created elements pick up (`fontColor`, `fontName`, `backgroundColor`,

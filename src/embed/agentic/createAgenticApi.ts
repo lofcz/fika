@@ -19,7 +19,8 @@ import { assertKnownTemplateId, buildTemplateSlidesCatalog, listTemplateCatalog,
 import { buildLayoutSlide, layoutExpectsBody, listLayouts, type FikaLayoutBackgroundMode } from './layouts';
 import { pickNearestAnchor, sequenceComposition, toApiCompositionPlan, type CompositionAnchor } from './composition';
 import { validateSlide } from './qa';
-import { getStylePreset, listStylePresets, resolveStylePreset, styleThemePatch } from './styles';
+import { DEFAULT_STYLE_ID, getStylePreset, listStylePresets, resolveStylePreset, styleThemePatch, type FikaStylePreset } from './styles';
+import { INHERITED_STYLE_ID, inferStylePresetFromDeck } from './inheritedStyle';
 import { AGENTIC_DOCS, describeAgenticCommand, listAgenticDomains } from './manifestDocs';
 import type { FikaAgentApi, FikaAgentCapability, FikaAgentCommand, FikaAudioElementPatch, FikaAudioSourceInput, FikaAudioTransformPatch, FikaAnimationCatalog, FikaAnimationSequenceStep, FikaBatchOptions, FikaBridgeEvent, FikaBridgeListener, FikaBridgeState, FikaChartElementPatch, FikaCommandIssue, FikaCommandMeta, FikaCommandResult, FikaCommandType, FikaCreateChartInput, FikaCreateAudioInput, FikaCreateLatexElementInput, FikaCreateShapeInput, FikaCreateTableInput, FikaCreateLineElementInput, FikaDeckDocument, FikaDeckInput, FikaDeckPatch, FikaDeckViewport, FikaApplyThemeOptions, FikaElementFlipInput, FikaInsertElementsInput, FikaInsertSlidesInput, FikaElementMoveInput, FikaElementResizeInput, FikaElementTransformPatch, FikaLatexElementPatch, FikaLineDirectionInput, FikaLineElementPatch, FikaLineStyleInput, FikaMediaAssetInput, FikaMediaAssetKind, FikaNoteInput, FikaNotePatch, FikaNoteReplyInput, FikaReplaceOptions, FikaSearchOptions, FikaSearchResult, FikaSearchResults, FikaSectionRange, FikaShapeFillInput, FikaShapePatch, FikaShapePreset, FikaSlideReference, FikaTableElementPatch, FikaSlideThemePatch, FikaRichTextElement, FikaRichTextParagraphAttrs, FikaRichTextStylePatch, FikaThemeExtractionOptions, FikaVideoPatch, FikaVideoPlaybackPatch, FikaVideoPositionPatch, FikaVideoSizePatch, FikaVideoSourcePatch } from './types';
 import { assertColorFields, assertElementPatch, assertIndexInRange, assertPositiveNumber, fromApiInsertSlideIndex, fromApiSlideIndex, toApiSlideIndex } from './validators';
@@ -1114,6 +1115,26 @@ export function createAgenticApi(options: {
   let snapshotId = 0;
   let currentWarnings: FikaCommandIssue[] | null = null;
   let lastAnchor: CompositionAnchor | undefined;
+  /**
+   * Layout ids of the body slides built this session, newest last. Anchors
+   * catch same-composition repeats; this catches the duller failure of the
+   * same LAYOUT (cards, cards, cards…) under different variants.
+   */
+  const recentBodyLayoutIds: string[] = [];
+  const STRUCTURAL_LAYOUT_IDS = new Set(['title', 'section', 'closing']);
+  const noteLayoutMonotony = (layoutId: string, slideNumber: number) => {
+    if (STRUCTURAL_LAYOUT_IDS.has(layoutId)) return;
+    const previous = recentBodyLayoutIds[recentBodyLayoutIds.length - 1];
+    const window = recentBodyLayoutIds.slice(-3);
+    const sameInWindow = window.filter(id => id === layoutId).length;
+    if (sameInWindow >= 2) {
+      addWarning(createIssue('LayoutMonotony', `[layoutMonotony] Slide ${slideNumber} makes ${sameInWindow + 1} "${layoutId}" layouts within the last four body slides. Audiences read a deck as one shape when layouts repeat — build the next slides from a different family (imageText, twoColumn, bigStat, quote, numbered, comparison, chart, imageFull). Keep this slide.`, undefined, true));
+    } else if (previous === layoutId) {
+      addWarning(createIssue('LayoutRepeat', `[layoutRepeat] Slide ${slideNumber} uses "${layoutId}" right after another "${layoutId}" slide. Alternate layout families so consecutive slides read differently; keep this slide, vary the next one.`, undefined, true));
+    }
+    recentBodyLayoutIds.push(layoutId);
+    if (recentBodyLayoutIds.length > 8) recentBodyLayoutIds.shift();
+  };
   /** Per-deck-index planned anchors; kept in sync with insert/delete/move/duplicate. */
   let plannedAnchors: Array<CompositionAnchor | undefined> | undefined;
   let compositionSession: {
@@ -1577,7 +1598,52 @@ export function createAgenticApi(options: {
     assertKnownTemplateId(payload.templateId);
     return buildTemplateSlidesCatalog(payload.templateId);
   });
-  register('styles.catalog', () => listStylePresets());
+  /**
+   * The preset a deck already carries. Decks imported from `.pptx` have no
+   * `styleId`; instead of silently dropping to the default preset we read the
+   * existing slides and inherit their fonts, inks and accent, so an added
+   * layout slide continues the deck rather than restarting it.
+   */
+  const inheritedPreset = (): FikaStylePreset | undefined => {
+    const viewport = viewportFromStores(stores);
+    return inferStylePresetFromDeck(stores.slides.slides, stores.slides.theme, viewport.size);
+  };
+  const resolveDeckPreset = (): FikaStylePreset => {
+    const styleId = stores.slides.theme.styleId;
+    const explicit = getStylePreset(styleId);
+    if (explicit) return explicit;
+    return inheritedPreset() ?? resolveStylePreset(styleId);
+  };
+  /** Resolve an agent-supplied style id, honouring the `inherited` pseudo-preset. */
+  const resolveRequestedPreset = (styleId: string): { preset: FikaStylePreset; known: boolean } => {
+    if (styleId === INHERITED_STYLE_ID) {
+      const inherited = inheritedPreset();
+      if (inherited) return { preset: inherited, known: true };
+      addWarning(createIssue('UnknownStyle', 'This deck has no authored slides to inherit a style from yet — falling back to the default preset. Pass one of: academic, minimal, bold, playful.', 'payload.styleId', true));
+      return { preset: resolveStylePreset(DEFAULT_STYLE_ID), known: false };
+    }
+    const explicit = getStylePreset(styleId);
+    return { preset: explicit ?? resolveStylePreset(styleId), known: !!explicit };
+  };
+  register('styles.catalog', () => {
+    const inherited = inheritedPreset();
+    const catalog = listStylePresets();
+    if (!inherited) return catalog;
+    return [{
+      id: inherited.id,
+      label: inherited.label,
+      description: `${inherited.description} Use this (or simply omit deck.applyStyle) when ADDING slides to an existing deck so they match; pick a named preset only when restyling the whole deck.`,
+      fonts: { ...inherited.fonts },
+      preview: {
+        background: inherited.palette.background,
+        title: inherited.palette.title,
+        body: inherited.palette.body,
+        accent: inherited.palette.accent,
+        featureBackground: inherited.palette.featureBackground
+      },
+      motif: { ...inherited.motif }
+    }, ...catalog];
+  });
   register('layouts.catalog', () => listLayouts());
   register('deck.applyStyle', (payload: {
     styleId: string;
@@ -1587,10 +1653,11 @@ export function createAgenticApi(options: {
     if (!payload?.styleId) {
       throw new AgenticCommandError('InvalidStyle', 'styleId is required. Call styles.catalog.', 'payload.styleId');
     }
-    if (!getStylePreset(payload.styleId)) {
+    const requested = resolveRequestedPreset(payload.styleId);
+    if (!requested.known && payload.styleId !== INHERITED_STYLE_ID) {
       addWarning(createIssue('UnknownStyle', `Unknown style "${payload.styleId}"; falling back to the default style. Call styles.catalog for valid ids.`, 'payload.styleId', true));
     }
-    const preset = resolveStylePreset(payload.styleId);
+    const preset = requested.preset;
     if (compositionSession?.styleId === preset.id && stores.slides.theme.styleId === preset.id) {
       addWarning(createIssue('BootstrapIdempotent', `Style "${preset.id}" is already active from deck.setup — applyStyle skipped. Continue building slides.`, undefined, true));
       return {
@@ -1614,7 +1681,7 @@ export function createAgenticApi(options: {
     if (!payload || !Number.isFinite(payload.slideCount) || payload.slideCount <= 0) {
       throw new AgenticCommandError('InvalidCompositionPlan', 'slideCount (a positive integer) is required.', 'payload.slideCount');
     }
-    const preset = resolveStylePreset(stores.slides.theme.styleId);
+    const preset = resolveDeckPreset();
     if (compositionSession && compositionSession.slideCount === payload.slideCount && compositionSession.styleId === preset.id && !payload.hints?.length) {
       plannedAnchors = compositionSession.plan.slides.map(entry => entry.anchor);
       addWarning(createIssue('BootstrapIdempotent', `Composition plan for ${payload.slideCount} slides is already active from deck.setup — planComposition skipped. Continue with createFromLayout.`, undefined, true));
@@ -1660,10 +1727,11 @@ export function createAgenticApi(options: {
     if (!payload || !Number.isFinite(payload.slideCount) || payload.slideCount <= 0) {
       throw new AgenticCommandError('InvalidCompositionPlan', 'slideCount (a positive integer) is required.', 'payload.slideCount');
     }
-    if (!getStylePreset(payload.styleId)) {
+    const requested = resolveRequestedPreset(payload.styleId);
+    if (!requested.known && payload.styleId !== INHERITED_STYLE_ID) {
       addWarning(createIssue('UnknownStyle', `Unknown style "${payload.styleId}"; falling back to the default style. Valid ids: academic, minimal, bold, playful.`, 'payload.styleId', true));
     }
-    const preset = resolveStylePreset(payload.styleId);
+    const preset = requested.preset;
     stores.slides.setTheme(mergeDeckTheme(stores.slides.theme, styleThemePatch(preset)));
     const plan = sequenceComposition(payload.slideCount, preset.id, payload.hints ?? []);
     plannedAnchors = plan.slides.map(entry => entry.anchor);
@@ -1772,6 +1840,12 @@ export function createAgenticApi(options: {
     variantId?: string;
     slots?: Record<string, unknown>;
     index?: number;
+    /**
+     * With an `index` inside 1…slideCount: `replace` (default) rebuilds that
+     * slide in place; `insert` places the new slide BEFORE it and shifts the
+     * rest right.
+     */
+    mode?: 'replace' | 'insert';
     select?: boolean;
     backgroundMode?: FikaLayoutBackgroundMode;
   } = {
@@ -1781,14 +1855,16 @@ export function createAgenticApi(options: {
       throw new AgenticCommandError('InvalidLayout', 'layoutId is required. Call layouts.catalog.', 'payload.layoutId');
     }
     warnLiteralHtmlInSlots(payload.slots);
-    const preset = resolveStylePreset(stores.slides.theme.styleId);
+    const preset = resolveDeckPreset();
     const viewport = viewportFromStores(stores);
 
     const currentSlides = stores.slides.slides;
     const replaceStarter = payload.index === undefined && currentSlides.length === 1 && isPristineStarterSlide(currentSlides[0]);
     const replaceDuplicateTitle = !replaceStarter && payload.index === undefined && payload.layoutId === 'title' && currentSlides.length === 1 && !isPristineStarterSlide(currentSlides[0]);
     const requestedIndex = payload.index;
-    const replaceStoreIndex = typeof requestedIndex === 'number' && Number.isFinite(requestedIndex) && requestedIndex >= 1 && requestedIndex <= currentSlides.length ? requestedIndex - 1 : null;
+    const indexWithinDeck = typeof requestedIndex === 'number' && Number.isFinite(requestedIndex) && requestedIndex >= 1 && requestedIndex <= currentSlides.length;
+    const insertBefore = indexWithinDeck && payload.mode === 'insert';
+    const replaceStoreIndex = indexWithinDeck && !insertBefore ? requestedIndex - 1 : null;
     const replaceAtIndex = replaceStoreIndex !== null;
     const index = replaceStarter || replaceDuplicateTitle ? 0 : replaceStoreIndex !== null ? replaceStoreIndex : fromApiInsertSlideIndex(requestedIndex, currentSlides.length);
     const replacing = replaceStarter || replaceDuplicateTitle || replaceAtIndex;
@@ -1844,6 +1920,9 @@ export function createAgenticApi(options: {
     if (replacing && currentSlides[index]) {
       stores.slides.replaceSlide(slide, currentSlides[index].id);
     } else {
+      // A mid-deck insert shifts the planned rhythm right; an append fills the
+      // next planned position as-is.
+      if (insertBefore) syncPlanOnInsert(index, 1);
       stores.slides.addSlide(slide, { index, select: false, keepSectionTag: true });
     }
     if (payload.select !== false) applySlideSelection(stores, index);
@@ -1855,6 +1934,9 @@ export function createAgenticApi(options: {
     if (typeof loudIndex === 'number' && index === loudIndex && payload.layoutId !== 'imageFull' && plannedAnchor === 'fullBleed') {
       addWarning(createIssue('CompositionLoudMiss', `[loudMiss] Slide ${index + 1} is the planned loud slide — prefer layoutId "imageFull" with image:{src,sourceUrl} from image_search. Soft advisory; keep this slide only if a full-bleed visual truly does not fit.`, undefined, true));
     }
+    // Explicit-index replacements are fixes of an existing slide, not new
+    // sequence members; appends (and the starter swap) are.
+    if (!replaceAtIndex) noteLayoutMonotony(payload.layoutId, index + 1);
     const textElementIds = slide.elements.filter((element): element is PPTTextElement => element.type === 'text').map(element => element.id);
     return {
       slideId: slide.id,
@@ -1864,6 +1946,7 @@ export function createAgenticApi(options: {
       anchor: built.anchor,
       replacedStarter: replaceStarter || replaceDuplicateTitle,
       replaced: replacing,
+      inserted: insertBefore,
       elementIds: slide.elements.map(element => element.id),
       textElementIds
     };

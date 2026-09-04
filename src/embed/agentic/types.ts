@@ -534,9 +534,14 @@ export interface FikaCreateFromLayoutInput {
   slots?: Record<string, unknown>;
   /**
    * 1-based slide number. Omit to append (or replace the blank starter / a duplicate title).
-   * 1…slideCount replaces that slide in place. slideCount+1 appends.
+   * 1…slideCount replaces that slide in place (or inserts before it with `mode: 'insert'`). slideCount+1 appends.
    */
   index?: number;
+  /**
+   * How an `index` inside 1…slideCount is applied: `replace` (default) rebuilds
+   * that slide; `insert` puts the new slide BEFORE it and shifts the rest right.
+   */
+  mode?: 'replace' | 'insert';
   select?: boolean;
   /** Force a feature (dark) or plain background; defaults to the layout's own preference. */
   backgroundMode?: FikaLayoutBackgroundMode;
@@ -554,6 +559,8 @@ export interface FikaCreateFromLayoutResult {
   replacedStarter?: boolean;
   /** True when an existing slide was overwritten in place. */
   replaced?: boolean;
+  /** True when the slide was inserted before `index` (`mode: 'insert'`), shifting later slides right. */
+  inserted?: boolean;
   elementIds: string[];
   textElementIds: string[];
 }

@@ -181,7 +181,7 @@
   "commands": {
     "styles.catalog": {
       "summary": "List the visual-identity style presets (academic, minimal, bold, playful) with their fonts, a color preview, and their signature motif.",
-      "details": "Read this first when building a deck from scratch. Each preset is a contrast-safe palette + heading/body font pairing + type scale + a signature motif (the one distinctive repeated mark that ties the deck together). Pick exactly one whose tone fits the audience, then apply it with deck.applyStyle before adding any slides.",
+      "details": "Read this first when building a deck from scratch. Each preset is a contrast-safe palette + heading/body font pairing + type scale + a signature motif (the one distinctive repeated mark that ties the deck together). Pick exactly one whose tone fits the audience, then apply it with deck.applyStyle before adding any slides. When the deck ALREADY has authored slides (imported .pptx, earlier session) the catalog starts with the pseudo-preset id 'inherited' — the fonts, inks and accent read from the existing slides. New layout slides use it automatically, so when adding to an existing deck simply skip applyStyle (or pass styleId:'inherited').",
       "examples": [
         "const styles = controller.styles.catalog() // -> [{ id:'academic', label:'Academic', fonts:{...}, preview:{ background, title, body, accent, featureBackground }, motif:{ shape:'doubleRule', colorRole:'accent', size:84, description:'…' } }, ...]"
       ],
@@ -194,13 +194,13 @@
     },
     "deck.applyStyle": {
       "summary": "Apply ONE style preset as the deck's visual identity (palette, fonts, type scale). Records theme.styleId so every layout inherits it.",
-      "details": "Prefer deck.setup({ styleId, slideCount }) which applies the style AND plans composition in one call. Use this alone only when you already have a plan or are restyling an existing deck. An unknown id falls back to the default style and returns a recoverable warning — read valid ids from styles.catalog.",
+      "details": "Prefer deck.setup({ styleId, slideCount }) which applies the style AND plans composition in one call. Use this alone only when you already have a plan or are RESTYLING an existing deck on purpose. Never call it just to add slides to a deck that already has content — new layout slides inherit the deck's existing fonts and colors by themselves (the 'inherited' preset). An unknown id falls back to the default style and returns a recoverable warning — read valid ids from styles.catalog.",
       "params": [
         {
           "name": "styleId",
           "type": "string",
           "required": true,
-          "description": "A preset id from styles.catalog ('academic' | 'minimal' | 'bold' | 'playful')."
+          "description": "A preset id from styles.catalog ('academic' | 'minimal' | 'bold' | 'playful'), or 'inherited' to (re)confirm the style read from the deck's existing slides."
         }
       ],
       "examples": [
@@ -331,7 +331,13 @@
           "name": "index",
           "type": "number",
           "required": false,
-          "description": "1-based slide number. Omit to append (or replace the blank starter / a duplicate title after setup). 1…slideCount REPLACES that slide in place. slideCount+1 appends. First slide is 1, never 0. Same number as result.data.slideIndex and screenshot.slideIndex."
+          "description": "1-based slide number. Omit to append (or replace the blank starter / a duplicate title after setup). 1…slideCount REPLACES that slide in place unless mode:'insert'. slideCount+1 appends. First slide is 1, never 0. Same number as result.data.slideIndex and screenshot.slideIndex."
+        },
+        {
+          "name": "mode",
+          "type": "'replace' | 'insert'",
+          "required": false,
+          "description": "How an index inside 1…slideCount is applied. 'replace' (default) rebuilds that slide; 'insert' puts the new slide BEFORE slide index and shifts the rest right (e.g. 9 slides, insert before the last → index: 9, mode: 'insert'). result.data.inserted reports which happened."
         },
         {
           "name": "select",
@@ -358,7 +364,8 @@
         "SLIDE NUMBERS START AT 1. payload.index, result.data.slideIndex, and screenshot.slideIndex are the same number. Human “slide 6” = index: 6. There is no slide 0.",
         "Prefer deck.setup({ styleId, slideCount }) once, then createFromLayout per slide. Separate applyStyle + planComposition is legacy.",
         "Pick a variant whose anchor matches plan.slides[i].anchor when you can. If you omit variantId, the engine picks a filled/full-width match (never an empty-rail by default). If you pass a variantId, it is KEPT even when the anchor drifts — CompositionDrift is soft; do not rebuild for drift alone.",
-        "VARY the layout family to match the content: 'cards' for parallel items, 'numbered' for ordered steps, 'bigStat'/'chart' for data, 'quote'/'imageFull' for impact. A deck where every slide is 'bullets' is the look to avoid.",
+        "VARY the layout family to match the content: 'cards' for parallel items, 'numbered' for ordered steps, 'bigStat'/'chart' for data, 'quote'/'imageFull' for impact, 'imageText'/'twoColumn' for explanation next to a visual. A deck where every slide is 'bullets' (or every slide is 'cards') is the look to avoid. The engine warns with LayoutRepeat when a body layout directly repeats the previous one and LayoutMonotony when one family fills 3 of the last 4 body slides — keep the slide, build the NEXT ones from a different family.",
+        "Every 3–4 slides give the audience a real picture: 'imageText' or 'imageFull' with image:{src,sourceUrl} from image search. Decks of pure typography read as notes, not as a presentation.",
         "Rail/offset variants (leftRail/rightRail/leftOffset/rightOffset) are ONLY for short/sparse content (≤3 short items). Dense copy auto-collapses to full width. Prefer standard/grid/accentPanel/even for real teaching content.",
         "Slot sanitization is automatic: bullet/step markers the layout already draws are stripped. For numbered, pass heading WITHOUT '1.'/'2.' — chips are drawn for you. Prefer leftBullets/rightBullets arrays over markdown lists in *Body (body lists are coerced).",
         "The style MOTIF (e.g. academic doubleRule) is drawn only on feature/hero slides (title/section/closing). Content layouts (cards/bullets/twoColumn/numbered/…) intentionally omit it — their own chrome (card tops, chips, columns) is the accent.",
@@ -833,6 +840,19 @@
         "4. After each slide, READ THE QA WARNINGS in the result and look at the auto-screenshot. QA flags overlap, low contrast, too-many/too-long bullets, shrunk text, empty placeholders, or a repeated composition vs the previous slide — fix any flag in the same turn (rebuild with a different variant or tighter copy). CompositionDrift is soft: keep the slide. Use the loud slide (plan.loudIndex) for a fullBleed layout (imageFull); use 'title' first and 'closing' last.",
         "5. Vary the layout FAMILY across the deck as well as the variant: 'cards' for parallel items, 'numbered' for ordered steps, 'bigStat'/'chart' for data, 'quote'/'imageFull' for impact. A deck where every slide is 'bullets' is the look to avoid.",
         "6. Only drop to host-registered templates (deck.applyTemplate + slides.insertFromTemplate) when templates.catalog is non-empty, or manual slides.create when no layout fits."
+      ]
+    },
+    {
+      "id": "existing-deck-flow",
+      "title": "How to add to or edit an EXISTING deck (imported .pptx, earlier session)",
+      "summary": "Continue the deck's own look: look at the whole deck first, add slides with layouts (they inherit the deck's fonts and colors), insert at the right position, never restyle unless asked.",
+      "body": [
+        "1. Look before you touch. If the host gave you a deck atlas (numbered thumbnails of every slide), study it: fonts, background color, accent, where titles sit, how dense slides are, which layouts already appear. Without an atlas, call pptx_read scope:'deck' once (the host may attach an atlas to it) — never read slides one by one just to learn the style.",
+        "2. Do NOT call deck.setup or deck.applyStyle with a named preset. Those restart the visual identity and make your slide look pasted in from another deck. New slides.createFromLayout slides inherit the deck's typography and palette automatically (styles.catalog lists this as 'inherited').",
+        "3. Insert where the user asked: slides.createFromLayout({ index: N, mode:'insert', … }) inserts BEFORE slide N; omit index to append at the end; index within 1…slideCount WITHOUT mode replaces that slide. To add a summary slide at the end of a 9-slide deck, append (no index) or use index: 10.",
+        "4. Match the deck's rhythm: if the deck alternates picture slides and text slides, continue that; if the deck uses a section-divider pattern, respect it. Prefer a layout family the deck does not yet overuse.",
+        "5. Verify with the auto-screenshot that the new slide sits in the same visual family (same title position, similar type sizes, same background ink). If it does not, adjust the slide — not the rest of the deck.",
+        "6. Only when the user explicitly asks to restyle or modernise the whole deck: deck.applyStyle({ styleId }) with a named preset and then rebuild slides as needed."
       ]
     },
     {

@@ -178,6 +178,17 @@ export interface FikaController extends FikaAgentApi {
   importPptx(data: File | Blob | ArrayBuffer, options?: FikaImportPptxOptions): Promise<boolean>;
   setTitle(title: string): void;
   setLocale(locale: Locales): Promise<void>;
+  /**
+   * Paint one slide offscreen (thumbnail painter, no DOM capture) and return
+   * the encoded image. Defaults to the current slide.
+   */
+  renderSlide(slideIdOrIndex?: FikaSlideReference, options?: import('./render').FikaRenderSlideOptions): Promise<{ blob: Blob; width: number; height: number } | null>;
+  /**
+   * Paint the whole deck as numbered contact sheets — what an agent should
+   * look at before editing an existing deck, or after its context was
+   * compacted. Long decks split across several sheets.
+   */
+  renderAtlas(options?: import('./render').FikaDeckAtlasOptions): Promise<import('./render').FikaDeckAtlasSheet[]>;
   goToSlide(slideIdOrIndex: FikaSlideReference): void;
   nextSlide(): void;
   previousSlide(): void;
