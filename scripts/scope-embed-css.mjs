@@ -13,13 +13,29 @@ if (!existsSync(cssPath)) {
   process.exit(1)
 }
 
-function isKeyframesRule(rule) {
+function hasAtRuleAncestor(rule, namePattern) {
   let parent = rule.parent
   while (parent) {
-    if (parent.type === 'atrule' && /keyframes$/i.test(parent.name)) return true
+    if (parent.type === 'atrule' && namePattern.test(parent.name)) return true
     parent = parent.parent
   }
   return false
+}
+
+function isKeyframesRule(rule) {
+  return hasAtRuleAncestor(rule, /keyframes$/i)
+}
+
+/**
+ * Selectors inside `@scope (...) { }` are already confined to the scoping root and
+ * are matched relative to it. Prefixing them with `.fika-embed-root ` makes the root
+ * part of the selector's own compound chain, which browsers do not let a scoped
+ * selector match (only `:scope` / `&` may address the root) — the whole rule goes
+ * dead. prosemirror.scss (list bullets, code, sup/sub, links) and the document
+ * reset live in such blocks, so leave them untouched.
+ */
+function isScopedRule(rule) {
+  return hasAtRuleAncestor(rule, /^scope$/i)
 }
 
 function prefixSelector(selector) {
@@ -52,7 +68,7 @@ const css = readFileSync(cssPath, 'utf8')
 const ast = postcss.parse(css, { from: cssPath })
 
 ast.walkRules(rule => {
-  if (!rule.selector || isKeyframesRule(rule)) return
+  if (!rule.selector || isKeyframesRule(rule) || isScopedRule(rule)) return
   rule.selector = prefixSelector(rule.selector)
 })
 
