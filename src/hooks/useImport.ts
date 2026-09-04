@@ -25,13 +25,14 @@ import { PPTX_HYPERLINK_COLOR, linkifyPlainUrls, styleImportedHyperlinks, wrapHa
 import { importedParagraphMetrics, scalePptxTextInset } from '@/utils/pptxImportMetrics';
 import { markSourcePackageDirty, retainSourcePackage } from '@/utils/pptxSourcePackage';
 import { htmlToStructuredText } from '@/utils/pptxStructuredText';
+import { importedCodeFontSize, importedCodeSource, parseCodeShapeName } from '@/utils/codeShapeTag';
 import { buildImportDiagnosticsReport, setLastImportDiagnostics } from '@/utils/pptxImportDiagnostics';
 import { internSlidesMedia, startInternSlideMedia } from '@/utils/mediaIntern';
 import { normalizeImportApplyOptions, resolveImportApply, type ImportApplyMode, type ImportApplyOptions } from '@/utils/importApply';
 import { applyImportTransitions } from '@/utils/importTransition';
 import { DEFAULT_TURNING_MODE } from '@/configs/animation';
 import { createJobProgress, isAbortError, slideJobProgress } from '@/utils/jobProgress';
-import type { Slide, SlideTheme, TableCellStyle, TableCell, ChartType, SlideBackground, PPTShapeElement, PPTLineElement, LinePoint, PPTImageElement, TextAlignVertical, PPTTextElement, ChartOptions, Gradient, PPTElement } from '@/types/slides';
+import type { Slide, SlideTheme, TableCellStyle, TableCell, ChartType, SlideBackground, PPTShapeElement, PPTLineElement, LinePoint, PPTImageElement, TextAlignVertical, PPTTextElement, PPTCodeElement, ChartOptions, Gradient, PPTElement } from '@/types/slides';
 
 /** Lazy — pulls jszip (and Node stream/Buffer polyfills) only when importing PPTX. */
 const loadPptxImportFidelity = () => import('@/utils/pptxImportFidelity');
@@ -739,7 +740,29 @@ export function getImportApi() {
               el.left = originLeft * ratio;
               el.top = originTop * ratio;
               const picture = pptxPictureSource(el);
-              if (el.type === 'text') {
+              const codeShape = (el.type === 'text' || el.type === 'shape') ? el : null;
+              const codeTag = codeShape ? parseCodeShapeName(codeShape.name) : null;
+              if (codeShape && codeTag) {
+                const codeEl: PPTCodeElement = {
+                  type: 'code',
+                  id: nanoid(10),
+                  width: codeShape.width,
+                  height: codeShape.height,
+                  left: codeShape.left,
+                  top: codeShape.top,
+                  rotate: codeShape.rotate,
+                  code: importedCodeSource(codeShape.content, codeTag),
+                  language: codeTag.language,
+                  theme: codeTag.theme,
+                  fontSize: importedCodeFontSize(codeShape.content, ratio),
+                  showLineNumbers: codeTag.showLineNumbers
+                };
+                if (codeShape.link) codeEl.link = {
+                  type: 'web',
+                  target: codeShape.link
+                };
+                pushElement(codeEl, originBox);
+              } else if (el.type === 'text') {
                 const autoFitType = el.autoFit?.type;
                 const isSelfAdaptive = autoFitType === 'shape';
                 const textRatio = ratio;

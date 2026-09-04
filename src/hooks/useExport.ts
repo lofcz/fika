@@ -17,6 +17,7 @@ import { collectEmbeddedFonts } from '@/utils/exportFonts';
 import { svg2Base64 } from '@/utils/svg2Base64';
 import { renderMermaid } from '@/utils/mermaid';
 import { codeElementPptxBox, codeElementToPptxText } from '@/utils/codePptxExport';
+import { formatCodeShapeName } from '@/utils/codeShapeTag';
 import { getPPTXImageCrop } from '@/utils/pptxUnit';
 import { encrypt } from '@/utils/crypto';
 import { tryGetCleanRetainedPackage } from '@/utils/pptxSourcePackage';
@@ -1988,6 +1989,10 @@ export default () => {
                 if (linkOption) options.hyperlink = linkOption;
               }
               applyObjectMeta(options as Record<string, unknown>, el, hiddenIds, true);
+              // The shape name is the round-trip contract: re-importing this
+              // deck (or one authored by python-pptx2's add_code) restores a
+              // native code element instead of a plain text box.
+              options.objectName = formatCodeShapeName(el);
               const animation = animationForElement(el.id, slide.animations);
               if (animation) options.animation = animation;
               pptxSlide.addText(painted.runs, options);
