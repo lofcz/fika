@@ -131,8 +131,7 @@ function paragraphsHtml(value: string, style: ParagraphStyle): string {
 function bulletsHtml(items: string[], style: SpanStyle, ordered = false): string {
   const tag = ordered ? 'ol' : 'ul';
   const lis = items.map(item => `<li>${spanHtml(item, style)}</li>`).join('');
-  const pad = round(style.size * 1.2);
-  return `<${tag} style="padding-inline-start:${pad}px;color:${style.color};font-size:${round(style.size)}px">${lis}</${tag}>`;
+  return `<${tag}>${lis}</${tag}>`;
 }
 
 /**

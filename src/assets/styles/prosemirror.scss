@@ -51,12 +51,16 @@
 
   ul, ol {
     margin: 0;
-    list-style-position: inside;
-    padding-inline-start: 0;
+    // Keep markers OUTSIDE: list items are <li><p>, so `inside` renders the
+    // marker on its own line above the block paragraph. The 1em gutter and
+    // 0.4em gap mirror DEFAULT_LIST_PADDING_EM / LIST_MARKER_GAP_EM in
+    // utils/textFit.ts so DOM and canvas paint agree.
+    list-style-position: outside;
+    padding-inline-start: 1em;
 
     li {
       display: list-item;
-      list-style-position: inside;
+      list-style-position: outside;
       margin: 0;
       padding-inline-start: 0.4em;
     }

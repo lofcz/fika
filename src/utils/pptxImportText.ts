@@ -108,30 +108,6 @@ export function wrapHangingIndentParagraphsAsLists(html: string, ratio = 1): str
   out += html.slice(last);
   return out;
 }
-
-const DEFAULT_LIST_GUTTER = '1.2em';
-
-/**
- * Lists without a gutter have their outside markers clipped by overflow:hidden
- * on fixed-height text boxes. Stamp a padding-inline-start when the importer
- * (or pptxtojson) emitted a bare <ul>/<ol>.
- */
-export function ensureListMarkerGutter(html: string): string {
-  if (!html || !/<[uo]l\b/i.test(html)) return html;
-  return html.replace(/<(ul|ol)\b([^>]*)>/gi, (full, tag: string, attrs: string) => {
-    const styleMatch = attrs.match(/style="([^"]*)"/i);
-    if (styleMatch && /padding-inline-start\s*:|padding-left\s*:/i.test(styleMatch[1])) {
-      return full;
-    }
-    if (styleMatch) {
-      const style = styleMatch[1].replace(/;?\s*$/, '');
-      const next = `${style}${style ? ';' : ''}padding-inline-start:${DEFAULT_LIST_GUTTER}`;
-      return `<${tag}${attrs.replace(/style="[^"]*"/i, `style="${next}"`)}>`;
-    }
-    const trimmed = attrs.trimEnd();
-    return `<${tag}${trimmed ? `${trimmed} ` : ' '}style="padding-inline-start:${DEFAULT_LIST_GUTTER}">`;
-  });
-}
 function trimUrlMatch(raw: string): string {
   return raw.replace(/[),.;:!?]+$/g, '');
 }
