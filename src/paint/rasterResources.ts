@@ -116,17 +116,20 @@ const canvas = (width: number, height: number) => {
 /**
  * Decode an SVG string through an `<img>` and draw it onto a canvas.
  * `createImageBitmap` rejects SVG blobs in Chromium, so an image element is
- * the only reliable rasterization path.
+ * the only reliable rasterization path. The source is a `data:` URL, not a
+ * blob URL: Chromium taints a canvas that draws a blob-backed SVG carrying a
+ * `<foreignObject>` (the code booth), which then fails `toBlob` for every
+ * slide thumbnail; the same markup as a data URL stays same-origin — this is
+ * exactly what html-to-image does for the math booth.
  */
 const svgToCanvas = async (svg: string, width: number, height: number): Promise<Raster | null> => {
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }))
   try {
     const image = new Image()
     image.decoding = 'async'
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve()
       image.onerror = () => reject(new Error('SVG decode failed'))
-      image.src = url
+      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
     })
     const result = canvas(width, height)
     result.getContext('2d')?.drawImage(image, 0, 0, result.width, result.height)
@@ -134,9 +137,6 @@ const svgToCanvas = async (svg: string, width: number, height: number): Promise<
   }
   catch {
     return null
-  }
-  finally {
-    URL.revokeObjectURL(url)
   }
 }
 

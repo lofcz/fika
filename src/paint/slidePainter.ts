@@ -34,6 +34,9 @@ import {
 } from '@/utils/textContrast'
 import { isUnfilledPlaceholder, placeholderPromptHtml } from '@/utils/placeholderPaint'
 import { placeholderPromptSizeOf } from '@/configs/textPresets'
+import { MATH_CLASS } from '@/utils/inlineMathBox'
+import { containsMath, tokenizeMath } from '@/utils/markdown'
+import { escapeLatexAttr } from '@/utils/math'
 import { paintRichText } from './textPainter'
 import { getChartRaster, getCodeRaster, getLatexRaster, getMermaidRaster } from './rasterResources'
 
@@ -502,6 +505,28 @@ const paintLatex = (ctx: CanvasRenderingContext2D, element: PPTLatexElement, inv
   })
 )
 
+const escapeCellHtml = (text: string) => text
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/\n/g, '<br/>')
+
+/**
+ * Cell text as the rich-text HTML the painter reads. Math delimiters become
+ * `span.fika-math[data-latex]` runs — the same wrapper the table's DOM view
+ * renders — so a `$\frac{1}{4}$` cell paints a typeset chip, not raw TeX.
+ */
+const tableCellInnerHtml = (text: string) => {
+  if (!containsMath(text)) return escapeCellHtml(text)
+  return tokenizeMath(text)
+    .map(segment => (
+      segment.type === 'math'
+        ? `<span class="${MATH_CLASS}" data-latex="${escapeLatexAttr(segment.value)}"${segment.display ? ' data-display="true"' : ''}>${escapeCellHtml(segment.raw)}</span>`
+        : escapeCellHtml(segment.value)
+    ))
+    .join('')
+}
+
 const tableTextHtml = (text: string, style: TableCellStyle | undefined, fallback: string) => {
   const decorations = [style?.underline ? 'underline' : '', style?.strikethrough ? 'line-through' : ''].filter(Boolean).join(' ')
   const css = [
@@ -513,11 +538,7 @@ const tableTextHtml = (text: string, style: TableCellStyle | undefined, fallback
     decorations ? `text-decoration:${decorations}` : '',
     style?.align ? `text-align:${style.align}` : '',
   ].filter(Boolean).join(';')
-  return `<p style="${css}">${text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br/>')}</p>`
+  return `<p style="${css}">${tableCellInnerHtml(text)}</p>`
 }
 
 const paintTable = (

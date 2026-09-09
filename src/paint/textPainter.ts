@@ -82,6 +82,23 @@ const listInset = (block: TextFitBlock, size: number) => {
   return gutter + LIST_MARKER_GAP_EM * size
 }
 
+/**
+ * The block's text font size (scaled) — the `em` the list gutter and marker
+ * are sized in. Deliberately ignores math run heights: a tall fraction must not
+ * push the bullet out or grow the indent.
+ */
+const blockEm = (items: TextFitRun[], scale: number) => {
+  let size = 0
+  for (const run of items) {
+    if (run.mathLatex) continue
+    if (run.size > size) size = run.size
+  }
+  if (size <= 0) size = items[0]?.size || DEFAULT_TEXT_FONT_SIZE
+  return Math.max(1, size * scale)
+}
+
+const textRunOf = (items: TextFitRun[]) => items.find(run => !run.mathLatex) || items[0]
+
 const paintText = (
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -143,8 +160,7 @@ const prepareLines = (
     const prepared = prepareRichInline(items.map(run => (
       richInlineFromRun(run, fontOf(run, family, scale), scale, letterSpacing || undefined)
     )))
-    const maxSize = Math.max(1, ...items.map(run => runVisualSize(run) * scale))
-    const lineWidth = Math.max(1, width - listInset(block, maxSize))
+    const lineWidth = Math.max(1, width - listInset(block, blockEm(items, scale)))
     walkRichInlineLineRanges(prepared, lineWidth, range => {
       const line = materializeRichInlineLineRange(prepared, range)
       const lineMaxSize = Math.max(1, ...line.fragments.map(fragment => {
@@ -244,7 +260,7 @@ export const paintRichText = (
   let previousBlock: TextFitBlock | undefined
   for (const line of lines) {
     if (previousBlock && previousBlock !== line.block) y += paragraphSpace
-    const indent = listInset(line.block, line.height / lineHeight)
+    const indent = listInset(line.block, blockEm(line.items, fitScale))
     const align = line.block.align || options.align || 'left'
     const available = innerWidth - indent
     let x = options.x + inset[3] + indent
@@ -252,12 +268,18 @@ export const paintRichText = (
     else if (align === 'right') x += Math.max(0, available - line.width)
 
     if (line.block.listMarker && previousBlock !== line.block) {
-      const markerRun = line.items[0]
-      ctx.font = fontOf(markerRun, options.defaultFontFamily, fitScale)
+      // Marker shares the text baseline of the line, so a tall inline math run
+      // (which only grows line.height) leaves the bullet where the words are.
+      const markerRun = textRunOf(line.items)
+      ctx.font = fontOf({ ...markerRun, italic: false }, options.defaultFontFamily, fitScale)
       ctx.fillStyle = markerRun.color || options.defaultColor
+      const anchor = line.fragments.find(fragment => fragment.text && !line.items[fragment.itemIndex]?.mathLatex)
+      const metrics = ctx.measureText(anchor?.text || 'Hg')
+      const ascent = metrics.actualBoundingBoxAscent || markerRun.size * fitScale * 0.8
+      const descent = metrics.actualBoundingBoxDescent || markerRun.size * fitScale * 0.2
       ctx.textAlign = 'right'
       ctx.textBaseline = 'alphabetic'
-      ctx.fillText(line.block.listMarker, options.x + inset[3] + Math.max(0, indent - 5), y + line.height * 0.78)
+      ctx.fillText(line.block.listMarker, options.x + inset[3] + Math.max(0, indent - 5), y + Math.max(0, (line.height - ascent - descent) / 2) + ascent)
       ctx.textAlign = 'left'
     }
 
