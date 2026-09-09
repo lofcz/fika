@@ -13,6 +13,7 @@
 import { layout as pretextLayout, prepare as pretextPrepare } from '@chenglou/pretext';
 import { prepareRichInline, walkRichInlineLineRanges } from '@chenglou/pretext/rich-inline';
 import { cssLengthParts, cssLengthToPx } from './cssLength';
+import { estimateInlineMathBox, MATH_CLASS } from './inlineMathBox';
 
 /** ProseMirror's default text size (assets/styles/prosemirror.scss). */
 export const DEFAULT_TEXT_FONT_SIZE = 16;
@@ -35,6 +36,13 @@ export interface TextFitRun {
   strikethrough?: boolean;
   color?: string;
   fontFamily?: string;
+  /** Authored TeX from `span.fika-math[data-latex]` — painted as a raster chip. */
+  mathLatex?: string;
+  mathDisplay?: boolean;
+  /** Chip width at authored `size` (not yet fit-scaled). */
+  extraWidth?: number;
+  /** Chip height at authored `size` (fractions are taller than the font). */
+  mathHeight?: number;
 }
 
 /** A single measurable text block (one paragraph or one list item). */
@@ -203,6 +211,52 @@ const runFont = (run: { bold?: boolean; italic?: boolean }, family: string, size
   return `${style} ${weight} ${size}px ${quoteFontFamily(family)}`
 }
 
+/** Line-box size for a run: math chips use the typeset height, not the font. */
+export const runVisualSize = (run: TextFitRun): number => (
+  Math.max(run.size, run.mathHeight ?? 0)
+)
+
+/**
+ * Stand-in grapheme for a math chip. pretext drops items whose text is empty
+ * or whitespace-only, so a chip must carry one real `text`-kind grapheme to
+ * exist in the flow; its glyph advance is subtracted from `extraWidth` so the
+ * item occupies exactly the chip width.
+ */
+export const MATH_PLACEHOLDER = '\uFFFC'
+const placeholderWidthCache = new Map<string, number>()
+let placeholderCtx: CanvasRenderingContext2D | null | undefined
+const placeholderWidth = (font: string): number => {
+  const cached = placeholderWidthCache.get(font)
+  if (cached !== undefined) return cached
+  if (placeholderCtx === undefined) {
+    placeholderCtx = typeof document === 'undefined'
+      ? null
+      : document.createElement('canvas').getContext('2d')
+  }
+  let width = 0
+  if (placeholderCtx) {
+    placeholderCtx.font = font
+    width = placeholderCtx.measureText(MATH_PLACEHOLDER).width
+  }
+  placeholderWidthCache.set(font, width)
+  return width
+}
+
+export const richInlineFromRun = (
+  run: TextFitRun,
+  font: string,
+  sizeScale: number,
+  letterSpacing?: number,
+) => ({
+  text: run.mathLatex ? MATH_PLACEHOLDER : run.text,
+  font,
+  ...(letterSpacing ? { letterSpacing } : {}),
+  ...(run.mathLatex ? {
+    break: 'never' as const,
+    extraWidth: Math.max(0, (run.extraWidth ?? 0) * sizeScale - placeholderWidth(font)),
+  } : {}),
+})
+
 const richInlineCache = new Map<string, ReturnType<typeof prepareRichInline>>()
 const RICH_INLINE_CACHE_MAX = 300
 
@@ -218,14 +272,15 @@ const measureRunsHeight = (
   lineHeight: number,
   letterSpacing?: number,
 ): number => {
-  const items = runs.map(run => ({
-    text: run.text,
-    font: runFont(run, family, run.size * sizeScale),
-    ...(letterSpacing ? { letterSpacing } : {}),
-  }))
+  const items = runs.map(run => richInlineFromRun(
+    run,
+    runFont(run, family, run.size * sizeScale),
+    sizeScale,
+    letterSpacing,
+  ))
   // Prepared rich-inline handles are immutable — cache them like the block
   // prepares so the fit search's repeated candidates stay cheap.
-  const key = `${items.map(item => `${item.font}\0${item.text.length}\0${item.text.slice(0, 32)}`).join('\x1f')}\0${letterSpacing ?? 0}`
+  const key = `${items.map(item => `${item.font}\0${item.text}\0${item.extraWidth ?? 0}\0${item.break ?? ''}`).join('\x1f')}\0${letterSpacing ?? 0}`
   let prepared = richInlineCache.get(key)
   if (!prepared) {
     prepared = prepareRichInline(items)
@@ -239,7 +294,7 @@ const measureRunsHeight = (
   walkRichInlineLineRanges(prepared, Math.max(1, width), line => {
     let max = 0
     for (const fragment of line.fragments) {
-      const size = runs[fragment.itemIndex]?.size ?? 0
+      const size = runVisualSize(runs[fragment.itemIndex] ?? { text: '', size: 0 })
       if (size > max) max = size
     }
     height += max * sizeScale * lineHeight
@@ -364,6 +419,7 @@ export type FitMeasureSession = {
   key: string
   lineHeight: number
   maxFont: number
+  letterSpacing?: number
   items: Array<{
     block: TextFitBlock
     size: number
@@ -412,6 +468,7 @@ export function createFitMeasureSession(
       key: options.key,
       lineHeight: options.lineHeight,
       maxFont,
+      letterSpacing: options.letterSpacing,
       items: blocks.map(block => ({
         block,
         size: block.size,
@@ -434,8 +491,19 @@ export function measureSessionHeight(
   if (!session.items.length) return 0
   let total = 0
   for (const item of session.items) {
-    const lineHeightPx = item.size * session.lineHeight
     const width = Math.max(1, innerWidth - listColumnInset(item.block, item.size, bulletIndent))
+    if (item.block.runs?.some(run => run.mathLatex)) {
+      total += measureRunsHeight(
+        item.block.runs,
+        item.block.fontFamily,
+        1,
+        width,
+        session.lineHeight,
+        session.letterSpacing,
+      )
+      continue
+    }
+    const lineHeightPx = item.size * session.lineHeight
     total += pretextLayout(item.handle, width, lineHeightPx).height
   }
   total += Math.max(0, session.items.length - 1) * blockSpace
@@ -504,6 +572,8 @@ type FitScaleOptions = {
   letterSpacing?: number
   blockSpace?: number
   locale?: string
+  /** Pre-extracted blocks (e.g. after MathLive refined math chip sizes). */
+  blocks?: TextFitBlock[]
 }
 
 const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
@@ -547,9 +617,11 @@ export function textFitScaleForHtml(
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
   const letterSpacing = options.letterSpacing || 0
   const memoKey = fitScaleMemoKey(html, options)
-  const memoized = fitScaleMemo.get(memoKey)
+  const memoized = options.blocks ? undefined : fitScaleMemo.get(memoKey)
   if (memoized !== undefined) return memoized
-  const { blocks } = extractBlocksCached(html, fontFamily, defaultSize)
+  const { blocks } = options.blocks
+    ? { blocks: options.blocks }
+    : extractBlocksCached(html, fontFamily, defaultSize)
   const maxFont = blocks.reduce((max, block) => Math.max(max, block.size), defaultSize)
   // Re-wrap search: the largest font whose RE-WRAPPED height fits. Unlike a
   // geometric zoom divide, smaller candidates wrap onto fewer lines and can
@@ -572,12 +644,30 @@ export function textFitScaleForHtml(
         return 1
       }
     })()
-  if (fitScaleMemo.size >= FIT_SCALE_MEMO_MAX) {
-    const oldest = fitScaleMemo.keys().next().value
-    if (oldest !== undefined) fitScaleMemo.delete(oldest)
+  if (!options.blocks) {
+    if (fitScaleMemo.size >= FIT_SCALE_MEMO_MAX) {
+      const oldest = fitScaleMemo.keys().next().value
+      if (oldest !== undefined) fitScaleMemo.delete(oldest)
+    }
+    fitScaleMemo.set(memoKey, scale)
   }
-  fitScaleMemo.set(memoKey, scale)
   return scale
+}
+
+/** Replace estimated math chip boxes with a real typeset measure. */
+export function applyMeasuredMathBoxes(
+  blocks: TextFitBlock[],
+  measure: (latex: string, fontSize: number, display: boolean) => { width: number; height: number } | null,
+) {
+  for (const block of blocks) {
+    for (const run of block.runs ?? []) {
+      if (!run.mathLatex) continue
+      const box = measure(run.mathLatex, run.size, !!run.mathDisplay)
+      if (!box) continue
+      run.extraWidth = box.width
+      run.mathHeight = box.height
+    }
+  }
 }
 function parseFontSizePx(value: string | null | undefined): number {
   return cssLengthToPx(value, DEFAULT_TEXT_FONT_SIZE) ?? 0;
@@ -678,7 +768,24 @@ const runSizeProfile = (
         if (text) runs.push({ text, ...next })
       }
       else if (node.nodeType === Node.ELEMENT_NODE) {
-        walk(node as Element, next)
+        const child = node as HTMLElement
+        if (child.classList?.contains(MATH_CLASS)) {
+          const latex = (child.getAttribute('data-latex') || '').trim()
+          if (latex) {
+            const display = child.getAttribute('data-display') === 'true'
+            const box = estimateInlineMathBox(latex, next.size, display)
+            runs.push({
+              text: '',
+              ...next,
+              mathLatex: latex,
+              mathDisplay: display,
+              extraWidth: box.width,
+              mathHeight: box.height,
+            })
+          }
+          continue
+        }
+        walk(child, next)
       }
     }
   }
@@ -721,6 +828,7 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
     // Empty bullets still occupy a line (Enter on a list placeholder).
     if (!text && !isList) continue;
     const runs = runSizeProfile(el, defaultSize, options.defaultFontFamily)
+    const keepRuns = runs.length > 1 || runs.some(run => !!run.mathLatex)
     const list = isList ? el.closest('ol, ul') : null
     const listMarker = isList
       ? (list?.tagName === 'OL'
@@ -738,7 +846,7 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
       align,
       listMarker,
       ...(isList ? listIndentFrom(el) : {}),
-      ...(runs.length > 1 ? { runs } : {})
+      ...(keepRuns ? { runs } : {})
     });
   }
 

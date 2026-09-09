@@ -14,9 +14,10 @@
  */
 
 import { decodeXML } from 'entities';
-import { getFikaPortalTarget } from '@/utils/portal';
+import { EMBED_ROOT_CLASS, getFikaPortalTarget, resolveOffscreenHost } from '@/utils/portal';
 
-export const MATH_CLASS = 'fika-math';
+export { MATH_CLASS, estimateInlineMathBox, htmlHasFikaMath } from './inlineMathBox';
+import { estimateInlineMathBox, MATH_CLASS } from './inlineMathBox';
 type ConvertLatexToMarkup = (latex: string, options?: {
   defaultMode?: 'inline-math' | 'math' | 'text';
 }) => string;
@@ -30,6 +31,7 @@ interface MathliveModule {
   MathfieldElement: {
     fontsDirectory: string | null;
     soundsDirectory: string | null;
+    stylesheetScope: string | null;
   };
 }
 let mathlive: MathliveModule | null = null;
@@ -78,6 +80,7 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
     try {
       resolved.MathfieldElement.fontsDirectory = null;
       resolved.MathfieldElement.soundsDirectory = null;
+      resolved.MathfieldElement.stylesheetScope = `.${EMBED_ROOT_CLASS}`;
     } catch {}
     try {
       resolved.initVirtualKeyboardInCurrentBrowsingContext?.();
@@ -192,6 +195,57 @@ export function renderLatexElementHtml(latex: string): string {
   return `<span ${attrs}>${markup}</span>`;
 }
 
+const inlineMathBoxCache = new Map<string, { width: number; height: number }>()
+
+const inlineMathBoxKey = (latex: string, fontSize: number, display: boolean) => (
+  `${latex}\0${Math.round(fontSize * 100)}\0${display ? 1 : 0}`
+)
+
+/**
+ * Sync natural box of inline/display math at `fontSize`. Returns null until
+ * MathLive can typeset; callers should fall back to {@link estimateInlineMathBox}.
+ */
+export function measureInlineMathBox(latex: string, fontSize: number, display = false): {
+  width: number
+  height: number
+} | null {
+  if (!mathlive || typeof document === 'undefined') return null
+  const key = inlineMathBoxKey(latex, fontSize, display)
+  const cached = inlineMathBoxCache.get(key)
+  if (cached) return cached
+  const probe = document.createElement('div')
+  probe.style.cssText = [
+    'position:absolute',
+    'left:-99999px',
+    'top:0',
+    `font-size:${Math.max(1, fontSize)}px`,
+    'line-height:normal',
+    'width:max-content',
+    'pointer-events:none',
+  ].join(';')
+  probe.innerHTML = renderMathToHtml(latex, display)
+  const host = resolveOffscreenHost()
+  host.appendChild(probe)
+  void probe.offsetWidth
+  const rect = probe.getBoundingClientRect()
+  host.removeChild(probe)
+  if (!(rect.width > 0) || !(rect.height > 0)) return null
+  const box = {
+    width: rect.width,
+    height: Math.max(rect.height, fontSize),
+  }
+  inlineMathBoxCache.set(key, box)
+  return box
+}
+
+/** Measured box when MathLive is ready, otherwise a conservative estimate. */
+export function inlineMathBox(latex: string, fontSize: number, display = false): {
+  width: number
+  height: number
+} {
+  return measureInlineMathBox(latex, fontSize, display) ?? estimateInlineMathBox(latex, fontSize, display)
+}
+
 /** Natural box of a formula at {@link LATEX_ELEMENT_FONT_SIZE}, plus padding. */
 export async function measureLatexElement(latex: string): Promise<{
   width: number;
@@ -207,11 +261,12 @@ export async function measureLatexElement(latex: string): Promise<{
   const probe = document.createElement('div');
   probe.style.cssText = ['position:absolute', 'left:-99999px', 'top:0', `font-size:${LATEX_ELEMENT_FONT_SIZE}px`, 'line-height:normal', 'width:max-content', 'pointer-events:none'].join(';');
   probe.innerHTML = renderLatexElementHtml(latex);
-  document.body.appendChild(probe);
+  const host = resolveOffscreenHost();
+  host.appendChild(probe);
   const rect = probe.getBoundingClientRect();
   const width = Math.max(48, Math.ceil(rect.width) + LATEX_ELEMENT_PAD);
   const height = Math.max(36, Math.ceil(rect.height) + LATEX_ELEMENT_PAD);
-  document.body.removeChild(probe);
+  host.removeChild(probe);
   return {
     width,
     height

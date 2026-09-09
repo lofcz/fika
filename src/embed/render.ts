@@ -1,5 +1,7 @@
 import type { Slide, SlideTheme } from '@/types/slides'
 import { paintSlideToCanvas } from '@/paint/slidePainter'
+import { hasPendingRasters } from '@/paint/rasterResources'
+import { deckHasMath, ensureMathliveReady } from '@/utils/math'
 
 /**
  * Offscreen slide rendering for hosts and agents.
@@ -78,6 +80,9 @@ const IDLE_WINDOW_MS = 220
  * resource, so an idle window after the last repaint means the frame is final.
  */
 async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, cssWidth: number, dpr: number, timeoutMs: number): Promise<void> {
+  if (deckHasMath([target.slide])) {
+    await ensureMathliveReady().catch(() => undefined)
+  }
   await document.fonts?.ready?.catch(() => undefined)
   const deadline = performance.now() + timeoutMs
   let pending = false
@@ -101,6 +106,8 @@ async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, css
     const remaining = deadline - performance.now()
     if (remaining <= 0) return
     // Wait for either a resource to resolve (repaint) or an idle window (done).
+    // Slow producers (MathLive typesetting, html-to-image) take longer than
+    // the idle window, so an idle frame only counts once nothing is in flight.
     const woke = await new Promise<boolean>(resolve => {
       const timer = window.setTimeout(() => {
         wake = null
@@ -113,7 +120,7 @@ async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, css
       }
       if (pending) wake()
     })
-    if (!woke) return
+    if (!woke && !hasPendingRasters()) return
   }
 }
 

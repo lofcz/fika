@@ -25,6 +25,21 @@ export function ensureAppPortalRoot(): HTMLElement {
   return portals
 }
 
+/**
+ * Parent for offscreen work nodes (MathLive probes, raster stages). The embed
+ * stylesheet is scoped under `.fika-embed-root`, so a node hung off
+ * `document.body` would paint without MathLive/ProseMirror rules (fractions
+ * collapse to a flat run). Mount inside the embed root when there is one.
+ */
+export function resolveOffscreenHost(): HTMLElement {
+  if (portalTarget?.isConnected) {
+    const root = portalTarget.closest<HTMLElement>(`.${EMBED_ROOT_CLASS}`)
+    if (root) return root
+  }
+  const root = document.querySelector<HTMLElement>(`.${EMBED_ROOT_CLASS}`)
+  return root ?? document.body
+}
+
 export function getFikaPortalTarget(): HTMLElement {
   if (portalTarget?.isConnected) return portalTarget
   return ensureAppPortalRoot()

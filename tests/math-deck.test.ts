@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@rstest/core'
 import { containsTexSource, isTexFormulaSource } from '@/utils/markdown'
-import { deckHasMath, htmlContainsMath, normalizeImportedLatex } from '@/utils/math'
+import { latexFallbackText } from '@/utils/inlineMathBox'
+import { deckHasMath, estimateInlineMathBox, htmlContainsMath, normalizeImportedLatex } from '@/utils/math'
 
 describe('deck math detection', () => {
   it('finds typeset fractions in text boxes', () => {
@@ -23,6 +24,23 @@ describe('tex source', () => {
     expect(containsTexSource(String.raw`see \int_0^1 x\,dx`)).toBe(true)
     expect(isTexFormulaSource('3/8')).toBe(false)
     expect(containsTexSource('porovnávání zlomků')).toBe(false)
+  })
+})
+
+describe('latex fallback text', () => {
+  it('keeps a readable stand-in for quadratic and fraction latex', () => {
+    expect(latexFallbackText(String.raw`ax^2 + bx + c = 0`)).toBe('ax² + bx + c = 0')
+    expect(latexFallbackText(String.raw`a \neq 0`)).toBe('a ≠ 0')
+    expect(latexFallbackText(String.raw`\frac{1}{3} = \frac{4}{12}`)).toBe('(1)/(3) = (4)/(12)')
+  })
+})
+
+describe('inline math box estimate', () => {
+  it('makes stacked fractions taller than a simple symbol', () => {
+    const frac = estimateInlineMathBox(String.raw`\frac{-b\pm\sqrt{D}}{2a}`, 20, false)
+    const simple = estimateInlineMathBox('x', 20, false)
+    expect(frac.height).toBeGreaterThan(simple.height)
+    expect(frac.width).toBeGreaterThan(simple.width)
   })
 })
 

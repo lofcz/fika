@@ -23,12 +23,16 @@ export default defineConfig({
   output: {
     target: 'web',
     module: true,
+    // Relative URLs so a host can serve this directory from any prefix
+    // (`/fika-assets/fika-embed.css` → `./fonts/…`).
+    assetPrefix: './',
     distPath: {
       root: 'dist/embed',
       js: '',
       css: '',
       jsAsync: 'chunks',
       cssAsync: 'chunks',
+      font: 'fonts',
     },
     autoExternal: {
       dependencies: false,
@@ -39,7 +43,7 @@ export default defineConfig({
     filename: {
       js: '[name].js',
       css: '[name].css',
-      font: 'fonts/[name][ext]',
+      font: '[name][ext]',
     },
     dataUriLimit: 0,
     sourceMap: false,

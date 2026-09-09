@@ -5,11 +5,17 @@ import {
 } from '@chenglou/pretext/rich-inline'
 
 import type { TextAlign, TextAlignVertical } from '@/types/slides'
+import { getInlineMathRaster } from '@/paint/rasterResources'
+import { latexFallbackText } from '@/utils/inlineMathBox'
+import { measureInlineMathBox } from '@/utils/math'
 import {
   DEFAULT_LIST_PADDING_EM,
   DEFAULT_TEXT_FONT_SIZE,
   LIST_MARKER_GAP_EM,
+  applyMeasuredMathBoxes,
   extractFitBlocksFromHtml,
+  richInlineFromRun,
+  runVisualSize,
   textFitScaleForHtml,
   type TextFitBlock,
   type TextFitRun,
@@ -34,6 +40,7 @@ export type CanvasTextPaintOptions = {
   opacity?: number
   vertical?: boolean
   shadow?: { h: number; v: number; blur: number; color: string }
+  invalidate?: () => void
 }
 
 type PreparedLine = {
@@ -133,18 +140,17 @@ const prepareLines = (
       color: run.color,
       fontFamily: run.fontFamily || block.fontFamily || family,
     }))
-    const prepared = prepareRichInline(items.map(run => ({
-      text: run.text,
-      font: fontOf(run, family, scale),
-      ...(letterSpacing ? { letterSpacing } : {}),
-    })))
-    const maxSize = Math.max(1, ...items.map(run => run.size * scale))
+    const prepared = prepareRichInline(items.map(run => (
+      richInlineFromRun(run, fontOf(run, family, scale), scale, letterSpacing || undefined)
+    )))
+    const maxSize = Math.max(1, ...items.map(run => runVisualSize(run) * scale))
     const lineWidth = Math.max(1, width - listInset(block, maxSize))
     walkRichInlineLineRanges(prepared, lineWidth, range => {
       const line = materializeRichInlineLineRange(prepared, range)
-      const lineMaxSize = Math.max(1, ...line.fragments.map(fragment => (
-        (items[fragment.itemIndex]?.size || DEFAULT_TEXT_FONT_SIZE) * scale
-      )))
+      const lineMaxSize = Math.max(1, ...line.fragments.map(fragment => {
+        const run = items[fragment.itemIndex]
+        return run ? runVisualSize(run) * scale : DEFAULT_TEXT_FONT_SIZE * scale
+      }))
       lines.push({
         block,
         items,
@@ -188,6 +194,7 @@ export const paintRichText = (
       }
     }
   }
+  applyMeasuredMathBoxes(blocks, measureInlineMathBox)
   const fitScale = options.fit
     ? textFitScaleForHtml(options.html, {
         innerWidth,
@@ -257,7 +264,38 @@ export const paintRichText = (
     for (const fragment of line.fragments) {
       x += fragment.gapBefore
       const run = line.items[fragment.itemIndex]
-      if (!run || !fragment.text) {
+      if (!run) {
+        x += fragment.occupiedWidth
+        continue
+      }
+      if (run.mathLatex) {
+        const color = run.color || options.defaultColor
+        const chipW = fragment.occupiedWidth
+        const chipH = runVisualSize(run) * fitScale
+        const chipY = y + Math.max(0, (line.height - chipH) / 2)
+        const raster = getInlineMathRaster(
+          run.mathLatex,
+          run.size * fitScale,
+          color,
+          !!run.mathDisplay,
+          options.invalidate ?? (() => {}),
+        )
+        if (raster && chipW > 0 && chipH > 0) {
+          ctx.drawImage(raster, x, chipY, chipW, chipH)
+        }
+        else if (chipW > 0) {
+          ctx.save()
+          ctx.font = fontOf({ ...run, italic: false }, options.defaultFontFamily, fitScale)
+          ctx.fillStyle = color
+          ctx.textAlign = 'left'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(latexFallbackText(run.mathLatex), x, y + line.height / 2, chipW)
+          ctx.restore()
+        }
+        x += fragment.occupiedWidth
+        continue
+      }
+      if (!fragment.text) {
         x += fragment.occupiedWidth
         continue
       }

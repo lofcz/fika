@@ -342,6 +342,7 @@ const paintShape = (
       inset: element.text.inset,
       vAlign: element.text.align,
       fit: element.text.fixedHeight !== false,
+      invalidate,
     })
   }
   ctx.restore()
@@ -353,6 +354,7 @@ const paintTextElement = (
   slide: Slide,
   theme: SlideTheme,
   showPlaceholders: boolean,
+  invalidate: () => void,
 ) => withRectTransform(ctx, element, () => {
   const box = roundRectPath(element.width, element.height, resolveOutlineRadiusPx(element.outline?.radius, element.width, element.height))
   ctx.save()
@@ -403,6 +405,7 @@ const paintTextElement = (
     fit: elementLocksTextBox(element),
     vertical: element.vertical,
     shadow: element.shadow,
+    invalidate,
   })
   ctx.restore()
 })
@@ -521,6 +524,7 @@ const paintTable = (
   ctx: CanvasRenderingContext2D,
   element: PPTTableElement,
   theme: SlideTheme,
+  invalidate: () => void,
 ) => withRectTransform(ctx, element, () => {
   const rows = element.data.length
   if (!rows) return
@@ -588,6 +592,7 @@ const paintTable = (
         vAlign: cell.style?.vAlign || 'top',
         align: cell.style?.align || 'left',
         fit: true,
+        invalidate,
       })
       x += width
       col += colSpan - 1
@@ -680,8 +685,8 @@ const paintElement = (
     case 'shape': paintShape(ctx, element, slide, theme, invalidate); break
     case 'line': paintLine(ctx, element); break
     case 'image': paintImage(ctx, element, invalidate); break
-    case 'text': paintTextElement(ctx, element, slide, theme, showPlaceholders); break
-    case 'table': paintTable(ctx, element, theme); break
+    case 'text': paintTextElement(ctx, element, slide, theme, showPlaceholders, invalidate); break
+    case 'table': paintTable(ctx, element, theme, invalidate); break
     case 'latex': paintLatex(ctx, element, invalidate); break
     case 'chart':
     case 'mermaid':

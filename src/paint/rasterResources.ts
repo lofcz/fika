@@ -8,7 +8,9 @@ import { getChartOption, expandChartThemeColors } from '@/views/components/eleme
 import { codeElementToBoothHtml } from '@/utils/codeHighlight'
 import { isLightCodeTheme } from '@/configs/code'
 import { renderMermaid } from '@/utils/mermaid'
-import { LATEX_ELEMENT_FONT_SIZE, ensureMathliveReady, renderLatexElementHtml } from '@/utils/math'
+import { LATEX_ELEMENT_FONT_SIZE, ensureMathliveReady, renderLatexElementHtml, renderMathToHtml } from '@/utils/math'
+import { latexFallbackText } from '@/utils/inlineMathBox'
+import { EMBED_ROOT_CLASS } from '@/utils/portal'
 
 echarts.use([
   BarChart,
@@ -275,6 +277,61 @@ const latexFontEmbedCss = (host: HTMLElement) => {
   return latexFontCssPromise
 }
 
+const MATH_RASTER_BOOTH_ID = 'fika-math-raster-booth'
+
+/**
+ * Offscreen stage classed as the embed root so scoped `.fika-embed-root .ML__*`
+ * rules match. A node hung off `document.body` without that class typesets
+ * as a flat run (no fraction bars, no KaTeX metrics).
+ */
+const ensureMathRasterBooth = (): HTMLElement => {
+  const existing = document.getElementById(MATH_RASTER_BOOTH_ID)
+  if (existing instanceof HTMLElement) return existing
+  const booth = document.createElement('div')
+  booth.id = MATH_RASTER_BOOTH_ID
+  booth.className = EMBED_ROOT_CLASS
+  booth.setAttribute('aria-hidden', 'true')
+  booth.style.cssText = [
+    'position:fixed',
+    'left:-10000px',
+    'top:0',
+    'width:max-content',
+    'height:max-content',
+    'pointer-events:none',
+    'overflow:visible',
+    'background:transparent',
+  ].join(';')
+  document.documentElement.appendChild(booth)
+  return booth
+}
+
+const canvasHasInk = (node: HTMLCanvasElement): boolean => {
+  const ctx = node.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return false
+  const { width, height } = node
+  if (!(width > 0) || !(height > 0)) return false
+  const data = ctx.getImageData(0, 0, width, height).data
+  let ink = 0
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 12) continue
+    if (data[i] > 248 && data[i + 1] > 248 && data[i + 2] > 248) continue
+    ink++
+    if (ink > 8) return true
+  }
+  return ink > 0
+}
+
+const fallbackMathCanvas = (latex: string, width: number, height: number, color: string, fontSize: number): HTMLCanvasElement => {
+  const node = canvas(Math.max(1, width), Math.max(1, height))
+  const ctx = node.getContext('2d')
+  if (!ctx) return node
+  ctx.fillStyle = color
+  ctx.font = `${Math.max(8, fontSize)}px ui-sans-serif, system-ui, sans-serif`
+  ctx.textBaseline = 'middle'
+  ctx.fillText(latexFallbackText(latex), 2, node.height / 2, node.width - 4)
+  return node
+}
+
 /**
  * MathLive typeset of a formula element, mirroring `LatexContent`'s DOM
  * (flex-centered box, 36px stage scaled uniformly into the authored box).
@@ -307,8 +364,9 @@ export const getLatexRaster = (
       formula.style.margin = '0'
       formula.style.color = 'inherit'
     }
+    host.className = EMBED_ROOT_CLASS
     host.appendChild(stage)
-    document.body.appendChild(host)
+    ensureMathRasterBooth().appendChild(host)
     try {
       const naturalWidth = stage.offsetWidth
       const naturalHeight = stage.offsetHeight
@@ -333,6 +391,69 @@ export const getLatexRaster = (
     }
   }, invalidate)
 }
+
+/**
+ * Typeset inline/display math at the painted font size and snapshot it.
+ * The booth is `.fika-embed-root` so scoped MathLive CSS applies; a white
+ * or empty capture falls back to readable TeX-ish text instead of a gap.
+ */
+export const getInlineMathRaster = (
+  latex: string,
+  fontSize: number,
+  color: string,
+  display: boolean,
+  invalidate: () => void,
+): Raster | undefined => {
+  const size = Math.max(1, fontSize)
+  const key = `imath:${hash(`${latex}\0${size}\0${color}\0${display ? 1 : 0}`)}`
+  return requestRaster(key, async () => {
+    await ensureMathliveReady()
+    try {
+      await document.fonts.ready
+    }
+    catch {
+      // Fonts that fail to load still produce a legible fallback raster.
+    }
+    const host = document.createElement('div')
+    host.className = EMBED_ROOT_CLASS
+    host.style.cssText = [
+      'display:inline-block',
+      'width:max-content',
+      'line-height:normal',
+      `font-size:${size}px`,
+      `color:${color}`,
+      'background:transparent',
+    ].join(';')
+    host.innerHTML = renderMathToHtml(latex, display)
+    ensureMathRasterBooth().appendChild(host)
+    try {
+      void host.offsetWidth
+      const width = Math.ceil(host.offsetWidth)
+      const height = Math.ceil(host.offsetHeight)
+      if (!(width > 0) || !(height > 0)) {
+        return fallbackMathCanvas(latex, Math.ceil(size * 3), Math.ceil(size * 1.5), color, size)
+      }
+      const [{ toCanvas }, fontEmbedCSS] = await Promise.all([import('html-to-image'), latexFontEmbedCss(host)])
+      const captured = await toCanvas(host, {
+        width,
+        height,
+        pixelRatio: 2,
+        fontEmbedCSS,
+        style: { position: 'static', left: '0', top: '0' },
+      })
+      if (captured && canvasHasInk(captured)) return captured
+      return fallbackMathCanvas(latex, width, height, color, size)
+    }
+    catch {
+      return fallbackMathCanvas(latex, Math.ceil(size * 3), Math.ceil(size * 1.5), color, size)
+    }
+    finally {
+      host.remove()
+    }
+  }, invalidate)
+}
+
+export const hasPendingRasters = () => jobs.size > 0 || workQueue.length > 0
 
 export const clearSlideRasterResources = () => {
   for (const raster of rasters.values()) {

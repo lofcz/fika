@@ -52,6 +52,17 @@ if (typeof DOMParser !== 'undefined') {
     defaultSize: 16,
   })
   assert(ptBlocks.blocks[0]?.size > 40, `imported pt font-size must not collapse to 16, got ${ptBlocks.blocks[0]?.size}`)
+
+  const mathHtml = '<p>See <span class="fika-math" data-latex="\\frac{3}{8}">8 3</span> now</p>'
+  const mathBlocks = extractFitBlocksFromHtml(mathHtml, {
+    defaultFontFamily: 'Arial',
+    defaultSize: 16,
+  })
+  const mathRuns = mathBlocks.blocks[0]?.runs || []
+  const mathRun = mathRuns.find(run => run.mathLatex === '\\frac{3}{8}')
+  assert(!!mathRun, 'fika-math must become an atomic run from data-latex')
+  assert(!mathRuns.some(run => (run.text || '').includes('8 3')), 'must not flatten MathLive/KaTeX textContent into a text run')
+  assert((mathRun?.extraWidth || 0) > 0, 'math chip must reserve wrap width')
 }
 
 assert(textFitScaleForHtml('', { innerWidth: 100, innerHeight: 40, lineHeight: 1.2 }) === 1, 'empty html does not shrink')
