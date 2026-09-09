@@ -13,9 +13,8 @@ import ScreenShell from '@/views/Screen/ScreenShell'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { buildStarterPresentation } from '@/configs/starterPresentation'
 import { registerLocaleSync, unregisterLocaleSync } from './localeBridge'
-import type { FikaDocument, FikaMountOptions } from './types'
-import type { FikaDeckViewport } from './agentic/types'
-import { inferViewportFromSlides } from './inferViewport'
+import { applyDocumentToStores } from './initialDocument'
+import type { FikaMountOptions } from './types'
 
 const Screen = lazy(importScreen)
 
@@ -28,10 +27,7 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
   const _isPC = isPC()
   const presentationOnly = init.viewMode === 'presentation'
   const slides = useSlidesStore(s => s.slides)
-  const setTitle = useSlidesStore(s => s.setTitle)
   const setSlides = useSlidesStore(s => s.setSlides)
-  const setViewportSize = useSlidesStore(s => s.setViewportSize)
-  const setViewportRatio = useSlidesStore(s => s.setViewportRatio)
   const setTemplates = useSlidesStore(s => s.setTemplates)
   const updateSlideIndex = useSlidesStore(s => s.updateSlideIndex)
   const screening = useScreenStore(s => s.screening)
@@ -39,22 +35,14 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
   const initSnapshotDatabase = useSnapshotStore(s => s.initSnapshotDatabase)
   const prevScreeningRef = useRef(screening)
 
-  function applyDocument(document: FikaDocument & { viewport?: Partial<FikaDeckViewport> }) {
-    setTitle(document.title)
-    setSlides(document.slides, document.theme)
-    const viewport = inferViewportFromSlides(document.slides, document.viewport) ?? document.viewport
-    if (viewport?.size) setViewportSize(viewport.size)
-    if (viewport?.ratio) setViewportRatio(viewport.ratio)
-  }
-
   async function resolveInitialDocument() {
-    if (init.document) {
-      applyDocument(init.document)
-      return
-    }
+    // `mountFika` already wrote `init.document` into the stores before the
+    // first render; re-applying it here would clobber any host command that
+    // ran between `mountFika` resolving and this effect.
+    if (init.document) return
     const loadedDocument = await init.loadDocument?.()
     if (loadedDocument) {
-      applyDocument(loadedDocument)
+      applyDocumentToStores(loadedDocument)
       return
     }
     if (init.loadMockOnEmpty === true) {
@@ -66,7 +54,7 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
       setSlides(mockSlides)
       return
     }
-    applyDocument(buildStarterPresentation(LL, init.starterPresentation))
+    applyDocumentToStores(buildStarterPresentation(LL, init.starterPresentation))
   }
 
   useEffect(() => {

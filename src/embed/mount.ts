@@ -26,6 +26,7 @@ import { applyLocale } from './localeBridge'
 import { bindTooltips } from '@/utils/tooltipBind'
 import { setContextmenuRenderer } from '@/utils/openContextmenu'
 import { createController } from './createController'
+import { applyDocumentToStores } from './initialDocument'
 import type { FikaController, FikaMountOptions, FikaMountResult } from './types'
 
 const activeMounts = new WeakMap<HTMLElement, Promise<FikaMountResult>>()
@@ -107,6 +108,11 @@ export async function mountFika(
       return () => menuRoot.unmount()
     })
     bindTooltips(el)
+
+    // The document must be in the stores before the controller is handed out:
+    // hosts issue commands right after `await mountFika(...)`, and a later
+    // effect-time apply would overwrite them.
+    if (options.document) applyDocumentToStores(options.document)
 
     root.render(
       createElement(TypesafeI18n, {
