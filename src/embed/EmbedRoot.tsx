@@ -36,14 +36,17 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
   const prevScreeningRef = useRef(screening)
 
   async function resolveInitialDocument() {
-    // `mountFika` already wrote `init.document` into the stores before the
-    // first render; re-applying it here would clobber any host command that
-    // ran between `mountFika` resolving and this effect.
+    // `mountFika` already wrote `init.document` (or the starter deck) into the
+    // stores before the first render; re-applying here would clobber any host
+    // command that ran between `mountFika` resolving and this effect. Only the
+    // genuinely async sources are resolved here.
     if (init.document) return
-    const loadedDocument = await init.loadDocument?.()
-    if (loadedDocument) {
-      applyDocumentToStores(loadedDocument)
-      return
+    if (init.loadDocument) {
+      const loadedDocument = await init.loadDocument()
+      if (loadedDocument) {
+        applyDocumentToStores(loadedDocument)
+        return
+      }
     }
     if (init.loadMockOnEmpty === true) {
       const base = (init.assetBaseUrl ?? '').replace(/\/$/, '')
@@ -54,7 +57,9 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
       setSlides(mockSlides)
       return
     }
-    applyDocumentToStores(buildStarterPresentation(LL, init.starterPresentation))
+    if (init.loadDocument && !useSlidesStore.getState().slides.length) {
+      applyDocumentToStores(buildStarterPresentation(LL, init.starterPresentation))
+    }
   }
 
   useEffect(() => {

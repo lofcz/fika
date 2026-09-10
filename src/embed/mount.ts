@@ -27,6 +27,8 @@ import { bindTooltips } from '@/utils/tooltipBind'
 import { setContextmenuRenderer } from '@/utils/openContextmenu'
 import { createController } from './createController'
 import { applyDocumentToStores } from './initialDocument'
+import { buildStarterPresentation } from '@/configs/starterPresentation'
+import { getLL } from '@/i18n/getLL'
 import type { FikaController, FikaMountOptions, FikaMountResult } from './types'
 
 const activeMounts = new WeakMap<HTMLElement, Promise<FikaMountResult>>()
@@ -111,8 +113,12 @@ export async function mountFika(
 
     // The document must be in the stores before the controller is handed out:
     // hosts issue commands right after `await mountFika(...)`, and a later
-    // effect-time apply would overwrite them.
+    // effect-time apply would overwrite them. The same goes for the starter
+    // deck: it is the initial state, not something to load after the fact.
     if (options.document) applyDocumentToStores(options.document)
+    else if (!options.loadDocument && options.loadMockOnEmpty !== true) {
+      applyDocumentToStores(buildStarterPresentation(getLL(locale), options.starterPresentation))
+    }
 
     root.render(
       createElement(TypesafeI18n, {
