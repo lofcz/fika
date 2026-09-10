@@ -270,6 +270,12 @@ let latexFontCssPromise: Promise<string> | null = null
 const latexFontEmbedCss = (host: HTMLElement) => {
   latexFontCssPromise ??= import('html-to-image')
     .then(mod => mod.getFontEmbedCSS(host))
+    .then(css => {
+      // The embed stylesheet was not parsed yet (or its fonts did not fetch):
+      // a snapshot with this CSS typesets in the system serif. Do not cache it.
+      if (!/KaTeX/i.test(css) || !/data:/.test(css)) latexFontCssPromise = null
+      return css
+    })
     .catch(() => {
       latexFontCssPromise = null
       return ''
@@ -279,25 +285,32 @@ const latexFontEmbedCss = (host: HTMLElement) => {
 
 let mathFontsPromise: Promise<void> | null = null
 /**
- * `document.fonts.ready` only covers faces something on the page already
- * uses; MathLive's KaTeX faces stay `unloaded` until a formula needs them, and
- * the html-to-image snapshot (an SVG image) cannot trigger that load itself —
- * the first captures then typeset in the system serif (`\ne` paints as `= ·`,
- * delimiters do not stretch) and stay cached that way. Load every KaTeX face
- * once, before the first capture.
+ * Two waits before the first capture. `document.fonts.ready` settles once no
+ * pending stylesheet load can still add faces — the embed stylesheet that
+ * declares the KaTeX `@font-face`s is exactly such a load, and html-to-image
+ * reads those rules from `document.styleSheets`. But `ready` only covers faces
+ * something on the page already uses, and MathLive's faces stay `unloaded`
+ * until a formula needs them, which the SVG snapshot cannot trigger itself.
+ * So load every KaTeX face explicitly as well; otherwise the first captures
+ * typeset in the system serif (`\ne` paints as `=`, delimiters do not stretch)
+ * and stay cached that way.
  */
 const ensureMathFontsLoaded = (): Promise<void> => {
   if (mathFontsPromise) return mathFontsPromise
   const fonts = typeof document !== 'undefined' ? document.fonts : undefined
   if (!fonts) return Promise.resolve()
-  const faces = Array.from(fonts as unknown as Iterable<FontFace>).filter(face => /KaTeX/i.test(face.family))
-  // The embed stylesheet may not be parsed yet — retry on the next capture.
-  if (!faces.length) return Promise.resolve()
-  mathFontsPromise = Promise.all(faces.map(face => face.load().catch(() => undefined)))
-    .then(() => undefined)
-    .catch(() => {
+  const promise = fonts.ready.then(async () => {
+    const faces = Array.from(fonts as unknown as Iterable<FontFace>).filter(face => /KaTeX/i.test(face.family))
+    if (!faces.length) {
+      // No embed stylesheet in this document yet — retry on the next capture.
       mathFontsPromise = null
-    })
+      return
+    }
+    await Promise.all(faces.map(face => face.load().catch(() => undefined)))
+  })
+  mathFontsPromise = promise.catch(() => {
+    mathFontsPromise = null
+  })
   return mathFontsPromise
 }
 
