@@ -39,7 +39,7 @@
         "lucide-react": "^1.33.0",
         "markdown-it": "^15.0.0",
         "markdown-it-texmath": "^1.0.0",
-        "mathlive": "npm:@lofcz/mathlive@^0.110.8",
+        "mathlive": "npm:@lofcz/mathlive@^0.110.9",
         "mathml2omml-plus": "^0.6.4",
         "mermaid": "^11.17.0",
         "mitt": "^3.0.1",
@@ -1262,7 +1262,7 @@
 
     "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
 
-    "mathlive": ["@lofcz/mathlive@0.110.8", "", { "dependencies": { "@cortex-js/compute-engine": "0.58.0" } }, "sha512-5CPpLsSAZaZ0uLpl/Hg8tYccDSo6vneh94quxuD4DvuNRO5ULF8LUMvNwqnvTSpMMbE9H6L0fvh3cYByI3imvg=="],
+    "mathlive": ["@lofcz/mathlive@0.110.9", "", { "dependencies": { "@cortex-js/compute-engine": "0.58.0" } }, "sha512-xNvp1Mz9KdMeXHcWxkVBuQxao/7tVurPmoP5q47TYXQef5kwH3jhvR4/HRU57VrYsRuTdq1gKRTn5kxPcqJbwQ=="],
 
     "mathml2omml-plus": ["mathml2omml-plus@0.6.4", "", {}, "sha512-WK+MVXfv4VAPgN797wPaCnG13uc6V0IiP62c06cr9dB4a49T/udl2iubHd7tBjyS/xc5aavwuMI2fpVyP6G3EA=="],
 
