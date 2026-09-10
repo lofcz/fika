@@ -125,7 +125,10 @@ const lineBaseline = (
   const metrics = ctx.measureText('Hg')
   const ascent = metrics.fontBoundingBoxAscent || metrics.actualBoundingBoxAscent || size * 0.8
   const descent = metrics.fontBoundingBoxDescent || metrics.actualBoundingBoxDescent || size * 0.2
-  return y + Math.max(0, (line.height - ascent - descent) / 2) + ascent
+  // Half-leading may go negative: with line-height below the font's own box
+  // (e.g. `1` on a badge digit) CSS still centres the content area, so the
+  // canvas must too — clamping at 0 sat the glyph a few px low.
+  return y + (line.height - ascent - descent) / 2 + ascent
 }
 
 const paintText = (
