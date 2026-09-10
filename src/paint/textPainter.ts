@@ -14,6 +14,7 @@ import {
   LIST_MARKER_GAP_EM,
   applyMeasuredMathBoxes,
   extractFitBlocksFromHtml,
+  lineBoxHeight,
   richInlineFromRun,
   runVisualSize,
   textFitScaleForHtml,
@@ -191,16 +192,18 @@ const prepareLines = (
     const lineWidth = Math.max(1, width - listInset(block, blockEm(items, scale)))
     walkRichInlineLineRanges(prepared, lineWidth, range => {
       const line = materializeRichInlineLineRange(prepared, range)
-      const lineMaxSize = Math.max(1, ...line.fragments.map(fragment => {
+      const lineRuns: TextFitRun[] = []
+      for (const fragment of line.fragments) {
         const run = items[fragment.itemIndex]
-        return run ? runVisualSize(run) * scale : DEFAULT_TEXT_FONT_SIZE * scale
-      }))
+        if (run) lineRuns.push(run)
+      }
+      if (!lineRuns.length) lineRuns.push({ text: '', size: DEFAULT_TEXT_FONT_SIZE })
       lines.push({
         block,
         items,
         fragments: line.fragments,
         width: line.width,
-        height: lineMaxSize * lineHeight,
+        height: Math.max(1, lineBoxHeight(lineRuns, scale, lineHeight)),
       })
     })
   }

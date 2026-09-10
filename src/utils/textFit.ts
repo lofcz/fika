@@ -217,6 +217,24 @@ export const runVisualSize = (run: TextFitRun): number => (
 )
 
 /**
+ * Line box for the runs sharing one line. Text costs `size × lineHeight`; a
+ * math chip is taller than its font but gets the *same* leading as the words
+ * beside it — never leading scaled by its own height — so a fraction widens
+ * the line by its excess height only, not by a 3 em gap.
+ */
+export const lineBoxHeight = (runs: TextFitRun[], sizeScale: number, lineHeight: number): number => {
+  let text = 0
+  let math = 0
+  for (const run of runs) {
+    if (run.size > text) text = run.size
+    const chip = run.mathHeight ?? 0
+    if (chip > math) math = chip
+  }
+  const leading = Math.max(0, text * (lineHeight - 1))
+  return Math.max(text * lineHeight, math + leading) * sizeScale
+}
+
+/**
  * Stand-in grapheme for a math chip. pretext drops items whose text is empty
  * or whitespace-only, so a chip must carry one real `text`-kind grapheme to
  * exist in the flow; its glyph advance is subtracted from `extraWidth` so the
@@ -292,12 +310,12 @@ const measureRunsHeight = (
   }
   let height = 0
   walkRichInlineLineRanges(prepared, Math.max(1, width), line => {
-    let max = 0
+    const lineRuns: TextFitRun[] = []
     for (const fragment of line.fragments) {
-      const size = runVisualSize(runs[fragment.itemIndex] ?? { text: '', size: 0 })
-      if (size > max) max = size
+      const run = runs[fragment.itemIndex]
+      if (run) lineRuns.push(run)
     }
-    height += max * sizeScale * lineHeight
+    height += lineBoxHeight(lineRuns, sizeScale, lineHeight)
   })
   return height
 }
