@@ -277,6 +277,30 @@ const latexFontEmbedCss = (host: HTMLElement) => {
   return latexFontCssPromise
 }
 
+let mathFontsPromise: Promise<void> | null = null
+/**
+ * `document.fonts.ready` only covers faces something on the page already
+ * uses; MathLive's KaTeX faces stay `unloaded` until a formula needs them, and
+ * the html-to-image snapshot (an SVG image) cannot trigger that load itself —
+ * the first captures then typeset in the system serif (`\ne` paints as `= ·`,
+ * delimiters do not stretch) and stay cached that way. Load every KaTeX face
+ * once, before the first capture.
+ */
+const ensureMathFontsLoaded = (): Promise<void> => {
+  if (mathFontsPromise) return mathFontsPromise
+  const fonts = typeof document !== 'undefined' ? document.fonts : undefined
+  if (!fonts) return Promise.resolve()
+  const faces = Array.from(fonts as unknown as Iterable<FontFace>).filter(face => /KaTeX/i.test(face.family))
+  // The embed stylesheet may not be parsed yet — retry on the next capture.
+  if (!faces.length) return Promise.resolve()
+  mathFontsPromise = Promise.all(faces.map(face => face.load().catch(() => undefined)))
+    .then(() => undefined)
+    .catch(() => {
+      mathFontsPromise = null
+    })
+  return mathFontsPromise
+}
+
 const MATH_RASTER_BOOTH_ID = 'fika-math-raster-booth'
 
 /**
@@ -347,12 +371,7 @@ export const getLatexRaster = (
   const key = `latex:${hash(`${element.latex}\0${width}\0${height}\0${element.color}`)}`
   return requestRaster(key, async () => {
     await ensureMathliveReady()
-    try {
-      await document.fonts.ready
-    }
-    catch {
-      // Fonts that fail to load still produce a legible fallback raster.
-    }
+    await ensureMathFontsLoaded()
     const host = document.createElement('div')
     host.style.cssText = `position:fixed;left:-99999px;top:0;width:${width}px;height:${height}px;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;color:${element.color}`
     const stage = document.createElement('div')
@@ -408,12 +427,7 @@ export const getInlineMathRaster = (
   const key = `imath:${hash(`${latex}\0${size}\0${color}\0${display ? 1 : 0}`)}`
   return requestRaster(key, async () => {
     await ensureMathliveReady()
-    try {
-      await document.fonts.ready
-    }
-    catch {
-      // Fonts that fail to load still produce a legible fallback raster.
-    }
+    await ensureMathFontsLoaded()
     const host = document.createElement('div')
     host.className = EMBED_ROOT_CLASS
     host.style.cssText = [
