@@ -99,6 +99,34 @@ const blockEm = (items: TextFitRun[], scale: number) => {
 
 const textRunOf = (items: TextFitRun[]) => items.find(run => !run.mathLatex) || items[0]
 
+/**
+ * One baseline per line, from the *font* metrics of its largest text run. Ink
+ * bounds (`actualBoundingBox*`) differ per fragment — a trailing "." after a
+ * bold or math run has almost no ascent, and centring it by its own ink would
+ * float it to the middle of the line.
+ */
+const lineBaseline = (
+  ctx: CanvasRenderingContext2D,
+  line: { height: number; items: TextFitRun[]; fragments: { itemIndex: number; text?: string }[] },
+  y: number,
+  fallbackFamily: string,
+  scale: number,
+) => {
+  let anchor: TextFitRun | undefined
+  for (const fragment of line.fragments) {
+    const run = line.items[fragment.itemIndex]
+    if (!run || run.mathLatex || !fragment.text) continue
+    if (!anchor || run.size > anchor.size) anchor = run
+  }
+  anchor ??= textRunOf(line.items)
+  const size = (anchor?.size || DEFAULT_TEXT_FONT_SIZE) * scale
+  if (anchor) ctx.font = fontOf({ ...anchor, italic: false }, fallbackFamily, scale)
+  const metrics = ctx.measureText('Hg')
+  const ascent = metrics.fontBoundingBoxAscent || metrics.actualBoundingBoxAscent || size * 0.8
+  const descent = metrics.fontBoundingBoxDescent || metrics.actualBoundingBoxDescent || size * 0.2
+  return y + Math.max(0, (line.height - ascent - descent) / 2) + ascent
+}
+
 const paintText = (
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -267,19 +295,17 @@ export const paintRichText = (
     if (align === 'center') x += Math.max(0, (available - line.width) / 2)
     else if (align === 'right') x += Math.max(0, available - line.width)
 
+    const baseline = lineBaseline(ctx, line, y, options.defaultFontFamily, fitScale)
+
     if (line.block.listMarker && previousBlock !== line.block) {
       // Marker shares the text baseline of the line, so a tall inline math run
       // (which only grows line.height) leaves the bullet where the words are.
       const markerRun = textRunOf(line.items)
       ctx.font = fontOf({ ...markerRun, italic: false }, options.defaultFontFamily, fitScale)
       ctx.fillStyle = markerRun.color || options.defaultColor
-      const anchor = line.fragments.find(fragment => fragment.text && !line.items[fragment.itemIndex]?.mathLatex)
-      const metrics = ctx.measureText(anchor?.text || 'Hg')
-      const ascent = metrics.actualBoundingBoxAscent || markerRun.size * fitScale * 0.8
-      const descent = metrics.actualBoundingBoxDescent || markerRun.size * fitScale * 0.2
       ctx.textAlign = 'right'
       ctx.textBaseline = 'alphabetic'
-      ctx.fillText(line.block.listMarker, options.x + inset[3] + Math.max(0, indent - 5), y + Math.max(0, (line.height - ascent - descent) / 2) + ascent)
+      ctx.fillText(line.block.listMarker, options.x + inset[3] + Math.max(0, indent - 5), baseline)
       ctx.textAlign = 'left'
     }
 
@@ -321,11 +347,6 @@ export const paintRichText = (
         x += fragment.occupiedWidth
         continue
       }
-      ctx.font = fontOf(run, options.defaultFontFamily, fitScale)
-      const metrics = ctx.measureText(fragment.text)
-      const ascent = metrics.actualBoundingBoxAscent || run.size * fitScale * 0.8
-      const descent = metrics.actualBoundingBoxDescent || run.size * fitScale * 0.2
-      const baseline = y + Math.max(0, (line.height - ascent - descent) / 2) + ascent
       ctx.textAlign = 'left'
       ctx.textBaseline = 'alphabetic'
       paintText(ctx, fragment.text, x, baseline, {
