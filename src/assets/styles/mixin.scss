@@ -158,12 +158,12 @@
     background-clip: padding-box;
   }
 
+  // Block, not a flex column: inline runs (text, `span.fika-math`, <br>) must
+  // flow as one paragraph. Vertical alignment is the cell's `vertical-align`.
   .cell-text {
     padding: 10px 14px;
     line-height: 1.45;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
+    display: block;
   }
 }
 

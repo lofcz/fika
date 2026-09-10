@@ -83,23 +83,35 @@ const TableElement = memo((props: ITableElementProps) => {
     });
   }, []);
 
-  useEffect(() => {
-    const el = elementRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries: ResizeObserverEntry[]) => {
-      const contentRect = entries[0].contentRect;
-      if (!elementRef.current || isScalingRef.current) return;
-      const realHeight = contentRect.height;
-      if (elementHeightRef.current !== realHeight) {
-        useSlidesStore.getState().updateElement({
-          id: elementIdRef.current,
-          props: { height: realHeight }
-        });
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
+  // The element's height follows the live table (uniform rows, each as tall
+  // as the tallest row's content, `cellMinHeight` the floor) — not the other
+  // way round. The outer box has an explicit height, so observe the table
+  // wrapper, whose height is the rows' actual sum.
+  const syncHeightToTable = useCallback(() => {
+    const wrapper = elementRef.current?.querySelector<HTMLElement>('[data-live-table]');
+    if (!wrapper || isScalingRef.current) return;
+    // Layout px (unaffected by the canvas zoom transform).
+    const realHeight = wrapper.offsetHeight;
+    if (realHeight > 0 && Math.abs(elementHeightRef.current - realHeight) >= 0.5) {
+      useSlidesStore.getState().updateElement({
+        id: elementIdRef.current,
+        props: { height: realHeight }
+      });
+    }
   }, []);
+  useEffect(() => {
+    const wrapper = elementRef.current?.querySelector('[data-live-table]');
+    if (!wrapper) return;
+    const observer = new ResizeObserver(() => { syncHeightToTable(); });
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, [syncHeightToTable]);
+  // A store write that the content overrules (a smaller `height`, a lower
+  // `cellMinHeight`) leaves the wrapper's size unchanged, so the observer
+  // stays silent — reconcile explicitly.
+  useEffect(() => {
+    syncHeightToTable();
+  }, [syncHeightToTable, elementInfo.height, elementInfo.cellMinHeight, elementInfo.data]);
 
   const updateTableCells = useCallback((data: TableCell[][]) => {
     rememberTableCellWrite(elementIdRef.current, data);

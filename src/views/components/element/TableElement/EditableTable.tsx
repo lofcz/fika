@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './EditableTable.module.scss'
 const cx = bindStyles(styles)
-import { type CSSProperties, type MouseEvent as ReactMouseEvent, useMemo, useCallback, useRef, memo, useState, useEffect } from 'react';
+import { type CSSProperties, type MouseEvent as ReactMouseEvent, useMemo, useCallback, useRef, memo, useState, useEffect, useLayoutEffect } from 'react';
 
 import { openContextmenu } from '@/utils/openContextmenu';
 import { debounce } from '@/utils/debounce';
@@ -196,22 +196,74 @@ const EditableTable = memo((props: IEditableTableProps) => {
   }, []);
 
   const { themeColors } = useSubThemeColor(theme);
-  useMathReady(tableCells);
+  const mathIsReady = useMathReady(tableCells);
 
   const [colSizeList, setColSizeList] = useState(() => colWidths.map(item => item * width));
   const [liveRowHeight, setLiveRowHeight] = useState<number | null>(null);
+  // Tallest row the content needs at the current widths / fonts. Rows are
+  // uniform (the painter and PPTX export draw them so), so every row takes
+  // the tallest one and `cellMinHeight` stays the floor: nothing is clipped,
+  // and the element's height follows (see the wrapper's ResizeObserver).
+  const [contentRowHeight, setContentRowHeight] = useState<number | null>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
   const colSizeListRef = useRef(colSizeList);
   const colOriginRef = useRef<number[] | null>(null);
   const rowCountRef = useRef(data.length);
+  const liveRowHeightRef = useRef(liveRowHeight);
   colSizeListRef.current = colSizeList;
   rowCountRef.current = data.length;
+  liveRowHeightRef.current = liveRowHeight;
   const totalWidth = colSizeList.reduce((a, b) => a + b, 0);
-  const paintRowHeight = liveRowHeight ?? cellMinHeight;
+  const paintRowHeight = liveRowHeight ?? Math.max(cellMinHeight, contentRowHeight ?? 0);
   useEffect(() => {
     colOriginRef.current = null;
     setLiveRowHeight(null);
     setColSizeList(colWidths.map(item => item * width));
   }, [colWidths, width]);
+
+  // Measure what the rows need with every row at its floor (a `tr` height is
+  // a minimum, so the browser reports max(floor, content)), then let the
+  // tallest one rule. Skipped mid-drag: the live box owns the height then.
+  const cellMinHeightRef = useRef(cellMinHeight);
+  cellMinHeightRef.current = cellMinHeight;
+  const measureRows = useCallback(() => {
+    const table = tableRef.current;
+    if (!table || liveRowHeightRef.current !== null || useMainStore.getState().isScaling) return;
+    const rows = Array.from(table.tBodies[0]?.rows ?? []);
+    if (rows.length === 0) return;
+    const floor = cellMinHeightRef.current;
+    // The wrapper's explicit height would stretch the table (host CSS may give
+    // tables a percentage height); release it for the measurement.
+    const wrapper = table.parentElement;
+    const wrapperHeight = wrapper?.style.height ?? '';
+    if (wrapper) wrapper.style.height = 'auto';
+    const previous = rows.map(row => row.style.height);
+    for (const row of rows) row.style.height = `${floor}px`;
+    let tallest = floor;
+    for (const row of rows) tallest = Math.max(tallest, row.offsetHeight);
+    rows.forEach((row, i) => { row.style.height = previous[i]; });
+    if (wrapper) wrapper.style.height = wrapperHeight;
+    setContentRowHeight(current => (current !== null && Math.abs(current - tallest) < 0.5 ? current : tallest));
+  }, []);
+  useLayoutEffect(() => {
+    measureRows();
+  }, [measureRows, tableCells, colSizeList, cellMinHeight, mathIsReady, editable, liveRowHeight]);
+  // A drop commits the dragged height as `cellMinHeight`; from then on the content rules again.
+  useEffect(() => {
+    let wasScaling = useMainStore.getState().isScaling;
+    return useMainStore.subscribe(state => {
+      if (wasScaling && !state.isScaling) setLiveRowHeight(null);
+      wasScaling = state.isScaling;
+    });
+  }, []);
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table || typeof ResizeObserver === 'undefined') return;
+    // Late-arriving fonts / typeset math change the content height after the layout effect ran.
+    const observer = new ResizeObserver(() => { measureRows(); });
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [measureRows]);
   useEffect(() => subscribeLiveBox((id, size) => {
     if (id !== elementId) return;
     if (!colOriginRef.current) colOriginRef.current = colSizeListRef.current.slice();
@@ -758,6 +810,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
       onMouseDown={$event => { handleMousedownColHandler($event.nativeEvent, index); }}
     />)}</div> : null}
     <table
+      ref={tableRef}
       className={cx({
         theme,
         'row-header': theme?.rowHeader,

@@ -3,26 +3,25 @@ import { containsMath, tokenizeMath } from '@/utils/markdown';
 import { ensureMathliveReady, mathReady, renderMathToHtml } from '@/utils/math';
 
 /**
- * Compute table cell box styles from outline and optional cell style.
+ * Compute table cell box styles from outline and optional cell style. The
+ * cell's vertical alignment lives here (`vertical-align` on the `td`), so the
+ * text box inside can stay a plain block and inline math flows with the text.
  */
 export const getCellStyle = (outline: PPTElementOutline, style?: TableCellStyle): any => {
   return {
     backgroundColor: style?.backcolor || '',
     borderStyle: outline.style,
     borderColor: outline.color,
-    borderWidth: outline.width + 'px'
+    borderWidth: outline.width + 'px',
+    verticalAlign: style?.vAlign || 'top'
   };
 };
 
 /**
  * Compute table cell text layout styles from optional cell style.
  */
-const cellTextMinHeight = (cellMinHeight: number) => `${Math.max(0, cellMinHeight - 20)}px`
-
-export const getTextStyle = (cellMinHeight: number, style?: TableCellStyle): any => {
-  if (!style) return {
-    minHeight: cellTextMinHeight(cellMinHeight)
-  };
+export const getTextStyle = (_cellMinHeight: number, style?: TableCellStyle): any => {
+  if (!style) return {};
   const {
     bold,
     em,
@@ -31,14 +30,8 @@ export const getTextStyle = (cellMinHeight: number, style?: TableCellStyle): any
     color,
     fontsize,
     fontname,
-    align,
-    vAlign
+    align
   } = style;
-  const vAlignMap = {
-    'top': 'flex-start',
-    'middle': 'center',
-    'bottom': 'flex-end'
-  };
   let textDecoration = `${underline ? 'underline' : ''} ${strikethrough ? 'line-through' : ''}`;
   if (textDecoration === ' ') textDecoration = 'none';
   return {
@@ -50,9 +43,7 @@ export const getTextStyle = (cellMinHeight: number, style?: TableCellStyle): any
     color: color || '#000',
     fontSize: fontsize || '14px',
     fontFamily: fontname || '',
-    justifyContent: vAlignMap[vAlign || 'top'],
-    textAlign: align || 'left',
-    minHeight: cellTextMinHeight(cellMinHeight)
+    textAlign: align || 'left'
   };
 };
 const escapeCellText = (text: string) => text.replace(/\n/g, '</br>').replace(/ /g, '&nbsp;');
