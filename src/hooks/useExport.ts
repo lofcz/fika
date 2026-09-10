@@ -15,7 +15,7 @@ import { latexPaintScale } from '@/utils/latex';
 import { applyOmmlRunStyle, prepareLatexToOmml, tryLatexToOmmlSync } from '@/utils/latexToOmml';
 import { collectEmbeddedFonts } from '@/utils/exportFonts';
 import { svg2Base64 } from '@/utils/svg2Base64';
-import { renderMermaid } from '@/utils/mermaid';
+import { renderMermaidForImage } from '@/utils/mermaid';
 import { codeElementPptxBox, codeElementToPptxText } from '@/utils/codePptxExport';
 import { formatCodeShapeName } from '@/utils/codeShapeTag';
 import { getPPTXImageCrop } from '@/utils/pptxUnit';
@@ -1957,7 +1957,7 @@ export default () => {
             } else if (el.type === 'mermaid') {
               let imageData = '';
               try {
-                const svg = await renderMermaid(el.code, el.id);
+                const svg = await renderMermaidForImage(el.code, el.id);
                 imageData = await svgToPngDataURL(svg, el.width, el.height);
               } catch (error) {
                 console.error('Mermaid export failed:', error);

@@ -1,3 +1,5 @@
+import { embedSvgFonts } from './fontEmbedCss'
+
 type MermaidAPI = {
   initialize: (config: Record<string, unknown>) => void;
   render: (id: string, code: string) => Promise<{
@@ -20,6 +22,15 @@ export const isMermaidRenderSuperseded = (err: unknown) => (
   || (err instanceof Error && err.name === 'MermaidRenderSuperseded')
 )
 
+/**
+ * Diagram type. Set here, not per diagram: mermaid's directive sanitizer
+ * keeps only a single bare family name in `themeVariables.fontFamily`
+ * (stacks, quotes and even `sans-serif` are dropped), whereas the initialize
+ * config takes the full stack. Inter is the embed's shipped body face and is
+ * inlined into image renders by `renderMermaidForImage`.
+ */
+export const MERMAID_FONT_FAMILY = 'Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
 let mermaidPromise: Promise<MermaidAPI> | null = null;
 let purifyPromise: Promise<DOMPurifyAPI> | null = null;
 let readyPromise: Promise<[MermaidAPI, DOMPurifyAPI]> | null = null;
@@ -41,7 +52,8 @@ function ensureMermaid(): Promise<MermaidAPI> {
     api.initialize({
       startOnLoad: false,
       securityLevel: 'strict',
-      htmlLabels: false
+      htmlLabels: false,
+      fontFamily: MERMAID_FONT_FAMILY
     });
     return api;
   });
@@ -101,3 +113,12 @@ export const renderMermaid = async (code: string, key = 'diagram') => {
   exclusive = run.then(() => undefined, () => undefined)
   return run
 }
+
+/**
+ * Diagram SVG for `<img>`/canvas consumers (thumbnails, export): the same
+ * markup with the web fonts it names inlined, since an SVG drawn as an image
+ * cannot reach the page's `@font-face` rules and would fall back to serif.
+ */
+export const renderMermaidForImage = async (code: string, key = 'diagram') => (
+  embedSvgFonts(await renderMermaid(code, key))
+)

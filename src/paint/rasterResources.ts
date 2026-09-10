@@ -7,10 +7,11 @@ import type { PPTChartElement, PPTCodeElement, PPTLatexElement, PPTMermaidElemen
 import { getChartOption, expandChartThemeColors } from '@/views/components/element/ChartElement/chartOption'
 import { codeElementToBoothHtml } from '@/utils/codeHighlight'
 import { isLightCodeTheme } from '@/configs/code'
-import { renderMermaid } from '@/utils/mermaid'
+import { renderMermaidForImage } from '@/utils/mermaid'
 import { LATEX_ELEMENT_FONT_SIZE, ensureMathliveReady, renderLatexElementHtml, renderMathToHtml } from '@/utils/math'
 import { latexFallbackText } from '@/utils/inlineMathBox'
 import { EMBED_ROOT_CLASS } from '@/utils/portal'
+import { declaredFontFamilies, fontEmbedCssFor } from '@/utils/fontEmbedCss'
 
 echarts.use([
   BarChart,
@@ -220,7 +221,7 @@ export const getMermaidRaster = (
   const width = Math.max(1, Math.round(element.width))
   const height = Math.max(1, Math.round(element.height))
   return requestRaster(key, async () => {
-    const raw = await renderMermaid(element.code, `canvas-${hash(element.id + element.code)}`)
+    const raw = await renderMermaidForImage(element.code, `canvas-${hash(element.id + element.code)}`)
     // renderMermaid already emits width/height="100%"; rewrite them via the DOM
     // (string-splicing duplicates the attributes, which is unparseable XML).
     const doc = new DOMParser().parseFromString(raw, 'image/svg+xml')
@@ -261,59 +262,15 @@ export const getCodeRaster = (
   }, invalidate)
 }
 
-const mathFontFamilies = (): string[] => {
-  const fonts = typeof document !== 'undefined' ? document.fonts : undefined
-  if (!fonts) return []
-  const families = new Set<string>()
-  for (const face of fonts as unknown as Iterable<FontFace>) {
-    if (/KaTeX/i.test(face.family)) families.add(face.family.replace(/["']/g, ''))
-  }
-  return [...families]
-}
-
 /**
- * MathLive fonts inlined as data URLs, computed once. Without this cache
- * html-to-image would re-parse every stylesheet and re-fetch the font files
- * for each formula capture.
- *
- * html-to-image only embeds the families the probed node actually uses, so
- * the probe is not the first formula (which might need nothing but
- * `KaTeX_Math`) but a stub that names every KaTeX family — otherwise later
- * captures typeset `=`, digits and delimiters in the system serif.
+ * Every KaTeX face inlined as data URLs (cached by `fontEmbedCssFor`). The
+ * first formula captured might need nothing but `KaTeX_Math`; embedding only
+ * what it uses would typeset `=`, digits and delimiters of every later
+ * formula in the system serif.
  */
-let latexFontCssPromise: Promise<string> | null = null
-const latexFontEmbedCss = (booth: HTMLElement) => {
-  latexFontCssPromise ??= import('html-to-image')
-    .then(async mod => {
-      const probe = document.createElement('div')
-      probe.className = EMBED_ROOT_CLASS
-      probe.style.cssText = 'position:absolute;left:0;top:0;width:max-content'
-      for (const family of mathFontFamilies()) {
-        const span = document.createElement('span')
-        span.style.fontFamily = `"${family}"`
-        span.textContent = 'x'
-        probe.appendChild(span)
-      }
-      booth.appendChild(probe)
-      try {
-        return await mod.getFontEmbedCSS(probe)
-      }
-      finally {
-        probe.remove()
-      }
-    })
-    .then(css => {
-      // The embed stylesheet was not parsed yet (or its fonts did not fetch):
-      // a snapshot with this CSS typesets in the system serif. Do not cache it.
-      if (!/KaTeX/i.test(css) || !/data:/.test(css)) latexFontCssPromise = null
-      return css
-    })
-    .catch(() => {
-      latexFontCssPromise = null
-      return ''
-    })
-  return latexFontCssPromise
-}
+const latexFontEmbedCss = (booth: HTMLElement) => (
+  fontEmbedCssFor([...declaredFontFamilies()].filter(family => /KaTeX/i.test(family)), booth)
+)
 
 let mathFontsPromise: Promise<void> | null = null
 /**
