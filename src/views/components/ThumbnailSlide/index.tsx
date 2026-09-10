@@ -6,6 +6,7 @@ import { memo } from 'react'
 import type { Slide } from '@/types/slides'
 import { useSlidesStore } from '@/store'
 import { usePreviewDestSize } from '@/views/Editor/Thumbnails/paneSize'
+import SlideSkeleton from '@/views/components/SlideSkeleton'
 import CanvasSlideThumb from './CanvasSlideThumb'
 import { arePaintedSlideIdentitiesEqual } from './paintedSlide'
 
@@ -48,6 +49,7 @@ const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
       style={{ width: width + 'px', height: width * viewportRatio + 'px' }}
     >
       {visible && full ? <CanvasSlideThumb slide={full} width={width} showPlaceholders={showPlaceholders} /> : null}
+      {visible && full?.skeleton ? <SlideSkeleton /> : null}
     </div>
   )
 }, areThumbnailSlidePropsEqual)

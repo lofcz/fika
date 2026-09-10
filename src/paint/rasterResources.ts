@@ -358,11 +358,21 @@ const fallbackMathCanvas = (latex: string, width: number, height: number, color:
   return node
 }
 
+/** Above this many raster pixels the formula snapshot drops back to 1x. */
+const LATEX_RASTER_HIDPI_BUDGET = 1_500_000
+
 /**
  * MathLive typeset of a formula element, mirroring `LatexContent`'s DOM
- * (flex-centered box, 36px stage scaled uniformly into the authored box).
+ * (flex-centered box, a 36px stage fitted uniformly into the authored box).
  * html-to-image is used instead of a bare foreignObject because SVG-as-image
  * cannot load the MathLive web fonts.
+ *
+ * The fit is applied as a font size, not a CSS transform: inside the SVG
+ * snapshot, box edges (the radical rule, fraction bars) snap to whole CSS
+ * pixels of the pre-transform layout while glyphs scale exactly, so a scaled
+ * 36px stage paints a `\sqrt` rule thinner and lower than the surd's tick.
+ * Laying out at the final size keeps that snap error under half a pixel, and
+ * the 2x capture halves it again.
  */
 export const getLatexRaster = (
   element: PPTLatexElement,
@@ -377,7 +387,7 @@ export const getLatexRaster = (
     const host = document.createElement('div')
     host.style.cssText = `position:fixed;left:-99999px;top:0;width:${width}px;height:${height}px;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;color:${element.color}`
     const stage = document.createElement('div')
-    stage.style.cssText = `width:max-content;line-height:normal;font-size:${LATEX_ELEMENT_FONT_SIZE}px;transform-origin:center center;color:inherit`
+    stage.style.cssText = `width:max-content;line-height:normal;font-size:${LATEX_ELEMENT_FONT_SIZE}px;color:inherit`
     stage.innerHTML = renderLatexElementHtml(element.latex)
     const formula = stage.firstElementChild as HTMLElement | null
     if (formula) {
@@ -393,12 +403,13 @@ export const getLatexRaster = (
       const naturalWidth = stage.offsetWidth
       const naturalHeight = stage.offsetHeight
       if (!(naturalWidth > 0) || !(naturalHeight > 0)) return null
-      stage.style.transform = `scale(${Math.min(width / naturalWidth, height / naturalHeight)})`
+      const fit = Math.min(width / naturalWidth, height / naturalHeight)
+      stage.style.fontSize = `${LATEX_ELEMENT_FONT_SIZE * fit}px`
       const [{ toCanvas }, fontEmbedCSS] = await Promise.all([import('html-to-image'), latexFontEmbedCss(booth)])
       return await toCanvas(host, {
         width,
         height,
-        pixelRatio: 1,
+        pixelRatio: width * height * 4 <= LATEX_RASTER_HIDPI_BUDGET ? 2 : 1,
         fontEmbedCSS,
         // The clone inherits the host's computed offscreen position, which
         // would shift the capture out of view — pin it back for the snapshot.

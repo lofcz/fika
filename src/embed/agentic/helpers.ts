@@ -449,6 +449,9 @@ export function normalizeSlide(slide: Partial<Slide> = {}): Slide {
     } : {}),
     ...(slide.type ? {
       type: slide.type
+    } : {}),
+    ...(slide.skeleton ? {
+      skeleton: true
     } : {})
   };
 }

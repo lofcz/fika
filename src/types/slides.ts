@@ -592,6 +592,10 @@ export type SlideType = 'cover' | 'contents' | 'transition' | 'content' | 'end';
  * remark?: speaker notes
  * turningMode?: transition
  * sourcePackageId?: retained PPTX package id (when imported from Office)
+ * skeleton?: the slide is a placeholder whose content is still being produced
+ *   (a host streaming a deck in). Painted as shimmering blocks in the rail and
+ *   on the canvas, not editable; cleared by the first `slides.update` that
+ *   omits or falsifies it.
  */
 export interface Slide {
   id: string;
@@ -604,6 +608,7 @@ export interface Slide {
   sectionTag?: SectionTag;
   type?: SlideType;
   sourcePackageId?: string;
+  skeleton?: boolean;
 }
 
 /**

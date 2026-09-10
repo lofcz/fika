@@ -1,0 +1,39 @@
+.slide-skeleton {
+  position: absolute;
+  inset: 0;
+  container-type: size;
+  pointer-events: none;
+  overflow: hidden;
+
+  &.shield {
+    pointer-events: auto;
+    cursor: progress;
+  }
+}
+
+.block {
+  position: absolute;
+  border-radius: 0.8cqw;
+  background: linear-gradient(
+    90deg,
+    rgba(30, 41, 59, 0.09) 0%,
+    rgba(30, 41, 59, 0.09) 35%,
+    rgba(30, 41, 59, 0.16) 50%,
+    rgba(30, 41, 59, 0.09) 65%,
+    rgba(30, 41, 59, 0.09) 100%
+  );
+  background-size: 300% 100%;
+  animation: slide-skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes slide-skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .block {
+    animation: none;
+    background: rgba(30, 41, 59, 0.09);
+  }
+}

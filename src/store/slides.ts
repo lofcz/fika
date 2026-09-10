@@ -328,7 +328,13 @@ export const useSlidesStore = create<SlidesStore>()(
         const slideIndex = slideId ? state.slides.findIndex(item => item.id === slideId) : state.slideIndex
         if (slideIndex < 0) return
         const next = { ...state.slides[slideIndex], ...props }
-        state.slides[slideIndex] = props.background
+        // A skeleton is a promise of content: any patch that brings elements
+        // (or explicitly falsifies the flag) fulfils it.
+        if (props.skeleton === false || (props.elements && props.skeleton === undefined)) delete next.skeleton
+        // Retinting default inks is for a background swapped under existing
+        // text; a patch that brings its own elements is an authored slide
+        // whose colours already agree with its background.
+        state.slides[slideIndex] = props.background && !props.elements
           ? applySlideBackgroundWithContrast(next, {
             backgroundColor: state.theme.backgroundColor,
             fontColor: state.theme.fontColor,

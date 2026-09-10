@@ -2,7 +2,7 @@ import { deepEqual } from 'fast-equals'
 import type { PPTElement, Slide, SlideBackground } from '@/types/slides'
 import { shapeTextIsEmpty } from './simpleShape'
 
-export type PaintedSlide = Pick<Slide, 'id' | 'elements' | 'background' | 'type'>
+export type PaintedSlide = Pick<Slide, 'id' | 'elements' | 'background' | 'type' | 'skeleton'>
 
 export type PaintedSlideDiff = {
   added: string[]

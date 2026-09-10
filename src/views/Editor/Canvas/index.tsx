@@ -44,6 +44,7 @@ import useCreateElement, { takePendingCreatedTextId } from '@/hooks/useCreateEle
 import EditableElement from './EditableElement'
 import MouseSelection from './MouseSelection'
 import ViewportBackground from './ViewportBackground'
+import SlideSkeleton from '@/views/components/SlideSkeleton'
 import ElementFloatLayer from './ElementFloatLayer/index'
 import AlignmentLine from './AlignmentLine'
 import Ruler from './Ruler'
@@ -146,6 +147,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
   const currentSlide = currentSnap
     ? selectCurrentSlide(useSlidesStore.getState())
     : undefined
+  const skeletonSlide = useSlidesStore(s => !!selectCurrentSlide(s)?.skeleton)
   const spaceKeyState = useKeyboardStore(s => s.spaceKeyState)
   const ctrlKeyState = useKeyboardStore(s => s.ctrlKeyState)
   const gesturingState = useMainStore(s => s.isGesturing)
@@ -669,6 +671,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
           }}
         >
           <ViewportBackground />
+          {skeletonSlide ? <SlideSkeleton className={cx('skeleton')} shield /> : null}
           <div className={cx('operates')}>
             {displayAlignmentLines.map((line, index) => (
               <AlignmentLine
@@ -738,7 +741,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
             activeElementIdList={activeElementIdList}
             editingElementId={editingElementId}
             clipingImageElementId={clipingImageElementId}
-            disabled={!!creatingElement || !!creatingCustomShape}
+            disabled={!!creatingElement || !!creatingCustomShape || skeletonSlide}
             selectElement={selectElement}
             beginEdit={beginEdit}
             openLinkDialog={openLinkDialog}

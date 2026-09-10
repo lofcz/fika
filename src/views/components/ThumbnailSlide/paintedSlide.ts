@@ -83,6 +83,7 @@ export function arePaintedSlideIdentitiesEqual(a: PaintedSlide | undefined, b: P
     && a.elements === b.elements
     && a.background === b.background
     && a.type === b.type
+    && (a.skeleton ?? false) === (b.skeleton ?? false)
 }
 
 export function areRailItemSlidesEqual(a: Slide | undefined, b: Slide | undefined): boolean {

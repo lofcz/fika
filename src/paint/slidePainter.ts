@@ -37,6 +37,7 @@ import { placeholderPromptSizeOf } from '@/configs/textPresets'
 import { MATH_CLASS } from '@/utils/inlineMathBox'
 import { containsMath, tokenizeMath } from '@/utils/markdown'
 import { escapeLatexAttr } from '@/utils/math'
+import { SLIDE_SKELETON_BLOCKS, SLIDE_SKELETON_FILL, SLIDE_SKELETON_RADIUS } from '@/configs/slideSkeleton'
 import { paintRichText } from './textPainter'
 import { getChartRaster, getCodeRaster, getLatexRaster, getMermaidRaster } from './rasterResources'
 
@@ -717,6 +718,19 @@ const paintElement = (
   }
 }
 
+/** Static counterpart of the shimmering `SlideSkeleton` overlay (same geometry). */
+const paintSkeleton = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+  ctx.save()
+  ctx.fillStyle = SLIDE_SKELETON_FILL
+  const radius = width * SLIDE_SKELETON_RADIUS
+  for (const block of SLIDE_SKELETON_BLOCKS) {
+    ctx.beginPath()
+    ctx.roundRect(block.x * width, block.y * height, block.w * width, block.h * height, radius)
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
 /**
  * Direct Slide JSON -> final-DPR canvas paint. No DOM tree, foreignObject
  * capture, intermediate PNG, or CSS-scale resampling is involved.
@@ -739,6 +753,7 @@ export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlid
   ctx.imageSmoothingQuality = 'high'
   ctx.setTransform(pixelWidth / logicalWidth, 0, 0, pixelHeight / logicalHeight, 0, 0)
   paintBackground(ctx, options.slide, logicalWidth, logicalHeight, options.invalidate)
+  if (options.slide.skeleton) paintSkeleton(ctx, logicalWidth, logicalHeight)
   for (const element of options.slide.elements) {
     try {
       paintElement(ctx, element, options.slide, options.theme, options.invalidate, !!options.showPlaceholders)

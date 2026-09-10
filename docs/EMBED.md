@@ -148,6 +148,21 @@ if (createTitle.ok && createTitle.data) {
 await controller.slides.setRemark(createSlide.data.id, '<p>Teacher notes from the sciobot agent</p>')
 ```
 
+### Skeleton slides (streaming a deck in)
+
+A slide with `skeleton: true` is a placeholder for content that is still being produced. The rail thumbnail and the live canvas paint shimmering grey blocks over its background, the canvas refuses edits on it, and `renderSlide` paints the same blocks statically. Seed the whole deck up front with the ids you will later fill, then swap each one in place — a `slides.update` patch that carries `elements` (or `skeleton: false`) clears the flag:
+
+```ts
+await controller.setDocument({
+  title,
+  slides: outline.map(item => ({ id: item.id, elements: [], skeleton: true, background })),
+})
+
+// …as each slide finishes generating:
+await controller.slides.update(item.id, { elements, background, remark })
+controller.goToSlide(item.id)
+```
+
 ### Bridge subscriptions
 
 Subscribe once when the controller is mounted, then unsubscribe before replacing or destroying it. `documentChanged` is the best signal for persistence, while `commandFailed` is the best signal for agent telemetry:
