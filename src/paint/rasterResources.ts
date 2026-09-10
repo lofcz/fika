@@ -261,15 +261,47 @@ export const getCodeRaster = (
   }, invalidate)
 }
 
+const mathFontFamilies = (): string[] => {
+  const fonts = typeof document !== 'undefined' ? document.fonts : undefined
+  if (!fonts) return []
+  const families = new Set<string>()
+  for (const face of fonts as unknown as Iterable<FontFace>) {
+    if (/KaTeX/i.test(face.family)) families.add(face.family.replace(/["']/g, ''))
+  }
+  return [...families]
+}
+
 /**
  * MathLive fonts inlined as data URLs, computed once. Without this cache
  * html-to-image would re-parse every stylesheet and re-fetch the font files
  * for each formula capture.
+ *
+ * html-to-image only embeds the families the probed node actually uses, so
+ * the probe is not the first formula (which might need nothing but
+ * `KaTeX_Math`) but a stub that names every KaTeX family — otherwise later
+ * captures typeset `=`, digits and delimiters in the system serif.
  */
 let latexFontCssPromise: Promise<string> | null = null
-const latexFontEmbedCss = (host: HTMLElement) => {
+const latexFontEmbedCss = (booth: HTMLElement) => {
   latexFontCssPromise ??= import('html-to-image')
-    .then(mod => mod.getFontEmbedCSS(host))
+    .then(async mod => {
+      const probe = document.createElement('div')
+      probe.className = EMBED_ROOT_CLASS
+      probe.style.cssText = 'position:absolute;left:0;top:0;width:max-content'
+      for (const family of mathFontFamilies()) {
+        const span = document.createElement('span')
+        span.style.fontFamily = `"${family}"`
+        span.textContent = 'x'
+        probe.appendChild(span)
+      }
+      booth.appendChild(probe)
+      try {
+        return await mod.getFontEmbedCSS(probe)
+      }
+      finally {
+        probe.remove()
+      }
+    })
     .then(css => {
       // The embed stylesheet was not parsed yet (or its fonts did not fetch):
       // a snapshot with this CSS typesets in the system serif. Do not cache it.
@@ -398,13 +430,14 @@ export const getLatexRaster = (
     }
     host.className = EMBED_ROOT_CLASS
     host.appendChild(stage)
-    ensureMathRasterBooth().appendChild(host)
+    const booth = ensureMathRasterBooth()
+    booth.appendChild(host)
     try {
       const naturalWidth = stage.offsetWidth
       const naturalHeight = stage.offsetHeight
       if (!(naturalWidth > 0) || !(naturalHeight > 0)) return null
       stage.style.transform = `scale(${Math.min(width / naturalWidth, height / naturalHeight)})`
-      const [{ toCanvas }, fontEmbedCSS] = await Promise.all([import('html-to-image'), latexFontEmbedCss(host)])
+      const [{ toCanvas }, fontEmbedCSS] = await Promise.all([import('html-to-image'), latexFontEmbedCss(booth)])
       return await toCanvas(host, {
         width,
         height,
@@ -452,7 +485,8 @@ export const getInlineMathRaster = (
       'background:transparent',
     ].join(';')
     host.innerHTML = renderMathToHtml(latex, display)
-    ensureMathRasterBooth().appendChild(host)
+    const booth = ensureMathRasterBooth()
+    booth.appendChild(host)
     try {
       void host.offsetWidth
       const width = Math.ceil(host.offsetWidth)
@@ -460,7 +494,7 @@ export const getInlineMathRaster = (
       if (!(width > 0) || !(height > 0)) {
         return fallbackMathCanvas(latex, Math.ceil(size * 3), Math.ceil(size * 1.5), color, size)
       }
-      const [{ toCanvas }, fontEmbedCSS] = await Promise.all([import('html-to-image'), latexFontEmbedCss(host)])
+      const [{ toCanvas }, fontEmbedCSS] = await Promise.all([import('html-to-image'), latexFontEmbedCss(booth)])
       const captured = await toCanvas(host, {
         width,
         height,
