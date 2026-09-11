@@ -29,7 +29,7 @@ type RailHandlers = {
   handleClickSlideThumbnail: (e: React.MouseEvent, index: number) => void
   enterScreening: () => void
   contextmenusThumbnailItem: () => ContextmenuItem[]
-  contextmenusSection: (el: HTMLElement) => ContextmenuItem[]
+  contextmenusSection: (el: HTMLElement) => ContextmenuItem[] | null
   editSection: (id: string) => void
   saveSection: (e: React.FocusEvent | React.KeyboardEvent) => void
   openNotesPanel: () => void
@@ -139,6 +139,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
   const slideIndex = useSlidesStore(s => s.slideIndex)
   const currentSlideHasSection = useSlidesStore(s => !!s.slides[s.slideIndex]?.sectionTag)
   const _selectedSlidesIndex = useMainStore(s => s.selectedSlidesIndex)
+  const readOnly = useMainStore(s => s.readOnly)
   const selectedSlidesIndex = useMemo(() => [..._selectedSlidesIndex, slideIndex], [_selectedSlidesIndex, slideIndex])
   const hasSection = useMemo(() => slides.some(item => item.sectionTag), [slides])
   const { scrollRef, virtualizer, virtualItems, dest } = useThumbnailVirtualizer(slides, hasSection)
@@ -207,7 +208,12 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
   const handleClickSlideThumbnail = useCallback((e: React.MouseEvent, index: number) => {
     if (editingSectionId) return
 
-    const { selectedSlidesIndex: extraSelected } = useMainStore.getState()
+    const { selectedSlidesIndex: extraSelected, readOnly: viewOnly } = useMainStore.getState()
+    if (viewOnly) {
+      // View-only: plain navigation, no multi-selection.
+      if (e.button === 0) changeSlideIndex(index)
+      return
+    }
     const currentIndex = useSlidesStore.getState().slideIndex
     const { ctrlKeyState, shiftKeyState } = useKeyboardStore.getState()
     const selected = [...extraSelected, currentIndex]
@@ -279,6 +285,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
   }, [])
 
   const editSection = useCallback((id: string) => {
+    if (useMainStore.getState().readOnly) return
     useMainStore.getState().setDisableHotkeysState(true)
     setEditingSectionId(id || 'default')
     Promise.resolve().then(() => {
@@ -294,7 +301,8 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
     useMainStore.getState().setDisableHotkeysState(false)
   }, [editingSectionId, updateSectionTitle])
 
-  const contextmenusSection = useCallback((el: HTMLElement): ContextmenuItem[] => {
+  const contextmenusSection = useCallback((el: HTMLElement): ContextmenuItem[] | null => {
+    if (useMainStore.getState().readOnly) return null
     const sectionId = el.dataset.sectionId!
     const menu = LL.editor.thumbnails.contextMenu
     return [
@@ -315,6 +323,9 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
 
   const contextmenusThumbnails = useCallback((): ContextmenuItem[] => {
     const menu = LL.editor.thumbnails.contextMenu
+    if (useMainStore.getState().readOnly) {
+      return [{ text: menu.slideShow(), subText: 'F5', handler: enterScreeningFromStart }]
+    }
     return [
       { text: menu.newSlide(), subText: 'Enter', handler: createSlide },
       { text: menu.paste(), subText: 'Ctrl + V', handler: pasteSlide },
@@ -325,6 +336,9 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
 
   const contextmenusThumbnailItem = useCallback((): ContextmenuItem[] => {
     const menu = LL.editor.thumbnails.contextMenu
+    if (useMainStore.getState().readOnly) {
+      return [{ text: menu.presentFromCurrent(), subText: 'Shift + F5', handler: () => enterScreening() }]
+    }
     return [
       { text: menu.cut(), subText: 'Ctrl + X', handler: cutSlide },
       { text: menu.copy(), subText: 'Ctrl + C', handler: copySlide },
@@ -358,7 +372,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
       onPointerEnter={prefetchScreen}
       onMouseDown={() => setThumbnailsFocus(true)}
     >
-      <div className={cx('add-slide')}>
+      {readOnly ? null : <div className={cx('add-slide')}>
         <div className={cx('btn')} onClick={() => createSlide()}>
           <Icon icon="plus" className={cx('icon')} />{LL.editor.thumbnails.addSlide()}
         </div>
@@ -374,11 +388,11 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
         >
           <div className={cx('select-btn')}><Icon icon="chevron-down" /></div>
         </Popover>
-      </div>
+      </div>}
       <Draggable
         className={cx('thumbnail-list')}
         modelValue={slides}
-        disabled={!!editingSectionId}
+        disabled={!!editingSectionId || readOnly}
         itemKey="id"
         scrollRef={scrollRef}
         virtualItems={virtualItems}

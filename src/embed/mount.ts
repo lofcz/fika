@@ -26,6 +26,7 @@ import { applyLocale } from './localeBridge'
 import { bindTooltips } from '@/utils/tooltipBind'
 import { setContextmenuRenderer } from '@/utils/openContextmenu'
 import { createController } from './createController'
+import { useMainStore } from '@/store/main'
 import { applyDocumentToStores } from './initialDocument'
 import { buildStarterPresentation } from '@/configs/starterPresentation'
 import { getLL } from '@/i18n/getLL'
@@ -119,6 +120,7 @@ export async function mountFika(
     else if (!options.loadDocument && options.loadMockOnEmpty !== true) {
       applyDocumentToStores(buildStarterPresentation(getLL(locale), options.starterPresentation))
     }
+    useMainStore.getState().setReadOnly(options.readOnly === true)
 
     root.render(
       createElement(TypesafeI18n, {
@@ -141,6 +143,7 @@ export async function mountFika(
       destroyed = true
       originalDestroy()
       unmount()
+      useMainStore.getState().setReadOnly(false)
       if (activeMounts.get(el) === mountPromise) activeMounts.delete(el)
       setFikaExportMediaResolver(null)
       setFikaMediaConfig(null)

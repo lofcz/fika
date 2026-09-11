@@ -126,6 +126,7 @@ const EditorHeader = memo(({ className, style }: { className?: string; style?: C
   const { enterScreening, enterScreeningFromStart, prefetchScreen } = useScreening()
   const { resetSlides } = useSlideHandler()
   const slideCount = useSlidesStore(s => s.slides.length)
+  const readOnly = useMainStore(s => s.readOnly)
   const isMacOS = isMac()
 
   const localeSwitcherEnabled = isFikaLocaleSwitcherEnabled()
@@ -302,7 +303,7 @@ const EditorHeader = memo(({ className, style }: { className?: string; style?: C
 
   return (
     <div className={cx('editor-header', className)} style={style}>
-      <div className={cx('left')}>
+      <div className={cx('left', { 'read-only': readOnly })}>
         <Popover
           trigger="click"
           placement="bottom-start"

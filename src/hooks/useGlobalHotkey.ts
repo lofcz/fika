@@ -238,6 +238,19 @@ export default () => {
 
       if (!mainStore.editorAreaFocus && !mainStore.thumbnailsFocus) return
 
+      if (mainStore.readOnly) {
+        // View-only: keyboard still pages through the deck, nothing else.
+        if (key === KEYS.UP || key === KEYS.PAGEUP) {
+          e.preventDefault()
+          actionsRef.current.updateSlideIndex(KEYS.UP)
+        }
+        else if (key === KEYS.DOWN || key === KEYS.PAGEDOWN) {
+          e.preventDefault()
+          actionsRef.current.updateSlideIndex(KEYS.DOWN)
+        }
+        return
+      }
+
       if (ctrlOrMetaKeyActive && key === KEYS.C) {
         if (mainStore.disableHotkeys) return
         e.preventDefault()

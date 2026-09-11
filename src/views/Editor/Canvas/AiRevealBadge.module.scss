@@ -1,0 +1,49 @@
+.ai-reveal-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 6;
+}
+
+.ai-reveal-badge {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.16);
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  backdrop-filter: blur(2px);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  animation: ai-reveal-pop 0.18s ease-out;
+  will-change: left, top;
+
+  .icon {
+    width: 12px;
+    height: 12px;
+    animation: ai-reveal-sparkle 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes ai-reveal-pop {
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ai-reveal-sparkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
+}

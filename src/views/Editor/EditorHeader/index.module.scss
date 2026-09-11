@@ -175,3 +175,10 @@
     max-width: 200px;
   }
 }
+
+// View-only mode: the main menu (import / reset / markup) and title editing are inert.
+.left.read-only {
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.6;
+}

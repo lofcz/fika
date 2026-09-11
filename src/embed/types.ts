@@ -4,7 +4,9 @@ import type { FikaMediaConfig } from '@/configs/mediaUpload';
 import type { Locales } from '@/i18n/locale';
 import type { Slide, SlideTheme, SlideTemplate } from '@/types/slides';
 import type { FikaAgentApi, FikaDeckViewport, FikaSlideReference } from './agentic/types';
+import type { FikaRevealOptions } from './reveal';
 export type { FikaExportMediaResolver };
+export type { FikaRevealOptions };
 export type { FikaMediaConfig, FikaMediaConstraints, FikaMediaKind, FikaMediaSizeLimit, FikaMediaUploadProgress, FikaMediaUploadRequest, FikaMediaUploadResult, FikaMediaUploader, FikaXhrMediaUploaderOptions } from '@/configs/mediaUpload';
 export interface FikaTemplatePayload {
   title?: string;
@@ -129,6 +131,12 @@ export interface FikaMountOptions {
    * Exiting the slideshow re-enters it, so the page stays a pure viewer.
    */
   viewMode?: FikaViewMode;
+  /**
+   * Start in view-only mode: the user can browse slides but not select, edit,
+   * insert, reorder or delete anything. Host and agent commands still apply.
+   * Toggle later with `controller.setReadOnly`.
+   */
+  readOnly?: boolean;
 }
 export type FikaImportApplyMode = import('@/utils/importApply').ImportApplyMode;
 export interface FikaImportPptxOptions {
@@ -193,6 +201,17 @@ export interface FikaController extends FikaAgentApi {
   nextSlide(): void;
   previousSlide(): void;
   setZoom(scale: number): void;
+  /** Toggle view-only mode (see `FikaMountOptions.readOnly`). */
+  setReadOnly(readOnly: boolean): void;
+  isReadOnly(): boolean;
+  /**
+   * Apply `patch` to an existing slide with an "AI is writing" reveal: pictures,
+   * shapes and other non-text elements pop in with a small stagger, text boxes
+   * are typed out and tables filled cell by cell, with an optional badge next
+   * to the caret. Resolves once the finished slide has been committed (one
+   * history step, one `onChange`). Aborting the signal finishes at once.
+   */
+  revealSlide(slideId: string, patch: Partial<Slide>, options?: FikaRevealOptions): Promise<void>;
   enterPresentation(): void;
   exitPresentation(): void;
   destroy(): void;

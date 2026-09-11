@@ -1,5 +1,6 @@
 import { useSlidesStore } from '@/store/slides'
 import { useScreenStore } from '@/store/screen'
+import { useMainStore } from '@/store/main'
 import { getImportApi } from '@/hooks/useImport'
 import type { FikaController, FikaDocument, FikaImportPptxOptions } from './types'
 import { applyLocale } from './localeBridge'
@@ -8,6 +9,8 @@ import { createAgenticApi } from './agentic/createAgenticApi'
 import { debounce } from '@/utils/debounce'
 import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern'
 import { renderDeckAtlas, renderSlideImage } from './render'
+import { revealSlide, type FikaRevealOptions } from './reveal'
+import type { Slide } from '@/types/slides'
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
@@ -55,8 +58,10 @@ export function createController(
       }, options.onChangeDebounceMs ?? 400)
     : null
 
+  // Reveal frames are transient: the host only hears about the finished slide.
+  let changeMuted = 0
   const stopChangeWatch = emitChange
-    ? useSlidesStore.subscribe(() => emitChange())
+    ? useSlidesStore.subscribe(() => { if (!changeMuted) emitChange() })
     : null
 
   const stopPresentationModeWatch = options.onPresentationModeChange
@@ -66,6 +71,7 @@ export function createController(
     : null
 
   let destroyed = false
+  let revealChain: Promise<void> = Promise.resolve()
 
   const runLegacyCommand = (command: Promise<unknown>) => {
     void command
@@ -171,6 +177,35 @@ export function createController(
       runLegacyCommand(agentic.api.view.setZoom(scale, { source: 'host' }))
     },
 
+    setReadOnly(readOnly: boolean) {
+      if (destroyed) return
+      useMainStore.getState().setReadOnly(readOnly)
+    },
+
+    isReadOnly() {
+      return useMainStore.getState().readOnly
+    },
+
+    revealSlide(slideId: string, patch: Partial<Slide>, options: FikaRevealOptions = {}) {
+      if (destroyed) return Promise.resolve()
+      const run = () => revealSlide(slideId, patch, options, {
+        mute() {
+          changeMuted++
+          emitChange?.cancel()
+        },
+        unmute() {
+          changeMuted = Math.max(0, changeMuted - 1)
+        },
+        async commit(id, finalPatch) {
+          await assertLegacyCommand(agentic.api.slides.update(id, finalPatch, { source: 'host' }))
+        },
+        isDestroyed: () => destroyed,
+      })
+      const next = revealChain.then(run, run)
+      revealChain = next.catch(() => undefined)
+      return next
+    },
+
     enterPresentation() {
       if (destroyed) return
       runLegacyCommand(agentic.api.view.enterPresentation())
@@ -184,6 +219,7 @@ export function createController(
     destroy() {
       if (destroyed) return
       destroyed = true
+      useMainStore.getState().setAiReveal(null)
       stopChangeWatch?.()
       stopPresentationModeWatch?.()
       emitChange?.cancel()

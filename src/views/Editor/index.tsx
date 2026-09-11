@@ -91,6 +91,7 @@ const Editor = memo(() => {
   const lastHostWidthRef = useRef(0)
   const applyHostLayoutRef = useRef<(width: number) => void>(() => {})
   const rightPanelCollapsed = useMainStore(s => s.rightPanelCollapsed)
+  const readOnly = useMainStore(s => s.readOnly)
 
   useEffect(() => {
     setDockOpen(!rightPanelCollapsed)
@@ -246,7 +247,7 @@ const Editor = memo(() => {
   return (
     <>
       <div
-        className={cx('fika-editor', { 'right-panel-collapsed': rightPanelCollapsed })}
+        className={cx('fika-editor', { 'right-panel-collapsed': rightPanelCollapsed, 'read-only': readOnly })}
         ref={editorRootRef}
         style={{ '--right-pane-width': `${rightPaneWidth}px` } as CSSProperties}
       >

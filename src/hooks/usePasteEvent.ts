@@ -18,9 +18,9 @@ export default () => {
      */
     const pasteListener = (e: ClipboardEvent) => {
       if (!isAppOwnedEvent(e)) return
-      const { editorAreaFocus, thumbnailsFocus, disableHotkeys } = useMainStore.getState()
+      const { editorAreaFocus, thumbnailsFocus, disableHotkeys, readOnly } = useMainStore.getState()
       if (!editorAreaFocus && !thumbnailsFocus) return
-      if (disableHotkeys) return
+      if (disableHotkeys || readOnly) return
 
       if (!e.clipboardData) return
 

@@ -221,3 +221,18 @@
     transform: rotate(180deg);
   }
 }
+
+// Host-driven view-only mode: editing chrome stays visible for orientation but
+// is inert and dimmed; the canvas and thumbnail rail keep navigation only.
+.fika-editor.read-only {
+  .center-top,
+  .center-code,
+  .center-bottom,
+  .right-panel-slot {
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.45;
+    filter: saturate(0.4);
+    transition: opacity 0.2s ease;
+  }
+}

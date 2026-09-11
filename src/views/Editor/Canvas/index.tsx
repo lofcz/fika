@@ -45,6 +45,7 @@ import EditableElement from './EditableElement'
 import MouseSelection from './MouseSelection'
 import ViewportBackground from './ViewportBackground'
 import SlideSkeleton from '@/views/components/SlideSkeleton'
+import AiRevealBadge from './AiRevealBadge'
 import ElementFloatLayer from './ElementFloatLayer/index'
 import AlignmentLine from './AlignmentLine'
 import Ruler from './Ruler'
@@ -148,6 +149,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     ? selectCurrentSlide(useSlidesStore.getState())
     : undefined
   const skeletonSlide = useSlidesStore(s => !!selectCurrentSlide(s)?.skeleton)
+  const readOnly = useMainStore(s => s.readOnly)
   const spaceKeyState = useKeyboardStore(s => s.spaceKeyState)
   const ctrlKeyState = useKeyboardStore(s => s.ctrlKeyState)
   const gesturingState = useMainStore(s => s.isGesturing)
@@ -652,12 +654,27 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
         ref={canvasRef}
         style={{ '--operate-line': operateLineColor, '--operate-line-halo': operateLineHalo, ...style } as CSSProperties}
         onMouseDownCapture={e => {
+          if (readOnly) return
           handleMousedownCanvasCapture(e.nativeEvent)
           handleCanvasHitSelect(e)
         }}
-        onMouseDown={e => handleClickBlankArea(e.nativeEvent)}
-        onDoubleClick={e => handleDblClick(e.nativeEvent)}
-        onContextMenu={e => { e.preventDefault(); e.stopPropagation(); openContextmenu(e, contextmenus) }}
+        onMouseDown={e => {
+          if (readOnly) {
+            // View-only: the canvas still takes focus (wheel paging, zoom
+            // shortcuts) and pans with Space, but never selects or edits.
+            const main = useMainStore.getState()
+            if (!main.editorAreaFocus) main.setEditorareaFocus(true)
+            if (useKeyboardStore.getState().spaceKeyState) dragViewport(e.nativeEvent)
+            return
+          }
+          handleClickBlankArea(e.nativeEvent)
+        }}
+        onDoubleClick={e => { if (!readOnly) handleDblClick(e.nativeEvent) }}
+        onContextMenu={e => {
+          e.preventDefault()
+          e.stopPropagation()
+          if (!readOnly) openContextmenu(e, contextmenus)
+        }}
       >
         {creatingElement ? <ElementCreateSelection onCreated={data => insertElementFromCreateSelection(data)} /> : null}
         {creatingCustomShape ? <ShapeCreateCanvas mode={creatingCustomShape ?? 'polygon'} onCreated={data => insertCustomShape(data)} /> : null}
@@ -719,6 +736,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
               viewportStyles={viewportStyles}
               openLinkDialog={openLinkDialog}
             />
+            <AiRevealBadge canvasRef={canvasRef} />
           </div>
           <div className={cx('viewport')} ref={viewportRef} style={{ transform: `scale(${canvasScale})` }}>
             {elementList.map((element, index) => (
@@ -741,7 +759,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
             activeElementIdList={activeElementIdList}
             editingElementId={editingElementId}
             clipingImageElementId={clipingImageElementId}
-            disabled={!!creatingElement || !!creatingCustomShape || skeletonSlide}
+            disabled={!!creatingElement || !!creatingCustomShape || skeletonSlide || readOnly}
             selectElement={selectElement}
             beginEdit={beginEdit}
             openLinkDialog={openLinkDialog}

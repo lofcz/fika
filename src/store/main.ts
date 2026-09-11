@@ -52,6 +52,23 @@ export interface MainState {
   rightPanelCollapsed: boolean
   rightPanelPinned: 'open' | 'closed' | null
   openPanelOnTextSelection: boolean
+  /**
+   * Host-driven view-only mode: the user can browse slides but not select,
+   * edit, insert, reorder or delete anything. Host/agent commands still apply.
+   */
+  readOnly: boolean
+  /** Live "AI is writing" reveal driven by `controller.revealSlide`; null when idle. */
+  aiReveal: AiRevealState | null
+}
+
+export interface AiRevealState {
+  slideId: string
+  /** Element currently being written; null while non-text elements pop in. */
+  elementId: string | null
+  /** Host-localized badge text. Empty string hides the badge. */
+  label: string
+  /** Bumped on every reveal frame so the badge re-measures the caret. */
+  tick: number
 }
 
 export interface MainActions {
@@ -90,6 +107,8 @@ export interface MainActions {
   setOpenPanelOnTextSelection: (on: boolean) => void
   revealRightPanelForTextRange: () => void
   applyRightPanelAuto: (width: number, narrowPx: number) => void
+  setReadOnly: (readOnly: boolean) => void
+  setAiReveal: (reveal: Omit<AiRevealState, 'tick'> | null) => void
 }
 
 export type MainStore = MainState & MainActions
@@ -167,6 +186,37 @@ export const useMainStore = create<MainStore>()((set, get) => ({
   rightPanelCollapsed: false,
   rightPanelPinned: null,
   openPanelOnTextSelection: readOpenPanelOnTextSelection(),
+  readOnly: false,
+  aiReveal: null,
+
+  setReadOnly(readOnly) {
+    if (get().readOnly === readOnly) return
+    if (readOnly) {
+      set({
+        readOnly,
+        activeElementIdList: [],
+        handleElementId: '',
+        activeGroupElementId: '',
+        editingElementId: '',
+        creatingElement: null,
+        creatingCustomShape: null,
+        clipingImageElementId: '',
+        textFormatPainter: null,
+        shapeFormatPainter: null,
+        selectedSlidesIndex: [],
+      })
+      return
+    }
+    set({ readOnly })
+  },
+  setAiReveal(reveal) {
+    if (!reveal) {
+      if (get().aiReveal) set({ aiReveal: null })
+      return
+    }
+    const prev = get().aiReveal
+    set({ aiReveal: { ...reveal, tick: (prev?.tick ?? 0) + 1 } })
+  },
 
   setActiveElementIdList(activeElementIdList) {
     const handleElementId = activeElementIdList.length === 1 ? activeElementIdList[0] : ''
