@@ -25,15 +25,18 @@ body {
   @include fika-document-reset;
 }
 
+/* Docked keyboard: the host spans the portal (= the Fika root), and MathLive's
+   own custom-container rules stack the keyboard at the host's bottom edge. */
 #fika-math-keyboard-host {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 5100;
   pointer-events: none;
+  --keyboard-zindex: 5100;
 }
 
 #fika-math-keyboard-host > .ML__keyboard {
-  position: fixed;
+  position: absolute;
   --_padding-bottom: calc(var(--keyboard-padding-bottom, 0px) + env(safe-area-inset-bottom, 0));
 }
 

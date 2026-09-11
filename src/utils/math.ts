@@ -14,7 +14,7 @@
  */
 
 import { decodeXML } from 'entities';
-import { EMBED_ROOT_CLASS, getFikaPortalTarget, resolveOffscreenHost } from '@/utils/portal';
+import { APP_SHELL_ID, EMBED_ROOT_CLASS, getFikaPortalTarget, resolveOffscreenHost } from '@/utils/portal';
 
 export { MATH_CLASS, estimateInlineMathBox, htmlHasFikaMath } from './inlineMathBox';
 import { estimateInlineMathBox, MATH_CLASS } from './inlineMathBox';
@@ -47,8 +47,9 @@ type MathVirtualKeyboard = {
  * keys. Fika's canvas is `height: 100%` of that body, so the padding
  * shrinks the slide and the viewport observer refits it smaller.
  *
- * Dock the keyboard in a fixed overlay instead — MathLive skips the padding
- * whenever `container !== document.body`.
+ * Dock the keyboard in a host that spans the portal (the Fika root) instead —
+ * MathLive skips the padding whenever `container !== document.body`, and its
+ * custom-container rules stack the keys at the host's bottom edge.
  */
 export function dockMathVirtualKeyboard() {
   const vk = (window as unknown as {
@@ -80,17 +81,16 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
     try {
       resolved.MathfieldElement.fontsDirectory = null;
       resolved.MathfieldElement.soundsDirectory = null;
-      resolved.MathfieldElement.stylesheetScope = `.${EMBED_ROOT_CLASS}`;
+      // Document-level MathLive sheets (keyboard, popovers) only apply inside
+      // Fika — the embed root or the standalone shell.
+      resolved.MathfieldElement.stylesheetScope = `.${EMBED_ROOT_CLASS}, #${APP_SHELL_ID}`;
     } catch {}
     try {
       resolved.initVirtualKeyboardInCurrentBrowsingContext?.();
     } catch {}
     mathlive = resolved;
     mathReady.value = true;
-    if (typeof document !== 'undefined') {
-      document.documentElement.style.setProperty('--keyboard-zindex', '5100');
-      dockMathVirtualKeyboard();
-    }
+    if (typeof document !== 'undefined') dockMathVirtualKeyboard();
     return resolved;
   }).catch(err => {
     mathlivePromise = null;

@@ -65,41 +65,19 @@ export function resolveFikaPortalTarget(el?: Element | null): HTMLElement {
   return getFikaPortalTarget()
 }
 
-const FIXED_WILL_CHANGE = new Set(['transform', 'perspective', 'filter'])
-
-/** Ancestor that becomes the containing block for `position: fixed` descendants. */
-export function findFixedContainingBlock(from: HTMLElement): HTMLElement | null {
-  let node: HTMLElement | null = from
-  while (node && node !== document.body && node !== document.documentElement) {
-    const cs = getComputedStyle(node)
-    const contain = cs.contain
-    const willChange = cs.willChange
-    if (
-      cs.transform !== 'none' ||
-      cs.perspective !== 'none' ||
-      (cs.filter && cs.filter !== 'none') ||
-      contain === 'strict' ||
-      contain === 'content' ||
-      contain.includes('layout') ||
-      contain.includes('paint') ||
-      (cs.containerType && cs.containerType !== 'normal') ||
-      willChange.split(',').some(value => FIXED_WILL_CHANGE.has(value.trim()))
-    ) {
-      return node
-    }
-    node = node.parentElement
-  }
-  return null
-}
-
+/**
+ * Pointer position and available space in the portal's own box. Menus are
+ * absolutely positioned inside the portal (which spans the Fika root), so
+ * viewport coordinates are translated into it.
+ */
 export function menuAxisFromEvent(event: MouseEvent, portal: HTMLElement): {
   x: number
   y: number
   width: number
   height: number
 } {
-  const containingBlock = findFixedContainingBlock(portal)
-  if (!containingBlock) {
+  const rect = portal.getBoundingClientRect()
+  if (!rect.width || !rect.height) {
     return {
       x: event.clientX,
       y: event.clientY,
@@ -107,12 +85,11 @@ export function menuAxisFromEvent(event: MouseEvent, portal: HTMLElement): {
       height: window.innerHeight,
     }
   }
-  const rect = containingBlock.getBoundingClientRect()
   return {
     x: event.clientX - rect.left,
     y: event.clientY - rect.top,
-    width: containingBlock.clientWidth || rect.width,
-    height: containingBlock.clientHeight || rect.height,
+    width: rect.width,
+    height: rect.height,
   }
 }
 

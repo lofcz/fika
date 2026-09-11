@@ -142,17 +142,22 @@ const ColorPicker = memo((vrProps: IColorPickerProps) => {
     if (!targetRef) return;
     const portalTarget = getFikaPortalTarget();
     const maskRef = document.createElement('div');
-    maskRef.style.cssText = 'position: fixed; top: 0; left: 0; bottom: 0; right: 0; z-index: 9999; cursor: wait;';
+    maskRef.style.cssText = 'position: absolute; inset: 0; z-index: 9999; cursor: wait;';
     portalTarget.appendChild(maskRef);
     const colorBlockRef = document.createElement('div');
     colorBlockRef.style.cssText = 'position: absolute; top: -100px; left: -100px; width: 16px; height: 16px; border: 1px solid #000; z-index: 999';
     maskRef.appendChild(colorBlockRef);
     const {
-      left,
-      top,
+      left: canvasLeft,
+      top: canvasTop,
       width,
       height
     } = targetRef.getBoundingClientRect();
+    // The mask is positioned inside the portal, so viewport coordinates are
+    // translated into its box.
+    const maskRect = maskRef.getBoundingClientRect();
+    const left = canvasLeft - maskRect.left;
+    const top = canvasTop - maskRect.top;
     const filter = (node: HTMLElement) => {
       if (node.tagName && node.tagName.toUpperCase() === 'FOREIGNOBJECT') return false;
       if (node.classList && node.classList.contains('operate')) return false;
@@ -174,8 +179,8 @@ const ColorPicker = memo((vrProps: IColorPickerProps) => {
       if (!ctx) return;
       let currentColor = '';
       const handleMousemove = (e: MouseEvent) => {
-        const x = e.x;
-        const y = e.y;
+        const x = e.clientX - maskRect.left;
+        const y = e.clientY - maskRect.top;
         const mouseX = x - left;
         const mouseY = y - top;
         const [r, g, b, a] = ctx.getImageData(mouseX, mouseY, 1, 1).data;

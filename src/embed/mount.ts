@@ -66,14 +66,24 @@ export async function mountFika(
   const mountPromise = (async () => {
     el.classList.add('fika-embed-root')
     el.innerHTML = ''
+    // Overlays (dialogs, loaders, the math keyboard, menus) are absolutely
+    // positioned inside the portal, so the host node must be their containing
+    // block. Only a static host is touched; a host that positions itself keeps
+    // its own value.
+    const hostHadStaticPosition = getComputedStyle(el).position === 'static'
+    const previousInlinePosition = el.style.position
+    if (hostHadStaticPosition) el.style.position = 'relative'
 
     const appRoot = document.createElement('div')
     appRoot.className = 'fika-embed-app'
     appRoot.style.cssText = 'display:block;height:100%;width:100%;min-height:0;overflow:hidden;'
 
+    // The portal spans the host box, not the viewport: everything rendered
+    // into it stays confined to Fika. Presentation mode opts out on its own
+    // with a fixed wrapper.
     const portalRoot = document.createElement('div')
     portalRoot.className = 'fika-embed-portal'
-    portalRoot.style.cssText = 'position:fixed;inset:0;z-index:2147483646;pointer-events:none;'
+    portalRoot.style.cssText = 'position:absolute;inset:0;z-index:2147483646;pointer-events:none;'
     if (!document.getElementById('fika-embed-portal-style')) {
       const portalStyle = document.createElement('style')
       portalStyle.id = 'fika-embed-portal-style'
@@ -151,6 +161,7 @@ export async function mountFika(
       setFikaLocaleSwitcherEnabled()
       clearFikaPortalTarget(portalRoot)
       el.classList.remove('fika-embed-root')
+      if (hostHadStaticPosition) el.style.position = previousInlinePosition
       el.innerHTML = ''
     }
 

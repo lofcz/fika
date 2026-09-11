@@ -79,7 +79,7 @@ export function openContextmenu(event: ContextmenuPointerEvent, menusOrFn: Menus
     else setTimeout(teardown, 0);
   };
   container = document.createElement('div');
-  container.style.cssText = 'position:fixed;inset:0;pointer-events:auto;';
+  container.style.cssText = 'position:absolute;inset:0;pointer-events:auto;';
   container.addEventListener('mousedown', (downEvent) => {
     if (downEvent.button !== 0) return;
     if (downEvent.target === container) removeContextmenu();

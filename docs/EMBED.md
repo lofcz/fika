@@ -69,6 +69,10 @@ export function FikaEditor({ locale }: { locale: 'cs' | 'en' | 'sk' | 'pl' }) {
 }
 ```
 
+### Overlays stay inside the host
+
+Dialogs, loaders, toasts, context menus and the MathLive virtual keyboard render into a portal that spans the **host element**, not the viewport. The host becomes their containing block: if it is `position: static`, `mountFika` sets `position: relative` on it for the lifetime of the mount. Size the host to the area Fika may cover. Only presentation mode takes the whole viewport.
+
 ## Imperative API (`FikaController`)
 
 | Method | Description |

@@ -1,11 +1,11 @@
 .contextmenu-mask {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 9998;
   pointer-events: auto;
 }
 .contextmenu {
-  position: fixed;
+  position: absolute;
   z-index: 9999;
   user-select: none;
   pointer-events: auto;
