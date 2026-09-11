@@ -1780,7 +1780,9 @@ export default () => {
               })).color;
               options.catAxisLabelColor = textColor;
               options.valAxisLabelColor = textColor;
-              const fontSize = 14 / ratioPx2Pt;
+              // Unset charts export a touch above the 12px on-canvas default —
+              // PowerPoint's chart text reads smaller than the ECharts render.
+              const fontSize = (el.options?.fontSize ?? 14) / ratioPx2Pt;
               options.catAxisLabelFontSize = fontSize;
               options.valAxisLabelFontSize = fontSize;
               if (el.fill || el.outline) {

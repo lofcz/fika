@@ -42,6 +42,8 @@ const renderSvg = (element: PPTChartElement) => {
     lineColor: element.lineColor || DEFAULT_CHART_LINE_COLOR,
     lineSmooth: element.options?.lineSmooth || false,
     stack: element.options?.stack || false,
+    fontSize: element.options?.fontSize,
+    width,
   })
   if (!option) return ''
   const host = document.createElement('div')

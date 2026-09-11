@@ -42,6 +42,7 @@ const Chart = memo((props: IChartProps) => {
   const textColor = props.textColor;
   const lineColor = props.lineColor;
   const options = props.options;
+  const width = props.width;
 
   const themeColors = useMemo(() => expandChartThemeColors(themeColorsProp), [themeColorsProp]);
 
@@ -51,12 +52,14 @@ const Chart = memo((props: IChartProps) => {
   const textColorRef = useRef(textColor);
   const lineColorRef = useRef(lineColor);
   const optionsRef = useRef(options);
+  const widthRef = useRef(width);
   typeRef.current = type;
   dataRef.current = data;
   themeColorsRef.current = themeColors;
   textColorRef.current = textColor;
   lineColorRef.current = lineColor;
   optionsRef.current = options;
+  widthRef.current = width;
 
   const updateOption = () => {
     const option = getChartOption({
@@ -66,7 +69,9 @@ const Chart = memo((props: IChartProps) => {
       textColor: textColorRef.current,
       lineColor: lineColorRef.current,
       lineSmooth: optionsRef.current?.lineSmooth || false,
-      stack: optionsRef.current?.stack || false
+      stack: optionsRef.current?.stack || false,
+      fontSize: optionsRef.current?.fontSize,
+      width: widthRef.current
     });
     if (option) chartInst.current?.setOption(option, true);
   };
@@ -92,6 +97,7 @@ const Chart = memo((props: IChartProps) => {
   useEffect(() => { updateOption(); }, [textColor]);
   useEffect(() => { updateOption(); }, [lineColor]);
   useEffect(() => { updateOption(); }, [options]);
+  useEffect(() => { updateOption(); }, [width]);
 
   return <div className={cx('chart')} ref={chartRef} />;
 });

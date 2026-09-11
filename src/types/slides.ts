@@ -361,6 +361,11 @@ export type ChartType = 'bar' | 'column' | 'line' | 'pie' | 'ring' | 'area' | 'r
 export interface ChartOptions {
   lineSmooth?: boolean;
   stack?: boolean;
+  /**
+   * Label font size in slide px — axis ticks, legend, pie/radar labels.
+   * Legend swatches, gaps and margins scale with it. Defaults to 12.
+   */
+  fontSize?: number;
 }
 export interface ChartData {
   labels: string[];

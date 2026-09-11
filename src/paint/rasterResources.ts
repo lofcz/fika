@@ -189,6 +189,8 @@ export const getChartRaster = (
       lineColor,
       lineSmooth: element.options?.lineSmooth || false,
       stack: element.options?.stack || false,
+      fontSize: element.options?.fontSize,
+      width,
     })
     if (!option) {
       chart.dispose()

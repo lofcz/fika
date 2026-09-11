@@ -5,6 +5,7 @@ import tinycolor from 'tinycolor2';
 import type { ChartData, ChartType } from '@/types/slides';
 type EChartOption = ComposeOption<BarSeriesOption | LineSeriesOption | PieSeriesOption | ScatterSeriesOption | RadarSeriesOption | GridComponentOption | LegendComponentOption | RadarComponentOption>;
 const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+export const DEFAULT_CHART_FONT_SIZE = 12;
 const BAR_RADIUS = 8;
 const PIE_GAP = 2;
 const RADAR_DEFAULT_SPLIT_NUMBER = 5;
@@ -42,60 +43,107 @@ const getRadarScale = (max: number) => {
     return best;
   });
 };
-const labelStyle = (color?: string) => ({
+/**
+ * Every pixel metric that has to keep pace with the label size — legend
+ * swatches, gaps, axis margins, bar widths, pie leader lines — derives from
+ * `fontSize` via `px()`, so a chart set to 20px labels does not end up with
+ * 10px swatches and 4px margins from the 12px design.
+ */
+interface ChartMetrics {
+  fontSize: number;
+  px: (base: number) => number;
+}
+const chartMetrics = (fontSize?: number): ChartMetrics => {
+  const size = fontSize && fontSize > 0 ? fontSize : DEFAULT_CHART_FONT_SIZE;
+  const scale = size / DEFAULT_CHART_FONT_SIZE;
+  return {
+    fontSize: size,
+    px: base => Math.round(base * scale)
+  };
+};
+const labelStyle = (m: ChartMetrics, color?: string) => ({
   color,
   fontFamily: FONT,
-  fontSize: 12,
+  fontSize: m.fontSize,
   fontWeight: 500 as const
 });
-const cartesianGrid = (hasLegend: boolean): GridComponentOption => ({
+const cartesianGrid = (m: ChartMetrics, hasLegend: boolean): GridComponentOption => ({
   containLabel: true,
-  top: 10,
-  right: 8,
-  left: 4,
-  bottom: hasLegend ? 28 : 4
+  top: m.px(10),
+  right: m.px(8),
+  left: m.px(4),
+  // Legend sits below the plot; leave one label line plus breathing room.
+  bottom: hasLegend ? m.px(16) + m.fontSize : m.px(4)
 });
-const legendOption = (show: boolean, textColor?: string): LegendComponentOption | undefined => {
+const legendOption = (m: ChartMetrics, show: boolean, textColor?: string): LegendComponentOption | undefined => {
   if (!show) return undefined;
   return {
     bottom: 0,
     left: 'center',
     icon: 'roundRect',
-    itemWidth: 10,
-    itemHeight: 10,
-    itemGap: 16,
+    itemWidth: m.px(10),
+    itemHeight: m.px(10),
+    itemGap: m.px(16),
     itemStyle: {
       borderWidth: 0
     },
     textStyle: {
-      ...labelStyle(textColor),
-      padding: [0, 0, 0, 2]
+      ...labelStyle(m, textColor),
+      padding: [0, 0, 0, m.px(2)]
     }
   };
 };
-const categoryAxis = (labels: string[], textColor?: string) => ({
-  type: 'category' as const,
-  data: labels,
-  axisTick: {
-    show: false
-  },
-  axisLine: {
-    show: true,
-    lineStyle: {
-      color: fade(textColor, 0.22) || textColor,
-      width: 1
+/**
+ * Horizontal category axis: labels get one band each and wrap inside it.
+ * Vertical (column charts): labels wrap past ~a third of the chart so long
+ * categories cannot squeeze the plot into a sliver.
+ */
+type CategoryAxisLayout = {
+  orient: 'x' | 'y';
+  /** Chart element width in px; wrapping is skipped when unknown. */
+  chartWidth?: number;
+};
+const categoryLabelWidth = (m: ChartMetrics, count: number, layout: CategoryAxisLayout): number | undefined => {
+  if (!layout.chartWidth || count === 0) return undefined;
+  if (layout.orient === 'y') return Math.floor(layout.chartWidth * 0.35);
+  // Value-axis labels plus grid padding sit left of the bands.
+  const plotWidth = layout.chartWidth - m.fontSize * 3.5 - m.px(12);
+  return Math.max(m.fontSize * 2, Math.floor(plotWidth / count - m.px(6)));
+};
+const categoryAxis = (m: ChartMetrics, labels: string[], textColor: string | undefined, layout: CategoryAxisLayout) => {
+  const width = categoryLabelWidth(m, labels.length, layout);
+  return {
+    type: 'category' as const,
+    data: labels,
+    axisTick: {
+      show: false
+    },
+    axisLine: {
+      show: true,
+      lineStyle: {
+        color: fade(textColor, 0.22) || textColor,
+        width: 1
+      }
+    },
+    axisLabel: {
+      ...labelStyle(m, textColor),
+      // ECharts' auto interval thins labels aggressively at readable sizes;
+      // show them all and let hideOverlap drop only real collisions.
+      interval: 0,
+      hideOverlap: true,
+      margin: m.px(10),
+      ...(width ? {
+        width,
+        overflow: 'break' as const,
+        lineHeight: Math.round(m.fontSize * 1.2)
+      } : {})
+    },
+    splitLine: {
+      show: false
     }
-  },
-  axisLabel: {
-    ...labelStyle(textColor),
-    hideOverlap: true,
-    margin: 10
-  },
-  splitLine: {
-    show: false
-  }
-});
-const valueAxis = (textColor?: string, lineColor?: string) => ({
+  };
+};
+const valueAxis = (m: ChartMetrics, textColor?: string, lineColor?: string) => ({
   type: 'value' as const,
   axisTick: {
     show: false
@@ -104,8 +152,8 @@ const valueAxis = (textColor?: string, lineColor?: string) => ({
     show: false
   },
   axisLabel: {
-    ...labelStyle(textColor),
-    margin: 8
+    ...labelStyle(m, textColor),
+    margin: m.px(8)
   },
   splitLine: {
     show: true,
@@ -117,12 +165,12 @@ const valueAxis = (textColor?: string, lineColor?: string) => ({
   },
   splitNumber: 4
 });
-const barSeries = (data: ChartData, stack: boolean, radius: [number, number, number, number]): BarSeriesOption[] => data.series.map((item, index) => {
+const barSeries = (m: ChartMetrics, data: ChartData, stack: boolean, radius: [number, number, number, number]): BarSeriesOption[] => data.series.map((item, index) => {
   const seriesItem: BarSeriesOption = {
     data: item,
     name: data.legends[index],
     type: 'bar',
-    barMaxWidth: 44,
+    barMaxWidth: m.px(44),
     barGap: '32%',
     label: {
       show: false
@@ -139,14 +187,14 @@ const barSeries = (data: ChartData, stack: boolean, radius: [number, number, num
   if (stack) seriesItem.stack = 'A';
   return seriesItem;
 });
-const lineSeries = (data: ChartData, stack: boolean, smooth: boolean, area: boolean): LineSeriesOption[] => data.series.map((item, index) => {
+const lineSeries = (m: ChartMetrics, data: ChartData, stack: boolean, smooth: boolean, area: boolean): LineSeriesOption[] => data.series.map((item, index) => {
   const seriesItem: LineSeriesOption = {
     data: item,
     name: data.legends[index],
     type: 'line',
     smooth,
     symbol: 'circle',
-    symbolSize: 8,
+    symbolSize: m.px(8),
     showSymbol: true,
     lineStyle: {
       width: area ? 2 : 2.5,
@@ -171,7 +219,7 @@ const lineSeries = (data: ChartData, stack: boolean, smooth: boolean, area: bool
   if (stack) seriesItem.stack = 'A';
   return seriesItem;
 });
-const pieSeries = (data: ChartData, textColor: string | undefined, ring: boolean): PieSeriesOption => ({
+const pieSeries = (m: ChartMetrics, data: ChartData, textColor: string | undefined, ring: boolean): PieSeriesOption => ({
   type: 'pie',
   data: data.series[0].map((item, index) => ({
     value: item,
@@ -186,12 +234,12 @@ const pieSeries = (data: ChartData, textColor: string | undefined, ring: boolean
     borderWidth: 0
   },
   label: {
-    ...labelStyle(textColor),
+    ...labelStyle(m, textColor),
     formatter: '{b}'
   },
   labelLine: {
-    length: 8,
-    length2: 10,
+    length: m.px(8),
+    length2: m.px(10),
     lineStyle: {
       color: fade(textColor, 0.35),
       width: 1
@@ -229,6 +277,9 @@ export interface ChartOptionPayload {
   lineColor?: string;
   lineSmooth?: boolean;
   stack?: boolean;
+  fontSize?: number;
+  /** Rendered chart width in px — lets category labels wrap inside their band. */
+  width?: number;
 }
 export const getChartOption = ({
   type,
@@ -237,13 +288,18 @@ export const getChartOption = ({
   textColor,
   lineColor,
   lineSmooth,
-  stack
+  stack,
+  fontSize,
+  width
 }: ChartOptionPayload): EChartOption | null => {
+  const m = chartMetrics(fontSize);
+  const xCategories: CategoryAxisLayout = { orient: 'x', chartWidth: width };
+  const yCategories: CategoryAxisLayout = { orient: 'y', chartWidth: width };
   const textStyle = {
-    ...labelStyle(textColor)
+    ...labelStyle(m, textColor)
   };
   const hasLegend = data.series.length > 1;
-  const legend = legendOption(hasLegend, textColor);
+  const legend = legendOption(m, hasLegend, textColor);
   const animation = {
     animationDuration: 420,
     animationEasing: 'cubicOut' as const
@@ -253,10 +309,10 @@ export const getChartOption = ({
       color: themeColors,
       textStyle,
       legend,
-      grid: cartesianGrid(hasLegend),
-      xAxis: categoryAxis(data.labels, textColor),
-      yAxis: valueAxis(textColor, lineColor),
-      series: barSeries(data, stack ?? false, [BAR_RADIUS, BAR_RADIUS, 0, 0]),
+      grid: cartesianGrid(m, hasLegend),
+      xAxis: categoryAxis(m, data.labels, textColor, xCategories),
+      yAxis: valueAxis(m, textColor, lineColor),
+      series: barSeries(m, data, stack ?? false, [BAR_RADIUS, BAR_RADIUS, 0, 0]),
       ...animation
     };
   }
@@ -265,10 +321,10 @@ export const getChartOption = ({
       color: themeColors,
       textStyle,
       legend,
-      grid: cartesianGrid(hasLegend),
-      yAxis: categoryAxis(data.labels, textColor),
-      xAxis: valueAxis(textColor, lineColor),
-      series: barSeries(data, stack ?? false, [0, BAR_RADIUS, BAR_RADIUS, 0]),
+      grid: cartesianGrid(m, hasLegend),
+      yAxis: categoryAxis(m, data.labels, textColor, yCategories),
+      xAxis: valueAxis(m, textColor, lineColor),
+      series: barSeries(m, data, stack ?? false, [0, BAR_RADIUS, BAR_RADIUS, 0]),
       ...animation
     };
   }
@@ -277,10 +333,10 @@ export const getChartOption = ({
       color: themeColors,
       textStyle,
       legend,
-      grid: cartesianGrid(hasLegend),
-      xAxis: categoryAxis(data.labels, textColor),
-      yAxis: valueAxis(textColor, lineColor),
-      series: lineSeries(data, stack ?? false, lineSmooth || false, false),
+      grid: cartesianGrid(m, hasLegend),
+      xAxis: categoryAxis(m, data.labels, textColor, xCategories),
+      yAxis: valueAxis(m, textColor, lineColor),
+      series: lineSeries(m, data, stack ?? false, lineSmooth || false, false),
       ...animation
     };
   }
@@ -289,13 +345,13 @@ export const getChartOption = ({
       color: themeColors,
       textStyle,
       legend,
-      grid: cartesianGrid(hasLegend),
+      grid: cartesianGrid(m, hasLegend),
       xAxis: {
-        ...categoryAxis(data.labels, textColor),
+        ...categoryAxis(m, data.labels, textColor, xCategories),
         boundaryGap: false
       },
-      yAxis: valueAxis(textColor, lineColor),
-      series: lineSeries(data, stack ?? false, lineSmooth || false, true),
+      yAxis: valueAxis(m, textColor, lineColor),
+      series: lineSeries(m, data, stack ?? false, lineSmooth || false, true),
       ...animation
     };
   }
@@ -303,8 +359,8 @@ export const getChartOption = ({
     return {
       color: themeColors,
       textStyle,
-      legend: legendOption(true, textColor),
-      series: [pieSeries(data, textColor, false)],
+      legend: legendOption(m, true, textColor),
+      series: [pieSeries(m, data, textColor, false)],
       ...animation
     };
   }
@@ -312,8 +368,8 @@ export const getChartOption = ({
     return {
       color: themeColors,
       textStyle,
-      legend: legendOption(true, textColor),
-      series: [pieSeries(data, textColor, true)],
+      legend: legendOption(m, true, textColor),
+      series: [pieSeries(m, data, textColor, true)],
       ...animation
     };
   }
@@ -336,8 +392,8 @@ export const getChartOption = ({
           max
         })),
         axisName: {
-          ...labelStyle(textColor),
-          padding: [6, 4]
+          ...labelStyle(m, textColor),
+          padding: [m.px(6), m.px(4)]
         },
         axisLine: {
           lineStyle: {
@@ -361,7 +417,7 @@ export const getChartOption = ({
       series: [{
         type: 'radar',
         symbol: 'circle',
-        symbolSize: 6,
+        symbolSize: m.px(6),
         lineStyle: {
           width: 2,
           cap: 'round',
@@ -386,7 +442,7 @@ export const getChartOption = ({
     const ySeries = data.series.length > 1 ? data.series.slice(1) : [xData];
     const formatedSeries: ScatterSeriesOption[] = ySeries.map((item, index) => ({
       type: 'scatter',
-      symbolSize: 11,
+      symbolSize: m.px(11),
       data: xData.map((x, dataIndex) => [x, item[dataIndex]]),
       name: data.legends[index + 1],
       itemStyle: {
@@ -399,10 +455,10 @@ export const getChartOption = ({
     return {
       color: themeColors,
       textStyle,
-      legend: legendOption(data.series.length > 2, textColor),
-      grid: cartesianGrid(data.series.length > 2),
-      xAxis: valueAxis(textColor, lineColor),
-      yAxis: valueAxis(textColor, lineColor),
+      legend: legendOption(m, data.series.length > 2, textColor),
+      grid: cartesianGrid(m, data.series.length > 2),
+      xAxis: valueAxis(m, textColor, lineColor),
+      yAxis: valueAxis(m, textColor, lineColor),
       series: formatedSeries,
       ...animation
     };
