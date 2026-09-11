@@ -59,7 +59,7 @@ const Editor = memo((props: IEditorProps) => {
 
   const updateTextContent = useCallback(() => {
     const editorView = editorViewRef.current
-    if (!editorView) return
+    if (!editorView || editorView.isDestroyed) return
     const { doc, tr } = editorView.state
     editorView.dispatch(tr.replaceRangeWith(0, doc.content.size, createDocument(valueRef.current)))
   }, [])
@@ -192,20 +192,32 @@ const Editor = memo((props: IEditorProps) => {
     }
   }, [handleFocus, handleBlur, handleMouseup, hideMenuInstance, handleInput, LL])
 
+  // Both effects defer to a microtask, so they can fire after unmount
+  // (e.g. leaving presentation mode tears the panel down in the same tick).
+  // A destroyed view still holds its state, and dispatching into it throws.
+  const mountedRef = useRef(true)
+
   useEffect(() => {
-    Promise.resolve().then(() => {
+    mountedRef.current = true
+    void Promise.resolve().then(() => {
+      if (!mountedRef.current) return
       initTimerRef.current = setTimeout(initEditor, 0)
     })
+    return () => {
+      mountedRef.current = false
+      if (initTimerRef.current) clearTimeout(initTimerRef.current)
+      editorViewRef.current?.destroy()
+      editorViewRef.current = undefined
+      menuInstanceRef.current?.destroy()
+      menuInstanceRef.current = undefined
+    }
   }, [])
 
   useEffect(() => {
-    Promise.resolve().then(updateTextContent)
+    void Promise.resolve().then(() => {
+      if (mountedRef.current) updateTextContent()
+    })
   }, [props.value, updateTextContent])
-
-  useEffect(() => () => {
-    if (initTimerRef.current) clearTimeout(initTimerRef.current)
-    editorViewRef.current?.destroy()
-  }, [])
 
   return (
     <div className={cx('editor')} ref={editorRootRef}>
