@@ -1,11 +1,13 @@
 import type { FikaExportTabsConfig } from '@/configs/exportTabs';
 import type { FikaExportMediaResolver } from '@/configs/exportMediaResolver';
+import type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver } from '@/configs/exportWatermark';
 import type { FikaMediaConfig } from '@/configs/mediaUpload';
 import type { Locales } from '@/i18n/locale';
 import type { Slide, SlideTheme, SlideTemplate } from '@/types/slides';
 import type { FikaAgentApi, FikaDeckViewport, FikaSlideReference } from './agentic/types';
 import type { FikaRevealOptions } from './reveal';
 export type { FikaExportMediaResolver };
+export type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver };
 export type { FikaRevealOptions };
 export type { FikaMediaConfig, FikaMediaConstraints, FikaMediaKind, FikaMediaSizeLimit, FikaMediaUploadProgress, FikaMediaUploadRequest, FikaMediaUploadResult, FikaMediaUploader, FikaXhrMediaUploaderOptions } from '@/configs/mediaUpload';
 export interface FikaTemplatePayload {
@@ -100,6 +102,13 @@ export interface FikaMountOptions {
    * or null/undefined to give up on that source.
    */
   exportMediaResolver?: FikaExportMediaResolver;
+  /**
+   * Watermark baked into every PPTX download (each slide and slide master, as
+   * a locked, unselectable picture). Evaluated at the start of each export so
+   * the host can gate it on current entitlement; return null for a clean deck.
+   * Applies to regenerated decks and retained source packages alike.
+   */
+  exportWatermark?: FikaExportWatermarkResolver;
   /**
    * Local media picker used by the unified Insert → Media action (images,
    * video, and audio). Pass `upload` to send files to your backend instead of

@@ -18,6 +18,7 @@ import { clearFikaPortalTarget, setFikaPortalTarget } from '@/utils/portal'
 import { setFikaAssetBase } from '@/utils/assetBase'
 import { setFikaExportTabs } from '@/configs/exportTabs'
 import { setFikaExportMediaResolver } from '@/configs/exportMediaResolver'
+import { setFikaExportWatermark } from '@/configs/exportWatermark'
 import { setFikaMediaConfig } from '@/configs/mediaUpload'
 import { setFikaHeaderMenuItems } from '@/configs/headerMenu'
 import { setFikaLocaleSwitcherEnabled } from '@/configs/localeSwitcher'
@@ -98,6 +99,7 @@ export async function mountFika(
     setFikaAssetBase(options.assetBaseUrl)
     setFikaExportTabs(options.exportTabs)
     setFikaExportMediaResolver(options.exportMediaResolver)
+    setFikaExportWatermark(options.exportWatermark)
     setFikaMediaConfig(options.media)
     setFikaHeaderMenuItems(options.headerMenuItems)
     setFikaLocaleSwitcherEnabled(options.showLocaleSwitcher)
@@ -156,6 +158,7 @@ export async function mountFika(
       useMainStore.getState().setReadOnly(false)
       if (activeMounts.get(el) === mountPromise) activeMounts.delete(el)
       setFikaExportMediaResolver(null)
+      setFikaExportWatermark(null)
       setFikaMediaConfig(null)
       setFikaHeaderMenuItems()
       setFikaLocaleSwitcherEnabled()

@@ -9,5 +9,5 @@
     "rootDir": "src",
     "outDir": "dist/types"
   },
-  "include": ["env.d.ts", "src/global.d.ts", "src/embed/**/*", "src/types/**/*", "src/i18n/locale.ts", "src/configs/exportTabs.ts", "src/configs/exportMediaResolver.ts", "src/configs/mediaUpload.ts"]
+  "include": ["env.d.ts", "src/global.d.ts", "src/embed/**/*", "src/types/**/*", "src/i18n/locale.ts", "src/configs/exportTabs.ts", "src/configs/exportMediaResolver.ts", "src/configs/exportWatermark.ts", "src/configs/mediaUpload.ts"]
 }

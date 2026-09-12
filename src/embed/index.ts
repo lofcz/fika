@@ -21,6 +21,11 @@ export type {
 } from './render'
 export type { ExportTabId, FikaExportTabsConfig } from '@/configs/exportTabs'
 export type { FikaExportMediaResolver } from '@/configs/exportMediaResolver'
+export type {
+  FikaExportWatermark,
+  FikaExportWatermarkPosition,
+  FikaExportWatermarkResolver,
+} from '@/configs/exportWatermark'
 export {
   createFikaMediaUploader,
 } from '@/configs/mediaUpload'

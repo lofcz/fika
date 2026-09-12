@@ -26,10 +26,29 @@ import { resolveChartLabelColor } from '@/utils/textContrast';
 import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
 import { getFikaExportMediaResolver } from '@/configs/exportMediaResolver';
+import { getFikaExportWatermark, type FikaExportWatermark } from '@/configs/exportWatermark';
+import { applyPptxExportWatermark, downloadPptxBytes, loadWatermarkImage, type WatermarkImage } from '@/utils/pptxExportWatermark';
 import { getInternedBlob, isBlobUrl, persistableMediaSrc } from '@/utils/mediaIntern';
 import { transitionExportForMode } from '@/configs/transitions';
 import { createJobProgress, slideJobProgress } from '@/utils/jobProgress';
 const exportJob = createJobProgress();
+
+interface ResolvedExportWatermark {
+  watermark: FikaExportWatermark
+  image: WatermarkImage
+}
+
+/**
+ * Asks the host whether this download must carry a watermark and preloads the
+ * mark. Failures propagate: a host-required mark is never silently skipped.
+ */
+async function resolveExportWatermark(): Promise<ResolvedExportWatermark | null> {
+  const resolver = getFikaExportWatermark();
+  if (!resolver) return null;
+  const watermark = await resolver();
+  if (!watermark) return null;
+  return { watermark, image: await loadWatermarkImage(watermark.image) };
+}
 
 /** 1×1 transparent PNG — used when a media URL cannot be inlined so pptxgenjs
  *  does not retry a cross-origin XHR (which surfaces as a CORS console error). */
@@ -1319,13 +1338,23 @@ export default () => {
     try {
       await tickExportProgress(0, 0, gen);
 
+      let stamp: ResolvedExportWatermark | null;
+      try {
+        stamp = await resolveExportWatermark();
+      } catch {
+        message.error(getLL().export.exportFailed());
+        return;
+      }
+      const fileName = `${title}.pptx`;
+
       const retained = tryGetCleanRetainedPackage(_slides);
       if (retained) {
         try {
           await tickExportProgress(1, _slides.length, gen);
-          saveAs(new Blob([retained], {
-            type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-          }), `${title}.pptx`);
+          const bytes = stamp
+            ? await applyPptxExportWatermark(retained, stamp.watermark, stamp.image)
+            : new Uint8Array(retained);
+          downloadPptxBytes(bytes, fileName);
           return;
         } catch {
         }
@@ -2034,9 +2063,12 @@ export default () => {
         }
         await tickExportProgress(0.96, slideCount + 1, gen);
         try {
-          await pptx.writeFile({
-            fileName: `${title}.pptx`
-          });
+          if (stamp) {
+            const packed = await pptx.write({ outputType: 'arraybuffer' }) as ArrayBuffer;
+            downloadPptxBytes(await applyPptxExportWatermark(packed, stamp.watermark, stamp.image), fileName);
+          } else {
+            await pptx.writeFile({ fileName });
+          }
           await tickExportProgress(1, slideCount + 1, gen);
           if (failedSources.size) {
             message.warning(`${getLL().export.exportPartial()} (${failedSources.size})`);

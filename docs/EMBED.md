@@ -283,6 +283,34 @@ await mountFika(host, {
 
 Direct fetch is tried first; the resolver runs only on failure.
 
+### Export watermark
+
+Hosts that gate clean downloads behind a plan can have every PPTX export carry a watermark. Pass `exportWatermark`, a resolver evaluated at the start of each export — return the mark for accounts that need it, `null` for a clean deck. Because it runs per export, an entitlement change takes effect on the next download without remounting.
+
+```ts
+await mountFika(host, {
+  exportWatermark: () =>
+    isFreeTier()
+      ? {
+          image: `${location.origin}/images/logo.png`, // PNG or JPEG; data: URLs work too
+          position: 'bottom-right',                    // default
+          widthRatio: 0.12,                            // fraction of slide width, default
+          marginRatio: 0.02,                           // fraction of slide width, default
+          name: 'Acme',                                // shape name, default 'Watermark'
+        }
+      : null,
+})
+```
+
+The mark is written into the OOXML after generation, so it is identical for regenerated decks and retained source packages:
+
+- one shared media part, referenced from **every slide and every slide master**;
+- the slide copy sits last in the shape tree (visible over full-bleed content) and is fully locked — `noSelect` keeps PowerPoint from selecting it by click, marquee, Ctrl+A or the selection pane, so there is no in-app way to delete it;
+- the master copy is `userDrawn` and locked too; it survives slide-level deletions in editors that ignore locks and only goes away through the slide master view (or by hiding background graphics on a slide);
+- parts already carrying the mark are skipped, so a re-imported export does not stack marks.
+
+OOXML is plain XML in a ZIP — a determined user can still strip the picture with a text editor. The mark is designed to defeat casual removal, not to be cryptographically enforced. If the resolver throws or the image cannot be loaded, the export fails with the standard export error instead of silently downloading a clean deck.
+
 ### Media uploads
 
 The toolbar **Media** action (images, video, and audio) opens a local-file picker. Pexels / remote galleries are not used. Without a host `upload` callback, images become data URLs and audio/video become blob URLs — fine for demos, not for persistence.
