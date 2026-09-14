@@ -33,8 +33,8 @@ import {
   resolvePlaceholderColor,
   resolveTableCellFill,
 } from '@/utils/textContrast'
-import { isUnfilledPlaceholder, placeholderPromptHtml } from '@/utils/placeholderPaint'
-import { placeholderPromptSizeOf } from '@/configs/textPresets'
+import { isUnfilledPlaceholder, placeholderAlignOf, placeholderPromptHtml } from '@/utils/placeholderPaint'
+import { placeholderPromptSizeOf, placeholderTypedSizeOf } from '@/configs/textPresets'
 import { MATH_CLASS } from '@/utils/inlineMathBox'
 import { containsMath, tokenizeMath } from '@/utils/markdown'
 import { escapeLatexAttr } from '@/utils/math'
@@ -401,12 +401,13 @@ const paintTextElement = (
       : painted!.ink,
     defaultSize: showPrompt
       ? placeholderPromptSizeOf(element)
-      : element.placeholder ? element.placeholderFontSize : undefined,
+      : element.placeholder ? placeholderTypedSizeOf(element) : undefined,
     lineHeight: element.lineHeight,
     letterSpacing: element.wordSpace,
     paragraphSpace: element.paragraphSpace,
     inset: element.inset,
     vAlign: layout.vAlign,
+    align: element.placeholder ? placeholderAlignOf(element) : undefined,
     fit: elementLocksTextBox(element),
     vertical: element.vertical,
     shadow: element.shadow,

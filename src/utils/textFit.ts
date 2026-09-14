@@ -751,11 +751,26 @@ function blockFontSize(block: Element, defaultSize: number): number {
   return max || defaultSize;
 }
 
-function paragraphAlignOf(el: Element): TextFitBlock['align'] {
+function alignFrom(el: Element | null | undefined): TextFitBlock['align'] {
+  if (!el) return undefined
   const fromProp = (el as HTMLElement).style?.textAlign?.trim()
   const raw = fromProp || /text-align\s*:\s*([^;]+)/i.exec(el.getAttribute('style') || '')?.[1]?.trim()
   if (raw === 'center' || raw === 'right' || raw === 'left' || raw === 'justify') return raw
   return undefined
+}
+
+function paragraphAlignOf(el: Element): TextFitBlock['align'] {
+  const own = alignFrom(el)
+  if (own) return own
+  // List blocks are the <li>; Left/Right live on the inner <p>. Reading only
+  // the li made title-slot lists fall back to the host's center in thumbnails.
+  if (el.tagName !== 'LI') return undefined
+  for (const child of Array.from(el.children)) {
+    if (child.tagName !== 'P' && child.tagName !== 'BLOCKQUOTE') continue
+    const inner = alignFrom(child)
+    if (inner) return inner
+  }
+  return alignFrom(el.closest('ul, ol'))
 }
 
 function usableFamily(family: string | undefined | null): string | null {

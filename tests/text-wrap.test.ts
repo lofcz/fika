@@ -2,6 +2,7 @@ import { describe, expect, it } from '@rstest/core'
 import {
   DEFAULT_TEXT_FONT_FAMILY,
   breakSpacesWrapWidth,
+  extractFitBlocksFromHtml,
   resolvePaintFontFamily,
 } from '../src/utils/textFit'
 
@@ -16,4 +17,24 @@ describe('text wrap vs live editor', () => {
     expect(breakSpacesWrapWidth(225, 18)).toBe(207)
     expect(breakSpacesWrapWidth(225, 0)).toBe(225)
   })
+
+  it('reads left-align from the inner paragraph of a list item', () => {
+    if (typeof DOMParser === 'undefined') return
+    const { blocks } = extractFitBlocksFromHtml(
+      '<ul><li><p style="text-align: left;">dadad</p></li><li><p style="text-align:left">dsa</p></li></ul>',
+      { defaultFontFamily: 'Arial', defaultSize: 66 },
+    )
+    expect(blocks.map(block => block.align)).toEqual(['left', 'left'])
+    expect(blocks.every(block => block.listItem)).toBe(true)
+  })
+
+  it('keeps an explicit centered list item centered', () => {
+    if (typeof DOMParser === 'undefined') return
+    const { blocks } = extractFitBlocksFromHtml(
+      '<ul><li><p style="text-align: center;">Title</p></li></ul>',
+      { defaultFontFamily: 'Arial', defaultSize: 66 },
+    )
+    expect(blocks[0]?.align).toBe('center')
+  })
 })
+

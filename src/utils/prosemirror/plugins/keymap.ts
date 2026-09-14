@@ -1,9 +1,10 @@
-import { splitListItem, liftListItem, sinkListItem } from 'prosemirror-schema-list';
+import { liftListItem, sinkListItem } from 'prosemirror-schema-list';
 import type { Schema } from 'prosemirror-model';
 import { undo, redo } from 'prosemirror-history';
 import { undoInputRule } from 'prosemirror-inputrules';
 import type { Command } from 'prosemirror-state';
-import { toggleMark, selectParentNode, joinUp, joinDown, chainCommands, newlineInCode, createParagraphNear, liftEmptyBlock, splitBlockKeepMarks } from 'prosemirror-commands';
+import { toggleMark, selectParentNode, joinUp, joinDown, chainCommands, newlineInCode, createParagraphNear, liftEmptyBlock } from 'prosemirror-commands';
+import { splitBlockKeepStyle, splitListItemKeepStyle } from '../commands/splitBlockKeepStyle';
 export const buildKeymap = (schema: Schema) => {
   const keys: Record<string, Command> = {};
   const bind = (key: string, cmd: Command) => keys[key] = cmd;
@@ -20,7 +21,7 @@ export const buildKeymap = (schema: Schema) => {
   bind('Mod-e', toggleMark(schema.marks.code));
   bind('Mod-;', toggleMark(schema.marks.superscript));
   bind(`Mod-'`, toggleMark(schema.marks.subscript));
-  bind('Enter', chainCommands(splitListItem(schema.nodes.list_item), newlineInCode, createParagraphNear, liftEmptyBlock, splitBlockKeepMarks));
+  bind('Enter', chainCommands(splitListItemKeepStyle(schema.nodes.list_item), newlineInCode, createParagraphNear, liftEmptyBlock, splitBlockKeepStyle));
   bind('Mod-[', liftListItem(schema.nodes.list_item));
   bind('Mod-]', sinkListItem(schema.nodes.list_item));
   bind('Tab', sinkListItem(schema.nodes.list_item));

@@ -239,7 +239,11 @@ export const paintRichText = (
   })
   if (!blocks.length) return 0
   for (const block of blocks) {
-    block.align ||= options.align
+    // Bare <p> after Enter inherits the slot (host text-align), not the
+    // previous paragraph — a left fragment must not left-align the next line.
+    // List items already carry the inner <p> align from extract; do not let a
+    // centered title slot recenter a left-aligned list.
+    if (!block.listItem) block.align ||= options.align
     block.fontFamily ||= options.defaultFontFamily
     if (block.runs) {
       for (const run of block.runs) {
@@ -299,7 +303,7 @@ export const paintRichText = (
   for (const line of lines) {
     if (previousBlock && previousBlock !== line.block) y += paragraphSpace
     const indent = listInset(line.block, blockEm(line.items, fitScale))
-    const align = line.block.align || options.align || 'left'
+    const align = line.block.align || (line.block.listItem ? 'left' : options.align) || 'left'
     const available = innerWidth - indent
     let x = options.x + inset[3] + indent
     if (align === 'center') x += Math.max(0, (available - line.width) / 2)

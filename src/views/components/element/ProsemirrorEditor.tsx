@@ -492,6 +492,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       } else if (item.command === 'code') {
         toggleMark(editorView.current.state.schema.marks.code)(editorView.current.state, editorView.current.dispatch);
       } else if (item.command === 'align' && item.value) {
+        if (editorView.current.state.selection.empty) autoSelectAll(editorView.current);
         alignmentCommand(editorView.current, item.value);
       } else if (item.command === 'indent' && item.value) {
         indentCommand(editorView.current, +item.value);

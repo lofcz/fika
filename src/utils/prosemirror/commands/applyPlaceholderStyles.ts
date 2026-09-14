@@ -188,7 +188,7 @@ export const applyPlaceholderStyles = (
     view.dispatch(tr);
     return;
   }
-  if (allTextblocksAligned(doc, options.align) && textAlreadyPainted(doc, storedMarks)) return;
+  if (textAlreadyPainted(doc, storedMarks)) return;
   const cursorPos = selection.from;
   let tr = state.tr;
   doc.nodesBetween(0, doc.content.size, (node, pos) => {
@@ -214,7 +214,6 @@ export const applyPlaceholderStyles = (
       tr = tr.addMark(from, to, em.create());
     }
   });
-  tr = alignAllTextblocks(tr, options.align);
   const mappedPos = tr.mapping.map(cursorPos, -1);
   const nextSel = safeTextSelection(tr.doc, mappedPos);
   if (nextSel) tr = tr.setSelection(nextSel);

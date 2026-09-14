@@ -166,7 +166,9 @@ const paragraph: NodeSpec = {
       lineHeight
     } = node.attrs;
     let style = '';
-    if (align && align !== 'left') style += `text-align: ${align};`;
+    // Always emit, including left. Title slots set text-align on the host;
+    // omitting left made the pane's "align left" inherit the slot center.
+    if (align) style += `text-align: ${align};`;
     if (textIndent) style += `text-indent: ${textIndent}em;`;
     if (lineHeight) style += `line-height: ${lineHeight};`;
     const attr: Attr = {
