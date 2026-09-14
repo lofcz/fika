@@ -106,7 +106,7 @@ async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, css
     const remaining = deadline - performance.now()
     if (remaining <= 0) return
     // Wait for either a resource to resolve (repaint) or an idle window (done).
-    // Slow producers (MathLive typesetting, html-to-image) take longer than
+    // Slow producers (MathLive typesetting, SnapDOM) take longer than
     // the idle window, so an idle frame only counts once nothing is in flight.
     const woke = await new Promise<boolean>(resolve => {
       const timer = window.setTimeout(() => {

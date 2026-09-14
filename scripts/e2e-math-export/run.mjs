@@ -1,5 +1,5 @@
 /**
- * Browser E2E: verify MathLive + html-to-image export produces visible ink.
+ * Browser E2E: verify MathLive + SnapDOM export produces visible ink.
  * Run: node scripts/e2e-math-export/run.mjs
  */
 import { createServer } from 'node:http'

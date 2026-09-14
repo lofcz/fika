@@ -3,8 +3,8 @@ import { createElement, useEffect, useState } from 'react'
 import { saveAs } from 'file-saver';
 import pptxgen from 'pptxgenjs-plus';
 import tinycolor from 'tinycolor2';
-import { toPng, toJpeg } from 'html-to-image';
 import { useMainStore, useSlidesStore } from '@/store';
+import { captureToJpegDataUrl, captureToPngDataUrl } from '@/utils/snapdomCapture';
 import type { Gradient, ImageElementFilters, LinePoint, PPTAnimation, PPTElementEffects, PPTElementOutline, PPTElementShadow, PPTElementLink, PPTTextElement, Slide } from '@/types/slides';
 import { outlineRadiusToPptxRectRadius, resolveShapePaintPath } from '@/utils/elementOutline';
 import { getElementRange, getLineElementPath, getTableThemeColors } from '@/utils/element';
@@ -57,7 +57,7 @@ import BaseShapeElement from '@/views/components/element/ShapeElement/BaseShapeE
 interface ExportImageConfig {
   quality: number
   width: number
-  fontEmbedCSS?: string
+  embedFonts: false | 'auto'
 }
 const svgToPngDataURL = (svg: string, width: number, height: number, pixelRatio = 2) => {
   return new Promise<string>((resolve, reject) => {
@@ -173,16 +173,19 @@ export default () => {
   const exportImage = (domRef: HTMLElement, format: string, quality: number, ignoreWebfont = true) => {
     if (exportJob.running.value) return;
     const gen = exportJob.start(0);
-    const toImage = format === 'png' ? toPng : toJpeg;
     const foreignObjectSpans = domRef.querySelectorAll('foreignObject [xmlns]');
     foreignObjectSpans.forEach(spanRef => spanRef.removeAttribute('xmlns'));
     setTimeout(() => {
       const config: ExportImageConfig = {
         quality,
-        width: 1600
+        width: 1600,
+        // v3 embeds webfonts by default; keep the old skip unless asked.
+        embedFonts: ignoreWebfont ? false : 'auto',
       };
-      if (ignoreWebfont) config.fontEmbedCSS = '';
-      toImage(domRef, config).then(dataUrl => {
+      const capture = format === 'png'
+        ? captureToPngDataUrl(domRef, { width: config.width, dpr: 1, embedFonts: config.embedFonts })
+        : captureToJpegDataUrl(domRef, { width: config.width, dpr: 1, quality: config.quality, embedFonts: config.embedFonts });
+      capture.then(dataUrl => {
         exportJob.finish(gen);
         saveAs(dataUrl, `${title}.${format}`);
       }).catch(() => {
@@ -201,13 +204,19 @@ export default () => {
       setPPTXLayout(pptx);
       const config: ExportImageConfig = {
         quality: 1,
-        width: 1600
+        width: 1600,
+        embedFonts: false,
       };
       const promiseArr = [];
       for (const domRef of domRefs) {
         const foreignObjectSpans = domRef.querySelectorAll('foreignObject [xmlns]');
         foreignObjectSpans.forEach(spanRef => spanRef.removeAttribute('xmlns'));
-        const promiseFunc = () => toJpeg(domRef as HTMLElement, config);
+        const promiseFunc = () => captureToJpegDataUrl(domRef as HTMLElement, {
+          width: config.width,
+          dpr: 1,
+          quality: config.quality,
+          embedFonts: config.embedFonts,
+        });
         promiseArr.push(promiseFunc);
       }
       Promise.all(promiseArr.map(func => func())).then(imgs => {

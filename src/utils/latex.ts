@@ -25,6 +25,27 @@ export function latexPaintScale(el: Pick<PPTLatexElement, 'width' | 'height' | '
   return Math.min(el.width / naturalW, el.height / naturalH)
 }
 
+/** Scale a measured formula so it stays inside the slide with a margin. */
+export function fitLatexBoxToSlide(
+  width: number,
+  height: number,
+  slideW: number,
+  slideH: number,
+  pad = 40,
+): { width: number; height: number; left: number; top: number } {
+  const maxW = Math.max(48, slideW - pad * 2)
+  const maxH = Math.max(36, slideH - pad * 2)
+  const scale = Math.min(1, maxW / Math.max(1, width), maxH / Math.max(1, height))
+  const nextW = Math.max(1, width * scale)
+  const nextH = Math.max(1, height * scale)
+  return {
+    width: nextW,
+    height: nextH,
+    left: (slideW - nextW) / 2,
+    top: (slideH - nextH) / 2,
+  }
+}
+
 /**
  * Extract the contents of every equation (or equation*) environment.
  */

@@ -7,7 +7,6 @@ import { useMemo, useCallback, memo, useState, useEffect } from 'react';
 
 import tinycolor, { type ColorFormats } from 'tinycolor2';
 import { debounce } from '@/utils/debounce';
-import { toCanvas } from 'html-to-image';
 import message from '@/utils/message';
 import { useI18nContext } from '@/i18n/useI18nContext';
 import { getFikaPortalTarget, queryFika } from '@/utils/portal';
@@ -158,20 +157,15 @@ const ColorPicker = memo((vrProps: IColorPickerProps) => {
     const maskRect = maskRef.getBoundingClientRect();
     const left = canvasLeft - maskRect.left;
     const top = canvasTop - maskRect.top;
-    const filter = (node: HTMLElement) => {
-      if (node.tagName && node.tagName.toUpperCase() === 'FOREIGNOBJECT') return false;
-      if (node.classList && node.classList.contains('operate')) return false;
-      return true;
-    };
-    toCanvas(targetRef, {
-      filter,
-      fontEmbedCSS: '',
+    // Selectors keep SnapDOM memoization; a predicate would force a full recapture.
+    import('@/utils/snapdomCapture').then(({ captureToCanvas }) => captureToCanvas(targetRef, {
+      exclude: ['foreignObject', '.operate'],
+      excludeMode: 'hide',
+      embedFonts: false,
       width,
       height,
-      canvasWidth: width,
-      canvasHeight: height,
-      pixelRatio: 1
-    }).then(canvasRef => {
+      dpr: 1,
+    })).then(canvasRef => {
       canvasRef.style.cssText = `position: absolute; top: ${top}px; left: ${left}px; cursor: crosshair;`;
       maskRef.style.cursor = 'default';
       maskRef.appendChild(canvasRef);

@@ -738,19 +738,21 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
             />
             <AiRevealBadge canvasRef={canvasRef} />
           </div>
-          <div className={cx('viewport')} ref={viewportRef} style={{ transform: `scale(${canvasScale})` }}>
-            {elementList.map((element, index) => (
-              <EditableElement
-                key={element.id}
-                elementInfo={element}
-                elementIndex={index + 1}
-                isMultiSelect={activeElementIdList.length > 1}
-                isEditing={editingElementId === element.id || clipingImageElementId === element.id}
-                selectElement={selectElement}
-                openLinkDialog={openLinkDialog}
-                style={hiddenElementIdList.includes(element.id) ? HIDDEN_STYLE : undefined}
-              />
-            ))}
+          <div className={cx('viewport-clip')}>
+            <div className={cx('viewport')} ref={viewportRef} style={{ transform: `scale(${canvasScale})` }}>
+              {elementList.map((element, index) => (
+                <EditableElement
+                  key={element.id}
+                  elementInfo={element}
+                  elementIndex={index + 1}
+                  isMultiSelect={activeElementIdList.length > 1}
+                  isEditing={editingElementId === element.id || clipingImageElementId === element.id}
+                  selectElement={selectElement}
+                  openLinkDialog={openLinkDialog}
+                  style={hiddenElementIdList.includes(element.id) ? HIDDEN_STYLE : undefined}
+                />
+              ))}
+            </div>
           </div>
           <HitLayer
             elementList={elementList}

@@ -76,7 +76,15 @@ export const mathReady = { value: false };
 /** Lazily import MathLive and configure it for a bundled (offline) font setup. */
 export function ensureMathliveReady(): Promise<MathliveModule> {
   if (mathlivePromise) return mathlivePromise;
-  mathlivePromise = import('mathlive').then((mod) => {
+  // `import('mathlive')` is the JS engine only. convertLatexToMarkup emits
+  // ML__* spans; the radical bar, fraction rule, KaTeX metrics and nowrap
+  // live in static.css. Without it the markup paints as a flat system-font
+  // run (√788 + sin(x) wrapping, \\frac{2}{3} reading as "32").
+  mathlivePromise = Promise.all([
+    import('mathlive'),
+    import('mathlive/static.css'),
+    import('mathlive/fonts.css'),
+  ]).then(([mod]) => {
     const resolved = mod as unknown as MathliveModule;
     try {
       resolved.MathfieldElement.fontsDirectory = null;
@@ -259,13 +267,15 @@ export async function measureLatexElement(latex: string): Promise<{
     ])
   } catch {}
   const probe = document.createElement('div');
+  probe.className = EMBED_ROOT_CLASS;
   probe.style.cssText = ['position:absolute', 'left:-99999px', 'top:0', `font-size:${LATEX_ELEMENT_FONT_SIZE}px`, 'line-height:normal', 'width:max-content', 'pointer-events:none'].join(';');
   probe.innerHTML = renderLatexElementHtml(latex);
   const host = resolveOffscreenHost();
   host.appendChild(probe);
   const rect = probe.getBoundingClientRect();
-  const width = Math.max(48, Math.ceil(rect.width) + LATEX_ELEMENT_PAD);
-  const height = Math.max(36, Math.ceil(rect.height) + LATEX_ELEMENT_PAD);
+  const MAX = 2000;
+  const width = Math.min(MAX, Math.max(48, Math.ceil(rect.width) + LATEX_ELEMENT_PAD));
+  const height = Math.min(MAX, Math.max(36, Math.ceil(rect.height) + LATEX_ELEMENT_PAD));
   host.removeChild(probe);
   return {
     width,

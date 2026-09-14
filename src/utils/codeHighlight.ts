@@ -202,10 +202,10 @@ export async function highlightCodeBlock(code: string, language: string, theme: 
   };
 }
 
-/** Warm Shiki + html-to-image so the first on-slide raster is not a cold start. */
+/** Warm Shiki + SnapDOM so the first on-slide raster is not a cold start. */
 export function prefetchCodeRaster(language = 'typescript', theme = 'github-dark') {
   void prepareHighlighter(language, theme);
-  void import('html-to-image');
+  void import('@/utils/snapdomCapture').then(mod => mod.prefetchSnapdom());
 }
 
 /** Load core + lang + theme. Safe to call before CodeMirror/Shiki highlighting. */
@@ -252,7 +252,7 @@ export type CodeRasterInput = {
   showLineNumbers: boolean;
 };
 
-/** Real gutter spans so SnapDOM / html-to-image do not depend on CSS counters. */
+/** Real gutter spans so SnapDOM does not depend on CSS counters. */
 export function injectBoothLineNumbers(shikiHtml: string, showLineNumbers: boolean): string {
   let n = 0;
   return innerCodeHtml(shikiHtml).replace(/<span class="line"([^>]*)>/g, (_, attrs: string) => {
@@ -279,26 +279,18 @@ export async function renderCodeElementPng(el: CodeRasterInput & {
   height: number;
 }): Promise<string> {
   const html = await codeElementToBoothHtml(el);
-  const {
-    toPng
-  } = await import('html-to-image');
+  const { captureToPngDataUrl } = await import('@/utils/snapdomCapture');
   const host = document.createElement('div');
   host.style.cssText = ['position:fixed', 'left:-99999px', 'top:0', `width:${el.width}px`, `height:${el.height}px`].join(';');
   host.innerHTML = html;
   document.body.appendChild(host);
   try {
-    return await toPng(host, {
+    // v3 captures offscreen roots; width/height are the final size and dpr
+    // multiplies the pixel backing store.
+    return await captureToPngDataUrl(host, {
       width: el.width,
       height: el.height,
-      pixelRatio: 2,
-      cacheBust: true,
-      // The clone inherits the host's computed offscreen position, which
-      // would shift the capture out of view — pin it back for the snapshot.
-      style: {
-        position: 'static',
-        left: '0',
-        top: '0'
-      }
+      dpr: 2,
     });
   } finally {
     host.remove();

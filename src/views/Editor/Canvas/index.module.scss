@@ -23,6 +23,14 @@
 .skeleton {
   z-index: 5;
 }
+.viewport-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+}
 .viewport {
   position: absolute;
   top: 0;

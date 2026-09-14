@@ -9,6 +9,12 @@
   justify-content: center;
   align-items: center;
 }
+.viewport-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
 .viewport {
   transform-origin: 0 0;
 }

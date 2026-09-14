@@ -26,8 +26,17 @@
       const ml = await import('/node_modules/mathlive/mathlive.min.mjs')
       convertLatexToMarkup = ml.convertLatexToMarkup
       MathfieldElement = ml.MathfieldElement
-      const h2i = await import('/node_modules/html-to-image/es/index.js')
-      toPng = h2i.toPng
+      const { snapdom } = await import('/node_modules/@zumer/snapdom/dist/snapdom.mjs')
+      toPng = async (el, opts) => {
+        const canvas = await snapdom.toCanvas(el, {
+          width: opts.width,
+          height: opts.height,
+          dpr: opts.pixelRatio ?? 1,
+          backgroundColor: opts.backgroundColor,
+          embedFonts: true,
+        })
+        return canvas.toDataURL('image/png')
+      }
     } catch (e) {
       statusEl.textContent += `\nIMPORT FAIL: ${e?.stack || e}`
       window.__MATH_E2E__ = { anyOk: false, error: String(e?.stack || e), results: [] }

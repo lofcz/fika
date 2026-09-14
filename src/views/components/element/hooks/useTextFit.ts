@@ -12,6 +12,7 @@ import {
   innerBoxFromLiveStyles,
   rememberFitScale,
   textFitScaleForHtml,
+  DEFAULT_TEXT_FONT_FAMILY,
   DEFAULT_TEXT_FONT_SIZE,
   type FitMeasureSession,
 } from '@/utils/textFit'
@@ -19,7 +20,6 @@ import {
 const DEFAULT_INSET: TextInset = [10, 10, 10, 10]
 const DEFAULT_LINE_HEIGHT = 1.5
 const DEFAULT_PARAGRAPH_SPACE = 5
-const DEFAULT_TEXT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
 
 type FitSource = PPTTextElement | PPTShapeElement
 

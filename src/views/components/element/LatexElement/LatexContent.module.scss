@@ -11,6 +11,8 @@
 .latex-stage {
   line-height: normal;
   width: max-content;
+  flex-shrink: 0;
+  white-space: nowrap;
   transform-origin: center center;
   color: inherit;
 

@@ -9,6 +9,7 @@ import { resolveChartSeriesColors, resolveElementDefaultFontColor, resolveSlideS
 import type { PPTLineElement, PPTElement, PPTImageElement, PPTLatexElement, PPTCodeElement, TableCell, TableCellStyle, PPTShapeElement, ChartType, PPTVideoElement, PPTAudioElement } from '@/types/slides';
 import type { FikaMediaKind, FikaMediaUploadResult } from '@/configs/mediaUpload';
 import { layoutMediaBoxes, DEFAULT_VIDEO_SIZE, DEFAULT_AUDIO_SIZE, type MediaBox } from '@/utils/mediaLayout';
+import { fitLatexBoxToSlide } from '@/utils/latex';
 import { hfmath } from '@/components/LaTeXEditor/hfmath';
 import { type ShapePoolItem, SHAPE_PATH_FORMULAS } from '@/configs/shapes';
 import type { LinePoolItem } from '@/configs/lines';
@@ -424,14 +425,15 @@ export default () => {
     h: number;
   }) => {
     const { viewportRatio, viewportSize } = getSlideEnv();
+    const box = fitLatexBoxToSlide(data.w, data.h, viewportSize, viewportSize * viewportRatio);
     createElement({
       type: 'latex',
       id: nanoid(10),
-      width: data.w,
-      height: data.h,
+      width: box.width,
+      height: box.height,
       rotate: 0,
-      left: (viewportSize - data.w) / 2,
-      top: (viewportSize * viewportRatio - data.h) / 2,
+      left: box.left,
+      top: box.top,
       path: data.path,
       latex: data.latex,
       color: defaultFontColor(),

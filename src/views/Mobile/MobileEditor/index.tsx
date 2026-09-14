@@ -123,15 +123,17 @@ export default function MobileEditor({ changeMode }: IMobileEditorProps) {
               />
             ) : null
           ))}
-          <div className={cx('viewport')} ref={viewportRef} style={{ transform: `scale(${canvasScale})` }}>
-            {elementList.map((element, index) => (
-              <MobileEditableElement
-                key={element.id}
-                elementInfo={element}
-                elementIndex={index + 1}
-                selectElement={selectElement}
-              />
-            ))}
+          <div className={cx('viewport-clip')}>
+            <div className={cx('viewport')} ref={viewportRef} style={{ transform: `scale(${canvasScale})` }}>
+              {elementList.map((element, index) => (
+                <MobileEditableElement
+                  key={element.id}
+                  elementInfo={element}
+                  elementIndex={index + 1}
+                  selectElement={selectElement}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>

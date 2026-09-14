@@ -76,6 +76,9 @@ export const e2eScripts = [
 
 export const rstestFiles = [
   'tests/live-paint.test.ts',
+  'tests/font-embed-css.test.ts',
+  'tests/latex-box.test.ts',
+  'tests/text-wrap.test.ts',
 ]
 
 const basename = (file) => file.replace(/^.*[\\/]/, '').replace(/\.test$/, '').replace(/\.(mjs|mts|ts)$/, '').replace(/\.test$/, '')

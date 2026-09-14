@@ -10,9 +10,11 @@ import { latexFallbackText } from '@/utils/inlineMathBox'
 import { measureInlineMathBox } from '@/utils/math'
 import {
   DEFAULT_LIST_PADDING_EM,
+  DEFAULT_TEXT_FONT_FAMILY,
   DEFAULT_TEXT_FONT_SIZE,
   LIST_MARKER_GAP_EM,
   applyMeasuredMathBoxes,
+  editorWrapWidth,
   extractFitBlocksFromHtml,
   lineBoxHeight,
   richInlineFromRun,
@@ -53,8 +55,8 @@ type PreparedLine = {
 }
 
 const quoteFamily = (family: string) => {
-  const value = family.trim()
-  if (!value) return 'sans-serif'
+  const value = (family || '').trim()
+  if (!value) return DEFAULT_TEXT_FONT_FAMILY
   if (value.includes(',')) return value
   const unquoted = value.replace(/^['"]+|['"]+$/g, '')
   return /\s/.test(unquoted) ? `"${unquoted.replace(/"/g, '\\"')}"` : unquoted
@@ -193,7 +195,9 @@ const prepareLines = (
       richInlineFromRun(run, fontOf(run, family, scale), scale, letterSpacing || undefined)
     )))
     const lineWidth = Math.max(1, width - listInset(block, blockEm(items, scale)))
-    walkRichInlineLineRanges(prepared, lineWidth, range => {
+    const spaceRun = items.find(run => !run.mathLatex) || items[0]
+    const wrapWidth = editorWrapWidth(lineWidth, fontOf(spaceRun, family, scale))
+    walkRichInlineLineRanges(prepared, wrapWidth, range => {
       const line = materializeRichInlineLineRange(prepared, range)
       const lineRuns: TextFitRun[] = []
       for (const fragment of line.fragments) {

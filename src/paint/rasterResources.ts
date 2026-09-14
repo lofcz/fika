@@ -11,7 +11,6 @@ import { renderMermaidForImage } from '@/utils/mermaid'
 import { LATEX_ELEMENT_FONT_SIZE, ensureMathliveReady, renderLatexElementHtml, renderMathToHtml } from '@/utils/math'
 import { latexFallbackText } from '@/utils/inlineMathBox'
 import { EMBED_ROOT_CLASS } from '@/utils/portal'
-import { declaredFontFamilies, fontEmbedCssFor } from '@/utils/fontEmbedCss'
 
 echarts.use([
   BarChart,
@@ -121,7 +120,7 @@ const canvas = (width: number, height: number) => {
  * blob URL: Chromium taints a canvas that draws a blob-backed SVG carrying a
  * `<foreignObject>` (the code booth), which then fails `toBlob` for every
  * slide thumbnail; the same markup as a data URL stays same-origin — this is
- * exactly what html-to-image does for the math booth.
+ * the same path SnapDOM's SVG engine uses for the math booth.
  */
 const svgToCanvas = async (svg: string, width: number, height: number): Promise<Raster | null> => {
   try {
@@ -264,24 +263,14 @@ export const getCodeRaster = (
   }, invalidate)
 }
 
-/**
- * Every KaTeX face inlined as data URLs (cached by `fontEmbedCssFor`). The
- * first formula captured might need nothing but `KaTeX_Math`; embedding only
- * what it uses would typeset `=`, digits and delimiters of every later
- * formula in the system serif.
- */
-const latexFontEmbedCss = (booth: HTMLElement) => (
-  fontEmbedCssFor([...declaredFontFamilies()].filter(family => /KaTeX/i.test(family)), booth)
-)
-
 let mathFontsPromise: Promise<void> | null = null
 /**
  * Two waits before the first capture. `document.fonts.ready` settles once no
  * pending stylesheet load can still add faces — the embed stylesheet that
- * declares the KaTeX `@font-face`s is exactly such a load, and html-to-image
- * reads those rules from `document.styleSheets`. But `ready` only covers faces
+ * declares the KaTeX `@font-face`s is exactly such a load, and SnapDOM
+ * embeds those webfonts automatically. But `ready` only covers faces
  * something on the page already uses, and MathLive's faces stay `unloaded`
- * until a formula needs them, which the SVG snapshot cannot trigger itself.
+ * until a formula needs them, which the snapshot cannot trigger itself.
  * So load every KaTeX face explicitly as well; otherwise the first captures
  * typeset in the system serif (`\ne` paints as `=`, delimiters do not stretch)
  * and stay cached that way.
@@ -364,62 +353,74 @@ const fallbackMathCanvas = (latex: string, width: number, height: number, color:
 const LATEX_RASTER_HIDPI_BUDGET = 1_500_000
 
 /**
- * MathLive typeset of a formula element, mirroring `LatexContent`'s DOM
- * (flex-centered box, a 36px stage fitted uniformly into the authored box).
- * html-to-image is used instead of a bare foreignObject because SVG-as-image
- * cannot load the MathLive web fonts.
+ * Tight MathLive snapshot of a formula — same nowrap, max-content stage as
+ * `LatexContent`. SnapDOM v3 `width`/`height` are output size only and do not
+ * reflow the live tree, but a flex host sized to the slide box *does*: the
+ * stage shrinks (`min-width:auto`), `.ML__latex` wraps, and the thumbnail
+ * becomes two lines of fallback-looking text. Capture the unconstrained
+ * stage, then `paintLatex` scales that bitmap into the authored box.
  *
- * The fit is applied as a font size, not a CSS transform: inside the SVG
- * snapshot, box edges (the radical rule, fraction bars) snap to whole CSS
- * pixels of the pre-transform layout while glyphs scale exactly, so a scaled
- * 36px stage paints a `\sqrt` rule thinner and lower than the surd's tick.
- * Laying out at the final size keeps that snap error under half a pixel, and
- * the 2x capture halves it again.
+ * Font size is the fitted size (not a CSS transform) so radical/fraction
+ * rules snap at the painted size. `reconcile: true` pins inline/table-cell
+ * boxes SnapDOM otherwise warns may re-wrap under font fallback.
  */
 export const getLatexRaster = (
   element: PPTLatexElement,
   invalidate: () => void,
 ): Raster | undefined => {
-  const width = Math.max(1, Math.ceil(element.width))
-  const height = Math.max(1, Math.ceil(element.height))
-  const key = `latex:${hash(`${element.latex}\0${width}\0${height}\0${element.color}`)}`
+  const boxW = Math.max(1, element.width)
+  const boxH = Math.max(1, element.height)
+  const key = `latex:${hash(`${element.latex}\0${boxW}\0${boxH}\0${element.color}`)}`
   return requestRaster(key, async () => {
     await ensureMathliveReady()
     await ensureMathFontsLoaded()
     const host = document.createElement('div')
-    host.style.cssText = `position:fixed;left:-99999px;top:0;width:${width}px;height:${height}px;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none;color:${element.color}`
-    const stage = document.createElement('div')
-    stage.style.cssText = `width:max-content;line-height:normal;font-size:${LATEX_ELEMENT_FONT_SIZE}px;color:inherit`
-    stage.innerHTML = renderLatexElementHtml(element.latex)
-    const formula = stage.firstElementChild as HTMLElement | null
+    host.className = EMBED_ROOT_CLASS
+    host.style.cssText = [
+      'display:inline-block',
+      'width:max-content',
+      'max-width:none',
+      'flex-shrink:0',
+      'white-space:nowrap',
+      'line-height:normal',
+      `font-size:${LATEX_ELEMENT_FONT_SIZE}px`,
+      `color:${element.color}`,
+      'pointer-events:none',
+      'background:transparent',
+    ].join(';')
+    host.innerHTML = renderLatexElementHtml(element.latex)
+    const formula = host.firstElementChild as HTMLElement | null
     if (formula) {
       formula.style.display = 'block'
       formula.style.margin = '0'
       formula.style.color = 'inherit'
+      formula.style.whiteSpace = 'nowrap'
     }
-    host.className = EMBED_ROOT_CLASS
-    host.appendChild(stage)
     const booth = ensureMathRasterBooth()
     booth.appendChild(host)
     try {
-      const naturalWidth = stage.offsetWidth
-      const naturalHeight = stage.offsetHeight
-      if (!(naturalWidth > 0) || !(naturalHeight > 0)) return null
-      const fit = Math.min(width / naturalWidth, height / naturalHeight)
-      stage.style.fontSize = `${LATEX_ELEMENT_FONT_SIZE * fit}px`
-      const [{ toCanvas }, fontEmbedCSS] = await Promise.all([import('html-to-image'), latexFontEmbedCss(booth)])
-      return await toCanvas(host, {
-        width,
-        height,
-        pixelRatio: width * height * 4 <= LATEX_RASTER_HIDPI_BUDGET ? 2 : 1,
-        fontEmbedCSS,
-        // The clone inherits the host's computed offscreen position, which
-        // would shift the capture out of view — pin it back for the snapshot.
-        style: { position: 'static', left: '0', top: '0' },
+      void host.offsetWidth
+      const naturalWidth = host.offsetWidth
+      const naturalHeight = host.offsetHeight
+      if (!(naturalWidth > 0) || !(naturalHeight > 0)) {
+        return fallbackMathCanvas(element.latex, boxW, boxH, element.color, LATEX_ELEMENT_FONT_SIZE)
+      }
+      const fit = Math.min(boxW / naturalWidth, boxH / naturalHeight)
+      host.style.fontSize = `${LATEX_ELEMENT_FONT_SIZE * fit}px`
+      void host.offsetWidth
+      const width = Math.max(1, Math.ceil(host.offsetWidth))
+      const height = Math.max(1, Math.ceil(host.offsetHeight))
+      const { captureToCanvas } = await import('@/utils/snapdomCapture')
+      const captured = await captureToCanvas(host, {
+        dpr: width * height * 4 <= LATEX_RASTER_HIDPI_BUDGET ? 2 : 1,
+        embedFonts: true,
+        reconcile: true,
       })
+      if (captured && canvasHasInk(captured)) return captured
+      return fallbackMathCanvas(element.latex, width, height, element.color, LATEX_ELEMENT_FONT_SIZE * fit)
     }
     catch {
-      return null
+      return fallbackMathCanvas(element.latex, boxW, boxH, element.color, LATEX_ELEMENT_FONT_SIZE)
     }
     finally {
       host.remove()
@@ -464,13 +465,12 @@ export const getInlineMathRaster = (
       if (!(width > 0) || !(height > 0)) {
         return fallbackMathCanvas(latex, Math.ceil(size * 3), Math.ceil(size * 1.5), color, size)
       }
-      const [{ toCanvas }, fontEmbedCSS] = await Promise.all([import('html-to-image'), latexFontEmbedCss(booth)])
-      const captured = await toCanvas(host, {
+      const { captureToCanvas } = await import('@/utils/snapdomCapture')
+      const captured = await captureToCanvas(host, {
         width,
         height,
-        pixelRatio: 2,
-        fontEmbedCSS,
-        style: { position: 'static', left: '0', top: '0' },
+        dpr: 2,
+        embedFonts: true,
       })
       if (captured && canvasHasInk(captured)) return captured
       return fallbackMathCanvas(latex, width, height, color, size)

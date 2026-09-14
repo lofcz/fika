@@ -18,6 +18,7 @@
         "@tanstack/react-virtual": "^3.14.10",
         "@use-gesture/react": "^10.3.1",
         "@use-gesture/vanilla": "^10.3.1",
+        "@zumer/snapdom": "^3.0.0",
         "animate.css": "^4.1.1",
         "buffer": "^6.0.3",
         "clipboard": "^2.0.11",
@@ -33,7 +34,6 @@
         "file-saver": "^2.0.5",
         "flatbush": "^4.6.2",
         "hfmath": "^0.0.2",
-        "html-to-image": "^1.11.13",
         "immer": "^11.1.18",
         "jszip": "^3.10.1",
         "lucide-react": "^1.33.0",
@@ -688,6 +688,8 @@
 
     "@use-gesture/vanilla": ["@use-gesture/vanilla@10.3.1", "", { "dependencies": { "@use-gesture/core": "10.3.1" } }, "sha512-lT4scGLu59ovA3zmtUonukAGcA0AdOOh+iwNDS05Bsu7Lq9aZToDHhI6D8Q2qvsVraovtsLLYwPrWdG/noMAKw=="],
 
+    "@zumer/snapdom": ["@zumer/snapdom@3.0.0", "", {}, "sha512-O+gqKYz+7545JNgG4Hzdy9/i+7/H38bDpF6tUOCJBqAUTm9npbaE3ZxuevFBcRi6cBLpvMqVYIjtywAZIP6OFQ=="],
+
     "abort-controller": ["abort-controller@3.0.0", "", { "dependencies": { "event-target-shim": "^5.0.0" } }, "sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg=="],
 
     "acorn": ["acorn@8.18.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ=="],
@@ -1103,8 +1105,6 @@
     "hfmath": ["hfmath@0.0.2", "", {}, "sha512-cKUi0yiQLGfLgs8+3Iw5nAiqSH13Knp7vCf0G1vlF5nfiKKO1XmxNagMvyp0F4ZvUNaHpRGTkmc7nowCy1S58g=="],
 
     "hmac-drbg": ["hmac-drbg@1.0.1", "", { "dependencies": { "hash.js": "^1.0.3", "minimalistic-assert": "^1.0.0", "minimalistic-crypto-utils": "^1.0.1" } }, "sha512-Tti3gMqLdZfhOQY1Mzf/AanLiqh1WTiJgEj26ZuYQ9fbkLomzGchCws4FyrSd4VkpBfiNhaE1On+lOz894jvXg=="],
-
-    "html-to-image": ["html-to-image@1.11.13", "", {}, "sha512-cuOPoI7WApyhBElTTb9oqsawRvZ0rHhaHwghRLlTuffoD1B2aDemlCruLeZrUIIdvG7gs9xeELEPm6PhuASqrg=="],
 
     "html-void-elements": ["html-void-elements@3.0.0", "", {}, "sha512-bEqo66MRXsUGxWHV5IP0PUiAWwoEjba4VCzg0LjFJBpchPaTfyfCKTG6bc5F8ucKec3q5y6qOdGyYTSBEvhCrg=="],
 

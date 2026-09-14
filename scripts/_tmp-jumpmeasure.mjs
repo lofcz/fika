@@ -133,9 +133,9 @@ try {
   })
   console.log('pause-y drag result:', JSON.stringify(jump))
 
-  // snapdom capture cost: the dependency was removed by the live-rail
-  // migration (no capture engine in the app anymore) — nothing to measure.
-  console.log('snapdom: not installed (removed with the raster pipeline)')
+  // Whole-slide SnapDOM capture was removed with the live-rail; v3 is only
+  // used for math/code/export booths, not thumbnail bitmaps.
+  console.log('snapdom: not used for thumbnail rail captures')
   await page.close()
 } finally {
   await browser.close()

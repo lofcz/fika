@@ -24,6 +24,7 @@ import {
   loadPreviewImageBitmap,
 } from '@/utils/imageBitmapCache'
 import { elementLocksTextBox, resolveTextBoxLayout } from '@/utils/placeholderLayout'
+import { resolvePaintFontFamily } from '@/utils/textFit'
 import {
   resolveChartElementSeriesColors,
   resolveChartLabelColor,
@@ -338,7 +339,7 @@ const paintShape = (
       y: 0,
       width: element.width,
       height: element.height,
-      defaultFontFamily: element.text.defaultFontName || theme.fontName,
+      defaultFontFamily: resolvePaintFontFamily(element.text.defaultFontName || theme.fontName),
       defaultColor: painted.ink,
       lineHeight: element.text.lineHeight,
       letterSpacing: element.text.wordSpace,
@@ -394,7 +395,7 @@ const paintTextElement = (
     y: 0,
     width: element.width,
     height: element.height,
-    defaultFontFamily: element.defaultFontName || theme.fontName,
+    defaultFontFamily: resolvePaintFontFamily(element.defaultFontName || theme.fontName),
     defaultColor: showPrompt
       ? element.defaultColor || theme.fontColor
       : painted!.ink,
@@ -486,14 +487,25 @@ const paintLine = (ctx: CanvasRenderingContext2D, element: PPTLineElement) => {
   ctx.restore()
 }
 
-const paintLatex = (ctx: CanvasRenderingContext2D, element: PPTLatexElement, invalidate: () => void) => (
+const paintLatex = (
+  ctx: CanvasRenderingContext2D,
+  element: PPTLatexElement,
+  invalidate: () => void,
+) => {
   withRectTransform(ctx, element, () => {
     // The main canvas typesets with MathLive and the editor saves `path: ''`,
     // so the MathLive raster is the source of truth. The legacy hfmath path
     // (imports, agentic creates) doubles as the interim while the raster bakes.
     const raster = getLatexRaster(element, invalidate)
     if (raster) {
-      ctx.drawImage(raster, 0, 0, element.width, element.height)
+      const srcW = 'style' in raster && raster.style.width ? parseFloat(raster.style.width) : raster.width
+      const srcH = 'style' in raster && raster.style.height ? parseFloat(raster.style.height) : raster.height
+      const rw = srcW > 0 ? srcW : raster.width
+      const rh = srcH > 0 ? srcH : raster.height
+      const scale = Math.min(element.width / rw, element.height / rh, 1)
+      const dw = rw * scale
+      const dh = rh * scale
+      ctx.drawImage(raster, (element.width - dw) / 2, (element.height - dh) / 2, dw, dh)
       return
     }
     if (!element.path) return
@@ -504,7 +516,7 @@ const paintLatex = (ctx: CanvasRenderingContext2D, element: PPTLatexElement, inv
     ctx.fill(path, 'evenodd')
     if (element.strokeWidth) ctx.stroke(path)
   })
-)
+}
 
 const escapeCellHtml = (text: string) => text
   .replace(/&/g, '&amp;')
@@ -605,7 +617,7 @@ const paintTable = (
         y: row * rowHeight,
         width,
         height,
-        defaultFontFamily: cell.style?.fontname || theme.fontName,
+        defaultFontFamily: resolvePaintFontFamily(cell.style?.fontname || theme.fontName),
         defaultColor: cell.style?.color || theme.fontColor,
         defaultSize: parseFloat(cell.style?.fontsize || '14') || 14,
         lineHeight: 1.2,
@@ -702,6 +714,8 @@ const paintElement = (
   theme: SlideTheme,
   invalidate: () => void,
   showPlaceholders: boolean,
+  slideW: number,
+  slideH: number,
 ) => {
   switch (element.type) {
     case 'shape': paintShape(ctx, element, slide, theme, invalidate); break
@@ -752,11 +766,15 @@ export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlid
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.setTransform(pixelWidth / logicalWidth, 0, 0, pixelHeight / logicalHeight, 0, 0)
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, 0, logicalWidth, logicalHeight)
+  ctx.clip()
   paintBackground(ctx, options.slide, logicalWidth, logicalHeight, options.invalidate)
   if (options.slide.skeleton) paintSkeleton(ctx, logicalWidth, logicalHeight)
   for (const element of options.slide.elements) {
     try {
-      paintElement(ctx, element, options.slide, options.theme, options.invalidate, !!options.showPlaceholders)
+      paintElement(ctx, element, options.slide, options.theme, options.invalidate, !!options.showPlaceholders, logicalWidth, logicalHeight)
     }
     catch (error) {
       if (import.meta.env.MODE === 'development') {
@@ -764,6 +782,7 @@ export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlid
       }
     }
   }
+  ctx.restore()
 }
 
 export const clearSlidePathCache = () => {

@@ -26,6 +26,7 @@ assert(canvasThumb.includes('EDIT_DEBOUNCE_MS'), 'slide edits repaint through a 
 assert(canvasThumb.includes('arePaintedSlideIdentitiesEqual'), 'thumbs re-render only when slide identity changes')
 assert(!canvasThumb.includes('ScreenSlide'), 'thumbnail paint never mounts the ScreenSlide DOM')
 assert(!canvasThumb.includes('snapdom'), 'thumbnail paint never captures DOM')
+assert(!thumbnail.includes('snapdom'), 'ThumbnailSlide never imports SnapDOM')
 assert(thumbnail.includes('CanvasSlideThumb'), 'ThumbnailSlide displays the direct canvas renderer')
 assert(scss.includes('pointer-events: none'), 'thumbnail content is not interactive')
 assert(painter.includes('paintSlideToCanvas'), 'the slide painter exposes one canvas entry point')
@@ -51,7 +52,11 @@ assert(draggable.includes('overlayRender'), 'the slide drag ghost is opt-in — 
 
 const pkg = read('package.json')
 assert(!pkg.includes('"konva"'), 'konva dependency is gone with the painter stack')
-assert(!pkg.includes('@zumer/snapdom'), 'SnapDOM is gone with whole-slide DOM capture')
+assert(pkg.includes('@zumer/snapdom'), 'SnapDOM v3 captures math/code/export booths')
+assert(!pkg.includes('html-to-image'), 'html-to-image is replaced by SnapDOM v3')
+assert(read('src/utils/snapdomCapture.ts').includes("from '@zumer/snapdom'"), 'booth captures go through the SnapDOM v3 helper')
+assert(read('src/paint/rasterResources.ts').includes("import('@/utils/snapdomCapture')"), 'math rasters capture through SnapDOM')
+assert(!read('src/views/Editor/Thumbnails/index.tsx').includes('snapdom'), 'the thumbnail rail does not import SnapDOM')
 
 assert(!read('src/views/Editor/Thumbnails/index.tsx').includes('previewRaster'), 'the rail wires no raster subscription')
 const virtualizer = read('src/views/Editor/Thumbnails/useThumbnailVirtualizer.ts')

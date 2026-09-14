@@ -6,6 +6,9 @@ declare module 'markdown-it-texmath' {
   export default plugin;
 }
 
+declare module 'mathlive/static.css'
+declare module 'mathlive/fonts.css'
+
 declare module '*.module.scss' {
   const classes: { readonly [key: string]: string }
   export default classes

@@ -17,6 +17,18 @@ import { estimateInlineMathBox, MATH_CLASS } from './inlineMathBox';
 
 /** ProseMirror's default text size (assets/styles/prosemirror.scss). */
 export const DEFAULT_TEXT_FONT_SIZE = 16;
+/**
+ * Live text boxes use `$textElementFont` when the theme/element family is
+ * empty. Canvas wrap must use the same stack — generic `sans-serif` is a
+ * different face and packs a different number of words per line.
+ */
+export const DEFAULT_TEXT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"'
+/** @deprecated Use DEFAULT_TEXT_FONT_FAMILY */
+export const DEFAULT_FIT_FONT_FAMILY = DEFAULT_TEXT_FONT_FAMILY
+
+export function resolvePaintFontFamily(family?: string | null): string {
+  return usableFamily(family) || DEFAULT_TEXT_FONT_FAMILY
+}
 /** Matches `ul, ol { padding-inline-start: 1em }` when the list has no inline pad. */
 export const DEFAULT_LIST_PADDING_EM = 1;
 /** Matches `li { padding-inline-start: 0.4em }` (marker-to-text gap). */
@@ -180,8 +192,8 @@ export function measureUnzoomedScrollHeight(host: HTMLElement, innerWidth: numbe
   return height;
 }
 function quoteFontFamily(family: string): string {
-  const trimmed = family.trim();
-  if (!trimmed) return 'sans-serif';
+  const trimmed = (family || '').trim();
+  if (!trimmed) return DEFAULT_TEXT_FONT_FAMILY;
   if (trimmed.includes(',')) return trimmed;
   const unquoted = trimmed.replace(/^['"]+|['"]+$/g, '');
   if (/^[a-zA-Z0-9-]+$/.test(unquoted)) return unquoted;
@@ -242,23 +254,55 @@ export const lineBoxHeight = (runs: TextFitRun[], sizeScale: number, lineHeight:
  */
 export const MATH_PLACEHOLDER = '\uFFFC'
 const placeholderWidthCache = new Map<string, number>()
+const spaceWidthCache = new Map<string, number>()
 let placeholderCtx: CanvasRenderingContext2D | null | undefined
-const placeholderWidth = (font: string): number => {
-  const cached = placeholderWidthCache.get(font)
-  if (cached !== undefined) return cached
+const measureCanvasContext = (): CanvasRenderingContext2D | null => {
   if (placeholderCtx === undefined) {
     placeholderCtx = typeof document === 'undefined'
       ? null
       : document.createElement('canvas').getContext('2d')
   }
+  return placeholderCtx
+}
+const placeholderWidth = (font: string): number => {
+  const cached = placeholderWidthCache.get(font)
+  if (cached !== undefined) return cached
+  const ctx = measureCanvasContext()
   let width = 0
-  if (placeholderCtx) {
-    placeholderCtx.font = font
-    width = placeholderCtx.measureText(MATH_PLACEHOLDER).width
+  if (ctx) {
+    ctx.font = font
+    width = ctx.measureText(MATH_PLACEHOLDER).width
   }
   placeholderWidthCache.set(font, width)
   return width
 }
+
+/**
+ * Live ProseMirror uses `white-space: break-spaces`: the space after the last
+ * word on a line still occupies width, so the wrap column is one space
+ * narrower than the content box. pretext is `white-space: normal` and would
+ * otherwise pack an extra word per line (thumb vs slide).
+ */
+export const measureSpaceWidth = (font: string): number => {
+  const cached = spaceWidthCache.get(font)
+  if (cached !== undefined) return cached
+  const ctx = measureCanvasContext()
+  let width = 0
+  if (ctx) {
+    ctx.font = font
+    width = ctx.measureText(' ').width
+  }
+  spaceWidthCache.set(font, width)
+  return width
+}
+
+export const breakSpacesWrapWidth = (width: number, spaceWidth: number): number => (
+  Math.max(1, width - Math.max(0, spaceWidth))
+)
+
+export const editorWrapWidth = (width: number, font: string): number => (
+  breakSpacesWrapWidth(width, measureSpaceWidth(font))
+)
 
 export const richInlineFromRun = (
   run: TextFitRun,
@@ -308,8 +352,15 @@ const measureRunsHeight = (
     }
     richInlineCache.set(key, prepared)
   }
+  const spaceRun = runs.reduce((best, run) => (
+    !run.mathLatex && run.size > (best?.size ?? 0) ? run : best
+  ), runs.find(run => !run.mathLatex) || runs[0])
+  const wrapWidth = editorWrapWidth(
+    Math.max(1, width),
+    runFont(spaceRun, family, spaceRun.size * sizeScale),
+  )
   let height = 0
-  walkRichInlineLineRanges(prepared, Math.max(1, width), line => {
+  walkRichInlineLineRanges(prepared, wrapWidth, line => {
     const lineRuns: TextFitRun[] = []
     for (const fragment of line.fragments) {
       const run = runs[fragment.itemIndex]
@@ -358,7 +409,7 @@ export function measureTextBlocksHeight(blocks: TextFitBlock[], options: Measure
     const lineHeightPx = size * options.lineHeight;
     const font = canvasFont(block, size);
     const prepared = prepareCached(block.text, font, options.letterSpacing || undefined);
-    total += pretextLayout(prepared, width, lineHeightPx).height;
+    total += pretextLayout(prepared, editorWrapWidth(width, font), lineHeightPx).height;
   }
   total += Math.max(0, blocks.length - 1) * (options.blockSpace ?? 0);
   return total
@@ -522,7 +573,7 @@ export function measureSessionHeight(
       continue
     }
     const lineHeightPx = item.size * session.lineHeight
-    total += pretextLayout(item.handle, width, lineHeightPx).height
+    total += pretextLayout(item.handle, editorWrapWidth(width, canvasFont(item.block, item.size)), lineHeightPx).height
   }
   total += Math.max(0, session.items.length - 1) * blockSpace
   return total
@@ -539,7 +590,6 @@ export function fitZoomScaleFromSession(
   return fitScaleFromContentHeight(height, Math.max(1, innerHeight - pad))
 }
 
-const DEFAULT_FIT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
 
 const FITTED_FONT_RE = /calc\(var\(--text-fit-scale,\s*1\)\s*\*\s*([0-9.]+)px\)/g
 /** Rendered spans may carry calc(var(--text-fit-scale,...)); measurement wants authored px. */
@@ -701,6 +751,13 @@ function blockFontSize(block: Element, defaultSize: number): number {
   return max || defaultSize;
 }
 
+function paragraphAlignOf(el: Element): TextFitBlock['align'] {
+  const fromProp = (el as HTMLElement).style?.textAlign?.trim()
+  const raw = fromProp || /text-align\s*:\s*([^;]+)/i.exec(el.getAttribute('style') || '')?.[1]?.trim()
+  if (raw === 'center' || raw === 'right' || raw === 'left' || raw === 'justify') return raw
+  return undefined
+}
+
 function usableFamily(family: string | undefined | null): string | null {
   if (!family) return null;
   const trimmed = family.trim();
@@ -836,6 +893,7 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
   const root = doc.body;
   if (!root) return empty;
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE;
+  const defaultFamily = resolvePaintFontFamily(options.defaultFontFamily);
   const blockEls = Array.from(root.querySelectorAll(BLOCK_SELECTOR))
   .filter(el => el.tagName === 'LI' || !el.closest('li'));
   const candidates = blockEls.length ? blockEls : Array.from(root.children);
@@ -845,7 +903,7 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
     const isList = el.tagName === 'LI';
     // Empty bullets still occupy a line (Enter on a list placeholder).
     if (!text && !isList) continue;
-    const runs = runSizeProfile(el, defaultSize, options.defaultFontFamily)
+    const runs = runSizeProfile(el, defaultSize, defaultFamily)
     const keepRuns = runs.length > 1 || runs.some(run => !!run.mathLatex)
     const list = isList ? el.closest('ol, ul') : null
     const listMarker = isList
@@ -853,13 +911,13 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
           ? `${Math.max(1, Array.from(list.children).indexOf(el) + 1)}.`
           : '•')
       : undefined
-    const align = ((el as HTMLElement).style?.textAlign || undefined) as TextFitBlock['align']
+    const align = paragraphAlignOf(el)
     blocks.push({
       text: text || ' ',
       size: blockFontSize(el, defaultSize),
       bold: !!el.querySelector('strong, b'),
       italic: !!el.querySelector('em, i'),
-      fontFamily: blockFontFamily(el, options.defaultFontFamily),
+      fontFamily: blockFontFamily(el, defaultFamily),
       listItem: isList,
       align,
       listMarker,
@@ -874,7 +932,7 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
       blocks.push({
         text,
         size: blockFontSize(root, defaultSize),
-        fontFamily: blockFontFamily(root, options.defaultFontFamily)
+        fontFamily: blockFontFamily(root, defaultFamily)
       });
     }
   }
