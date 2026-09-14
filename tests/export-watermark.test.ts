@@ -5,8 +5,10 @@ import {
   EXPORT_WATERMARK_MARKER,
   applyPptxExportWatermark,
   hasPptxExportWatermark,
+  inferWatermarkSurfaceFromSlideXml,
   loadWatermarkImage,
   readWatermarkImage,
+  watermarkSurfaceFromHex,
 } from '../src/utils/pptxExportWatermark'
 
 const PNG_1X1 =
@@ -113,5 +115,32 @@ describe('pptx export watermark', () => {
     const margin = Math.round(9144000 * 0.02)
     expect(xml).toContain(`<a:off x="${margin}" y="${margin}"/>`)
     expect(xml).toContain('<a:alphaModFix amt="50000"/>')
+  })
+
+  it('picks the invert mark on dark slides and the basic mark on light ones', async () => {
+    expect(watermarkSurfaceFromHex('1F3A5F')).toBe('dark')
+    expect(watermarkSurfaceFromHex('ffffff')).toBe('light')
+    expect(inferWatermarkSurfaceFromSlideXml('<p:sld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="1F3A5F"/></a:solidFill></p:bgPr></p:bg></p:sld>')).toBe('dark')
+    expect(inferWatermarkSurfaceFromSlideXml('<p:sld><p:bg><p:bgPr><a:blipFill/></p:bgPr></p:bg></p:sld>')).toBe('dark')
+    expect(inferWatermarkSurfaceFromSlideXml('<p:sld><p:cSld><p:spTree/></p:cSld></p:sld>')).toBe('light')
+
+    const pptx = new pptxgen()
+    pptx.addSlide().background = { color: '1F3A5F' }
+    pptx.addSlide().background = { color: 'FFFFFF' }
+    const deck = new Uint8Array(await pptx.write({ outputType: 'nodebuffer' }) as Uint8Array)
+    const onLight = await loadWatermarkImage(PNG_1X1)
+    const onDark = { ...onLight, bytes: new Uint8Array(onLight.bytes) }
+    const stamped = await applyPptxExportWatermark(deck, { image: PNG_1X1, imageOnDark: PNG_1X1 }, {
+      onLight,
+      onDark,
+      slideSurfaces: ['dark', 'light'],
+    })
+    const zip = await JSZip.loadAsync(stamped)
+    const media = Object.keys(zip.files).filter((p) => p.startsWith('ppt/media/fika-watermark'))
+    expect(media.length).toBe(2)
+    const slide1Rels = await part(stamped, 'ppt/slides/_rels/slide1.xml.rels')
+    const slide2Rels = await part(stamped, 'ppt/slides/_rels/slide2.xml.rels')
+    expect(slide1Rels).not.toBe(slide2Rels)
+    expect(slide1Rels.includes('fika-watermark-2') || slide2Rels.includes('fika-watermark-2')).toBe(true)
   })
 })

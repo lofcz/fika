@@ -25,6 +25,7 @@ export type {
   FikaExportWatermark,
   FikaExportWatermarkPosition,
   FikaExportWatermarkResolver,
+  FikaWatermarkSurface,
 } from '@/configs/exportWatermark'
 export {
   createFikaMediaUploader,

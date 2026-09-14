@@ -21,7 +21,7 @@
  * pile up marks.
  */
 import JSZip from 'jszip'
-import type { FikaExportWatermark, FikaExportWatermarkPosition } from '@/configs/exportWatermark'
+import type { FikaExportWatermark, FikaExportWatermarkPosition, FikaWatermarkSurface } from '@/configs/exportWatermark'
 
 export const EXPORT_WATERMARK_MARKER = 'fika:export-watermark'
 
@@ -41,6 +41,14 @@ export interface WatermarkImage {
   mime: 'image/png' | 'image/jpeg'
   width: number
   height: number
+}
+
+export interface ApplyPptxExportWatermarkImages {
+  onLight: WatermarkImage
+  onDark?: WatermarkImage
+  /** Per-slide polarity from `preferredInk`. Gaps are inferred from the slide XML. */
+  slideSurfaces?: Array<FikaWatermarkSurface | undefined>
+  masterSurface?: FikaWatermarkSurface
 }
 
 // ─── image loading ────────────────────────────────────────────────────────────
@@ -273,6 +281,50 @@ function partPaths(zip: JSZip, pattern: RegExp): string[] {
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
 }
 
+/**
+ * Same cliff as `perceivedDark` in textContrast: AERT brightness 140 or WCAG
+ * luminance 0.25. Dark surface → light mark.
+ */
+export function watermarkSurfaceFromRgb(r: number, g: number, b: number): FikaWatermarkSurface {
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000
+  const lin = (c: number) => {
+    const x = c / 255
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+  }
+  const luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+  return brightness < 140 || luminance < 0.25 ? 'dark' : 'light'
+}
+
+export function watermarkSurfaceFromHex(hex: string): FikaWatermarkSurface {
+  const raw = hex.replace('#', '').trim()
+  const full = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return 'light'
+  return watermarkSurfaceFromRgb(parseInt(full.slice(0, 2), 16), parseInt(full.slice(2, 4), 16), parseInt(full.slice(4, 6), 16))
+}
+
+/** Photo fills use the invert mark; solids/gradients follow the sampled color. */
+export function inferWatermarkSurfaceFromSlideXml(xml: string): FikaWatermarkSurface {
+  const bg = /<p:bg\b[\s\S]*?<\/p:bg>/.exec(xml)?.[0] ?? ''
+  if (!bg) return 'light'
+  if (/<a:blipFill\b/.test(bg)) return 'dark'
+  const hexes = [...bg.matchAll(/<a:srgbClr\b[^>]*\sval="([0-9A-Fa-f]{6})"/g)].map((m) => m[1])
+  if (hexes.length) {
+    const darkest = hexes.reduce((a, b) => {
+      const toneA = watermarkSurfaceFromHex(a)
+      const toneB = watermarkSurfaceFromHex(b)
+      if (toneA === toneB) return a
+      return toneA === 'dark' ? a : b
+    })
+    return watermarkSurfaceFromHex(darkest)
+  }
+  if (/<a:schemeClr\b[^>]*\sval="(?:dk1|dk2|tx1)"/.test(bg)) return 'dark'
+  return 'light'
+}
+
+function normalizeImages(images: WatermarkImage | ApplyPptxExportWatermarkImages): ApplyPptxExportWatermarkImages {
+  return 'bytes' in images ? { onLight: images } : images
+}
+
 /** True when the package already carries the export watermark on any slide. */
 export async function hasPptxExportWatermark(bytes: ArrayBuffer | Uint8Array): Promise<boolean> {
   const zip = await JSZip.loadAsync(bytes)
@@ -290,8 +342,9 @@ export async function hasPptxExportWatermark(bytes: ArrayBuffer | Uint8Array): P
 export async function applyPptxExportWatermark(
   bytes: ArrayBuffer | Uint8Array,
   watermark: FikaExportWatermark,
-  image: WatermarkImage,
+  images: WatermarkImage | ApplyPptxExportWatermarkImages,
 ): Promise<Uint8Array> {
+  const pack = normalizeImages(images)
   const zip = await JSZip.loadAsync(bytes)
   const slides = partPaths(zip, /^ppt\/slides\/slide\d+\.xml$/)
   if (slides.length === 0) throw new Error('PPTX package has no slides')
@@ -300,25 +353,44 @@ export async function applyPptxExportWatermark(
   const contentTypes = await readText(zip, '[Content_Types].xml')
   if (!contentTypes) throw new Error('PPTX package has no [Content_Types].xml')
 
-  const ext = mediaExtension(image.mime)
-  const mediaPath = uniqueMediaName(zip, ext)
-  zip.file(mediaPath, image.bytes, { compression: 'STORE' })
-  zip.file('[Content_Types].xml', ensureContentType(contentTypes, ext, image.mime))
+  const light = pack.onLight
+  const dark = pack.onDark && pack.onDark !== light ? pack.onDark : null
+  const lightExt = mediaExtension(light.mime)
+  const lightPath = uniqueMediaName(zip, lightExt)
+  zip.file(lightPath, light.bytes, { compression: 'STORE' })
+  let types = ensureContentType(contentTypes, lightExt, light.mime)
+  let darkPath = lightPath
+  if (dark) {
+    const darkExt = mediaExtension(dark.mime)
+    darkPath = uniqueMediaName(zip, darkExt)
+    zip.file(darkPath, dark.bytes, { compression: 'STORE' })
+    types = ensureContentType(types, darkExt, dark.mime)
+  }
+  zip.file('[Content_Types].xml', types)
 
-  const geometry = placement(await slideSize(zip), image, watermark)
+  const size = await slideSize(zip)
+  const lightGeom = placement(size, light, watermark)
+  const darkGeom = dark ? placement(size, dark, watermark) : lightGeom
   const opacity =
     typeof watermark.opacity === 'number' && watermark.opacity > 0 && watermark.opacity < 1 ? watermark.opacity : 1
   const name = watermark.name?.trim() || 'Watermark'
 
+  const pick = (surface: FikaWatermarkSurface) =>
+    surface === 'dark' && dark ? { mediaPath: darkPath, geometry: darkGeom } : { mediaPath: lightPath, geometry: lightGeom }
+
   let stamped = 0
-  for (const path of slides) {
-    if (await stampPart(zip, path, { mediaPath, name, geometry, opacity, master: false })) stamped += 1
+  for (let i = 0; i < slides.length; i++) {
+    const path = slides[i]
+    const xml = await readText(zip, path)
+    const surface = pack.slideSurfaces?.[i] ?? (xml ? inferWatermarkSurfaceFromSlideXml(xml) : 'light')
+    if (await stampPart(zip, path, { ...pick(surface), name, opacity, master: false })) stamped += 1
   }
   for (const path of masters) {
-    if (await stampPart(zip, path, { mediaPath, name, geometry, opacity, master: true })) stamped += 1
+    const xml = await readText(zip, path)
+    const surface = pack.masterSurface ?? (xml ? inferWatermarkSurfaceFromSlideXml(xml) : 'light')
+    if (await stampPart(zip, path, { ...pick(surface), name, opacity, master: true })) stamped += 1
   }
   if (stamped === 0) {
-    // Already watermarked — hand back the input untouched instead of a re-zipped copy.
     return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
   }
 

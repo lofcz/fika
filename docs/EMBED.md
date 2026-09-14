@@ -292,7 +292,8 @@ await mountFika(host, {
   exportWatermark: () =>
     isFreeTier()
       ? {
-          image: `${location.origin}/images/logo.png`, // PNG or JPEG; data: URLs work too
+          image: `${location.origin}/images/logo.png`,      // light slides (dark artwork)
+          imageOnDark: `${location.origin}/images/logo-on-dark.png`, // optional; dark / photo slides
           position: 'bottom-right',                    // default
           widthRatio: 0.12,                            // fraction of slide width, default
           marginRatio: 0.02,                           // fraction of slide width, default
@@ -304,7 +305,7 @@ await mountFika(host, {
 
 The mark is written into the OOXML after generation, so it is identical for regenerated decks and retained source packages:
 
-- one shared media part, referenced from **every slide and every slide master**;
+- one media part per polarity (`image` on light fills, `imageOnDark` on dark / photo fills). The engine picks the variant with the same `preferredInk` query as editor chrome; image backgrounds follow the invert mark;
 - the slide copy sits last in the shape tree (visible over full-bleed content) and is fully locked — `noSelect` keeps PowerPoint from selecting it by click, marquee, Ctrl+A or the selection pane, so there is no in-app way to delete it;
 - the master copy is `userDrawn` and locked too; it survives slide-level deletions in editors that ignore locks and only goes away through the slide master view (or by hiding background graphics on a slide);
 - parts already carrying the mark are skipped, so a re-imported export does not stack marks.

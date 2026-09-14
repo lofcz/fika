@@ -9,9 +9,20 @@
  */
 export type FikaExportWatermarkPosition = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
 
+export type FikaWatermarkSurface = 'light' | 'dark'
+
 export interface FikaExportWatermark {
-  /** PNG or JPEG as a `data:` URL or a URL the browser can fetch. */
+  /**
+   * Mark for light slide fills (dark artwork). PNG or JPEG as a `data:` URL
+   * or a URL the browser can fetch.
+   */
   image: string
+  /**
+   * Mark for dark / photo slides (light artwork). When omitted every slide
+   * uses `image`. Polarities come from the same `preferredInk` query as editor
+   * chrome and text contrast.
+   */
+  imageOnDark?: string
   /** Corner of the slide. @default 'bottom-right' */
   position?: FikaExportWatermarkPosition
   /** Mark width as a fraction of the slide width (0–1]. @default 0.12 */

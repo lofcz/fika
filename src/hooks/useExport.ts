@@ -22,11 +22,11 @@ import { getPPTXImageCrop } from '@/utils/pptxUnit';
 import { encrypt } from '@/utils/crypto';
 import { tryGetCleanRetainedPackage } from '@/utils/pptxSourcePackage';
 import { getPlaceholderBaselineHeight } from '@/utils/placeholderLayout';
-import { resolveChartLabelColor } from '@/utils/textContrast';
+import { preferredInk, resolveChartLabelColor, resolveSlideSurfaceColors } from '@/utils/textContrast';
 import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
 import { getFikaExportMediaResolver } from '@/configs/exportMediaResolver';
-import { getFikaExportWatermark, type FikaExportWatermark } from '@/configs/exportWatermark';
+import { getFikaExportWatermark, type FikaExportWatermark, type FikaWatermarkSurface } from '@/configs/exportWatermark';
 import { applyPptxExportWatermark, downloadPptxBytes, loadWatermarkImage, type WatermarkImage } from '@/utils/pptxExportWatermark';
 import { getInternedBlob, isBlobUrl, persistableMediaSrc } from '@/utils/mediaIntern';
 import { transitionExportForMode } from '@/configs/transitions';
@@ -35,7 +35,12 @@ const exportJob = createJobProgress();
 
 interface ResolvedExportWatermark {
   watermark: FikaExportWatermark
-  image: WatermarkImage
+  onLight: WatermarkImage
+  onDark: WatermarkImage
+}
+
+function slideWatermarkSurface(background: Slide['background'], themeBackgroundColor: string): FikaWatermarkSurface {
+  return preferredInk(resolveSlideSurfaceColors(background, themeBackgroundColor)) === '#ffffff' ? 'dark' : 'light';
 }
 
 /**
@@ -47,7 +52,9 @@ async function resolveExportWatermark(): Promise<ResolvedExportWatermark | null>
   if (!resolver) return null;
   const watermark = await resolver();
   if (!watermark) return null;
-  return { watermark, image: await loadWatermarkImage(watermark.image) };
+  const onLight = await loadWatermarkImage(watermark.image);
+  const onDark = watermark.imageOnDark ? await loadWatermarkImage(watermark.imageOnDark) : onLight;
+  return { watermark, onLight, onDark };
 }
 
 /** 1×1 transparent PNG — used when a media URL cannot be inlined so pptxgenjs
@@ -1361,7 +1368,12 @@ export default () => {
         try {
           await tickExportProgress(1, _slides.length, gen);
           const bytes = stamp
-            ? await applyPptxExportWatermark(retained, stamp.watermark, stamp.image)
+            ? await applyPptxExportWatermark(retained, stamp.watermark, {
+              onLight: stamp.onLight,
+              onDark: stamp.onDark,
+              slideSurfaces: _slides.map((slide) => slideWatermarkSurface(slide.background, theme.backgroundColor)),
+              masterSurface: slideWatermarkSurface(undefined, theme.backgroundColor),
+            })
             : new Uint8Array(retained);
           downloadPptxBytes(bytes, fileName);
           return;
@@ -2074,7 +2086,12 @@ export default () => {
         try {
           if (stamp) {
             const packed = await pptx.write({ outputType: 'arraybuffer' }) as ArrayBuffer;
-            downloadPptxBytes(await applyPptxExportWatermark(packed, stamp.watermark, stamp.image), fileName);
+            downloadPptxBytes(await applyPptxExportWatermark(packed, stamp.watermark, {
+              onLight: stamp.onLight,
+              onDark: stamp.onDark,
+              slideSurfaces: _slides.map((slide) => slideWatermarkSurface(slide.background, theme.backgroundColor)),
+              masterSurface: slideWatermarkSurface(undefined, theme.backgroundColor),
+            }), fileName);
           } else {
             await pptx.writeFile({ fileName });
           }

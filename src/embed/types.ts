@@ -1,13 +1,13 @@
 import type { FikaExportTabsConfig } from '@/configs/exportTabs';
 import type { FikaExportMediaResolver } from '@/configs/exportMediaResolver';
-import type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver } from '@/configs/exportWatermark';
+import type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver, FikaWatermarkSurface } from '@/configs/exportWatermark';
 import type { FikaMediaConfig } from '@/configs/mediaUpload';
 import type { Locales } from '@/i18n/locale';
 import type { Slide, SlideTheme, SlideTemplate } from '@/types/slides';
 import type { FikaAgentApi, FikaDeckViewport, FikaSlideReference } from './agentic/types';
 import type { FikaRevealOptions } from './reveal';
 export type { FikaExportMediaResolver };
-export type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver };
+export type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver, FikaWatermarkSurface };
 export type { FikaRevealOptions };
 export type { FikaMediaConfig, FikaMediaConstraints, FikaMediaKind, FikaMediaSizeLimit, FikaMediaUploadProgress, FikaMediaUploadRequest, FikaMediaUploadResult, FikaMediaUploader, FikaXhrMediaUploaderOptions } from '@/configs/mediaUpload';
 export interface FikaTemplatePayload {
