@@ -323,7 +323,11 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       doc,
       tr
     } = editorView.current.state;
-    let next = tr.replaceRangeWith(0, doc.content.size, createDocument(value));
+    const incomingDoc = createDocument(value);
+    // HTML spelling, style order and DOM caret aids can differ while the
+    // authored document is identical. Compare the parsed ProseMirror trees.
+    if (doc.eq(incomingDoc)) return;
+    let next = tr.replaceRangeWith(0, doc.content.size, incomingDoc);
     const size = next.doc.content.size;
     const nextFrom = Math.max(0, Math.min(range.from, size));
     const nextTo = Math.max(0, Math.min(range.to, size));

@@ -1,3 +1,4 @@
+declare let __webpack_public_path__: string;
 import { createElement } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
@@ -97,6 +98,13 @@ export async function mountFika(
     setFikaPortalTarget(portalRoot)
 
     setFikaAssetBase(options.assetBaseUrl)
+    // Lazy editor CSS belongs to the embed asset directory, including when a
+    // host imports the ESM bundle from a different page/base URL.
+    if (options.assetBaseUrl) {
+      __webpack_public_path__ = options.assetBaseUrl.endsWith('/')
+        ? options.assetBaseUrl
+        : `${options.assetBaseUrl}/`
+    }
     setFikaExportTabs(options.exportTabs)
     setFikaExportMediaResolver(options.exportMediaResolver)
     setFikaExportWatermark(options.exportWatermark)

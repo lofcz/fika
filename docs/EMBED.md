@@ -454,3 +454,28 @@ Persist `document.viewport` from `onChange` / `getDocument()` and pass it back o
 - `postMessage` optional bridge for cross-origin CDN hosting
 - Persist `FikaDocument` in `linked_materials` + `presentation` kind in workspace tabs
 - Split chunk / lazy `import('fika-editor/embed')` on first open of presentation tab
+
+### Generated Markdown outside the editor
+
+`fika-editor/text` is a small ESM entry without React or DOM dependencies. It
+uses CommonMark and math syntax trees with source positions, so servers and
+browsers can recover escaped line breaks without changing code, formulas,
+link destinations, or HTML source.
+
+```ts
+import { normalizeGeneratedMarkdown, normalizeGeneratedNewlines } from 'fika-editor/text'
+
+normalizeGeneratedMarkdown(String.raw`**Title**\r\nSecond line`)
+// "**Title**\nSecond line" (a real newline)
+
+// Preserve entities if only newline recovery is wanted:
+normalizeGeneratedNewlines(String.raw`# Heading\n- **Point**`)
+```
+
+`controller.markdownToHtml()` and Markdown layout slots use this normalization
+before rendering formatted runs. `getDocument()` returns the complete target
+slide during `revealSlide()`, so a host can safely snapshot it during animation.
+The ProseMirror schema preserves hard line breaks and Markdown strikethrough
+through storage, static rendering, and editing.
+Pass `assetBaseUrl` to `mountFika()` to resolve lazy editor CSS under the same
+asset directory as the embed stylesheet.

@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext",
+    "declaration": true, "outDir": "dist/text", "rootDir": "src/text",
+    "esModuleInterop": true, "skipLibCheck": true
+  },
+  "include": ["src/text/**/*.ts"]
+}

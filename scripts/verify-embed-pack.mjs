@@ -29,6 +29,8 @@ const REQUIRED = [
   'dist/embed/fika-embed.css',
   'dist/embed/agentic-manifest.json',
   'dist/types/embed/index.d.ts',
+  'dist/text/index.js',
+  'dist/text/index.d.ts',
 ]
 
 const failures = []

@@ -193,7 +193,7 @@ export async function revealSlide(slideId: string, patch: Partial<Slide>, option
   const totalMs = plan.staggerMs + plan.typingMs
   const label = options.label ?? ''
   const signal = options.signal
-  const animate = options.animate !== false && totalMs > 0 && !signal?.aborted && typeof document !== 'undefined'
+  const animate = options.animate !== false && totalMs > 0 && !signal?.aborted && typeof document !== 'undefined' && document.visibilityState !== 'hidden'
 
   if (animate) {
     deps.mute()
@@ -205,7 +205,7 @@ export async function revealSlide(slideId: string, patch: Partial<Slide>, option
       useMainStore.getState().setAiReveal({ slideId, elementId: null, label })
       while (elapsed < totalMs) {
         await sleep(FRAME_MS, signal)
-        if (signal?.aborted || deps.isDestroyed()) break
+        if (signal?.aborted || deps.isDestroyed() || document.visibilityState === 'hidden') break
         const store = useSlidesStore.getState()
         if (!store.slides.some(slide => slide.id === slideId)) break
         elapsed = performance.now() - started

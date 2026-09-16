@@ -246,12 +246,19 @@ const math: NodeSpec = {
 const {
   doc,
   blockquote,
+  hard_break,
   text
 } = nodes;
 export default {
   doc,
   paragraph,
   blockquote,
+  hard_break: {
+    ...hard_break,
+    // ProseMirror appends this DOM-only caret aid after a final hard break.
+    // It must not become another authored break on HTML round-trip.
+    parseDOM: [{ tag: 'br.ProseMirror-trailingBreak', ignore: true }, { tag: 'br' }]
+  } as NodeSpec,
   text,
   math,
   'ordered_list': orderedList,

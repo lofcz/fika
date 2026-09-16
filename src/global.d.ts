@@ -1,11 +1,4 @@
 declare const __FIKA_EXTRAS_ENABLED__: boolean;
-declare module 'markdown-it-texmath' {
-  import type { ComponentType } from 'react';
-  import type MarkdownIt from 'markdown-it';
-  const plugin: (md: MarkdownIt, options: unknown) => void;
-  export default plugin;
-}
-
 declare module 'mathlive/static.css'
 declare module 'mathlive/fonts.css'
 

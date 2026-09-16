@@ -72,6 +72,7 @@ export function createController(
 
   let destroyed = false
   let revealChain: Promise<void> = Promise.resolve()
+  let revealing: { slideId: string; patch: Partial<Slide> } | null = null
 
   const runLegacyCommand = (command: Promise<unknown>) => {
     void command
@@ -90,7 +91,14 @@ export function createController(
     ...agentic.api,
 
     getDocument(): FikaDocument {
-      return agentic.api.deck.get()
+      const doc = agentic.api.deck.get()
+      // Animation frames are paint-only. A host snapshot/reconnect must see
+      // the complete target slide, never a prefix marked as finished.
+      const target = revealing
+      if (target) doc.slides = doc.slides.map(slide => slide.id === target.slideId
+        ? { ...slide, ...target.patch, id: slide.id, skeleton: false }
+        : slide)
+      return doc
     },
 
     setDocument(document: FikaDocument) {
@@ -188,19 +196,26 @@ export function createController(
 
     revealSlide(slideId: string, patch: Partial<Slide>, options: FikaRevealOptions = {}) {
       if (destroyed) return Promise.resolve()
-      const run = () => revealSlide(slideId, patch, options, {
-        mute() {
-          changeMuted++
-          emitChange?.cancel()
-        },
-        unmute() {
-          changeMuted = Math.max(0, changeMuted - 1)
-        },
-        async commit(id, finalPatch) {
-          await assertLegacyCommand(agentic.api.slides.update(id, finalPatch, { source: 'host' }))
-        },
-        isDestroyed: () => destroyed,
-      })
+      const run = async () => {
+        revealing = { slideId, patch: JSON.parse(JSON.stringify(patch)) }
+        try {
+          await revealSlide(slideId, patch, options, {
+            mute() {
+              changeMuted++
+              emitChange?.cancel()
+            },
+            unmute() {
+              changeMuted = Math.max(0, changeMuted - 1)
+            },
+            async commit(id, finalPatch) {
+              await assertLegacyCommand(agentic.api.slides.update(id, finalPatch, { source: 'host' }))
+            },
+            isDestroyed: () => destroyed,
+          })
+        } finally {
+          revealing = null
+        }
+      }
       const next = revealChain.then(run, run)
       revealChain = next.catch(() => undefined)
       return next

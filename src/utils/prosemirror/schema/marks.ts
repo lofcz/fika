@@ -22,6 +22,10 @@ const superscript: MarkSpec = {
 };
 const strikethrough: MarkSpec = {
   parseDOM: [{
+    tag: 's'
+  }, {
+    tag: 'del'
+  }, {
     tag: 'strike'
   }, {
     style: 'text-decoration',

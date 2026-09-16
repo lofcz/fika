@@ -36,7 +36,10 @@ const merged = [
 
 writeFileSync(entryPath, merged)
 for (const filePath of vendorCssFiles) {
-  rmSync(filePath)
+  // The runtime still requests asynchronous stylesheets when their JS chunk
+  // loads. Keep a response at that URL after moving the styles into the entry.
+  if (dirname(filePath) !== embedDir) writeFileSync(filePath, '/* Styles included in fika-embed.css. */\n')
+  else rmSync(filePath)
 }
 
 console.log(`Merged ${vendorCssFiles.length} embed CSS chunks into ${entryName}`)

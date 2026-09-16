@@ -11,7 +11,8 @@
     "dist/types",
     "docs/EMBED.md",
     "docs/AGENTIC_BRIDGE.md",
-    "docs/RELEASE.md"
+    "docs/RELEASE.md",
+    "dist/text"
   ],
   "exports": {
     ".": {
@@ -29,7 +30,12 @@
       "default": "./dist/embed/fika-embed.css"
     },
     "./agentic-manifest.json": "./dist/embed/agentic-manifest.json",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./text": {
+      "types": "./dist/text/index.d.ts",
+      "import": "./dist/text/index.js",
+      "default": "./dist/text/index.js"
+    }
   },
   "engines": {
     "node": ">=24 <25"
@@ -49,7 +55,7 @@
     "dx:start": "1dxway start",
     "doctor": "react-doctor --no-telemetry",
     "build": "run-p type-check \"build-only {@}\" --",
-    "build:embed": "node scripts/run-i18n.mjs --no-watch && npm run build:types && rsbuild build --config rsbuild.config.embed.ts && node scripts/rewrite-embed-base-uri.mjs && node scripts/merge-embed-css.mjs && node scripts/scope-embed-css.mjs && node scripts/extract-embed-fonts.mjs && node scripts/copy-embed-public.mjs && node scripts/generate-agentic-manifest.mjs",
+    "build:embed": "node scripts/run-i18n.mjs --no-watch && npm run build:text && npm run build:types && rsbuild build --config rsbuild.config.embed.ts && node scripts/rewrite-embed-base-uri.mjs && node scripts/merge-embed-css.mjs && node scripts/scope-embed-css.mjs && node scripts/extract-embed-fonts.mjs && node scripts/copy-embed-public.mjs && node scripts/generate-agentic-manifest.mjs",
     "agentic:manifest": "node scripts/generate-agentic-manifest.mjs",
     "build:types": "node -e \"require('node:fs').rmSync('dist/types',{recursive:true,force:true})\" && tsc -p tsconfig.types.json && node scripts/rewrite-embed-types.mjs",
     "prepack": "node scripts/verify-embed-pack.mjs",
@@ -62,7 +68,8 @@
     "lint:fix": "oxlint --fix",
     "test": "node scripts/test.mjs",
     "i18n": "node scripts/run-i18n.mjs",
-    "i18n:build": "node scripts/run-i18n.mjs --no-watch"
+    "i18n:build": "node scripts/run-i18n.mjs --no-watch",
+    "build:text": "tsc -p tsconfig.text.json"
   },
   "author": "Matěj \"lofcz\" Štágl",
   "license": "MIT",
@@ -111,7 +118,10 @@
     "markdown-it-texmath": "^1.0.0",
     "mathlive": "npm:@lofcz/mathlive@^0.110.10",
     "mathml2omml-plus": "^0.6.4",
+    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-math": "^3.0.0",
     "mermaid": "^11.17.0",
+    "micromark-extension-llm-math": "^3.1.1-20250610",
     "mitt": "^3.0.1",
     "nanoid": "^6.0.1",
     "number-precision": "^1.6.0",
