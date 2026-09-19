@@ -91,7 +91,7 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
       resolved.MathfieldElement.soundsDirectory = null;
       // Document-level MathLive sheets (keyboard, popovers) only apply inside
       // Fika — the embed root or the standalone shell.
-      resolved.MathfieldElement.stylesheetScope = `.${EMBED_ROOT_CLASS}, #${APP_SHELL_ID}`;
+      resolved.MathfieldElement.stylesheetScope = `:is(.${EMBED_ROOT_CLASS}, #${APP_SHELL_ID})`;
     } catch {}
     try {
       resolved.initVirtualKeyboardInCurrentBrowsingContext?.();
@@ -222,6 +222,7 @@ export function measureInlineMathBox(latex: string, fontSize: number, display = 
   const cached = inlineMathBoxCache.get(key)
   if (cached) return cached
   const probe = document.createElement('div')
+  probe.className = EMBED_ROOT_CLASS
   probe.style.cssText = [
     'position:absolute',
     'left:-99999px',
@@ -229,6 +230,7 @@ export function measureInlineMathBox(latex: string, fontSize: number, display = 
     `font-size:${Math.max(1, fontSize)}px`,
     'line-height:normal',
     'width:max-content',
+    'white-space:nowrap',
     'pointer-events:none',
   ].join(';')
   probe.innerHTML = renderMathToHtml(latex, display)

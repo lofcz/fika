@@ -744,7 +744,10 @@ export function visualHitAabb(rect: VisualHitRect) {
 export function hitRectClipPath(rect: VisualHitRect, occluders: VisualHitRect[]): string | undefined {
   const holes = occludersAboveRect(rect, occluders).filter(hole => visualHitRectsOverlap(rect, hole));
   if (!holes.length) return undefined;
-  const parts = [`M0 0H${clipPathNum(rect.width)}V${clipPathNum(rect.height)}H0Z`];
+  // Include the outer grab so a hole clip does not shear off the move ring.
+  const padX = dragRingMetrics(rect.width).outerPx;
+  const padY = dragRingMetrics(rect.height).outerPx;
+  const parts = [`M${clipPathNum(-padX)} ${clipPathNum(-padY)}H${clipPathNum(rect.width + padX)}V${clipPathNum(rect.height + padY)}H${clipPathNum(-padX)}Z`];
   for (const hole of holes) {
     const corners = visualHitCorners(hole).map(point => {
       const local = localPointInRect(point.x, point.y, rect);
@@ -771,7 +774,10 @@ export function isPointOnResizeHandle(x: number, y: number, rect: VisualHitRect,
   return false;
 }
 
-/** True when the wrapper-local point sits on the inward drag border, not the edit interior. */
+/**
+ * True when the wrapper-local point sits on the move ring (inner + outer grab).
+ * Same geometry as {@link hitRingLayout} / `.operate-drag-border` / `.hit-border`.
+ */
 export function isPointOnVisualBorder(x: number, y: number, rect: VisualHitRect, options?: {
   clearResizeHandles?: readonly ResizeHandleDirection[];
 }): boolean {
@@ -780,14 +786,18 @@ export function isPointOnVisualBorder(x: number, y: number, rect: VisualHitRect,
   }
   const vertical = dragRingMetrics(rect.height);
   const horizontal = dragRingMetrics(rect.width);
-  if (vertical.innerPx <= 0 && horizontal.innerPx <= 0) return false;
-  if (!pointInVisualHitRect(x, y, rect)) return false;
   const local = localPointInRect(x, y, rect);
-  const distLeft = local.x + rect.width / 2;
-  const distRight = rect.width / 2 - local.x;
-  const distTop = local.y + rect.height / 2;
-  const distBottom = rect.height / 2 - local.y;
-  return horizontal.innerPx > 0 && (distLeft <= horizontal.innerPx || distRight <= horizontal.innerPx) || vertical.innerPx > 0 && (distTop <= vertical.innerPx || distBottom <= vertical.innerPx);
+  const lx = local.x + rect.width / 2;
+  const ly = local.y + rect.height / 2;
+  const vInner = vertical.innerPx;
+  const vOuter = vertical.outerPx;
+  const hInner = horizontal.innerPx;
+  const hOuter = horizontal.outerPx;
+  const alongTop = ly >= -vOuter && ly <= vInner && lx >= -hOuter && lx <= rect.width + hOuter;
+  const alongBottom = ly >= rect.height - vInner && ly <= rect.height + vOuter && lx >= -hOuter && lx <= rect.width + hOuter;
+  const alongLeft = lx >= -hOuter && lx <= hInner && ly >= vInner && ly <= rect.height - vInner;
+  const alongRight = lx >= rect.width - hInner && lx <= rect.width + hOuter && ly >= vInner && ly <= rect.height - vInner;
+  return alongTop || alongBottom || alongLeft || alongRight;
 }
 export type OperateHitTarget = 'resize' | 'move' | 'edit' | null;
 

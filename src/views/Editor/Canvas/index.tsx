@@ -13,7 +13,7 @@ import type { AlignmentLineProps, CreateCustomShapeData } from '@/types/edit'
 import { SlideScaleContext } from '@/types/injectKey'
 import { removeAllRanges } from '@/utils/selection'
 import { clientToCanvas } from '@/utils/canvasPointer'
-import { clicksToEditText, collectVisualHitPlan, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInAnyVisualHitRect, pointInVisualHitRect, retryPendingCaret, type ClientCoords, type VisualHitRect } from '@/utils/canvasHitTest'
+import { clicksToEditText, collectVisualHitPlan, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInAnyVisualHitRect, pointInVisualHitRect, resizeHandleDirectionsFor, retryPendingCaret, type ClientCoords, type VisualHitRect } from '@/utils/canvasHitTest'
 import { layerStackAtPoint, nextSelectableLayer, type LayerStackEntry } from '@/utils/layerStack'
 import { drainCommitQueue, registerAfterCommitDrain } from '@/utils/commitQueue'
 import { richTextAttrsFromElement } from '@/utils/prosemirror/richTextAttrsFromElement'
@@ -392,12 +392,33 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     const y = e.clientY - bounds.top
     let topOccluder: VisualHitRect | null = null
     for (const rect of occluderRects) {
-      if (!pointInVisualHitRect(x, y, rect)) continue
+      const occluded = byId.get(rect.id)
+      const target = occluded
+        ? hitTestOperateTarget(x, y, rect, {
+          interactive: hasInteractiveSurface(occluded),
+          handles: resizeHandleDirectionsFor(occluded),
+        })
+        : null
+      if (!target && !pointInVisualHitRect(x, y, rect)) continue
       if (!topOccluder || rect.zIndex > topOccluder.zIndex) topOccluder = rect
     }
     const hit = hitTestVisualRects(hitRects, x, y)
     if (!toggleModifier) {
-      if (topOccluder) return
+      if (topOccluder) {
+        const occluded = byId.get(topOccluder.id)
+        if (occluded && !occluded.lock) {
+          const target = hitTestOperateTarget(x, y, topOccluder, {
+            interactive: hasInteractiveSurface(occluded),
+            handles: resizeHandleDirectionsFor(occluded),
+          })
+          if (target === 'move') {
+            e.stopPropagation()
+            e.nativeEvent.stopPropagation()
+            selectElement(e.nativeEvent, occluded, true)
+          }
+        }
+        return
+      }
     }
     else if (topOccluder && (!hit || topOccluder.zIndex > hit.zIndex)) {
       // Toggle click on the selected element the user sees at this point:

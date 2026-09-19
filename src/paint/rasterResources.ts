@@ -450,6 +450,9 @@ export const getInlineMathRaster = (
     host.style.cssText = [
       'display:inline-block',
       'width:max-content',
+      'max-width:none',
+      'flex-shrink:0',
+      'white-space:nowrap',
       'line-height:normal',
       `font-size:${size}px`,
       `color:${color}`,
@@ -471,6 +474,7 @@ export const getInlineMathRaster = (
         height,
         dpr: 2,
         embedFonts: true,
+        reconcile: true,
       })
       if (captured && canvasHasInk(captured)) return captured
       return fallbackMathCanvas(latex, width, height, color, size)

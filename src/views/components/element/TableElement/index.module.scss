@@ -14,7 +14,6 @@
   height: 100%;
   position: relative;
   font-family: $textElementFont;
-  cursor: move;
 }
 .table-mask {
   @include absolute-0();

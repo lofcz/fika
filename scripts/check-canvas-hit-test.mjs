@@ -122,7 +122,19 @@ assert(isPointOnVisualBorder(200, 100, visual), 'top edge is a drag border')
 assert(isPointOnVisualBorder(200 + MAX_INNER_DRAG_PX, 180, visual), 'left edge is a drag border')
 assert(!isPointOnVisualBorder(200 + MAX_INNER_DRAG_PX + 1, 180, visual), 'just inside the left ring is edit')
 assert(!isPointOnVisualBorder(400, 180, visual), 'center is interior, not a drag border')
-assert(!isPointOnVisualBorder(0, 0, visual), 'outside the box is not an inward drag border')
+assert(!isPointOnVisualBorder(0, 0, visual), 'far outside the box is not a drag border')
+assert(
+  isPointOnVisualBorder(400, 100 - MAX_OUTER_DRAG_PX, visual),
+  'outer grab just above the box is a move ring (same as CSS)',
+)
+assert(
+  !isPointOnVisualBorder(400, 100 - MAX_OUTER_DRAG_PX - 1, visual),
+  'beyond the outer grab is not a move ring',
+)
+assert(
+  hitTestOperateTarget(400, 100 - MAX_OUTER_DRAG_PX, visual, { interactive: true }) === 'move',
+  'operate hit-test and the CSS ring agree on the outer grab',
+)
 
 const tall = dragRingMetrics(160)
 assert(tall.innerPx === MAX_INNER_DRAG_PX, 'tall boxes clamp inner drag to max')
@@ -147,9 +159,12 @@ assert(thinLayout.inset.startsWith('0px '), 'edit inset is 0 on the short axis')
 
 const thin = { id: 'thin', left: 0, top: 0, width: 400, height: 10, rotate: 0, zIndex: 1 }
 assert(!isPointOnVisualBorder(200, 5, thin), 'center of a 10px-tall box is interior')
-assert(!isPointOnVisualBorder(200, 0, thin), 'top edge of a short box is edit; drag is outside')
+assert(isPointOnVisualBorder(200, 0, thin), 'top edge of a short box is the move ring (inner is 0, outer still grabs)')
+assert(isPointOnVisualBorder(200, -MIN_OUTER_DRAG_PX, thin), 'outer grab above a short box is move')
+assert(!isPointOnVisualBorder(200, 1, thin), 'just inside a short box stays edit')
 const tooThin = { ...thin, height: 5 }
-assert(!isPointOnVisualBorder(200, 2, tooThin), 'a 5px-tall box has no inward drag ring')
+assert(!isPointOnVisualBorder(200, 2, tooThin), 'center of a 5px-tall box is still edit')
+assert(isPointOnVisualBorder(200, -1, tooThin), 'a 5px-tall box still has an outside grab strip')
 
 const tableEl = { id: 'table', type: 'table', left: 100, top: 50, width: 200, height: 80, rotate: 0 }
 assert(resizeHandleDirectionsFor(tableEl).length === 8, 'tables expose all eight resize handles')
@@ -292,6 +307,7 @@ assert(multiSrc.includes('dragElement'), 'MultiSelectOperate wires group move')
 assert(canvasSrc.includes('.hit-rect, .hit-border, .hit-edit'), 'canvas capture defers to HitLayer edit-vs-move')
 assert(canvasSrc.includes('collectVisualHitPlan'), 'canvas capture uses the same hit plan as HitLayer')
 assert(canvasSrc.includes('pointInAnyVisualHitRect'), 'canvas capture ignores points on selected/editing occluders')
+assert(canvasSrc.includes("target === 'move'"), 'canvas capture starts a drag when the selected occluder hit is the move ring')
 assert(canvasHitSrc.includes('export function collectVisualHitPlan'), 'hit plan helper is exported')
 assert(canvasSrc.includes('<MultiSelectOperate'), 'canvas mounts MultiSelectOperate')
 assert(canvasSrc.includes('<Operate'), 'canvas mounts Operate')

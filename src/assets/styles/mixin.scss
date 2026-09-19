@@ -194,6 +194,17 @@
     box-sizing: border-box;
   }
 
+  // MathLive radicals / nested fractions assume content-box and no host
+  // ::before/::after borders. The reset above (and Tailwind preflight)
+  // otherwise paints a second rule above the surd and collapses stacked
+  // fraction bars.
+  .fika-math .ML__sqrt-line::before,
+  .fika-math .ML__sqrt-line::after,
+  .fika-math .ML__frac-line::after {
+    box-sizing: content-box;
+    border-style: none;
+  }
+
   article,
   aside,
   details,
@@ -331,7 +342,20 @@
     display: inline-block;
     vertical-align: baseline;
     line-height: normal;
+    white-space: nowrap;
     user-select: none;
+
+    .ML__latex {
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .ML__base,
+    .ML__mfrac,
+    .ML__vlist,
+    .ML__vlist-t {
+      box-sizing: content-box;
+    }
 
     &[data-display='true'] {
       display: block;
