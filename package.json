@@ -1,6 +1,6 @@
 {
   "name": "fika-editor",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "description": "Fika presentation editor embed bundle with a typed agentic bridge.",
   "type": "module",
   "main": "dist/embed/fika-embed.js",
