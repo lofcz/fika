@@ -116,7 +116,8 @@
     &.row-header tr:first-child .cell {
       font-weight: 600;
       letter-spacing: 0.04em;
-      box-shadow: inset 0 -2px 0 #{$ink};
+      // Explicit cell fills carry their own paper-theme hierarchy.
+      &:not([data-cell-fill]) { box-shadow: inset 0 -2px 0 #{$ink}; }
     }
     &.row-header tr:first-child .cell:not([data-cell-color]) .cell-text {
       color: #fafafa !important;
@@ -152,8 +153,9 @@
 
   .cell {
     position: relative;
-    white-space: normal;
-    word-wrap: break-word;
+    white-space: pre-wrap;
+    word-break: normal;
+    overflow-wrap: break-word;
     vertical-align: middle;
     background-clip: padding-box;
   }

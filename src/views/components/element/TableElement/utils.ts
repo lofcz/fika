@@ -13,6 +13,10 @@ export const getCellStyle = (outline: PPTElementOutline, style?: TableCellStyle)
     borderStyle: outline.style,
     borderColor: outline.color,
     borderWidth: outline.width + 'px',
+    borderTopWidth: style?.borderTopWidth,
+    borderRightWidth: style?.borderRightWidth,
+    borderBottomWidth: style?.borderBottomWidth,
+    borderLeftWidth: style?.borderLeftWidth,
     verticalAlign: style?.vAlign || 'top'
   };
 };
@@ -46,11 +50,14 @@ export const getTextStyle = (_cellMinHeight: number, style?: TableCellStyle): an
     textAlign: align || 'left'
   };
 };
-const escapeCellText = (text: string) => text.replace(/\n/g, '</br>').replace(/ /g, '&nbsp;');
+// Stored cell content is plain text. Preserve breakable spaces and escape HTML.
+export const escapeCellText = (text: string) => text
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/\r\n?|\n/g, '<br>');
 
 /**
- * Render a table cell's stored source for display. Plain text keeps the legacy
- * newline/space escaping; cells whose source contains math (`$…$`, `$$…$$`,
+ * Render a table cell's stored source for display. Plain text is HTML-escaped
+ * with breakable spaces and explicit line breaks; cells whose source contains math (`$…$`, `$$…$$`,
  * `\(…\)`, …) get each formula typeset with MathLive into the canonical
  * `span.fika-math` wrapper while the surrounding text stays escaped.
  *

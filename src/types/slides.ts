@@ -396,6 +396,11 @@ export interface PPTChartElement extends PPTBaseElement {
  * Table cell style.
  */
 export interface TableCellStyle {
+  /** Optional per-edge border widths in canvas pixels; inherit the table outline when omitted. */
+  borderTopWidth?: number;
+  borderRightWidth?: number;
+  borderBottomWidth?: number;
+  borderLeftWidth?: number;
   bold?: boolean;
   em?: boolean;
   underline?: boolean;

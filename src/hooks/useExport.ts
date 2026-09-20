@@ -1940,6 +1940,13 @@ export default () => {
                       transparency: (1 - c.alpha) * 100
                     };
                   }
+                  if (cell.style && ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'].some(key => key in cell.style!)) {
+                    cellOptions.border = [cell.style.borderTopWidth, cell.style.borderRightWidth, cell.style.borderBottomWidth, cell.style.borderLeftWidth].map(width => ({
+                      type: (width ?? el.outline.width) === 0 ? 'none' as const : el.outline.style === 'solid' ? 'solid' as const : 'dash' as const,
+                      pt: (width ?? el.outline.width) / ratioPx2Pt,
+                      color: formatColor(el.outline.color).color,
+                    })) as [pptxgen.BorderProps, pptxgen.BorderProps, pptxgen.BorderProps, pptxgen.BorderProps];
+                  }
                   if (cell.style?.color) cellOptions.color = formatColor(cell.style.color).color;
                   if (!hiddenCells.includes(`${i}_${j}`)) {
                     _row.push({

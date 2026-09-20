@@ -552,7 +552,11 @@ const tableTextHtml = (text: string, style: TableCellStyle | undefined, fallback
     decorations ? `text-decoration:${decorations}` : '',
     style?.align ? `text-align:${style.align}` : '',
   ].filter(Boolean).join(';')
-  return `<p style="${css}">${tableCellInnerHtml(text)}</p>`
+  let inner = tableCellInnerHtml(text)
+  // Single-run blocks preserve semantic emphasis in the rich-text painter.
+  if (style?.bold) inner = `<strong>${inner}</strong>`
+  if (style?.em) inner = `<em>${inner}</em>`
+  return `<p style="${css}">${inner}</p>`
 }
 
 const paintTable = (
@@ -604,12 +608,25 @@ const paintTable = (
         ctx.fillRect(x, row * rowHeight, width, height)
       }
       const border = element.outline
-      if (border?.width) {
+      if (border) {
+        const y = row * rowHeight
+        const edges = [
+          [cell.style?.borderTopWidth ?? border.width, x, y, x + width, y],
+          [cell.style?.borderRightWidth ?? border.width, x + width, y, x + width, y + height],
+          [cell.style?.borderBottomWidth ?? border.width, x, y + height, x + width, y + height],
+          [cell.style?.borderLeftWidth ?? border.width, x, y, x, y + height],
+        ]
         ctx.save()
         ctx.strokeStyle = border.color || '#18181b'
-        ctx.lineWidth = border.width
         ctx.setLineDash(outlineDash(border))
-        ctx.strokeRect(x, row * rowHeight, width, height)
+        for (const [edgeWidth, x1, y1, x2, y2] of edges) {
+          if (!(edgeWidth > 0)) continue
+          ctx.lineWidth = edgeWidth
+          ctx.beginPath()
+          ctx.moveTo(x1, y1)
+          ctx.lineTo(x2, y2)
+          ctx.stroke()
+        }
         ctx.restore()
       }
       // Engine rows are already sized to the tallest cell. `fit` shrinks a
