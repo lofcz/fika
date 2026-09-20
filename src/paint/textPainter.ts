@@ -319,7 +319,7 @@ export const paintRichText = (
       ctx.fillStyle = markerRun.color || options.defaultColor
       ctx.textAlign = 'right'
       ctx.textBaseline = 'alphabetic'
-      ctx.fillText(line.block.listMarker, options.x + inset[3] + Math.max(0, indent - 5), baseline)
+      ctx.fillText(line.block.listMarker, options.x + inset[3] + Math.max(0, indent - LIST_MARKER_GAP_EM * blockEm(line.items, fitScale)), baseline)
       ctx.textAlign = 'left'
     }
 

@@ -31,8 +31,8 @@ export function resolvePaintFontFamily(family?: string | null): string {
 }
 /** Matches `ul, ol { padding-inline-start: 1em }` when the list has no inline pad. */
 export const DEFAULT_LIST_PADDING_EM = 1;
-/** Matches `li { padding-inline-start: 0.4em }` (marker-to-text gap). */
-export const LIST_MARKER_GAP_EM = 0.4;
+/** Matches `li { padding-inline-start: 0.5333333333em }` (marker-to-text gap). */
+export const LIST_MARKER_GAP_EM = 0.4 * (4 / 3);
 /**
  * @deprecated Prefer per-block `listIndentPx` from the imported list padding.
  * Kept as a fallback indent (px) when a list item has no padding of its own.
