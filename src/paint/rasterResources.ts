@@ -465,7 +465,7 @@ export const getInlineMathRaster = (
       void host.offsetWidth
       const width = Math.ceil(host.offsetWidth)
       const height = Math.ceil(host.offsetHeight)
-      if (!(width > 0) || !(height > 0)) {
+      if (!(width > 0) || !(height > 0) || width < size * 0.35 || height > size * 4.5) {
         return fallbackMathCanvas(latex, Math.ceil(size * 3), Math.ceil(size * 1.5), color, size)
       }
       const { captureToCanvas } = await import('@/utils/snapdomCapture')

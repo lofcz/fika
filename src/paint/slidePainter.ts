@@ -612,6 +612,13 @@ const paintTable = (
         ctx.strokeRect(x, row * rowHeight, width, height)
         ctx.restore()
       }
+      // Engine rows are already sized to the tallest cell. `fit` shrinks a
+      // collapsed MathLive box into a sliver and paints it as a vertical bar;
+      // clip so a tall chip cannot leak under the next row.
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(x, row * rowHeight, width, height)
+      ctx.clip()
       paintRichText(ctx, {
         html: tableTextHtml(cell.text || '', cell.style, theme.fontColor),
         x,
@@ -621,14 +628,15 @@ const paintTable = (
         defaultFontFamily: resolvePaintFontFamily(cell.style?.fontname || theme.fontName),
         defaultColor: cell.style?.color || theme.fontColor,
         defaultSize: parseFloat(cell.style?.fontsize || '14') || 14,
-        lineHeight: 1.2,
+        lineHeight: 1.45,
         paragraphSpace: 0,
-        inset: [10, 10, 10, 10],
-        vAlign: cell.style?.vAlign || 'top',
+        inset: [10, 14, 10, 14],
+        vAlign: cell.style?.vAlign || 'middle',
         align: cell.style?.align || 'left',
-        fit: true,
+        fit: false,
         invalidate,
       })
+      ctx.restore()
       x += width
       col += colSpan - 1
     }

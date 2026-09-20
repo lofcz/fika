@@ -35,3 +35,19 @@ export function estimateInlineMathBox(latex: string, fontSize: number, display: 
     height: fontSize * (tall ? 1.85 : 1.2),
   }
 }
+
+/**
+ * Unstyled MathLive HTML collapses to a sliver (a few px wide, many em tall).
+ * Stretching that box onto the canvas is what turns table snapshots into bars.
+ */
+export function isPlausibleInlineMathBox(
+  box: { width: number; height: number },
+  fontSize: number,
+  estimate: { width: number; height: number },
+): boolean {
+  if (!(box.width > 0) || !(box.height > 0) || !(fontSize > 0)) return false
+  if (box.width < fontSize * 0.35) return false
+  if (box.height > fontSize * 4.5) return false
+  if (box.width < estimate.width * 0.25) return false
+  return true
+}

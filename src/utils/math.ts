@@ -16,8 +16,8 @@
 import { decodeXML } from 'entities';
 import { APP_SHELL_ID, EMBED_ROOT_CLASS, getFikaPortalTarget, resolveOffscreenHost } from '@/utils/portal';
 
-export { MATH_CLASS, estimateInlineMathBox, htmlHasFikaMath } from './inlineMathBox';
-import { estimateInlineMathBox, MATH_CLASS } from './inlineMathBox';
+export { MATH_CLASS, estimateInlineMathBox, htmlHasFikaMath, isPlausibleInlineMathBox } from './inlineMathBox';
+import { estimateInlineMathBox, isPlausibleInlineMathBox, MATH_CLASS } from './inlineMathBox';
 type ConvertLatexToMarkup = (latex: string, options?: {
   defaultMode?: 'inline-math' | 'math' | 'text';
 }) => string;
@@ -243,6 +243,9 @@ export function measureInlineMathBox(latex: string, fontSize: number, display = 
   const box = {
     width: rect.width,
     height: Math.max(rect.height, fontSize),
+  }
+  if (!isPlausibleInlineMathBox(box, fontSize, estimateInlineMathBox(latex, fontSize, display))) {
+    return null
   }
   inlineMathBoxCache.set(key, box)
   return box

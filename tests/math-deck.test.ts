@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@rstest/core'
 import { containsTexSource, isTexFormulaSource } from '@/utils/markdown'
 import { latexFallbackText } from '@/utils/inlineMathBox'
-import { deckHasMath, estimateInlineMathBox, htmlContainsMath, normalizeImportedLatex } from '@/utils/math'
+import { deckHasMath, estimateInlineMathBox, htmlContainsMath, isPlausibleInlineMathBox, normalizeImportedLatex } from '@/utils/math'
 
 describe('deck math detection', () => {
   it('finds typeset fractions in text boxes', () => {
@@ -41,6 +41,12 @@ describe('inline math box estimate', () => {
     const simple = estimateInlineMathBox('x', 20, false)
     expect(frac.height).toBeGreaterThan(simple.height)
     expect(frac.width).toBeGreaterThan(simple.width)
+  })
+
+  it('rejects the collapsed sliver unstyled MathLive paints', () => {
+    const estimate = estimateInlineMathBox(String.raw`\frac{3}{4}`, 26, false)
+    expect(isPlausibleInlineMathBox({ width: 3, height: 220 }, 26, estimate)).toBe(false)
+    expect(isPlausibleInlineMathBox({ width: estimate.width, height: estimate.height }, 26, estimate)).toBe(true)
   })
 })
 

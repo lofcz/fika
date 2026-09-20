@@ -13,7 +13,7 @@
 import { layout as pretextLayout, prepare as pretextPrepare } from '@chenglou/pretext';
 import { prepareRichInline, walkRichInlineLineRanges } from '@chenglou/pretext/rich-inline';
 import { cssLengthParts, cssLengthToPx } from './cssLength';
-import { estimateInlineMathBox, MATH_CLASS } from './inlineMathBox';
+import { estimateInlineMathBox, isPlausibleInlineMathBox, MATH_CLASS } from './inlineMathBox';
 
 /** ProseMirror's default text size (assets/styles/prosemirror.scss). */
 export const DEFAULT_TEXT_FONT_SIZE = 16;
@@ -732,6 +732,8 @@ export function applyMeasuredMathBoxes(
       if (!run.mathLatex) continue
       const box = measure(run.mathLatex, run.size, !!run.mathDisplay)
       if (!box) continue
+      const estimate = estimateInlineMathBox(run.mathLatex, run.size, !!run.mathDisplay)
+      if (!isPlausibleInlineMathBox(box, run.size, estimate)) continue
       run.extraWidth = box.width
       run.mathHeight = box.height
     }

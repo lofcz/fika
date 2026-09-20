@@ -343,7 +343,12 @@ export const paintRichText = (
           options.invalidate ?? (() => {}),
         )
         if (raster && chipW > 0 && chipH > 0) {
-          ctx.drawImage(raster, x, chipY, chipW, chipH)
+          const natW = Math.max(1, raster.width)
+          const natH = Math.max(1, raster.height)
+          const scale = Math.min(chipW / natW, chipH / natH)
+          const dw = natW * scale
+          const dh = natH * scale
+          ctx.drawImage(raster, x, chipY + Math.max(0, (chipH - dh) / 2), dw, dh)
         }
         else if (chipW > 0) {
           ctx.save()
