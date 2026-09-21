@@ -1,3 +1,5 @@
+import { listFikaDesignThemes, getFikaDesignTheme } from '@/configs/designThemes';
+import { applyDesignTheme } from '@/utils/applyDesignTheme';
 import { getAttentionAnimations, getEnterAnimations, getExitAnimations, getSlideAnimations, SLIDE_ANIMATIONS } from '@/configs/animation';
 import { SHAPE_LIST, type ShapePoolItem } from '@/configs/shapes';
 import { useMainStore } from '@/store/main';
@@ -9,6 +11,7 @@ import { applyLocale } from '../localeBridge';
 import { inferViewportFromSlides } from '../inferViewport';
 import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern';
 import { clampIndex, cloneElementsWithRemappedIds, clonePatch, clonePlain, cloneSlidesWithRemappedIds, createId, createIssue, createTableCell, ensureElementOnSlide, ensureSlide, findElement, findSlideLinkReferences, insertIndex, isCanonicalCommandType, mergeShapeElement, mergeTheme, normalizeAnimation, normalizeAudioElement, normalizeAudioPatch, deriveLatexGeometry, normalizeElement, normalizeElementLink, normalizeLatexElement, normalizeLineElement, normalizeNote, normalizeNotePatch, normalizeReply, normalizeShapeElement, normalizeSlide, normalizeTableElementPatch, resolveMediaAsset, toIdList, updateLineElement } from './helpers';
+import { stripThemeInlineStyles } from './themeFormatting';
 import { agentTextToHtmlBreaks } from '@/utils/agentText';
 import { applyTextRunStyle, markdownToHtml, type TextRunStyle } from '@/utils/markdown';
 import { applySlideBackgroundWithContrast, resolveChartLabelColor } from '@/utils/textContrast';
@@ -121,9 +124,6 @@ function inlineStyleValues(content: string | undefined, property: 'color' | 'fon
   }
   return values;
 }
-function stripThemeInlineStyles(content: string): string {
-  return content.replace(/color:\s*[^;"']+;?/gi, '').replace(/font-family:\s*[^;"']+;?/gi, '');
-}
 function collectTextTheme(content: string | undefined, defaultColor: string | undefined, defaultFontName: string | undefined, area: number, fontColors: Record<string, number>, fontNames: Record<string, number>) {
   addThemeValue(fontColors, defaultColor, area);
   addThemeValue(fontNames, defaultFontName, area);
@@ -192,11 +192,11 @@ function hasOutline(element: PPTElement): element is OutlineElement {
 function hasShadow(element: PPTElement): element is ShadowElement {
   return (SHADOW_ELEMENT_TYPES as readonly string[]).includes(element.type);
 }
-function applyThemeToSlideContent(stores: Stores, theme: SlideTheme, options: FikaApplyThemeOptions = {}) {
+function applyThemeToSlideContent(stores: Stores, theme: SlideTheme, options: FikaApplyThemeOptions = {}, patch: FikaSlideThemePatch = theme) {
   if (!options.applyToSlides) return;
   const slides = clonePlain(stores.slides.slides);
   for (const slide of slides) {
-    if (!slide.background || slide.background.type !== 'image') {
+    if (patch.backgroundColor !== undefined && (!slide.background || slide.background.type !== 'image')) {
       slide.background = {
         type: 'solid',
         color: theme.backgroundColor
@@ -204,31 +204,31 @@ function applyThemeToSlideContent(stores: Stores, theme: SlideTheme, options: Fi
     }
     for (const element of slide.elements) {
       if (element.type === 'text') {
-        element.defaultColor = theme.fontColor;
-        element.defaultFontName = theme.fontName;
-        element.content = stripThemeInlineStyles(element.content);
+        if (patch.fontColor !== undefined) element.defaultColor = theme.fontColor;
+        if (patch.fontName !== undefined) element.defaultFontName = theme.fontName;
+        element.content = stripThemeInlineStyles(element.content, patch);
       } else if (element.type === 'shape' && element.text) {
-        element.text.defaultColor = theme.fontColor;
-        element.text.defaultFontName = theme.fontName;
-        element.text.content = stripThemeInlineStyles(element.text.content);
+        if (patch.fontColor !== undefined) element.text.defaultColor = theme.fontColor;
+        if (patch.fontName !== undefined) element.text.defaultFontName = theme.fontName;
+        element.text.content = stripThemeInlineStyles(element.text.content, patch);
       } else if (element.type === 'table') {
         for (const row of element.data) {
           for (const cell of row) {
             cell.style = {
               ...(cell.style || {}),
-              color: theme.fontColor,
-              fontname: theme.fontName
+              ...(patch.fontColor !== undefined ? { color: theme.fontColor } : {}),
+              ...(patch.fontName !== undefined ? { fontname: theme.fontName } : {})
             };
           }
         }
       } else if (element.type === 'chart') {
-        element.themeColors = clonePlain(theme.themeColors);
-        element.textColor = resolveChartLabelColor(element, {
+        if (patch.themeColors !== undefined) element.themeColors = clonePlain(theme.themeColors);
+        if (patch.fontColor !== undefined || patch.backgroundColor !== undefined) element.textColor = resolveChartLabelColor(element, {
           background: slide.background,
           fallbackSurface: theme.backgroundColor,
           fontColor: theme.fontColor
         });
-      } else if (element.type === 'latex') {
+      } else if (element.type === 'latex' && patch.fontColor !== undefined) {
         element.color = theme.fontColor;
       }
       if (options.includeElementStyles && hasOutline(element) && element.outline) element.outline = clonePlain(theme.outline);
@@ -1374,7 +1374,7 @@ export function createAgenticApi(options: {
       currentWarnings = previousWarnings;
     }
   };
-  const readOnlyCommands = new Set<FikaCommandType>(['deck.get', 'deck.getTheme', 'deck.extractTheme', 'animations.list', 'animations.catalog', 'animations.sequence', 'templates.catalog', 'templates.slidesCatalog', 'styles.catalog', 'layouts.catalog', 'slides.current', 'slides.read', 'slides.getTransition', 'slides.getRemark', 'notes.listReplies', 'sections.list', 'search.find', 'text.getContent', 'media.resolveAsset', 'export.json', 'shapes.presets']);
+  const readOnlyCommands = new Set<FikaCommandType>(['deck.get', 'deck.getTheme', 'deck.listDesignThemes', 'deck.extractTheme', 'animations.list', 'animations.catalog', 'animations.sequence', 'templates.catalog', 'templates.slidesCatalog', 'styles.catalog', 'layouts.catalog', 'slides.current', 'slides.read', 'slides.getTransition', 'slides.getRemark', 'notes.listReplies', 'sections.list', 'search.find', 'text.getContent', 'media.resolveAsset', 'export.json', 'shapes.presets']);
   const stateOnlyCommands = new Set<FikaCommandType>(['slides.select', 'elements.select', 'elements.selectGroup', 'elements.clearSelection', 'elements.setHandle', 'elements.hide', 'elements.show', 'history.commit', 'view.goToSlide', 'view.nextSlide', 'view.previousSlide', 'view.setZoom', 'view.enterPresentation', 'view.exitPresentation', 'view.setLocale']);
   const isReadOnlyCommandType = (type: FikaCommandType) => type.endsWith('.get') || type.endsWith('.list') || readOnlyCommands.has(type);
   const changesDocument = (command: FikaAgentCommand) => !stateOnlyCommands.has(command.type);
@@ -1561,6 +1561,13 @@ export function createAgenticApi(options: {
     stores.slides.setTheme(mergeDeckTheme(stores.slides.theme, theme));
     return clonePlain(stores.slides.theme);
   });
+  register('deck.listDesignThemes', () => listFikaDesignThemes());
+  register('deck.applyDesignTheme', (payload: { themeId: string }) => {
+    const preset = getFikaDesignTheme(payload.themeId);
+    const result = applyDesignTheme(stores.slides.slides, stores.slides.theme, preset);
+    stores.slides.setSlides(result.slides, result.theme);
+    return { themeId: preset.id!, name: preset.name!, slideCount: result.slides.length };
+  });
   register('deck.getTheme', () => clonePlain(stores.slides.theme));
   register('deck.applyTheme', (payload: {
     theme: FikaSlideThemePatch;
@@ -1568,7 +1575,7 @@ export function createAgenticApi(options: {
   }) => {
     const theme = normalizeDocumentTheme(payload.theme, 'payload.theme') || {};
     stores.slides.setTheme(mergeDeckTheme(stores.slides.theme, theme));
-    applyThemeToSlideContent(stores, stores.slides.theme, payload.options);
+    applyThemeToSlideContent(stores, stores.slides.theme, payload.options, theme);
     return clonePlain(stores.slides.theme);
   });
   register('deck.extractTheme', (payload: {
@@ -4620,6 +4627,8 @@ export function createAgenticApi(options: {
       setTitle: (title, meta) => command('deck.setTitle', {
         title
       }, meta),
+      listDesignThemes: () => listFikaDesignThemes(),
+      applyDesignTheme: (themeId, meta) => command('deck.applyDesignTheme', { themeId }, meta),
       getTheme: () => clonePlain(stores.slides.theme),
       setTheme: (theme, meta) => command('deck.setTheme', {
         theme

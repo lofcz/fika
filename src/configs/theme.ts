@@ -123,9 +123,9 @@ export const themeChartColors = (theme: Pick<PresetTheme, 'colors' | 'chartColor
   [...(theme.chartColors?.length ? theme.chartColors : theme.colors)]
 );
 
-export const matchPresetTheme = (themeColors: string[]): PresetTheme | undefined => {
+export const matchPresetTheme = (themeColors: string[], presets: readonly PresetTheme[] = PRESET_THEMES): PresetTheme | undefined => {
   const key = themeColors.map(color => color.toLowerCase()).join(',');
-  return PRESET_THEMES.find(item => item.colors.map(color => color.toLowerCase()).join(',') === key);
+  return presets.find(item => item.colors.map(color => color.toLowerCase()).join(',') === key);
 };
 
 /** Paint a layout preview/insert with the active preset's type-specific background and type. */

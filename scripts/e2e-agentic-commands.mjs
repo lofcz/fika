@@ -18,6 +18,7 @@ const DEV_PORTS = [5173, 5174, 5175, 5176]
 
 const EXPECTED_COMMANDS = [
   'deck.get', 'deck.set', 'deck.patch', 'deck.setTitle', 'deck.getTheme', 'deck.setTheme',
+  'deck.listDesignThemes', 'deck.applyDesignTheme',
   'deck.applyTheme', 'deck.extractTheme',
   'deck.applyTemplate', 'deck.applyStyle', 'deck.planComposition', 'deck.setup',
   'deck.setViewport', 'deck.setTemplates',
@@ -369,6 +370,20 @@ async function runSuite(page) {
     {
       const { result } = await agent('deck.setTheme', { theme: { fontColor: '#112233' } })
       rec('deck.setTheme merges fontColor', result.ok && store().theme.fontColor === '#112233', { fontColor: store().theme.fontColor })
+    }
+    {
+      await agent('history.commit', undefined, { commit: true })
+      const before = JSON.stringify(store().slides)
+      const themeBefore = JSON.stringify(store().theme)
+      const catalog = await agent('deck.listDesignThemes')
+      rec('deck.listDesignThemes is read-only and returns the active catalog', catalog.result.ok && !catalog.result.changed && catalog.result.data?.length > 0, { error: err(catalog.result) })
+      const themeId = catalog.result.data[0].id
+      const applied = await agent('deck.applyDesignTheme', { themeId }, { commit: true })
+      rec('deck.applyDesignTheme applies the picker design in one command', applied.result.ok && applied.result.data.themeId === themeId && JSON.stringify(store().theme.themeColors) === JSON.stringify(catalog.result.data[0].colors), { error: err(applied.result) })
+      const undo = await agent('history.undo')
+      rec('one undo restores all slides and the theme after a design change', undo.result.ok && JSON.stringify(store().slides) === before && JSON.stringify(store().theme) === themeBefore, { error: err(undo.result) })
+      const invalid = await agent('deck.applyDesignTheme', { themeId: 'missing-host-theme' })
+      rec('unknown host theme is rejected without changing the deck', !invalid.result.ok && JSON.stringify(store().slides) === before && JSON.stringify(store().theme) === themeBefore, { error: err(invalid.result) })
     }
     {
       const { result } = await agent('deck.getTheme')
@@ -1349,7 +1364,8 @@ try {
   }
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   page.on('pageerror', error => console.error('[pageerror]', error.message))
-  await page.goto(devUrl, { waitUntil: 'networkidle' })
+  // The bridge hook is the readiness signal; remote fonts/media may never go idle.
+  await page.goto(devUrl, { waitUntil: 'domcontentloaded' })
   await waitForHooks(page)
   const { cases, missing, missingOk } = await runSuite(page)
   await page.close()

@@ -1,3 +1,4 @@
+import { setFikaDesignThemes } from '@/configs/designThemes'
 import { useSlidesStore } from '@/store/slides'
 import { useScreenStore } from '@/store/screen'
 import { useMainStore } from '@/store/main'
@@ -131,6 +132,9 @@ export function createController(
       runLegacyCommand(agentic.api.deck.setTitle(title, { source: 'host' }))
     },
 
+    setDesignThemes(themes) {
+      if (!destroyed) setFikaDesignThemes(themes)
+    },
     async setLocale(locale: Locales) {
       if (destroyed) return
       await assertLegacyCommand(agentic.api.view.setLocale(locale))

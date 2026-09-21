@@ -1,3 +1,4 @@
+import { useDesignThemes } from '@/configs/designThemes'
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
@@ -13,7 +14,7 @@ import type {
   SlideBackgroundImage,
   SlideBackgroundImageSize,
 } from '@/types/slides'
-import { matchThemeBackgroundIndex, PRESET_THEMES, slideBackgroundToStyle, themeBackgroundCycle } from '@/configs/theme'
+import { matchThemeBackgroundIndex, type PresetTheme, slideBackgroundToStyle, themeBackgroundCycle } from '@/configs/theme'
 import { useFonts } from '@/configs/font'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useSlideTheme from '@/hooks/useSlideTheme'
@@ -45,16 +46,18 @@ const readBackground = (): SlideBackground => {
 
 const ThemeList = memo(function ThemeList({
   activeThemeId,
+  themes,
   useLabel,
   onApply,
 }: {
   activeThemeId: string | null
+  themes: readonly PresetTheme[]
   useLabel: string
-  onApply: (item: (typeof PRESET_THEMES)[number]) => void
+  onApply: (item: PresetTheme) => void
 }) {
   return (
     <div className={cx('theme-list')}>
-      {PRESET_THEMES.map(item => (
+      {themes.map(item => (
         <div className={cx('theme-item')} key={item.id}>
           <button
             type="button"
@@ -64,7 +67,7 @@ const ThemeList = memo(function ThemeList({
             onClick={() => onApply(item)}
           >
             <span className={cx('theme-card-preview')} style={slideBackgroundToStyle(item.featureBackground, item.background)} />
-            <span className={cx('theme-card-aa')} style={{ color: item.featureFontColor || '#fff' }}>Aa</span>
+            <span className={cx('theme-card-aa')} style={{ color: item.featureFontColor || item.fontColor }}>Aa</span>
             <span className={cx('theme-card-use')}>{useLabel}</span>
           </button>
           <span className={cx('theme-name')}>{item.name}</span>
@@ -108,12 +111,13 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
   const slideIndex = useSlidesStore(s => s.slideIndex)
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const theme = useSlidesStore(s => s.theme)
+  const themes = useDesignThemes(s => s.themes)
 
   const [customViewportSizeVisible, setCustomViewportSizeVisible] = useState(false)
   const [currentGradientIndex, setCurrentGradientIndex] = useState(0)
 
   const { addHistorySnapshot } = useHistorySnapshot()
-  const { applyPresetTheme, clearPresetTheme, applyThemeLookToCurrentSlide } = useSlideTheme()
+  const { applyPresetTheme, applyThemeLookToCurrentSlide } = useSlideTheme()
 
   const backgroundTypeOptions = useMemo(() => [
     { label: LL.editor.slideDesign.solidFill(), value: 'solid' },
@@ -143,18 +147,15 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
 
   const activeThemeId = useMemo(() => {
     const colors = theme.themeColors.map(item => item.toLowerCase()).join(',')
-    return PRESET_THEMES.find(item => item.colors.map(color => color.toLowerCase()).join(',') === colors)?.id ?? null
-  }, [theme.themeColors])
-  const onApplyPresetTheme = useCallback((item: (typeof PRESET_THEMES)[number]) => {
-    if (activeThemeId === item.id) {
-      clearPresetTheme()
-      return
-    }
+    return themes.find(item => item.colors.map(color => color.toLowerCase()).join(',') === colors)?.id ?? null
+  }, [theme.themeColors, themes])
+  const onApplyPresetTheme = useCallback((item: PresetTheme) => {
+    if (activeThemeId === item.id) return
     applyPresetTheme(item)
-  }, [activeThemeId, applyPresetTheme, clearPresetTheme])
+  }, [activeThemeId, applyPresetTheme])
   const activeTheme = useMemo(
-    () => PRESET_THEMES.find(item => item.id === activeThemeId) ?? null,
-    [activeThemeId],
+    () => themes.find(item => item.id === activeThemeId) ?? null,
+    [activeThemeId, themes],
   )
   const themeLooks = useMemo(() => (activeTheme ? themeBackgroundCycle(activeTheme) : []), [activeTheme])
   const activeLookIndex = useMemo(
@@ -294,13 +295,14 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
   return (
     <>
       <div className={cx('slide-design-panel', className)} style={style}>
-        <PanelSection label={LL.editor.slideDesign.presetThemes()}>
+        {themes.length > 0 && <PanelSection label={LL.editor.slideDesign.presetThemes()}>
           <ThemeList
+            themes={themes}
             activeThemeId={activeThemeId}
             useLabel={LL.editor.slideDesign.use()}
             onApply={onApplyPresetTheme}
           />
-        </PanelSection>
+        </PanelSection>}
 
         {themeLooks.length ? (
           <PanelSection label={LL.editor.slideDesign.looks()}>

@@ -73,3 +73,6 @@ export type {
   TextAlign,
   TurningMode,
 } from '@/types/slides'
+
+export type { FikaDesignTheme } from '@/configs/designThemes'
+export { getFikaDefaultDesignThemes } from '@/configs/designThemes'

@@ -479,3 +479,43 @@ The ProseMirror schema preserves hard line breaks and Markdown strikethrough
 through storage, static rendering, and editing.
 Pass `assetBaseUrl` to `mountFika()` to resolve lazy editor CSS under the same
 asset directory as the embed stylesheet.
+
+### Host-configured slide designs
+
+Pass `designThemes` to replace the built-in design cards (not editor chrome).
+The supplied order and host-localized `name` appear in the picker. Custom designs
+also drive layout previews, new layout slides, background looks and chart colors.
+Omit the option for Fika defaults; pass `[]` to hide the preset section.
+Configuring the catalog does not apply a design to the existing document.
+
+```ts
+import { mountFika, getFikaDefaultDesignThemes, type FikaDesignTheme } from 'fika-editor/embed'
+
+const paper: FikaDesignTheme = {
+  id: 'my-paper', name: 'Paper',
+  background: '#FAF8F4', fontColor: '#2B3445', fontname: 'Inter',
+  colors: ['#D25F2B', '#2A7FA3', '#5F8A2C'],
+  borderColor: '#E3DFD6',
+}
+const { controller } = await mountFika('#editor', { designThemes: [paper] })
+controller.setDesignThemes([{ ...paper, name: 'Papír' }]) // reactive label/catalog update
+controller.setDesignThemes(getFikaDefaultDesignThemes()) // independent copies of defaults
+```
+
+Design IDs must be nonempty and unique; names and accent palettes are required.
+Use distinct accent palettes so the active design can be recognized after a
+saved document is loaded. Optional `chartColors`, `featureFontColor`,
+`contentBackground`, `featureBackground`, `altBackground` and `backgrounds`
+provide the same appearance controls as built-in designs. Catalogs are runtime
+host configuration, not part of the persisted document. Like Fika's other embed
+configuration and stores, the catalog is shared by the active editor runtime;
+use separate runtimes for independently configured simultaneous editors.
+
+Agents can use the same active catalog via `controller.deck.listDesignThemes()`
+(read-only), then apply one by ID with
+`controller.deck.applyDesignTheme('scio-blue')`. The command-bus equivalent is
+`{ type: 'deck.applyDesignTheme', payload: { themeId: 'scio-blue' } }`.
+Application uses the picker implementation and creates one undo step for the
+whole deck. Unknown IDs fail without changing the presentation. Hosts should
+include the small catalog in agent context so applying a named theme needs only
+one call, without a preceding discovery request.

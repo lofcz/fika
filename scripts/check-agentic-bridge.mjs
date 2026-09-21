@@ -21,6 +21,7 @@ const expectedCommands = [
   'deck.setTitle',
   'deck.getTheme',
   'deck.setTheme',
+  'deck.listDesignThemes', 'deck.applyDesignTheme',
   'deck.applyTheme',
   'deck.extractTheme',
   'deck.applyTemplate',

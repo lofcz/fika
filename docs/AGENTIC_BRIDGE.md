@@ -519,3 +519,11 @@ await controller.executeBatch(commands, { atomic: true })
 ```
 
 Use `controller.export.json()` for a synchronous serializable snapshot. Use `controller.import.json(document)`, `controller.execute({ type: 'import.json', payload: { document } })`, or `controller.execute({ type: 'export.json' })` when sciobot needs command results for whole-document import/export.
+### Partial theme application
+
+`deck.applyTheme` with `options.applyToSlides: true` applies only the supplied
+properties to existing slide content. For example, `{ theme: { fontName:
+'Calibri' }, options: { applyToSlides: true } }` replaces text/shape/table font
+families without resetting backgrounds, text colors, chart palettes or sizes.
+Inline property removal is restricted to style declarations; background-color,
+border-color and literal CSS examples in lesson text are preserved.

@@ -1,3 +1,4 @@
+import { useDesignThemes } from '@/configs/designThemes'
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
@@ -41,6 +42,7 @@ const ChartStylePanel = memo(function ChartStylePanel() {
   const { LL } = useI18nContext()
   const handleElementId = useHandleElementId()
   const theme = useSlidesStore(s => s.theme)
+  const designThemes = useDesignThemes(s => s.themes)
   const slideBackground = useSlidesStore(s => selectCurrentSlide(s)?.background)
   const chartType = useHandleElementSelect(el => el?.type === 'chart' ? el.chartType : null)
   const chartStyle = useHandleElementShallow(el => {
@@ -211,7 +213,7 @@ const ChartStylePanel = memo(function ChartStylePanel() {
                   type="button"
                   className={cx('preset-theme slide-theme', { on: sameColors(theme.themeColors, themeColors) })}
                   onClick={() => {
-                    const preset = matchPresetTheme(theme.themeColors)
+                    const preset = matchPresetTheme(theme.themeColors, designThemes)
                     applyThemeColors(resolveChartSeriesColors(
                       preset ? themeChartColors(preset) : theme.themeColors,
                       resolveElementSurfaces({

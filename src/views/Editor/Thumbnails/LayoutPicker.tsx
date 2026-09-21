@@ -1,3 +1,4 @@
+import { useDesignThemes } from '@/configs/designThemes'
 import { bindStyles } from '@/utils/cssm'
 import styles from './LayoutPicker.module.scss'
 const cx = bindStyles(styles)
@@ -26,6 +27,7 @@ export type ILayoutPickerProps = {
 const LayoutPicker = memo((props: ILayoutPickerProps) => {
   const { LL } = useI18nContext()
   const theme = useSlidesStore(s => s.theme)
+  const designThemes = useDesignThemes(s => s.themes)
 
   const starterOptions = useMemo(() => ({
     backgroundColor: theme.backgroundColor,
@@ -36,7 +38,7 @@ const LayoutPicker = memo((props: ILayoutPickerProps) => {
   const layouts = useMemo(() => {
     const names = LL.editor.thumbnails.layouts
     const options = starterOptions
-    const preset = matchPresetTheme(theme.themeColors)
+    const preset = matchPresetTheme(theme.themeColors, designThemes)
     const items = [
       { id: 'cover', name: names.cover(), index: 0, slide: buildTitleSlide(LL, options) },
       { id: 'content', name: names.content(), index: 1, slide: buildContentSlide(LL, options) },
@@ -51,7 +53,7 @@ const LayoutPicker = memo((props: ILayoutPickerProps) => {
       if (preset) applyPresetToLayoutSlide(item.slide, preset, item.index)
     }
     return items
-  }, [LL, starterOptions, theme.themeColors])
+  }, [LL, starterOptions, theme.themeColors, designThemes])
 
   const onSelectRef = useRef(props.onSelect)
   onSelectRef.current = props.onSelect

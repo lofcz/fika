@@ -17,6 +17,7 @@ import { TypesafeI18n } from '@/i18n/i18n-react'
 import { getFikaLocale, setFikaLocale, type Locales } from '@/i18n/locale'
 import { clearFikaPortalTarget, setFikaPortalTarget } from '@/utils/portal'
 import { setFikaAssetBase } from '@/utils/assetBase'
+import { setFikaDesignThemes, resolveDesignThemes } from '@/configs/designThemes'
 import { setFikaExportTabs } from '@/configs/exportTabs'
 import { setFikaExportMediaResolver } from '@/configs/exportMediaResolver'
 import { setFikaExportWatermark } from '@/configs/exportWatermark'
@@ -54,6 +55,8 @@ export async function mountFika(
   options: FikaMountOptions = {},
 ): Promise<FikaMountResult> {
   const el = resolveHostElement(target)
+  // Validate before tearing down an existing mount or modifying the host DOM.
+  resolveDesignThemes(options.designThemes)
 
   const previousMount = activeMounts.get(el)
   if (previousMount) {
@@ -105,6 +108,7 @@ export async function mountFika(
         ? options.assetBaseUrl
         : `${options.assetBaseUrl}/`
     }
+    setFikaDesignThemes(options.designThemes)
     setFikaExportTabs(options.exportTabs)
     setFikaExportMediaResolver(options.exportMediaResolver)
     setFikaExportWatermark(options.exportWatermark)
@@ -168,6 +172,7 @@ export async function mountFika(
       setFikaExportMediaResolver(null)
       setFikaExportWatermark(null)
       setFikaMediaConfig(null)
+      setFikaDesignThemes()
       setFikaHeaderMenuItems()
       setFikaLocaleSwitcherEnabled()
       clearFikaPortalTarget(portalRoot)

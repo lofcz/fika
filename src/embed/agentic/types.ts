@@ -600,6 +600,8 @@ export interface FikaAgentDeckApi {
   setTitle(title: string, meta?: FikaCommandMeta): Promise<FikaCommandResult<{
     title: string;
   }>>;
+  listDesignThemes(): Array<{ id: string; name: string; background: string; fontColor: string; colors: string[] }>;
+  applyDesignTheme(themeId: string, meta?: FikaCommandMeta): Promise<FikaCommandResult<{ themeId: string; name: string; slideCount: number }>>;
   getTheme(): SlideTheme;
   setTheme(theme: FikaSlideThemePatch, meta?: FikaCommandMeta): Promise<FikaCommandResult<SlideTheme>>;
   applyTemplate(templateId: string, meta?: FikaCommandMeta): Promise<FikaCommandResult<FikaApplyTemplateResult>>;
@@ -1202,6 +1204,8 @@ export interface FikaCommandPayloadMap {
   'deck.setTitle': {
     title: string;
   };
+  'deck.listDesignThemes': undefined;
+  'deck.applyDesignTheme': { themeId: string };
   'deck.getTheme': undefined;
   'deck.setTheme': {
     theme: FikaSlideThemePatch | Partial<SlideTheme>;
@@ -1894,6 +1898,8 @@ export interface FikaCommandResultDataMap {
   'deck.setTitle': {
     title: string;
   };
+  'deck.listDesignThemes': Array<{ id: string; name: string; background: string; fontColor: string; colors: string[] }>;
+  'deck.applyDesignTheme': { themeId: string; name: string; slideCount: number };
   'deck.getTheme': SlideTheme;
   'deck.setTheme': SlideTheme;
   'deck.applyTheme': SlideTheme;

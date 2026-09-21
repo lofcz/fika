@@ -1,3 +1,4 @@
+import type { FikaDesignTheme } from '@/configs/designThemes';
 import type { FikaExportTabsConfig } from '@/configs/exportTabs';
 import type { FikaExportMediaResolver } from '@/configs/exportMediaResolver';
 import type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver, FikaWatermarkSurface } from '@/configs/exportWatermark';
@@ -66,6 +67,8 @@ export interface FikaHeaderMenuItem {
 /** `editor` is the default full editor; `presentation` boots straight into the fullscreen slideshow with no editor chrome. */
 export type FikaViewMode = 'editor' | 'presentation';
 export interface FikaMountOptions {
+  /** Replacement design catalog in display order. Omit for Fika defaults; [] hides presets. Does not restyle the loaded document. */
+  designThemes?: readonly FikaDesignTheme[];
   /** UI locale (`cs` | `en` | `sk` | `pl`). */
   locale?: Locales;
   /** Initial deck; takes precedence over `loadDocument` and the starter slide. */
@@ -195,6 +198,8 @@ export interface FikaController extends FikaAgentApi {
   importPptx(data: File | Blob | ArrayBuffer, options?: FikaImportPptxOptions): Promise<boolean>;
   setTitle(title: string): void;
   setLocale(locale: Locales): Promise<void>;
+  /** Replace the visible design catalog without changing slide content. Undefined restores defaults. */
+  setDesignThemes(themes?: readonly FikaDesignTheme[]): void;
   /**
    * Paint one slide offscreen (thumbnail painter, no DOM capture) and return
    * the encoded image. Defaults to the current slide.

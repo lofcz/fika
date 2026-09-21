@@ -822,6 +822,30 @@
         "execute",
         "history.commit"
       ]
+    },
+    "deck.listDesignThemes": {
+      "summary": "Read the active host-provided design picker catalog (Fika defaults when the host supplies none). Read-only; IDs may be passed directly to deck.applyDesignTheme.",
+      "examples": [
+        "controller.deck.listDesignThemes()"
+      ]
+    },
+    "deck.applyDesignTheme": {
+      "summary": "Apply a design from the active host catalog to the entire existing deck in one undoable command, using the same implementation as the design picker.",
+      "params": [
+        {
+          "name": "themeId",
+          "type": "string",
+          "required": true,
+          "description": "Exact ID from deck.listDesignThemes or host-provided live deck context."
+        }
+      ],
+      "examples": [
+        "controller.deck.applyDesignTheme('scio-blue')"
+      ],
+      "tips": [
+        "When host IDs are already in context, apply the requested theme directly without a catalog/read call.",
+        "Preserves slide IDs and content; changes backgrounds, fonts, colors and chart palettes. Never use deck.setup to restyle an existing deck."
+      ]
     }
   },
   "guides": [
