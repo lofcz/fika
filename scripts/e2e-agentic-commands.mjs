@@ -111,7 +111,7 @@ async function waitForDev(timeoutMs = 60000) {
 async function waitForHooks(page) {
   const start = Date.now()
   while (Date.now() - start < 20000) {
-    if (await page.evaluate(() => !!window.__FIKA_AGENTIC__ && !!window.__FIKA_SLIDES__ && !!window.__FIKA_TEMPLATES__)) return
+    if (await page.evaluate(() => !!window.__FIKA_AGENTIC__ && !!window.__FIKA_SLIDES__ && !!window.__FIKA_TEMPLATES__ && window.__FIKA_SNAPSHOT__?.getState().snapshotLength > 0)) return
     await sleep(250)
   }
   throw new Error('fika agentic hook did not appear — restart the fika dev server')
@@ -372,6 +372,13 @@ async function runSuite(page) {
       rec('deck.setTheme merges fontColor', result.ok && store().theme.fontColor === '#112233', { fontColor: store().theme.fontColor })
     }
     {
+      // Isolate theme undo from asynchronous image/diagram sizing in the golden
+      // fixture. Two fixed text slides still exercise whole-deck restoration.
+      await agent('deck.patch', { slides: [1, 2].map(index => ({
+        id: `theme_undo_${index}`, background: { type: 'solid', color: '#fafafa' },
+        elements: [{ id: `theme_copy_${index}`, type: 'text', left: 50, top: 50, width: 500, height: 100, rotate: 0,
+          fixedHeight: true, defaultColor: '#111111', defaultFontName: 'Arial', content: '<p style="font-size:24px">Theme undo fixture</p>' }],
+      })) })
       await agent('history.commit', undefined, { commit: true })
       const before = JSON.stringify(store().slides)
       const themeBefore = JSON.stringify(store().theme)
@@ -382,8 +389,14 @@ async function runSuite(page) {
       rec('deck.applyDesignTheme applies the picker design in one command', applied.result.ok && applied.result.data.themeId === themeId && JSON.stringify(store().theme.themeColors) === JSON.stringify(catalog.result.data[0].colors), { error: err(applied.result) })
       const undo = await agent('history.undo')
       rec('one undo restores all slides and the theme after a design change', undo.result.ok && JSON.stringify(store().slides) === before && JSON.stringify(store().theme) === themeBefore, { error: err(undo.result) })
+      // Let restored text/diagram DOM settle before testing the next command's
+      // transaction boundary (it can legitimately normalize imported geometry).
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const beforeInvalid = JSON.stringify(store().slides)
       const invalid = await agent('deck.applyDesignTheme', { themeId: 'missing-host-theme' })
-      rec('unknown host theme is rejected without changing the deck', !invalid.result.ok && JSON.stringify(store().slides) === before && JSON.stringify(store().theme) === themeBefore, { error: err(invalid.result) })
+      rec('unknown host theme is rejected without changing the deck', !invalid.result.ok && JSON.stringify(store().slides) === beforeInvalid && JSON.stringify(store().theme) === themeBefore, { error: err(invalid.result) })
+      await seed()
+      await agent('deck.setTheme', { theme: { fontColor: '#112233' } })
     }
     {
       const { result } = await agent('deck.getTheme')
@@ -410,6 +423,17 @@ async function runSuite(page) {
     {
       const { result } = await agent('deck.setViewport', { size: 1000, ratio: 0.5625 })
       rec('deck.setViewport updates size and ratio', result.ok && store().viewportSize === 1000 && Math.abs(store().viewportRatio - 0.5625) < 0.0001, { size: store().viewportSize, ratio: store().viewportRatio })
+    }
+    {
+      await agent('history.commit', undefined, { commit: true })
+      const before = JSON.stringify(store().slides)
+      const beforeSize = store().viewportSize, beforeRatio = store().viewportRatio
+      const resize = await agent('deck.setViewport', { size: beforeSize / 2, ratio: 0.75 }, { commit: true })
+      rec('deck.setViewport fits slide content as well as the canvas', resize.result.ok && JSON.stringify(store().slides) !== before && store().viewportRatio === 0.75, { error: err(resize.result) })
+      const undo = await agent('history.undo')
+      rec('one undo restores viewport and every resized element', undo.result.ok && JSON.stringify(store().slides) === before && store().viewportSize === beforeSize && store().viewportRatio === beforeRatio, { error: err(undo.result) })
+      const dry = await agent('deck.setViewport', { ratio: 1.4142 }, { dryRun: true })
+      rec('viewport dry-run leaves geometry and canvas unchanged', dry.result.ok && JSON.stringify(store().slides) === before && store().viewportRatio === beforeRatio, { error: err(dry.result) })
     }
     {
       const { result } = await agent('deck.setTemplates', { templates: [{ id: 'tpl_agent', name: 'Agent template', cover: PNG }] })

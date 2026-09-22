@@ -1,3 +1,4 @@
+import { designColorRoles, textSurface, retintInlineText } from '@/utils/designColorRoles';
 import tinycolor from 'tinycolor2';
 import type { Slide, SlideTheme } from '@/types/slides';
 import { inferThemeSlideType, resolvePresetBackground, themeChartColors, type PresetTheme } from '@/configs/theme';
@@ -61,9 +62,11 @@ import { stripThemeInlineStyles } from '@/embed/agentic/themeFormatting';
     }
     return themeColorMap;
   };
-export const setSlideTheme = (slide: Slide, theme: PresetTheme, index = 0) => {
-    const colorMap = createSlideThemeColorMap(slide, theme.colors);
+export const setSlideTheme = (slide: Slide, theme: PresetTheme, index = 0, sourceAccents: readonly string[] = theme.colors) => {
+    const roles = theme.preserveColorRoles ? designColorRoles(theme, sourceAccents) : undefined;
+    const colorMap = roles ? {} : createSlideThemeColorMap(slide, theme.colors);
     const getColor = (color: string) => {
+      if (roles) return roles.fill(color);
       const alpha = tinycolor(color).getAlpha();
       const _color = colorMap[tinycolor(color).setAlpha(1).toRgbString()];
       return _color ? tinycolor(_color).setAlpha(alpha).toRgbString() : color;
@@ -71,23 +74,38 @@ export const setSlideTheme = (slide: Slide, theme: PresetTheme, index = 0) => {
     if (!slide.background || slide.background.type !== 'image') {
       slide.background = resolvePresetBackground(theme, slide.type, index);
     }
-    const ink = preferredInk(resolveSlideSurfaceColors(slide.background, theme.background));
+    const ink = roles ? theme.fontColor : preferredInk(resolveSlideSurfaceColors(slide.background, theme.background));
+    // Paint all surfaces first so text sees the final panel below it.
+    if (roles) for (const el of slide.elements) {
+      if ((el.type === 'shape' || el.type === 'text' || el.type === 'chart') && el.fill) {
+        el.fill = getColor(el.fill);
+        if (el.type === 'shape' && el.name === 'Decor' && (el.opacity ?? 1) > 0.5 && tinycolor(el.fill).toHsl().l < 0.78) {
+          el.fill = tinycolor.mix(theme.background, el.fill, 13).setAlpha(tinycolor(el.fill).getAlpha()).toRgbString();
+        }
+      }
+      if (el.type === 'shape') delete el.gradient;
+    }
     for (const el of slide.elements) {
+      const surface = textSurface(slide, el, theme.background);
+      const elementInk = roles ? roles.ink(surface) : ink;
+      const formatText = (html: string) => roles
+        ? retintInlineText(stripThemeInlineStyles(html, { fontName: theme.fontname }), surface, roles.ink)
+        : stripThemeInlineStyles(html, { fontColor: ink, fontName: theme.fontname });
       if (el.type === 'shape') {
-        if (el.fill) el.fill = getColor(el.fill);
+        if (el.fill && !roles) el.fill = getColor(el.fill);
         if (el.gradient) delete el.gradient;
         if (el.text) {
-          el.text.defaultColor = ink;
+          el.text.defaultColor = elementInk;
           el.text.defaultFontName = theme.fontname;
-          if (el.text.content) el.text.content = stripThemeInlineStyles(el.text.content, { fontColor: ink, fontName: theme.fontname });
+          if (el.text.content) el.text.content = formatText(el.text.content);
         }
       }
       if (el.type === 'text') {
-        if (el.fill) el.fill = getColor(el.fill);
-        el.defaultColor = ink;
+        if (el.fill && !roles) el.fill = getColor(el.fill);
+        el.defaultColor = elementInk;
         el.defaultFontName = theme.fontname;
-        el.placeholderColor = ink;
-        if (el.content) el.content = stripThemeInlineStyles(el.content, { fontColor: ink, fontName: theme.fontname });
+        el.placeholderColor = elementInk;
+        if (el.content) el.content = formatText(el.content);
       }
       if (el.type === 'image' && el.colorMask) {
         el.colorMask = getColor(el.colorMask);
@@ -97,8 +115,10 @@ export const setSlideTheme = (slide: Slide, theme: PresetTheme, index = 0) => {
         for (const rowCells of el.data) {
           for (const cell of rowCells) {
             if (cell.style) {
-              cell.style.color = ink;
+              if (roles && cell.style.backcolor) cell.style.backcolor = getColor(cell.style.backcolor);
+              cell.style.color = roles ? roles.ink(cell.style.backcolor ?? theme.background) : ink;
               cell.style.fontname = theme.fontname;
+              if (roles) cell.text = retintInlineText(stripThemeInlineStyles(cell.text, { fontName: theme.fontname }), cell.style.backcolor ?? theme.background, roles.ink);
             }
           }
         }
@@ -108,11 +128,11 @@ export const setSlideTheme = (slide: Slide, theme: PresetTheme, index = 0) => {
           themeChartColors(theme),
           resolveSlideSurfaceColors(slide.background, theme.background),
         );
-        el.textColor = ink;
+        el.textColor = elementInk;
       }
       if (el.type === 'line') el.color = getColor(el.color);
       if (el.type === 'audio') el.color = getColor(el.color);
-      if (el.type === 'latex') el.color = ink;
+      if (el.type === 'latex') el.color = elementInk;
       if ('outline' in el && el.outline) {
         if (theme.outline) el.outline = {
           ...theme.outline
@@ -139,7 +159,7 @@ export function applyDesignTheme(slides: readonly Slide[], currentTheme: SlideTh
   const nextSlides = structuredClone(slides) as Slide[];
   nextSlides.forEach((slide, index) => {
     slide.type = inferThemeSlideType(slide, index, nextSlides.length);
-    setSlideTheme(slide, preset, index);
+    setSlideTheme(slide, preset, index, currentTheme.themeColors);
   });
   return { slides: nextSlides, theme };
 }

@@ -76,3 +76,5 @@ export type {
 
 export type { FikaDesignTheme } from '@/configs/designThemes'
 export { getFikaDefaultDesignThemes } from '@/configs/designThemes'
+
+export { resizeDeckSlides, type SlideCanvas } from '@/utils/resizeDeck';

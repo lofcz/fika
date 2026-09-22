@@ -9,6 +9,8 @@ export interface PresetTheme {
   background: string;
   fontColor: string;
   featureFontColor?: string;
+  /** Retain pale panels and accent roles when restyling host-authored decks. */
+  preserveColorRoles?: boolean;
   fontname: string;
   colors: string[];
   /** Series palette when `colors` includes near-background swatches (Ink #171717). */

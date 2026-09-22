@@ -1,3 +1,4 @@
+import { resizeDeckSlides } from '@/utils/resizeDeck';
 import { listFikaDesignThemes, getFikaDesignTheme } from '@/configs/designThemes';
 import { applyDesignTheme } from '@/utils/applyDesignTheme';
 import { getAttentionAnimations, getEnterAnimations, getExitAnimations, getSlideAnimations, SLIDE_ANIMATIONS } from '@/configs/animation';
@@ -1812,6 +1813,11 @@ export function createAgenticApi(options: {
     ratio?: number;
   }) => {
     const viewport = normalizeDocumentViewport(cloneJsonSafePayload(payload, 'payload'), 'payload');
+    const size = viewport.size ?? stores.slides.viewportSize;
+    const ratio = viewport.ratio ?? stores.slides.viewportRatio;
+    stores.slides.setSlides(resizeDeckSlides(stores.slides.slides,
+      { width: stores.slides.viewportSize, height: stores.slides.viewportSize * stores.slides.viewportRatio },
+      { width: size, height: size * ratio }));
     applyViewport(stores, viewport);
     return getState(stores, documentVersion);
   });

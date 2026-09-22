@@ -519,3 +519,26 @@ Application uses the picker implementation and creates one undo step for the
 whole deck. Unknown IDs fail without changing the presentation. Hosts should
 include the small catalog in agent context so applying a named theme needs only
 one call, without a preceding discovery request.
+
+### Content-aware canvas resizing
+
+`controller.deck.setViewport({ ratio: 0.75 })` fits the entire deck to 4:3 in
+one undo step, using the same operation as the size menu and custom size dialog.
+It identifies full-width headings and independent body columns, distributes
+rows through their available height, scales type with its boxes, preserves media
+proportions and groups, remaps connectors, and anchors vector edge decorations.
+It consumes spare vertical gutters before shrinking type when returning to a
+shorter canvas. It preserves the authored composition rather than inventing a
+new reading order or cropping photographs. Imported objects already outside the
+canvas may still need manual correction.
+
+Hosts authoring slides into a differently sized deck can use the pure,
+DOM-free `resizeDeckSlides(slides, from, to)` export from `fika-editor/layout`;
+`from` and `to` are `{ width, height }`. Raw document loading remains available
+through `deck.set` / `deck.patch` with `slides` and `viewport` supplied together.
+
+Host design themes can opt into `preserveColorRoles: true` to keep pale panels,
+neutral surfaces and saturated accents separate during theme application.
+Text is retinted against the actual panel beneath it, including badge and table
+cell fills. Named `Decor` shapes become soft accents on the selected background.
+Reapplying a selected theme is supported, including for older generated decks.

@@ -1,3 +1,4 @@
+import useResizeDeck from '@/hooks/useResizeDeck'
 import { useDesignThemes } from '@/configs/designThemes'
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
@@ -150,9 +151,8 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
     return themes.find(item => item.colors.map(color => color.toLowerCase()).join(',') === colors)?.id ?? null
   }, [theme.themeColors, themes])
   const onApplyPresetTheme = useCallback((item: PresetTheme) => {
-    if (activeThemeId === item.id) return
     applyPresetTheme(item)
-  }, [activeThemeId, applyPresetTheme])
+  }, [applyPresetTheme])
   const activeTheme = useMemo(
     () => themes.find(item => item.id === activeThemeId) ?? null,
     [activeThemeId, themes],
@@ -283,13 +283,16 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
     updateTheme({ themeColors: colors })
   }
 
+  const resizeDeck = useResizeDeck()
+
   const updateViewportRatio = (value: string | number) => {
     if (value === 'custom') {
       setCustomViewportSizeVisible(true)
       return
     }
     if (typeof value !== 'number') return
-    useSlidesStore.getState().setViewportRatio(value)
+    const width = useSlidesStore.getState().viewportSize
+    resizeDeck(width, width * value)
   }
 
   return (

@@ -59,3 +59,21 @@ describe('host design application shared by picker and agent', () => {
     expect(current.fontName).toBe('Arial')
   })
 })
+
+it('restyles legacy dark feature slides with soft panels and readable badges, consistently on reapply', () => {
+  const current: SlideTheme = { backgroundColor: paper.background, fontColor: paper.fontColor, fontName: 'Inter', themeColors: paper.colors, outline: { color: '#eee', width: 1, style: 'solid' }, shadow: { h: 0, v: 0, blur: 0, color: '#000' } };
+  const elements: Slide['elements'] = [
+    { id: 'panel', type: 'shape', left: 100, top: 100, width: 600, height: 200, rotate: 0, path: '', viewBox: [100, 100], fixedRatio: false, fill: '#2A3D5C' },
+    { id: 'copy', type: 'text', left: 120, top: 120, width: 500, height: 100, rotate: 0, content: '<p style="color:#ffffff;font-size:30px">Feature</p>', defaultColor: '#fff', defaultFontName: 'Inter' },
+    { id: 'badge', type: 'shape', left: 800, top: 100, width: 60, height: 60, rotate: 0, path: '', viewBox: [100, 100], fixedRatio: false, fill: paper.colors[1], text: { content: '<p style="color:#fff">1</p>', defaultColor: '#fff', defaultFontName: 'Inter', align: 'middle' } },
+  ];
+  const result = applyDesignTheme([{ id: 'legacy', background: { type: 'solid', color: '#1B2A41' }, elements }], current, { ...paper, preserveColorRoles: true });
+  expect(result.slides[0].background?.color).toBe(paper.background);
+  const [panel, copy, badge] = result.slides[0].elements;
+  expect(panel.type === 'shape' && panel.fill).not.toBe(paper.colors[0]);
+  expect(copy.type === 'text' && copy.defaultColor).toBe(paper.fontColor);
+  expect(copy.type === 'text' && copy.content).toContain(paper.fontColor);
+  expect(badge.type === 'shape' && badge.text?.defaultColor).toBe('#ffffff');
+  const again = applyDesignTheme(result.slides, result.theme, { ...paper, preserveColorRoles: true });
+  expect(again.slides).toEqual(result.slides);
+});

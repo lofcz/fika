@@ -523,8 +523,8 @@
       ]
     },
     "deck.setViewport": {
-      "summary": "Set the canvas size/aspect ratio. size is the canvas width in px; ratio is height/width.",
-      "details": "Default is { size: 1000, ratio: 0.5625 } (16:9, 1000 x 562.5 px). Use ratio 0.75 for 4:3.",
+      "summary": "Resize the canvas and fit all slide content in one undoable operation. size is the canvas width in px; ratio is height/width.",
+      "details": "Default is { size: 1000, ratio: 0.5625 } (16:9, 1000 x 562.5 px). Use ratio 0.75 for 4:3. Content and type scale together; empty gutters adapt, groups stay together and images retain their proportions. For raw document import, use deck.patch with slides and viewport instead.",
       "examples": [
         "controller.deck.setViewport({ size: 1000, ratio: 0.5625 })"
       ],

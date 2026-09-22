@@ -1,3 +1,4 @@
+import useResizeDeck from '@/hooks/useResizeDeck'
 import { bindStyles } from '@/utils/cssm'
 import styles from './ViewportSizeSetting.module.scss'
 const cx = bindStyles(styles)
@@ -20,6 +21,7 @@ const VIEWPORT_SIZE_MAX = 2000
 
 export default function ViewportSizeSetting({ onClose, className, style }: IViewportSizeSettingProps) {
   const { LL } = useI18nContext()
+  const resizeDeck = useResizeDeck()
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const viewportSize = useSlidesStore(s => s.viewportSize)
 
@@ -30,14 +32,15 @@ export default function ViewportSizeSetting({ onClose, className, style }: IView
     const width = customViewportWidth
     const height = customViewportHeight
     if (
+      !Number.isFinite(width) ||
+      !Number.isFinite(height) ||
       width < VIEWPORT_SIZE_MIN ||
       width > VIEWPORT_SIZE_MAX ||
       height < VIEWPORT_SIZE_MIN ||
       height > VIEWPORT_SIZE_MAX
     ) return message.warning(LL.editor.slideDesign.canvasSizeRangeWarning({ min: VIEWPORT_SIZE_MIN, max: VIEWPORT_SIZE_MAX }))
 
-    useSlidesStore.getState().setViewportSize(width)
-    useSlidesStore.getState().setViewportRatio(height / width)
+    resizeDeck(width, height)
     onClose?.()
   }
 
