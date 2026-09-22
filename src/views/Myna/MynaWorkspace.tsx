@@ -54,7 +54,7 @@ export default function MynaWorkspace() {
   { id: 'styles', label: t.styles(), icon: Palette },
   { id: 'layers', label: t.layers(), icon: Layers },
 ] as const
-  const [panel, setPanel] = useState<PanelId | null>(() => useSlidesStore.getState().slides[0]?.id.startsWith('school-showcase-') ? null : 'templates')
+  const [panel, setPanel] = useState<PanelId | null>(null)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All')
   const [properties, setProperties] = useState(false)
