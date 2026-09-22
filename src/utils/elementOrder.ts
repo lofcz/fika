@@ -1,3 +1,4 @@
+import { frameDescendantIds } from './nestedFrames'
 import type { PPTElement } from '@/types/slides';
 export type ElementOrderCommand = 'up' | 'down' | 'top' | 'bottom';
 
@@ -15,7 +16,8 @@ export function collectOrderUnitIds(elementList: PPTElement[], seedIds: string[]
   for (const el of elementList) {
     if (seed.has(el.id) || el.groupId && groupIds.has(el.groupId)) unit.add(el.id);
   }
-  return elementList.filter(el => unit.has(el.id)).map(el => el.id);
+  const expanded = new Set(frameDescendantIds(elementList, [...unit]));
+  return elementList.filter(el => expanded.has(el.id)).map(el => el.id);
 }
 function extractUnit(list: PPTElement[], unitIds: string[]): {
   rest: PPTElement[];

@@ -10,6 +10,8 @@ import { buildStarterPresentation } from '@/configs/starterPresentation'
 import { importScreen, prefetchScreen } from '@/views/Screen/lazy'
 
 import Editor from './views/Editor/index'
+import { createSchoolShowcase } from './views/Myna/schoolShowcase'
+import { fitMynaPages } from './views/Myna/MynaZoomControl'
 import Mobile from './views/Mobile/index'
 import FullscreenSpin from '@/components/FullscreenSpin'
 import ScreenShell from '@/views/Screen/ScreenShell'
@@ -21,10 +23,11 @@ const Screen = lazy(importScreen)
 setFikaLocaleSwitcherEnabled(true)
 
 const _isPC = isPC()
+const isMynaMode = ['canva', 'myna'].includes(new URLSearchParams(window.location.search).get('mode') ?? '')
 const isAudienceMode = new URLSearchParams(window.location.search).get('mode') === 'audience'
 
 const App = memo(() => {
-  const { LL } = useI18nContext()
+  const { LL, locale } = useI18nContext()
   const hasSlides = useSlidesStore(s => s.slides.length > 0)
   const screening = useScreenStore(s => s.screening)
 
@@ -38,16 +41,25 @@ const App = memo(() => {
         useScreenStore.getState().setScreening(true)
       }
       else {
-        const starter = buildStarterPresentation(LL)
+        const starter: import('@/embed/types').FikaDocument = isMynaMode ? createSchoolShowcase(locale) : buildStarterPresentation(LL)
         const slidesState = useSlidesStore.getState()
         slidesState.setTitle(starter.title)
         slidesState.setSlides(starter.slides, starter.theme)
+        if (starter.viewport?.size) slidesState.setViewportSize(starter.viewport.size)
+        if (starter.viewport?.ratio) slidesState.setViewportRatio(starter.viewport.ratio)
 
         await deleteDiscardedDB()
         useSnapshotStore.getState().initSnapshotDatabase()
       }
     })()
   }, [])
+
+  useEffect(() => {
+    if (!isMynaMode || !hasSlides) return
+    let second = 0
+    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => fitMynaPages()) })
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second) }
+  }, [hasSlides])
 
   useEffect(() => {
     if (import.meta.env.MODE !== 'development') {
@@ -87,7 +99,7 @@ const App = memo(() => {
   return (
     <>
       <Activity mode={screening ? 'hidden' : 'visible'}>
-        {_isPC ? <Editor /> : <Mobile />}
+        {isMynaMode ? <Editor myna /> : _isPC ? <Editor /> : <Mobile />}
       </Activity>
       {screening ? (
         <Suspense fallback={<ScreenShell />}>

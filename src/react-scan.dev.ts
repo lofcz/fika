@@ -26,7 +26,8 @@ twProperties.textContent = `
 `
 document.head.append(twProperties)
 
-scan({
+// Rendering instrumentation is opt-in: the overlay itself is expensive during canvas gestures.
+if (new URLSearchParams(window.location.search).get('scan') === '1') scan({
   enabled: true,
   showToolbar: true,
   log: false,

@@ -17,6 +17,7 @@ import cs_configs from './cs/configs'
 import cs_editor from './cs/editor'
 import cs_export from './cs/export'
 import cs_mobile from './cs/mobile'
+import cs_myna from './cs/myna'
 import cs_screen from './cs/screen'
 import en_canvas from './en/canvas'
 import en_common from './en/common'
@@ -25,6 +26,7 @@ import en_configs from './en/configs'
 import en_editor from './en/editor'
 import en_export from './en/export'
 import en_mobile from './en/mobile'
+import en_myna from './en/myna'
 import en_screen from './en/screen'
 import pl_canvas from './pl/canvas'
 import pl_common from './pl/common'
@@ -33,6 +35,7 @@ import pl_configs from './pl/configs'
 import pl_editor from './pl/editor'
 import pl_export from './pl/export'
 import pl_mobile from './pl/mobile'
+import pl_myna from './pl/myna'
 import pl_screen from './pl/screen'
 import sk_canvas from './sk/canvas'
 import sk_common from './sk/common'
@@ -41,6 +44,7 @@ import sk_configs from './sk/configs'
 import sk_editor from './sk/editor'
 import sk_export from './sk/export'
 import sk_mobile from './sk/mobile'
+import sk_myna from './sk/myna'
 import sk_screen from './sk/screen'
 
 const localeTranslations = {
@@ -53,6 +57,7 @@ const localeTranslations = {
 		editor: cs_editor,
 		'export': cs_export,
 		mobile: cs_mobile,
+		myna: cs_myna,
 		screen: cs_screen
 	},
 	en: {
@@ -64,6 +69,7 @@ const localeTranslations = {
 		editor: en_editor,
 		'export': en_export,
 		mobile: en_mobile,
+		myna: en_myna,
 		screen: en_screen
 	},
 	pl: {
@@ -75,6 +81,7 @@ const localeTranslations = {
 		editor: pl_editor,
 		'export': pl_export,
 		mobile: pl_mobile,
+		myna: pl_myna,
 		screen: pl_screen
 	},
 	sk: {
@@ -86,6 +93,7 @@ const localeTranslations = {
 		editor: sk_editor,
 		'export': sk_export,
 		mobile: sk_mobile,
+		myna: sk_myna,
 		screen: sk_screen
 	},
 }

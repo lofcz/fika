@@ -1,7 +1,8 @@
+import { recordRender } from '@/utils/renderMetrics'
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 
 import type { Slide } from '@/types/slides'
 import { useSlidesStore } from '@/store'
@@ -35,9 +36,18 @@ export function areThumbnailSlidePropsEqual(prev: IThumbnailSlideProps, next: IT
 
 /** Model-driven slide thumbnail painted directly at the final device DPR. */
 const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
+  recordRender('ThumbnailSlide')
   const { slide, size, visible = true, showPlaceholders = false, className } = props
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
-  const storeSlide = useSlidesStore(s => s.slides.find(item => item.id === slide.id))
+  const selectSlide = useMemo(() => {
+    let painted: Slide | undefined
+    return (state: { slides: Slide[] }) => {
+      const next = state.slides.find(item => item.id === slide.id)
+      if (!arePaintedSlideIdentitiesEqual(painted, next)) painted = next
+      return painted
+    }
+  }, [slide.id])
+  const storeSlide = useSlidesStore(selectSlide)
   const full = storeSlide ?? ('elements' in slide ? slide : undefined)
   const dest = usePreviewDestSize()
   const width = size || dest.cssWidth

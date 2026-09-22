@@ -176,6 +176,11 @@
       "title": "Export",
       "summary": "Serializable JSON snapshot of the deck.",
       "whenToUse": "Persist/autosave from documentChanged events."
+    },
+    "canvas": {
+      "title": "Canvas workspace",
+      "summary": "Bounded context for freeform multi-page design work.",
+      "whenToUse": "Read before targeted canvas edits; existing slide/element commands edit pages and artwork."
     }
   },
   "commands": {
@@ -846,6 +851,17 @@
         "When host IDs are already in context, apply the requested theme directly without a catalog/read call.",
         "Preserves slide IDs and content; changes backgrounds, fonts, colors and chart palettes. Never use deck.setup to restyle an existing deck."
       ]
+    },
+    "canvas.get": {
+      "summary": "Read a compact canvas overview and one page of element summaries. No image bytes or full HTML.",
+      "details": "Defaults to active page, 40 elements, 160 text characters. At most 100 elements and 500 text characters per item. Use nextOffset to paginate. Mutate with existing slides/elements/text/shapes commands; batch related edits into one undoable operation. slides.update accepts canvasName, canvasPosition, guides, and workspaceLabels; elements.update accepts parentFrameId, and shapes accept frame.clipContent.",
+      "examples": [
+        "{\"type\":\"canvas.get\",\"payload\":{\"limit\":30}}"
+      ]
+    },
+    "canvas.apply": {
+      "summary": "Create or edit a canvas using up to 100 compact operations in one undoable transaction.",
+      "details": "Operations: title, viewport, page, pageUpdate, text, shape, element, update, remove. Explicit page and element IDs allow references later in the same call. Text uses Markdown and fixed-size boxes. Rich native elements and frames use element/update. The first page operation replaces an untouched unnamed empty starter. Failure rolls back the entire call. Returns only operation names and IDs, never image data or complete elements."
     }
   },
   "guides": [

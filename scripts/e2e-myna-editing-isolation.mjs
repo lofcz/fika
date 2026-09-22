@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+const browser=await chromium.launch({headless:true})
+try {
+ const page=await browser.newPage({viewport:{width:1600,height:1000}})
+ await page.goto(`${process.env.FIKA_TEST_URL||'http://127.0.0.1:5173'}/?mode=myna&locale=en`)
+ await page.locator('[data-myna-workspace]').waitFor()
+ await page.getByRole('button',{name:'Fit',exact:true}).click()
+ const id=await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements.find(e=>e.type==='text').id)
+ const node=page.locator(`#editable-element-${id}`)
+ await page.waitForTimeout(300)
+ await node.locator('[data-live-box]').dblclick({force:true})
+ const editor=node.locator('[contenteditable="true"]')
+ await editor.waitFor();await editor.click({force:true});await page.waitForTimeout(350)
+ await page.evaluate(()=>{window.__FIKA_RENDER_METRICS__={}})
+ await page.keyboard.press('End');await page.keyboard.type(' New ideas for every learner.',{delay:15})
+ await page.waitForTimeout(350)
+ assert.match(await editor.innerText(),/New ideas for every learner/)
+ const metrics=await page.evaluate(()=>window.__FIKA_RENDER_METRICS__)
+ assert.equal(metrics.MynaWorkspace||0,0,'typing stays out of workspace shell')
+ assert.equal(metrics.MynaPageCanvas||0,0,'typing stays out of page layout')
+ assert.equal(metrics.WorkspaceObject||0,0,'typing stays out of annotations')
+ await page.getByRole('button',{name:'Pages',exact:true}).click()
+ await page.waitForFunction(id=>window.__FIKA_SLIDES__.getState().slides[0].elements.find(e=>e.id===id).content.includes('New ideas for every learner'),id)
+ console.log('PASS native text typing and commit; unrelated workspace roots remain idle',JSON.stringify(metrics))
+} finally {await browser.close()}

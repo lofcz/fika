@@ -542,3 +542,13 @@ neutral surfaces and saturated accents separate during theme application.
 Text is retinted against the actual panel beneath it, including badge and table
 cell fills. Named `Decor` shapes become soft accents on the selected background.
 Reapplying a selected theme is supported, including for older generated decks.
+
+
+## Myna graphic design mode
+
+Pass `viewMode: 'canva'` (or its `'myna'` alias) to open the Myna design
+workspace. Omit `document` for its square editable starter, or provide any
+ordinary Fika document and viewport. `createMynaDocument()` and `MYNA_FORMATS`
+are exported for hosts that need the starter or format catalog. The same
+controller, history, media uploader, read-only options, and change callbacks
+apply. See [Myna integration and capabilities](./MYNA.md).

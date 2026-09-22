@@ -1,0 +1,23 @@
+.panel { padding: 16px 0; border-top: 1px solid var(--border-color, #dedee3); color: inherit; }
+.panel h3 { font-size: 14px; margin: 0 0 12px; }
+.panel p { font-size: 12px; line-height: 1.6; opacity: .75; }
+.presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.panel button { color: inherit; background: var(--bg-color, #fff); border: 1px solid var(--border-color, #dedee3); border-radius: 7px; cursor: pointer; padding: 8px; min-width: 0; }
+.panel button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.panel button:disabled { opacity: .45; cursor: default; }
+.panel button[aria-pressed=true] { border: 2px solid currentColor; }
+.presets button { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11px; }
+.presets svg { width: 60px; max-width: 100%; height: 42px; }
+.cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 12px 0; }
+.cells img { width: 100%; height: 58px; object-fit: cover; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; font-size: 12px; }
+.gutter { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.gutter input { width: 70px; padding: 6px; border: 1px solid var(--border-color, #dedee3); border-radius: 5px; background: transparent; color: inherit; }
+.assets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.assets img { width: 100%; height: 45px; object-fit: cover; }
+.panel { padding: 0; border: 0; }
+.presets { gap: 10px 8px; }
+.presets button { padding: 0 !important; border: 0 !important; background: transparent !important; gap: 7px !important; justify-content: flex-start; font-size: 11px !important; line-height: 1.4; text-align: center; > span:last-child { min-height: 30px; } }
+.preview { display: grid; place-items: center; width: 100%; aspect-ratio: 1; background: var(--myna-surface); border-radius: 9px; border: 1px solid transparent; box-sizing: border-box; }
+.presets button:hover .preview { border-color: #a1a1aa; background: #eaeaed; }
+.presets svg { width: 100%; height: auto; aspect-ratio: 1; display: block; padding: 8px; box-sizing: border-box; }

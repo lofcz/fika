@@ -1,0 +1,15 @@
+.panel { border-top: 1px solid var(--fika-border, #ddd); padding-top: 14px; margin-top: 16px; color: inherit;
+  summary { font-size: 14px; font-weight: 600; cursor: pointer; }
+  p { font-size: 12px; line-height: 1.6; opacity: .75; }
+  form { display: grid; gap: 10px; }
+  label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+  textarea, select, button { font: inherit; color: inherit; border: 1px solid var(--fika-border, #ddd); border-radius: 6px; padding: 8px; background: transparent; min-width: 0; }
+  textarea { resize: vertical; min-height: 64px; }
+  select option { color: #202024; background: #fff; }
+  img { justify-self: center; max-width: 100%; object-fit: contain; }
+  button { cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  :focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+}
+.colors { display: flex; gap: 14px; flex-wrap: wrap; input { cursor: pointer; width: 54px; height: 32px; padding: 2px; border: 1px solid var(--fika-border, #ddd); border-radius: 5px; background: transparent; } }
+.panel { margin: 0; padding: 0; border: 0; > p:first-child { margin-top: 0; } form > button { background: var(--myna-ink) !important; color: white !important; padding: 12px !important; } img { padding: 16px; background: var(--myna-surface); border-radius: 12px; box-sizing: content-box; max-width: calc(100% - 32px); } }

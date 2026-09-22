@@ -1,3 +1,6 @@
+import { selectInsertedElements } from '@/utils/selectInsertedElements';
+import { useContext } from 'react';
+import { FixedTextCreationContext } from './textCreationDefaults';
 import { nanoid } from 'nanoid';
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store';
 import { drainCommitQueue } from '@/utils/commitQueue';
@@ -50,6 +53,7 @@ const getSlideEnv = () => {
   };
 };
 export default () => {
+  const fixedTextHeight = useContext(FixedTextCreationContext);
   const {
     addHistorySnapshot
   } = useHistorySnapshot();
@@ -91,11 +95,8 @@ export default () => {
     drainCommitQueue();
     const main = useMainStore.getState();
     getSlideEnv().addElement(elements);
-    main.setActiveElementIdList([elements[elements.length - 1].id]);
+    selectInsertedElements([elements[elements.length - 1].id]);
     if (main.creatingElement) main.setCreatingElement(null);
-    setTimeout(() => {
-      main.setEditorareaFocus(true);
-    }, 0);
     addHistorySnapshot();
   };
 
@@ -103,11 +104,8 @@ export default () => {
     drainCommitQueue();
     const main = useMainStore.getState();
     getSlideEnv().addElement(element);
-    main.setActiveElementIdList([element.id]);
+    selectInsertedElements([element.id]);
     if (main.creatingElement) main.setCreatingElement(null);
-    setTimeout(() => {
-      main.setEditorareaFocus(true);
-    }, 0);
     if (callback) callback();
     addHistorySnapshot();
   };
@@ -324,6 +322,7 @@ export default () => {
       width,
       height,
       content,
+      ...(fixedTextHeight ? { fixedHeight: true } : {}),
       rotate: 0,
       defaultFontName: slides.theme.fontName,
       defaultColor,
@@ -518,9 +517,8 @@ export default () => {
       }
       top += row.height + gap;
     }
-    const main = useMainStore.getState();
     getSlideEnv().addElement(elements);
-    main.setActiveElementIdList(elements.map(el => el.id));
+    selectInsertedElements(elements.map(el => el.id));
     addHistorySnapshot();
   };
   const createMermaidElement = (code: string) => {

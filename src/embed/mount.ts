@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import EmbedRoot from './EmbedRoot'
+import { createMynaDocument } from '@/views/Myna/catalog'
 import Contextmenu from '@/components/Contextmenu/index'
 
 import 'prosemirror-view/style/prosemirror.css'
@@ -142,7 +143,9 @@ export async function mountFika(
     // deck: it is the initial state, not something to load after the fact.
     if (options.document) applyDocumentToStores(options.document)
     else if (!options.loadDocument && options.loadMockOnEmpty !== true) {
-      applyDocumentToStores(buildStarterPresentation(getLL(locale), options.starterPresentation))
+      applyDocumentToStores(options.viewMode === 'canva' || options.viewMode === 'myna'
+        ? createMynaDocument(getLL(locale).myna)
+        : buildStarterPresentation(getLL(locale), options.starterPresentation))
     }
     useMainStore.getState().setReadOnly(options.readOnly === true)
 

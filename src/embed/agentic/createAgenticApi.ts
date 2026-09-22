@@ -1,3 +1,6 @@
+import { canvasOperationCommand } from './canvasOperations';
+import type { FikaCanvasOperation, FikaCanvasApplyResult } from './types';
+import { summarizeCanvas } from './canvasContext';
 import { resizeDeckSlides } from '@/utils/resizeDeck';
 import { listFikaDesignThemes, getFikaDesignTheme } from '@/configs/designThemes';
 import { applyDesignTheme } from '@/utils/applyDesignTheme';
@@ -1495,6 +1498,45 @@ export function createAgenticApi(options: {
       text
     } as Partial<PPTElement>) as PPTShapeElement;
   };
+  register('canvas.apply', async (payload: { operations: FikaCanvasOperation[] }) => {
+    if (!Array.isArray(payload?.operations) || !payload.operations.length || payload.operations.length > 100) throw new Error('Provide 1–100 canvas operations');
+    const commands = payload.operations.map(canvasOperationCommand);
+    const result: FikaCanvasApplyResult = { results: [] };
+    for (let index = 0; index < commands.length; index++) {
+      let command = commands[index];
+      const operation = payload.operations[index];
+      // Replace only an untouched, unnamed starter. Never discard a designed page.
+      if (operation.op === 'page' && stores.slides.slides.length === 1 && !stores.slides.slides[0].canvasName && stores.slides.slides[0].elements.length === 0) {
+        const slide = (command.payload as { slide: Partial<Slide> }).slide;
+        command = { type: 'slides.update', payload: { slideId: stores.slides.slides[0].id, patch: slide } };
+      }
+      if (operation.op === 'textUpdate') {
+        const { element } = getTextElement(operation.id, operation.pageId);
+        const document = new DOMParser().parseFromString(element.content, 'text/html');
+        const nodes = Array.from(document.body.querySelectorAll<HTMLElement>('*'));
+        const value = (property: string) => nodes.map(node => node.style.getPropertyValue(property)).find(Boolean);
+        const weight = value('font-weight');
+        (command.payload as { style: TextRunStyle }).style = {
+          fontSize: parseFloat(value('font-size') || '') || 32,
+          fontName: value('font-family') || element.defaultFontName,
+          color: value('color') || element.defaultColor,
+          bold: weight === 'bold' || Number(weight) >= 600 || !!document.querySelector('strong,b'),
+          align: (value('text-align') || 'left') as TextRunStyle['align'],
+          ...operation.style,
+        };
+      }
+      if (['text', 'shape', 'element'].includes(operation.op)) {
+        const id = operation.op === 'element' ? operation.element.id : 'id' in operation ? operation.id : undefined;
+        if (id && stores.slides.slides.some(page => page.elements.some(element => element.id === id))) throw new Error(`Element id already exists: ${id}`);
+      }
+      const handler = registry.get(command.type)!;
+      const data = await handler.handler(command.payload, command) as { id?: string } | undefined;
+      const pageId = 'pageId' in operation ? operation.pageId || stores.slides.slides[stores.slides.slideIndex]?.id : undefined;
+      result.results.push({ op: operation.op, ...(data?.id ? { id: data.id } : 'id' in operation ? { id: operation.id } : {}), ...(pageId ? { pageId } : {}) });
+    }
+    return result;
+  });
+  register('canvas.get', (payload: { pageId?: string; offset?: number; limit?: number; textLimit?: number } = {}) => summarizeCanvas(stores.slides.slides, stores.slides.slides[stores.slides.slideIndex]?.id, stores.main.activeElementIdList, stores.slides.viewportSize, stores.slides.viewportRatio, payload));
   register('deck.get', () => documentFromStores(stores));
   register('deck.set', (payload: FikaDeckInput) => {
     restoreDocument(stores, documentFromPayload(payload));

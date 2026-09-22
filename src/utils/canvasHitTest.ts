@@ -1,3 +1,4 @@
+import { frameClipPolygon } from '@/utils/nestedFrames'
 import type { PPTElement } from '@/types/slides';
 import { getElementRange } from '@/utils/element';
 import { queryFika } from '@/utils/portal';
@@ -250,6 +251,7 @@ export function hitRingLayout(width: number, height: number, options?: HitRingLa
   };
 }
 export interface VisualHitRect {
+  frameClip?: { x: number; y: number }[];
   id: string;
   left: number;
   top: number;
@@ -309,6 +311,18 @@ export function elementVisualHitRect(element: PPTElement, canvasScale: number, z
   };
 }
 export function pointInVisualHitRect(x: number, y: number, rect: VisualHitRect): boolean {
+  if (rect.frameClip) {
+    const points = rect.frameClip
+    if (points.length < 3) return false
+    let positive = false, negative = false
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i], b = points[(i + 1) % points.length]
+      const cross = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x)
+      if (cross > .001) positive = true
+      if (cross < -.001) negative = true
+    }
+    if (positive && negative) return false
+  }
   if (!rect.rotate) {
     return x >= rect.left && x <= rect.left + rect.width && y >= rect.top && y <= rect.top + rect.height;
   }
@@ -327,7 +341,7 @@ function visualHitRectKey(id: string, zIndex: number) {
 }
 
 function visualHitRectGeometryEqual(a: VisualHitRect, b: VisualHitRect) {
-  return a.id === b.id && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height && a.rotate === b.rotate && a.zIndex === b.zIndex
+  return JSON.stringify(a.frameClip) === JSON.stringify(b.frameClip) && a.id === b.id && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height && a.rotate === b.rotate && a.zIndex === b.zIndex
 }
 
 function visualHitRectsGeometryEqual(prev: VisualHitRect[], next: VisualHitRect[]) {
@@ -560,6 +574,9 @@ export function collectVisualHitPlan(input: VisualHitPlanInput): VisualHitPlan {
     const element = input.elementList[i];
     if (hidden.has(element.id)) continue;
     const rect = elementVisualHitRect(element, input.canvasScale, i + 1);
+    const clip = frameClipPolygon(element, input.elementList)
+    if (clip) rect.frameClip = clip.map(p => ({ x: p.x * input.canvasScale, y: p.y * input.canvasScale }))
+    if (clip && !clip.length) continue
     const occupiesBox = element.id === input.editingElementId
       || element.id === input.clipingImageElementId
       || selected.has(element.id) && element.type !== 'line';
@@ -742,6 +759,10 @@ export function visualHitAabb(rect: VisualHitRect) {
  * hover/click/drag after the top element leaves the hit layer.
  */
 export function hitRectClipPath(rect: VisualHitRect, occluders: VisualHitRect[]): string | undefined {
+  if (rect.frameClip) {
+    const points = rect.frameClip.map(p => { const local = localPointInRect(p.x, p.y, rect); return `${local.x + rect.width / 2}px ${local.y + rect.height / 2}px` })
+    return points.length ? `polygon(${points.join(',')})` : 'polygon(0px 0px,0px 0px,0px 0px)'
+  }
   const holes = occludersAboveRect(rect, occluders).filter(hole => visualHitRectsOverlap(rect, hole));
   if (!holes.length) return undefined;
   // Include the outer grab so a hole clip does not shear off the move ring.

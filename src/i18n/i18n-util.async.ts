@@ -21,6 +21,7 @@ const localeNamespaceLoaders = {
 		editor: () => import('./cs/editor'),
 		'export': () => import('./cs/export'),
 		mobile: () => import('./cs/mobile'),
+		myna: () => import('./cs/myna'),
 		screen: () => import('./cs/screen')
 	},
 	en: {
@@ -31,6 +32,7 @@ const localeNamespaceLoaders = {
 		editor: () => import('./en/editor'),
 		'export': () => import('./en/export'),
 		mobile: () => import('./en/mobile'),
+		myna: () => import('./en/myna'),
 		screen: () => import('./en/screen')
 	},
 	pl: {
@@ -41,6 +43,7 @@ const localeNamespaceLoaders = {
 		editor: () => import('./pl/editor'),
 		'export': () => import('./pl/export'),
 		mobile: () => import('./pl/mobile'),
+		myna: () => import('./pl/myna'),
 		screen: () => import('./pl/screen')
 	},
 	sk: {
@@ -51,6 +54,7 @@ const localeNamespaceLoaders = {
 		editor: () => import('./sk/editor'),
 		'export': () => import('./sk/export'),
 		mobile: () => import('./sk/mobile'),
+		myna: () => import('./sk/myna'),
 		screen: () => import('./sk/screen')
 	}
 }

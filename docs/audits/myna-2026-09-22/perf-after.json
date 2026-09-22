@@ -1,0 +1,33 @@
+{
+  "pan": {
+    "renders": {
+      "Canvas": 45,
+      "MynaPageCanvas": 45
+    },
+    "paints": 0,
+    "notifications": 0,
+    "frameP95": 19.2,
+    "longTasks": 0
+  },
+  "element": {
+    "renders": {
+      "Canvas": 88,
+      "ThumbnailSlide": 44,
+      "CanvasSlideThumb": 44
+    },
+    "paints": 1,
+    "notifications": 44,
+    "frameP95": 20.5,
+    "longTasks": 0
+  },
+  "section": {
+    "renders": {
+      "WorkspaceLabelsCanvas": 45,
+      "WorkspaceObject": 45
+    },
+    "paints": 0,
+    "notifications": 45,
+    "frameP95": 16.8,
+    "longTasks": 0
+  }
+}

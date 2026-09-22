@@ -1,0 +1,7 @@
+.settings { box-sizing: border-box; width: min(288px, calc(100vw - 32px)); padding: 16px; color: #27272a; background: #fff; border: 1px solid #e4e4e7; border-radius: 11px; font-size: 12px; line-height: 1.5; box-shadow: 0 12px 35px rgb(0 0 0 / 9%); }
+.heading { display: block; margin-bottom: 12px; font-size: 13px; }
+.toggle { display: flex; align-items: center; gap: 9px; padding: 9px 0; cursor: pointer; > svg { color: #71717a; flex: none; } > span { flex: 1; } > input { width: 15px; height: 15px; margin: 0; accent-color: #27272a; } }
+.spacing { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-block: 1px solid #e4e4e7; margin-top: 5px; span { flex: 1; } input { box-sizing: border-box; width: 76px; min-width: 0; border: 1px solid #d4d4d8; border-radius: 6px; padding: 6px; font: inherit; color: inherit; background: #fff; &:disabled { opacity: .45; } } }
+.hint { color: #71717a; font-size: 11px; line-height: 1.6; margin: 13px 0; }
+.clear { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 9px; border: 1px solid #e4e4e7; border-radius: 7px; background: #fafafa; color: inherit; font: inherit; cursor: pointer; &:hover { background: #f4f4f5; } &:disabled { cursor: default; opacity: .4; } }
+.settings :is(button,input):focus-visible { outline: 2px solid #52525b; outline-offset: 3px; }

@@ -1,3 +1,4 @@
+import { recordRender } from '@/utils/renderMetrics'
 import { memo, useCallback, useEffect, useId, useRef } from 'react'
 
 import { useSlidesStore } from '@/store'
@@ -23,6 +24,7 @@ const EDIT_DEBOUNCE_MS = 100
  * backing store while an edit is debounced or an async asset resolves.
  */
 const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanvasSlideThumbProps) => {
+  recordRender('CanvasSlideThumb')
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const paintKey = useId()

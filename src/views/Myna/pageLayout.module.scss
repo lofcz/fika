@@ -1,0 +1,21 @@
+.layout { padding: 0 0 20px; margin-bottom: 20px; border-bottom: 1px solid var(--myna-border); color: var(--myna-ink); }
+.layout h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+.layout p { font-size: 12px; line-height: 1.5; opacity: .65; margin: 0 0 14px; }
+.layout fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.layout button, .layout input { border: 1px solid var(--myna-border); background: var(--myna-paper); color: inherit; border-radius: 7px; min-height: 32px; font: inherit; font-size: 12px; }
+.layout button { cursor: pointer; padding: 6px 10px; }
+.layout button:disabled { opacity: .45; cursor: default; }
+.layout form > button { width: 100%; margin-top: 8px; }
+.coordinates { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.coordinates label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.coordinates input { width: 100%; min-width: 0; padding: 4px 7px; }
+.arrange { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+
+.move { width: 100%; min-width: 0; margin-top: 12px; padding: 8px; border: 1px solid var(--myna-border); border-radius: 7px; background: var(--myna-paper); color: var(--myna-ink); font: inherit; font-size: 12px; }
+.layout .coordinates label { border: 1px solid var(--myna-border); border-radius: 7px; padding: 0 9px; background: var(--myna-surface); color: var(--myna-muted); }
+.layout .coordinates input { border: 0 !important; background: transparent !important; color: var(--myna-ink); padding: 8px 0; }
+.layout form > button { border: 1px solid var(--myna-border) !important; background: var(--myna-paper); }
+.layout .arrange { border: 1px solid var(--myna-border); border-radius: 8px; padding: 3px; gap: 3px; background: var(--myna-surface); }
+.layout .arrange button { border: 0; padding: 6px 4px; font-size: 11px; }
+.layout .arrange button:hover { background: var(--myna-paper); }
+.layout input[type=text] { border: 1px solid var(--myna-border) !important; background: var(--myna-surface) !important; }

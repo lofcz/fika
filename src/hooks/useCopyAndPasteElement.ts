@@ -1,4 +1,5 @@
-import { useMainStore, selectActiveElementList } from '@/store'
+import { frameDescendantIds } from '@/utils/nestedFrames'
+import { useMainStore, useSlidesStore, selectActiveElementList } from '@/store'
 import { copyText, readClipboard } from '@/utils/clipboard'
 import { encrypt } from '@/utils/crypto'
 import message from '@/utils/message'
@@ -12,7 +13,10 @@ export default () => {
   const copyElement = () => {
     const { activeElementIdList, setEditorareaFocus } = useMainStore.getState()
     if (!activeElementIdList.length) return
-    const activeElementList = selectActiveElementList(useMainStore.getState())
+    const state = useSlidesStore.getState()
+    const elements = state.slides[state.slideIndex]?.elements || []
+    const ids = frameDescendantIds(elements, activeElementIdList)
+    const activeElementList = elements.filter(e => ids.includes(e.id))
     const text = encrypt(JSON.stringify({
       type: 'elements',
       data: activeElementList,

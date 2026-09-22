@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+const browser = await chromium.launch({ headless: true })
+const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } })
+try {
+  await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5178'}/?mode=myna&locale=en`, { waitUntil: 'networkidle' })
+  await page.getByRole('button', { name: 'Pages', exact: true }).click()
+  const panel = page.locator('[data-myna-outline]')
+  await panel.locator('summary').click()
+  await panel.getByLabel('Speaker notes').fill('Draft before section change')
+  await panel.getByLabel('Section name').fill('Research')
+  await panel.getByRole('button', { name: 'Start section', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].sectionTag.title), 'Research')
+  assert.equal(await panel.getByLabel('Speaker notes').inputValue(), 'Draft before section change')
+  await panel.getByLabel('Speaker notes').fill('First line\nSecond <line> & detail')
+  await panel.getByRole('button', { name: 'Save notes', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].remark), '<p>First line</p><p>Second &lt;line&gt; &amp; detail</p>')
+  assert.equal(await panel.getByLabel('Speaker notes').inputValue(), 'First line\nSecond <line> & detail')
+  await panel.getByRole('status').filter({ hasText: 'Page notes saved.' }).waitFor()
+  await panel.getByRole('button', { name: 'Remove section', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].sectionTag), undefined)
+  await page.evaluate(() => window.__FIKA_MAIN__.getState().setReadOnly(true))
+  assert.equal(await panel.getByLabel('Speaker notes').isDisabled(), true)
+  console.log('Myna outline: section create/remove, native persisted notes, safe markup/newline roundtrip and read-only passed.')
+} finally { await browser.close() }

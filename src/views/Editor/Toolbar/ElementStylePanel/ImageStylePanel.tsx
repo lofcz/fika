@@ -163,7 +163,7 @@ const ImageStylePanel = memo(() => {
       <div className={cx('origin-image')} style={{ backgroundImage: `url(${handleImageElement.src})` }} />
       <ElementFlip />
       <ButtonGroup className={cx('row')} passive>
-        <Button first style={{ width: 'calc(100% - 32px)' }} onClick={() => clipImage()}>
+        <Button first style={{ width: 'calc(100% - 32px)' }} onClick={event => { event.stopPropagation(); clipImage() }}>
           <Icon icon="crop" /> {LL.editor.stylePanel.image.cropImage()}
         </Button>
         <Popover
@@ -176,9 +176,9 @@ const ImageStylePanel = memo(() => {
               <div className={cx('title')}>{LL.editor.stylePanel.image.clipByShape()}</div>
               <div className={cx('shape-clip')}>
                 {Object.entries(shapeClipPathOptions).map(([key, item]) => (
-                  <div className={cx('shape-clip-item')} key={key} onClick={() => presetImageClip(key)}>
+                  <button type="button" className={cx('shape-clip-item')} key={key} aria-label={LL.configs.imageClip[key as keyof typeof LL.configs.imageClip]()} onClick={event => { event.stopPropagation(); presetImageClip(key) }}>
                     <div className={cx('shape')} style={{ clipPath: item.style }} />
-                  </div>
+                  </button>
                 ))}
               </div>
               {ratioClipOptions.map(typeItem => (
@@ -186,7 +186,7 @@ const ImageStylePanel = memo(() => {
                   {typeItem.label ? <div className={cx('title')}>{LL.editor.stylePanel.image.clipByRatio({ label: typeItem.label })}</div> : null}
                   <ButtonGroup className={cx('row')}>
                     {typeItem.children.map(item => (
-                      <Button style={{ flex: '1' }} key={item.key} onClick={() => presetImageClip('rect', item.ratio)}>
+                      <Button style={{ flex: '1' }} key={item.key} onClick={event => { event.stopPropagation(); presetImageClip('rect', item.ratio) }}>
                         {item.key}
                       </Button>
                     ))}

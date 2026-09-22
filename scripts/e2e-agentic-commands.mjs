@@ -17,6 +17,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 const DEV_PORTS = [5173, 5174, 5175, 5176]
 
 const EXPECTED_COMMANDS = [
+  'canvas.get', 'canvas.apply',
   'deck.get', 'deck.set', 'deck.patch', 'deck.setTitle', 'deck.getTheme', 'deck.setTheme',
   'deck.listDesignThemes', 'deck.applyDesignTheme',
   'deck.applyTheme', 'deck.extractTheme',
@@ -347,6 +348,10 @@ async function runSuite(page) {
       rec('slides.createFromLayout builds a title layout', created.result.ok && created.result.data?.layoutId === 'title' && !!created.result.data?.slideId, { slideId: created.result.data?.slideId, replaced: created.result.data?.replaced, error: err(created.result) })
     }
 
+    const canvasRead = await agent('canvas.get', { limit: 2 });
+    rec('canvas.get bounds its response', canvasRead.result.ok && canvasRead.result.data.elements.length <= 2);
+    const canvasApply = await agent('canvas.apply', { operations: [{ op: 'title', title: 'Canvas agent test' }] });
+    rec('canvas.apply returns compact acknowledgements', canvasApply.result.ok && canvasApply.result.data.results.length === 1);
     const seeded = await seed()
     rec('deck.set seeds the golden document', seeded.ok && store().title === 'Agentic bridge golden deck' && slideById(IDS.slide)?.elements.length === 11, { slides: store().slides.length, error: err(seeded) })
 

@@ -1,3 +1,7 @@
+import { recordRender } from '@/utils/renderMetrics'
+import MynaFrameTitles from '@/views/Myna/MynaFrameTitles'
+import { frameDomClip } from '@/utils/frameDomClip'
+import MynaPageCanvas, { useMynaPageOrigin } from '@/views/Myna/MynaPageCanvas'
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
@@ -24,6 +28,7 @@ import { collectCtrlMeasures, snapQueryPad, unionBoxes } from '@/utils/snap'
 import useViewportSize from './hooks/useViewportSize'
 import useOperateChrome from './hooks/useOperateChrome'
 import useMouseSelection from './hooks/useMouseSelection'
+import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useDrop from './hooks/useDrop'
 import useRotateElement from './hooks/useRotateElement'
 import useRotateGroupElement from './hooks/useRotateGroupElement'
@@ -49,6 +54,8 @@ import AiRevealBadge from './AiRevealBadge'
 import ElementFloatLayer from './ElementFloatLayer/index'
 import AlignmentLine from './AlignmentLine'
 import Ruler from './Ruler'
+import MynaRulers from './MynaRulers'
+import type { MynaViewState } from '@/views/Myna/viewStore'
 import CanvasScrollbars from './CanvasScrollbars'
 import ElementCreateSelection from './ElementCreateSelection'
 import ShapeCreateCanvas from './ShapeCreateCanvas'
@@ -58,6 +65,10 @@ import HitLayer from './HitLayer'
 import LayerStackPanel from './LayerStackPanel'
 import LinkDialog from './LinkDialog'
 import Modal from '@/components/Modal'
+import { fillPhotoFrame } from '@/views/Myna/photoFrames'
+import { loadPhotoFrameImage } from '@/views/Myna/photoFrameUpload'
+import { photoFrameLabels } from '@/views/Myna/photoFrameLabels'
+import { getFikaLocale } from '@/i18n/locale'
 import message from '@/utils/message'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { classifyElementListSync, patchEditingElementChrome, snapSlideElements, slideElementsSnapEqual } from './elementListSync'
@@ -129,7 +140,8 @@ const findViewportWrapper = (from: EventTarget | null, canvas: HTMLElement | nul
   return scoped instanceof HTMLElement ? scoped : null
 }
 
-const Canvas = memo(({ className, style }: { className?: string; style?: CSSProperties }) => {
+const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { className?: string; style?: CSSProperties; allowOverflow?: boolean; mynaView?: MynaViewState }) => {
+  recordRender('Canvas')
   const { LL } = useI18nContext()
   const activeElementIdList = useMainStore(s => s.activeElementIdList)
   const activeGroupElementId = useMainStore(s => s.activeGroupElementId)
@@ -246,19 +258,33 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
   }, [activeElementIdList, beginEdit])
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
-  const { dragViewport, panViewport, viewportStyles } = useViewportSize(canvasRef)
+  const { dragViewport, panViewport, rebaseViewport, viewportStyles } = useViewportSize(canvasRef)
+  useMynaPageOrigin(!!mynaView, rebaseViewport, viewportStyles, canvasRef)
 
-  const handleMousedownCanvasCapture = useCallback((e: MouseEvent) => {
-    if (e.button !== 1) return
-    e.preventDefault()
-    e.stopPropagation()
-    dragViewport(e)
-  }, [dragViewport])
-
-  useDrop(canvasRef)
+  const { addHistorySnapshot } = useHistorySnapshot()
+  useDrop(canvasRef, event => {
+    const file = event.dataTransfer?.files[0]
+    if (!file || !viewportRef.current || readOnly) return false
+    const point = clientToCanvas(event, viewportRef.current, canvasScale)
+    const state = useSlidesStore.getState()
+    const page = state.slides[state.slideIndex]
+    const target = layerStackAtPoint(page.elements, 1, useMainStore.getState().hiddenElementIdList, point.x, point.y)[0]?.element
+    if (target?.type !== 'image' || !target.photoFrame) return false
+    event.preventDefault(); event.stopPropagation()
+    if (target.lock) return true
+    void loadPhotoFrameImage(file).then(({ src, width, height }) => {
+      const store = useSlidesStore.getState()
+      const latest = store.slides.find(slide => slide.id === page.id)?.elements.find(element => element.id === target.id)
+      if (useMainStore.getState().readOnly || latest?.type !== 'image' || !latest.photoFrame || latest.lock || latest.src !== target.src) return
+      drainCommitQueue()
+      store.updateElement({ id: latest.id, slideId: page.id, props: fillPhotoFrame(latest, src, width, height) })
+      addHistorySnapshot()
+    }).catch(() => message.error((photoFrameLabels[getFikaLocale()] || photoFrameLabels.en).error))
+    return true
+  })
 
   const { mouseSelection, mouseSelectionVisible, updateMouseSelection } = useMouseSelection(elementList, viewportRef)
-  const { dragElement } = useDragElement(elementList, setElementList, alignmentLines, setAlignmentLines, canvasScale)
+  const { dragElement } = useDragElement(elementList, setElementList, alignmentLines, setAlignmentLines, canvasScale, mynaView)
   const { dragLineElement } = useDragLineElement(elementList, setElementList)
   const { selectElement } = useSelectAndMoveElement(elementList, dragElement)
   const { scaleElement, scaleMultiElement } = useScaleElement(elementList, setElementList, canvasScale)
@@ -519,6 +545,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
       }, 200)
       return
     }
+    if (mynaView) { panViewport(-e.deltaX, -deltaPx); return }
     wheelPageAccumRef.current += deltaPx
     while (wheelPageAccumRef.current >= WHEEL_PAGE_STEP) {
       wheelPageAccumRef.current -= WHEEL_PAGE_STEP
@@ -532,7 +559,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
     wheelResetTimerRef.current = setTimeout(() => {
       wheelPageAccumRef.current = 0
     }, 200)
-  }, [applyCanvasZoomDelta, updateSlideIndex])
+  }, [applyCanvasZoomDelta, updateSlideIndex, mynaView, panViewport])
 
   useEffect(() => {
     const el = canvasRef.current
@@ -543,9 +570,10 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
   }, [handleMousewheelCanvas])
 
   const toggleRuler = useCallback(() => {
+    if (mynaView) { mynaView.setPreference('showRulers', !mynaView.showRulers); return }
     const main = useMainStore.getState()
     main.setRulerState(!main.showRuler)
-  }, [])
+  }, [mynaView])
 
   const toggleBubbleMenu = useCallback(() => {
     const main = useMainStore.getState()
@@ -584,6 +612,13 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
 
   const contextmenus = useCallback((): ContextmenuItem[] => {
     const main = useMainStore.getState()
+    const gridSize = mynaView ? (mynaView.showGrid ? mynaView.gridSize : 0) : main.gridLineSize
+    const setGridSize = (size: number) => {
+      if (mynaView) {
+        mynaView.setPreference('showGrid', size > 0)
+        if (size > 0) mynaView.setPreference('gridSize', size)
+      } else main.setGridLineSize(size)
+    }
     return [
       {
         text: LL.canvas.contextMenu.paste(),
@@ -597,33 +632,33 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
       },
       {
         text: LL.canvas.contextMenu.ruler(),
-        subText: main.showRuler ? '√' : '',
+        subText: (mynaView ? mynaView.showRulers : main.showRuler) ? '√' : '',
         handler: toggleRuler,
       },
       {
         text: LL.canvas.contextMenu.gridLines(),
-        subText: 'Alt',
-        handler: () => useMainStore.getState().setGridLineSize(useMainStore.getState().gridLineSize ? 0 : 50),
+        subText: mynaView ? (mynaView.showGrid ? '√' : '') : 'Alt',
+        handler: () => setGridSize(gridSize ? 0 : 50),
         children: [
           {
             text: LL.canvas.contextMenu.gridNone(),
-            subText: useMainStore.getState().gridLineSize === 0 ? '√' : '',
-            handler: () => useMainStore.getState().setGridLineSize(0),
+            subText: gridSize === 0 ? '√' : '',
+            handler: () => setGridSize(0),
           },
           {
             text: LL.canvas.contextMenu.gridSmall(),
-            subText: useMainStore.getState().gridLineSize === 25 ? '√' : '',
-            handler: () => useMainStore.getState().setGridLineSize(25),
+            subText: gridSize === 25 ? '√' : '',
+            handler: () => setGridSize(25),
           },
           {
             text: LL.canvas.contextMenu.gridMedium(),
-            subText: useMainStore.getState().gridLineSize === 50 ? '√' : '',
-            handler: () => useMainStore.getState().setGridLineSize(50),
+            subText: gridSize === 50 ? '√' : '',
+            handler: () => setGridSize(50),
           },
           {
             text: LL.canvas.contextMenu.gridLarge(),
-            subText: useMainStore.getState().gridLineSize === 100 ? '√' : '',
-            handler: () => useMainStore.getState().setGridLineSize(100),
+            subText: gridSize === 100 ? '√' : '',
+            handler: () => setGridSize(100),
           },
         ],
       },
@@ -648,7 +683,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
         handler: enterScreeningFromStart,
       },
     ]
-  }, [LL, pasteElement, selectAllElements, toggleRuler, deleteAllElements, toggleBubbleMenu, toggleOpenPanelOnTextSelection, enterScreeningFromStart])
+  }, [LL, mynaView, pasteElement, selectAllElements, toggleRuler, deleteAllElements, toggleBubbleMenu, toggleOpenPanelOnTextSelection, enterScreeningFromStart])
 
   const displayAlignmentLines = useMemo(() => {
     if (gesturingState) return alignmentLines
@@ -673,10 +708,19 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
       <div
         className={[cx('canvas'), className].filter(Boolean).join(' ')}
         ref={canvasRef}
+        data-fika-canvas
+        tabIndex={-1}
         style={{ '--operate-line': operateLineColor, '--operate-line-halo': operateLineHalo, ...style } as CSSProperties}
         onMouseDownCapture={e => {
-          if (readOnly) return
-          handleMousedownCanvasCapture(e.nativeEvent)
+          // Navigation takes priority over page activation and editing, including
+          // page chrome and view-only canvases. Stop React's child handlers too.
+          if (e.button === 1) {
+            e.preventDefault()
+            e.stopPropagation()
+            dragViewport(e.nativeEvent)
+            return
+          }
+          if (readOnly || (e.target instanceof Element && e.target.closest('[data-myna-rulers], [data-myna-page-chrome], [data-myna-frame-title]'))) return
           handleCanvasHitSelect(e)
         }}
         onMouseDown={e => {
@@ -697,18 +741,21 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
           if (!readOnly) openContextmenu(e, contextmenus)
         }}
       >
+        {mynaView && <MynaPageCanvas left={viewportStyles.left} top={viewportStyles.top} canvasWidth={canvasRef.current?.clientWidth || 0} canvasHeight={canvasRef.current?.clientHeight || 0} />}
         {creatingElement ? <ElementCreateSelection onCreated={data => insertElementFromCreateSelection(data)} /> : null}
         {creatingCustomShape ? <ShapeCreateCanvas mode={creatingCustomShape ?? 'polygon'} onCreated={data => insertCustomShape(data)} /> : null}
         <div
           className={cx('viewport-wrapper')}
           style={{
+            zIndex: mynaView ? 2 : undefined,
             width: viewportStyles.width * canvasScale + 'px',
             height: viewportStyles.height * canvasScale + 'px',
             left: viewportStyles.left + 'px',
             top: viewportStyles.top + 'px',
           }}
         >
-          <ViewportBackground />
+          <ViewportBackground showGrid={!mynaView} />
+          {mynaView && <MynaFrameTitles elements={elementList} scale={canvasScale} drag={dragElement} />}
           {skeletonSlide ? <SlideSkeleton className={cx('skeleton')} shield /> : null}
           <div className={cx('operates')}>
             {displayAlignmentLines.map((line, index) => (
@@ -759,7 +806,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
             />
             <AiRevealBadge canvasRef={canvasRef} />
           </div>
-          <div className={cx('viewport-clip')}>
+          <div className={cx('viewport-clip', { 'viewport-overflow': allowOverflow || !!mynaView })}>
             <div className={cx('viewport')} ref={viewportRef} style={{ transform: `scale(${canvasScale})` }}>
               {elementList.map((element, index) => (
                 <EditableElement
@@ -770,7 +817,7 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
                   isEditing={editingElementId === element.id || clipingImageElementId === element.id}
                   selectElement={selectElement}
                   openLinkDialog={openLinkDialog}
-                  style={hiddenElementIdList.includes(element.id) ? HIDDEN_STYLE : undefined}
+                  style={hiddenElementIdList.includes(element.id) ? HIDDEN_STYLE : frameDomClip(element, elementList)}
                 />
               ))}
             </div>
@@ -805,9 +852,9 @@ const Canvas = memo(({ className, style }: { className?: string; style?: CSSProp
             onClose={closeLayerStack}
           />
         ) : null}
-        {spaceKeyState ? <div className={cx('drag-mask')} /> : null}
+        {spaceKeyState ? <div className={cx('drag-mask')} style={mynaView ? { zIndex: 20 } : undefined} /> : null}
         <CanvasScrollbars canvasRef={canvasRef} viewportStyles={viewportStyles} canvasScale={canvasScale} pan={panViewport} />
-        {showRuler ? <Ruler viewportStyles={viewportStyles} elementList={elementList} /> : null}
+        {mynaView ? <MynaRulers canvasRef={canvasRef} viewportStyles={viewportStyles} elementList={elementList} view={mynaView} /> : showRuler ? <Ruler viewportStyles={viewportStyles} elementList={elementList} /> : null}
         <Modal visible={linkDialogVisible} onUpdateVisible={(value: boolean) => setLinkDialogVisible(value)} width={540}>
           <LinkDialog onClose={() => setLinkDialogVisible(false)} />
         </Modal>

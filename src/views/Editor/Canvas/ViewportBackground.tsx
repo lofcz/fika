@@ -8,7 +8,7 @@ import { resolveGridSize } from '@/utils/snap'
 import GridLines from './GridLines'
 import useSlideBackgroundStyle from '@/hooks/useSlideBackgroundStyle'
 
-const ViewportBackground = memo(() => {
+const ViewportBackground = memo(({ showGrid = true }: { showGrid?: boolean }) => {
   const gridLineSize = useMainStore(s => s.gridLineSize)
   const altKeyState = useKeyboardStore(s => s.altKeyState)
   const background = useSlidesStore(s => selectCurrentSlide(s)?.background)
@@ -18,7 +18,7 @@ const ViewportBackground = memo(() => {
 
   return (
     <div className={cx('viewport-background')} data-live-background style={backgroundStyle}>
-      {effectiveSize ? <GridLines size={effectiveSize} ephemeral={previewGrid} /> : null}
+      {showGrid && effectiveSize ? <GridLines size={effectiveSize} ephemeral={previewGrid} /> : null}
     </div>
   )
 })

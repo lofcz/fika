@@ -527,3 +527,26 @@ properties to existing slide content. For example, `{ theme: { fontName:
 families without resetting backgrounds, text colors, chart palettes or sizes.
 Inline property removal is restricted to style declarations; background-color,
 border-color and literal CSS examples in lesson text are preserved.
+
+## Canvas authoring with compact context
+
+Myna uses the same native document and command bus. `canvas.get` returns a bounded
+page overview plus element IDs, geometry, frame relationships, and short text
+excerpts for one page. It excludes image bytes, SVG paths, and rich-text HTML.
+The default read is 40 elements with 160 text characters each; `offset`, `limit`
+(maximum 100), and `textLimit` (maximum 500) let hosts request only what is needed.
+
+`canvas.apply` accepts `{ operations: [...] }` (1–100 operations) and returns only
+operation acknowledgements and IDs. One call is one undoable transaction, and a
+failure rolls back the entire call. Operations are `title`, `viewport`, `page`,
+`pageUpdate`, `text`, `textUpdate`, `shape`, `element`, `update`, and `remove`.
+Use explicit IDs to reference newly created pages/elements in the same call.
+Text is authored as Markdown with fixed-size boxes. `textUpdate` preserves the
+existing first-run typography unless `style` overrides it. The `element` and
+`update` operations expose native artwork types and nested-frame properties.
+Existing bridge commands remain available for specialized editing.
+
+For an initial invitation, batch the title, viewport, page, decorative shapes,
+and text. For a revision, read only the target page and send targeted operations;
+do not resend the document or automatically attach a screenshot on every turn.
+The first `page` operation reuses an untouched, unnamed empty starter page.

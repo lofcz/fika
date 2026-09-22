@@ -182,3 +182,39 @@
   user-select: none;
   opacity: 0.6;
 }
+
+.menu-button {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  &:focus-visible { outline: 2px solid $ring; outline-offset: 2px; }
+}
+.myna-header {
+  flex: 0 0 56px;
+  box-sizing: border-box;
+  min-width: 0;
+  gap: 12px;
+  padding: 0 16px;
+  border-bottom: 1px solid $borderColor;
+  background: #fff;
+  .left, .right { background: transparent; padding: 0; }
+  .left { flex: 1; }
+  .right { flex-shrink: 0; gap: 8px; }
+  .title { max-width: 280px; }
+
+  // Workspace input styling must not change the unobtrusive document title.
+  .title-field { border: 0; background: transparent; padding: 0 10px; }
+}
+@container (width <= 900px) {
+  .myna-header {
+    gap: 6px;
+    padding: 0 10px;
+    .title { max-width: 160px; }
+    .right { gap: 3px; }
+  }
+}
+@container (width <= 650px) {
+  .myna-header {
+    .title { max-width: 110px; }
+  }
+}

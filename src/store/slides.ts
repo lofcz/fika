@@ -1,8 +1,10 @@
+import { reconcileFrameTransforms, frameDescendantIds } from '@/utils/nestedFrames'
+import { transferPageElements } from '@/utils/transferPageElements'
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { setAutoFreeze } from 'immer'
 import { omit } from '@/utils/object'
-import type { Slide, SlideTheme, PPTElement, PPTAnimation, SlideTemplate, ImportedSlideTemplate, TurningMode } from '@/types/slides'
+import type { WorkspaceLabel, Slide, SlideTheme, PPTElement, PPTAnimation, SlideTemplate, ImportedSlideTemplate, TurningMode } from '@/types/slides'
 import { DEFAULT_TURNING_MODE } from '@/configs/animation'
 import { getLL } from '@/i18n/getLL'
 import { markSourcePackageDirty } from '@/utils/pptxSourcePackage'
@@ -74,6 +76,8 @@ export interface SlidesActions {
   addImportedTemplate: (template: ImportedSlideTemplate) => void
   replaceSlide: (slide: Slide, slideId?: string) => void
   addSlide: (slide: Slide | Slide[], options?: AddSlideOptions) => void
+  transferPageElements: (sourceId: string, targetId: string, ids: readonly string[]) => void
+  updateWorkspace: (change: { positions?: Record<string, { x: number; y: number }>; annotation?: { owner: string; id: string; props: Partial<WorkspaceLabel> } }) => void
   updateSlide: (props: Partial<Slide>, slideId?: string) => void
   removeSlideProps: (data: RemovePropData) => void
   deleteSlide: (slideId: string | string[]) => void
@@ -323,11 +327,36 @@ export const useSlidesStore = create<SlidesStore>()(
       loadGoogleFonts(collectSlidesFonts(incoming))
     },
 
+    transferPageElements(sourceId, targetId, ids) {
+      set(state => {
+        const next = transferPageElements(state.slides, sourceId, targetId, ids, state.viewportSize, state.viewportSize * state.viewportRatio)
+        if (next === state.slides) return
+        state.slides = next
+        state.slideIndex = next.findIndex(page => page.id === targetId)
+      })
+      markSourcePackageDirty()
+    },
+
+    updateWorkspace({ positions, annotation }) {
+      // One store publication per gesture frame, independent of the number of member pages.
+      set(state => {
+        for (const slide of state.slides) {
+          const point = positions?.[slide.id]
+          if (point && (slide.canvasPosition?.x !== point.x || slide.canvasPosition?.y !== point.y)) slide.canvasPosition = point
+          if (annotation?.owner === slide.id) {
+            const label = slide.workspaceLabels?.find(item => item.id === annotation.id)
+            if (label) Object.assign(label, annotation.props)
+          }
+        }
+      })
+    },
+
     updateSlide(props, slideId) {
       set((state) => {
         const slideIndex = slideId ? state.slides.findIndex(item => item.id === slideId) : state.slideIndex
         if (slideIndex < 0) return
-        const next = { ...state.slides[slideIndex], ...props }
+        const old = state.slides[slideIndex]
+        const next = { ...old, ...props, ...(props.elements ? { elements: reconcileFrameTransforms(old.elements, props.elements) } : {}) }
         // A skeleton is a promise of content: any patch that brings elements
         // (or explicitly falsifies the flag) fulfils it.
         if (props.skeleton === false || (props.elements && props.skeleton === undefined)) delete next.skeleton
@@ -357,6 +386,13 @@ export const useSlidesStore = create<SlidesStore>()(
       const current = get()
       const { slides, deletedIndexes } = deleteSlidesPreservingIdentity(current.slides, slidesId)
       if (!deletedIndexes.length) return
+      // Workspace annotations survive deletion of their storage page.
+      const detachedLabels = current.slides.filter(slide => slidesId.includes(slide.id)).flatMap(slide => slide.workspaceLabels || [])
+      if (slides.length && detachedLabels.length) {
+        const existing = new Set(slides.flatMap(slide => (slide.workspaceLabels || []).map(label => label.id)))
+        slides[0] = { ...slides[0], workspaceLabels: [...(slides[0].workspaceLabels || []), ...detachedLabels.filter(label => !existing.has(label.id))] }
+      }
+      for (let i = 0; i < slides.length; i++) if (slides[i].workspaceLabels?.some(label => label.kind === 'section')) slides[i] = { ...slides[i], workspaceLabels: slides[i].workspaceLabels?.map(label => label.kind === 'section' ? { ...label, pageIds: label.pageIds?.filter(id => !slidesId.includes(id)) } : label) }
       const slideIndex = slideIndexAfterDelete(
         current.slideIndex,
         current.slides,
@@ -408,7 +444,8 @@ export const useSlidesStore = create<SlidesStore>()(
 
     deleteElement(elementId) {
       set((state) => {
-        const elementIdList = Array.isArray(elementId) ? elementId : [elementId]
+        const ids = Array.isArray(elementId) ? elementId : [elementId]
+        const elementIdList = frameDescendantIds(state.slides[state.slideIndex].elements, ids)
         const currentSlideEls = state.slides[state.slideIndex].elements
         state.slides[state.slideIndex].elements = currentSlideEls.filter(item => !elementIdList.includes(item.id))
       })
@@ -431,9 +468,9 @@ export const useSlidesStore = create<SlidesStore>()(
         const nextIndex = slideId ? state.slides.findIndex(item => item.id === slideId) : state.slideIndex
         const nextSlide = state.slides[nextIndex]
         if (!nextSlide) return
-        nextSlide.elements = nextSlide.elements.map(el => (
+        nextSlide.elements = reconcileFrameTransforms(nextSlide.elements, nextSlide.elements.map(el => (
           elIdList.includes(el.id) ? { ...el, ...props } as PPTElement : el
-        ))
+        )))
       })
       markSourcePackageDirty()
     },

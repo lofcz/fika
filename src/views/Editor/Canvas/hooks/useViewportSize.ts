@@ -1,13 +1,24 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useMainStore, useSlidesStore } from '@/store'
+import { FIT_CANVAS_BOUNDS_EVENT, calculateCanvasFit, type CanvasFitRequest } from '@/utils/canvasFit'
+import { occupancyForTargetZoom, setPendingZoom } from '@/utils/canvasZoom'
 
 export default (canvasRef: { current: HTMLElement | null }) => {
   const [viewportLeft, setViewportLeft] = useState(0)
   const [viewportTop, setViewportTop] = useState(0)
   const viewportLeftRef = useRef(0)
   const viewportTopRef = useRef(0)
-  viewportLeftRef.current = viewportLeft
-  viewportTopRef.current = viewportTop
+  // The refs are the current camera, including input coalesced before the next render.
+  const panFrame = useRef(0)
+  const publishPan = useCallback(() => {
+    if (panFrame.current) return
+    panFrame.current = requestAnimationFrame(() => {
+      panFrame.current = 0
+      setViewportLeft(viewportLeftRef.current)
+      setViewportTop(viewportTopRef.current)
+    })
+  }, [])
+  useEffect(() => () => cancelAnimationFrame(panFrame.current), [])
 
   const canvasPercentage = useMainStore(s => s.canvasPercentage)
   const canvasDragged = useMainStore(s => s.canvasDragged)
@@ -156,6 +167,32 @@ export default (canvasRef: { current: HTMLElement | null }) => {
     if (!canvasDragged) scheduleViewportRef.current(true)
   }, [canvasDragged])
 
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const fitBounds = (event: Event) => {
+      const next = calculateCanvasFit((event as CustomEvent<CanvasFitRequest>).detail, canvas.clientWidth, canvas.clientHeight)
+      if (!next) return
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = 0
+      const main = useMainStore.getState()
+      const slides = useSlidesStore.getState()
+      const percentage = occupancyForTargetZoom(next.scale * 100, canvas.clientWidth, canvas.clientHeight, slides.viewportSize, slides.viewportRatio)
+      // Mark the occupancy as consumed so the normal zoom effect cannot recenter this fit.
+      prevPercentageRef.current = percentage
+      setPendingZoom(null)
+      main.setCanvasDragged(true)
+      main.setCanvasPercentage(percentage)
+      main.setCanvasScale(next.scale)
+      viewportLeftRef.current = next.left
+      viewportTopRef.current = next.top
+      setViewportLeft(next.left)
+      setViewportTop(next.top)
+    }
+    canvas.addEventListener(FIT_CANVAS_BOUNDS_EVENT, fitBounds)
+    return () => canvas.removeEventListener(FIT_CANVAS_BOUNDS_EVENT, fitBounds)
+  }, [canvasRef])
+
   const viewportStyles = useMemo(() => ({
     width: viewportSize,
     height: viewportSize * viewportRatio,
@@ -204,8 +241,20 @@ export default (canvasRef: { current: HTMLElement | null }) => {
     const top = viewportTopRef.current + dy
     viewportLeftRef.current = left
     viewportTopRef.current = top
-    setViewportLeft(left)
-    setViewportTop(top)
+    publishPan()
+    useMainStore.getState().setCanvasDragged(true)
+  }, [publishPan])
+
+  // A page-origin change is a coordinate rebase, not user camera input.
+  // Publish in the caller's layout effect so the new origin and its compensating
+  // offset reach the screen together, without a frame of workspace movement.
+  const rebaseViewport = useCallback((dx: number, dy: number) => {
+    viewportLeftRef.current += dx
+    viewportTopRef.current += dy
+    cancelAnimationFrame(panFrame.current)
+    panFrame.current = 0
+    setViewportLeft(viewportLeftRef.current)
+    setViewportTop(viewportTopRef.current)
     useMainStore.getState().setCanvasDragged(true)
   }, [])
 
@@ -225,8 +274,7 @@ export default (canvasRef: { current: HTMLElement | null }) => {
       const top = originTop + (moveEvent.clientY - startClientY)
       viewportLeftRef.current = left
       viewportTopRef.current = top
-      setViewportLeft(left)
-      setViewportTop(top)
+      publishPan()
     }
 
     document.onmouseup = () => {
@@ -236,11 +284,12 @@ export default (canvasRef: { current: HTMLElement | null }) => {
 
       useMainStore.getState().setCanvasDragged(true)
     }
-  }, [])
+  }, [publishPan])
 
   return {
     viewportStyles,
     dragViewport,
     panViewport,
+    rebaseViewport,
   }
 }

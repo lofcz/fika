@@ -1,0 +1,30 @@
+.panel {
+  margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--fika-border-color, #dedee2);
+  h3 { margin: 0 0 8px; font-size: 13px; }
+  p { font-size: 12px; line-height: 1.5; opacity: .65; margin: 0 0 12px; }
+  form { display: flex; flex-wrap: wrap; gap: 8px; }
+  input { min-width: 0; width: 100%; border: 1px solid var(--fika-border-color, #dedee2); background: transparent; color: inherit; border-radius: 6px; padding: 8px; }
+  button { border: 1px solid var(--fika-border-color, #dedee2); border-radius: 6px; background: transparent; color: inherit; padding: 7px 10px; cursor: pointer; }
+  button:disabled, input:disabled { opacity: .5; cursor: default; }
+}
+.fields { display: grid; grid-template-columns: minmax(0, 1fr) 64px 32px; gap: 5px; margin-top: 8px; }
+.label {
+  position: absolute; z-index: 6; max-width: none; pointer-events: auto; color: #494951;
+  button, textarea { font: inherit; color: inherit; line-height: 1.3; white-space: pre-wrap; background: transparent; border: 1px solid transparent; border-radius: 3px; text-align: left; padding: 4px 6px; }
+  button { cursor: move; touch-action: none; min-width: 30px; max-width: 100%; overflow-wrap: anywhere; }
+  button:hover, button:focus-visible { outline: none; border-color: currentColor; background: #ffffff66; }
+  textarea { background: #fff; border-color: currentColor; min-width: 220px; min-height: 70px; resize: both; }
+}
+
+/* The workspace resets generic controls; keep annotation controls visibly editable. */
+.panel.panel {
+  border-top: 0; margin-top: 0; padding-top: 0;
+  h3 { margin: 0 0 8px; }
+  input { box-sizing: border-box; border-radius: 7px !important; border: 1px solid var(--myna-border, #dedee2) !important; background: var(--myna-surface, #f4f4f5) !important; color: var(--myna-ink, #18181b); min-height: 34px; }
+  form > button { width: 100%; border: 1px solid var(--myna-border, #dedee2) !important; background: var(--myna-paper, #fff); }
+  .fields { margin-top: 12px; }
+  .fields button { border: 1px solid var(--myna-border, #dedee2) !important; }
+}
+
+.label.label button { background: transparent !important; border-radius: 2px !important; font-size: inherit !important; padding: 2px 3px !important; min-height: 0; }
+.label.label button:hover, .label.label button:focus-visible { background: #ffffff66 !important; }

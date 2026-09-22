@@ -63,4 +63,5 @@ export const loadSymbolItems = (category: SymbolCategoryKey, emojiType: EmojiTyp
 export const prefetchSymbolItems = (category: SymbolCategoryKey, emojiType: EmojiTypeKey = DEFAULT_EMOJI_TYPE) => {
   void loadSymbolItems(category, emojiType);
 };
-void loadSymbolItems('emoji', DEFAULT_EMOJI_TYPE);
+// Load on demand: embedded hosts set the asset base in mountFika, after this
+// module is evaluated. An eager request here uses the host bundle's directory.

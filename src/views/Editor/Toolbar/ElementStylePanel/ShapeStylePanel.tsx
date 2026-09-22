@@ -34,6 +34,7 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
   const handleElementId = useHandleElementId()
   const shapeFormatPainter = useMainStore(s => s.shapeFormatPainter)
   const editingElementId = useMainStore(s => s.editingElementId)
+  const isFrame = useHandleElementSelect(el => !!(el?.type === 'shape' && el.frame))
   const hasShapeText = useHandleElementSelect(el => !!(el?.type === 'shape' && el.text?.content))
   const isEditingText = !!editingElementId && editingElementId === handleElementId
   const shapeStyle = useHandleElementShallow(el => {
@@ -161,7 +162,7 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
 
   const changeShape = (shape: ShapePoolItem) => {
     const handleElement = getHandleElement()
-    if (!handleElement || handleElement.type !== 'shape') return
+    if (!handleElement || handleElement.type !== 'shape' || handleElement.frame) return
     const { width, height } = handleElement
     const props: Partial<PPTShapeElement> = {
       viewBox: shape.viewBox,
@@ -189,7 +190,7 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
     <div className={cx('shape-style-panel')}>
       {!isEditingText ? (
         <>
-          <PanelSection label={LL.editor.stylePanel.shape.clickToReplaceShape()}>
+          {!isFrame && <PanelSection label={LL.editor.stylePanel.shape.clickToReplaceShape()}>
             <div className={cx('shape-pool')}>
               {SHAPE_LIST.map(item => (
                 <div className={cx('category')} key={item.categoryKey}>
@@ -206,7 +207,7 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
                 </div>
               ))}
             </div>
-          </PanelSection>
+          </PanelSection>}
 
           <PanelSection label={LL.editor.panel.fill()}>
             <Select

@@ -1,0 +1,2 @@
+.title { position: absolute; z-index: 9; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: move !important; pointer-events: auto; font-size: 10px !important; padding: 3px 6px !important; height: 22px; background: #f4f4f5 !important; border: 1px solid #d4d4d8 !important; }
+.title[aria-pressed=true] { background: #18181b !important; color: white !important; }

@@ -1,0 +1,24 @@
+.panel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.hint { color: var(--myna-muted, #71717a); font-size: 12px; line-height: 1.6; margin: 0; }
+.search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--myna-border, #e4e4e7); border-radius: 8px; padding-inline-start: 10px; input { min-width: 0; width: 100%; border: 0 !important; background: transparent !important; } }
+.filters { display: flex; gap: 3px; flex-wrap: wrap; button { font-size: 11px !important; padding: 6px 8px !important; } }
+.empty { padding: 24px 12px; text-align: center; color: var(--myna-muted, #71717a); border: 1px dashed var(--myna-border, #e4e4e7); border-radius: 8px; line-height: 1.6; }
+.asset-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.asset { display: flex !important; flex-direction: column; align-items: stretch !important; text-align: start; padding: 0 !important; overflow: hidden; border: 1px solid var(--myna-border, #e4e4e7) !important; gap: 0 !important; }
+.asset-preview { position: relative; display: flex; align-items: center; justify-content: center; height: 104px; background: var(--myna-surface, #f4f4f5); overflow: hidden; img { max-width: 100%; max-height: 100%; object-fit: contain; } }
+.asset-add { position: absolute; inset-inline-end: 5px; bottom: 5px; padding: 4px; border-radius: 50%; background: var(--myna-paper, #fff); color: var(--myna-ink, #18181b); display: flex; }
+.asset-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; padding: 8px 8px 3px; }
+.asset-meta { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--myna-muted, #71717a); padding: 0 8px 8px; }
+.add-page { width: 100%; border: 1px dashed var(--myna-border, #e4e4e7) !important; }
+.page-grid { display: flex; flex-direction: column; gap: 16px; }
+.page-card { border: 1px solid var(--myna-border, #e4e4e7); border-radius: 9px; overflow: hidden; &.selected { border-color: var(--myna-accent, #18181b); box-shadow: 0 0 0 1px var(--myna-accent, #18181b); } }
+.page-preview { min-height: 116px; display: flex !important; width: 100%; background: var(--myna-surface, #f4f4f5) !important; padding: 14px 8px !important; border-radius: 0 !important; }
+.page-caption { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 4px; strong { font-size: 12px; } span { font-size: 11px; color: var(--myna-muted, #71717a); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+.page-actions { display: flex; justify-content: flex-end; padding: 2px 6px 6px; button { padding: 7px !important; } }
+
+.page-card.dropping { border-top: 3px solid var(--myna-accent, #18181b); }
+.layer-list { display: flex; flex-direction: column; gap: 7px; }
+.layer-card { border: 1px solid var(--myna-border, #e4e4e7); border-radius: 8px; padding: 7px 5px 3px; &.selected { border-color: var(--myna-accent, #18181b); background: var(--myna-surface, #f4f4f5); } &.dropping { border-top: 3px solid var(--myna-accent, #18181b); } &.invisible .layer-title { opacity: .5; } }
+.layer-title { display: flex; align-items: center; gap: 3px; min-width: 0; > svg { flex: none; opacity: .5; } input { width: 100%; min-width: 0; } }
+.layer-name { display: block !important; min-width: 0; flex: 1; text-align: start; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px !important; padding: 6px !important; }
+.layer-actions { display: flex; justify-content: flex-end; gap: 0; button { padding: 6px !important; } }

@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage({ viewport: { width: 1800, height: 1200 } })
+  const errors = []; page.on('pageerror', e => errors.push(e.message))
+  await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5173'}/?mode=myna&locale=en`)
+  await page.locator('[data-myna-page-handle]').first().waitFor()
+  await page.getByRole('button', { name: 'Layers', exact: true }).click()
+  const panel = page.locator('[data-myna-frames-hierarchy]')
+  const source = await page.evaluate(() => { const s = window.__FIKA_SLIDES__.getState(); return s.slides[s.slideIndex] })
+  const shape = source.elements.find(el => el.type === 'shape' && el.height > 150)
+  await panel.locator(`[data-frame-element-id="${shape.id}"]`).click()
+  await panel.getByRole('button', { name: 'Frame selection', exact: true }).click()
+  const frame = await page.evaluate(() => { const s = window.__FIKA_SLIDES__.getState(); return s.slides[s.slideIndex].elements.find(el => el.frame) })
+  await panel.getByRole('button', { name: 'Frame selection', exact: true }).click()
+  await panel.locator(`[data-frame-element-id="${frame.id}"]`).click()
+  await page.getByRole('button', { name: 'Fit all pages', exact: true }).click()
+  await page.waitForTimeout(400)
+  const title = await page.locator(`[data-myna-frame-title="${frame.id}"]`).boundingBox()
+  const pageBox = await page.locator(`[data-myna-page-handle="${source.id}"]`).locator('..').boundingBox()
+  await page.keyboard.down('Alt')
+  await page.mouse.move(title.x + title.width / 2, title.y + title.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(pageBox.x - 100, pageBox.y + 30, { steps: 15 })
+  await page.mouse.up(); await page.keyboard.up('Alt')
+  await page.waitForTimeout(200)
+  assert.equal(await page.locator('.viewport-clip').evaluate(n => getComputedStyle(n).overflow), 'visible')
+  const after = await page.evaluate(() => { const s = window.__FIKA_SLIDES__.getState(); return { id: s.slides[s.slideIndex].id, slides: s.slides } })
+  assert.equal(after.id, source.id, 'gap drop retains document ownership')
+  assert.equal(after.slides.find(s => s.id === source.id).elements.find(el => el.id === frame.id).parentFrameId, undefined, 'pasteboard drop escapes the old parent frame')
+  assert.ok(after.slides.find(s => s.id === source.id).elements.find(el => el.id === frame.id).left < 0)
+  const other = after.slides.find(s => s.id !== source.id)
+  await page.locator(`[data-myna-page-handle="${other.id}"]`).press('Enter')
+  const overlay = page.locator(`[data-myna-page-overflow="${source.id}"]`)
+  await overlay.waitFor()
+  const pixels = await overlay.locator('canvas').evaluate(canvas => {
+    const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
+    let count = 0; for (let i = 3; i < data.length; i += 4) if (data[i]) count++
+    return count
+  })
+  assert.ok(pixels > 100, 'off-page artwork stays painted after switching pages')
+  await overlay.locator(`[data-myna-overflow-element="${shape.id}"]`).click({ force: true })
+  assert.equal(await page.evaluate(() => { const s = window.__FIKA_SLIDES__.getState(); return s.slides[s.slideIndex].id }), source.id, 'off-page artwork can reactivate its owning page')
+  assert.deepEqual(errors, [])
+  console.log('PASS pasteboard drop: visible after release, visible on inactive pages, selectable, and ownership retained')
+} finally { await browser.close() }

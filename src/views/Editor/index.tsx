@@ -1,3 +1,4 @@
+import { FixedTextCreationContext } from '@/hooks/textCreationDefaults'
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
@@ -9,6 +10,7 @@ import useGlobalHotkey from '@/hooks/useGlobalHotkey'
 import usePasteEvent from '@/hooks/usePasteEvent'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import EditorHeader from './EditorHeader/index'
+import MynaWorkspace from '../Myna/MynaWorkspace'
 import Canvas from './Canvas/index'
 import CanvasTool from './CanvasTool/index'
 import Thumbnails from './Thumbnails/index'
@@ -58,7 +60,7 @@ const syncRightPanelToWidth = (width: number) => {
   useMainStore.getState().applyRightPanelAuto(width, NARROW_RIGHT_PANEL_PX)
 }
 
-const Editor = memo(() => {
+const Editor = memo(({ myna = false }: { myna?: boolean }) => {
   const dialogForExport = useMainStore(s => s.dialogForExport)
   const showSelectPanel = useMainStore(s => s.showSelectPanel)
   const showSearchPanel = useMainStore(s => s.showSearchPanel)
@@ -247,12 +249,12 @@ const Editor = memo(() => {
   return (
     <>
       <div
-        className={cx('fika-editor', { 'right-panel-collapsed': rightPanelCollapsed, 'read-only': readOnly })}
+        className={cx('fika-editor', { 'right-panel-collapsed': rightPanelCollapsed, 'read-only': readOnly, 'myna-editor': myna })}
         ref={editorRootRef}
         style={{ '--right-pane-width': `${rightPaneWidth}px` } as CSSProperties}
       >
-        <EditorHeader className={cx('layout-header')} />
-        <Group
+        {!myna ? <EditorHeader className={cx('layout-header')} /> : null}
+        {myna ? <MynaWorkspace /> : <Group
           id="fika-editor-main"
           orientation="horizontal"
           className={cx('layout-content')}
@@ -329,7 +331,7 @@ const Editor = memo(() => {
             </div>
           </div>
           </Panel>
-        </Group>
+        </Group>}
       </div>
 
       {showSelectPanel ? <SelectPanel /> : null}
@@ -358,4 +360,6 @@ const Editor = memo(() => {
   )
 })
 
-export default Editor
+export default function EditorWithCreationDefaults({ myna = false }: { myna?: boolean }) {
+  return <FixedTextCreationContext.Provider value={myna}><Editor myna={myna} /></FixedTextCreationContext.Provider>
+}

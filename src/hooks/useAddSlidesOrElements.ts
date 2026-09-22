@@ -1,5 +1,7 @@
+import { frameDescendantIds } from '@/utils/nestedFrames'
+import { selectInsertedElements } from '@/utils/selectInsertedElements'
 import { nanoid } from 'nanoid'
-import { useSlidesStore, useMainStore, selectCurrentSlide } from '@/store'
+import { useSlidesStore, selectCurrentSlide } from '@/store'
 import type { PPTElement, Slide } from '@/types/slides'
 import { clonePlain } from '@/utils/clonePlain'
 import { createSlideIdMap, createElementIdMap, getElementRange } from '@/utils/element'
@@ -11,7 +13,9 @@ export default () => {
   const addElementsFromData = (elements: PPTElement[]) => {
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
     if (!currentSlide) return
-    const cloned = clonePlain(elements)
+    const ids = frameDescendantIds(currentSlide.elements, elements.map(e => e.id))
+    const missing = currentSlide.elements.filter(e => ids.includes(e.id) && !elements.some(copy => copy.id === e.id))
+    const cloned = clonePlain([...elements, ...missing])
     const { groupIdMap, elIdMap } = createElementIdMap(cloned)
     const firstElement = cloned[0]
     let offset = 0
@@ -32,12 +36,13 @@ export default () => {
     } while (lastSameElement)
     for (const element of cloned) {
       element.id = elIdMap[element.id]
+      if (element.parentFrameId) element.parentFrameId = elIdMap[element.parentFrameId]
       element.left = element.left + offset
       element.top = element.top + offset
       if (element.groupId) element.groupId = groupIdMap[element.groupId]
     }
     useSlidesStore.getState().addElement(cloned)
-    useMainStore.getState().setActiveElementIdList(Object.values(elIdMap))
+    selectInsertedElements(Object.values(elIdMap))
     addHistorySnapshot()
   }
 
@@ -47,8 +52,11 @@ export default () => {
     for (const slide of cloned) {
       const { groupIdMap, elIdMap } = createElementIdMap(slide.elements)
       slide.id = slideIdMap[slide.id]
+      // Workspace annotations are not part of a duplicated/pasted page.
+      delete slide.workspaceLabels
       for (const element of slide.elements) {
         element.id = elIdMap[element.id]
+      if (element.parentFrameId) element.parentFrameId = elIdMap[element.parentFrameId]
         if (element.groupId) element.groupId = groupIdMap[element.groupId]
         if (element.link && element.link.type === 'slide') {
           if (slideIdMap[element.link.target]) {

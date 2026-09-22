@@ -39,3 +39,12 @@
   pointer-events: none;
   z-index: 1;
 }
+
+// Design editing uses the surrounding pasteboard for off-page content. Keep
+// clipping at the canvas panel boundary, while exported pages stay bounded.
+.viewport-clip.viewport-overflow {
+  overflow: visible;
+}
+
+// Drag roots may cross page/frame boundaries; nested children retain their clips.
+.viewport [data-myna-drag-root] { clip-path: none !important; }

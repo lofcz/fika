@@ -4,7 +4,9 @@ import { parseText2Paragraphs } from '@/utils/textParser'
 import useCreateElement from '@/hooks/useCreateElement'
 import usePasteDataTransfer from '@/hooks/usePasteDataTransfer'
 
-export default (elementRef: { current: HTMLElement | null }) => {
+export default (elementRef: { current: HTMLElement | null }, onFrameDrop?: (event: DragEvent) => boolean) => {
+  const frameDropRef = useRef(onFrameDrop)
+  frameDropRef.current = onFrameDrop
   const { createTextElement } = useCreateElement()
   const { pasteDataTransfer } = usePasteDataTransfer()
   const createTextElementRef = useRef(createTextElement)
@@ -15,6 +17,8 @@ export default (elementRef: { current: HTMLElement | null }) => {
   useEffect(() => {
     const handleDrop = (e: DragEvent) => {
       if (!e.dataTransfer || e.dataTransfer.items.length === 0) return
+      if (useMainStore.getState().readOnly) return
+      if (frameDropRef.current?.(e)) return
       const { isFile, dataTransferFirstItem } = pasteDataTransferRef.current(e.dataTransfer)
       if (isFile) return
       if (dataTransferFirstItem && dataTransferFirstItem.kind === 'string' && dataTransferFirstItem.type === 'text/plain') {

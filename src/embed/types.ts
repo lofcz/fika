@@ -64,8 +64,8 @@ export interface FikaHeaderMenuItem {
   onSelect?: (id: string) => void;
 }
 
-/** `editor` is the default full editor; `presentation` boots straight into the fullscreen slideshow with no editor chrome. */
-export type FikaViewMode = 'editor' | 'presentation';
+/** `editor`: presentation editor; `presentation`: viewer; `canva` (alias `myna`): Myna design workspace. */
+export type FikaViewMode = 'editor' | 'presentation' | 'canva' | 'myna';
 export interface FikaMountOptions {
   /** Replacement design catalog in display order. Omit for Fika defaults; [] hides presets. Does not restyle the loaded document. */
   designThemes?: readonly FikaDesignTheme[];
@@ -138,6 +138,7 @@ export interface FikaMountOptions {
    */
   openPanelOnTextSelection?: boolean;
   /**
+   * `canva` (or `myna`) mounts the Myna graphic design workspace.
    * `presentation` mounts a presentation-only viewer: once the deck resolves,
    * the fullscreen slideshow starts immediately and the editor never renders.
    * Exiting the slideshow re-enters it, so the page stays a pure viewer.

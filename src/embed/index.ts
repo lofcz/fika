@@ -78,3 +78,6 @@ export type { FikaDesignTheme } from '@/configs/designThemes'
 export { getFikaDefaultDesignThemes } from '@/configs/designThemes'
 
 export { resizeDeckSlides, type SlideCanvas } from '@/utils/resizeDeck';
+
+/** Myna design-mode capabilities and editable starter document. */
+export { createMynaDocument, MYNA_FORMATS } from '@/views/Myna/catalog'

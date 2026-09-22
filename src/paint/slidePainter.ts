@@ -15,6 +15,7 @@ import type {
   SlideTheme,
   TableCellStyle,
 } from '@/types/slides'
+import { frameClipPolygon } from '@/utils/nestedFrames'
 import { CLIPPATHS, ClipPathTypes } from '@/configs/imageClip'
 import { DEFAULT_CHART_LINE_COLOR } from '@/configs/chart'
 import { getLineElementRenderPath, getTableThemeColors } from '@/utils/element'
@@ -43,6 +44,8 @@ import { paintRichText } from './textPainter'
 import { getChartRaster, getCodeRaster, getLatexRaster, getMermaidRaster } from './rasterResources'
 
 export type PaintSlideOptions = {
+  /** Workspace-only projection. Exports and thumbnails retain page clipping. */
+  workspaceBounds?: { x: number; y: number; width: number; height: number }
   slide: Slide
   theme: SlideTheme
   viewportSize: number
@@ -53,6 +56,10 @@ export type PaintSlideOptions = {
   invalidate: () => void
   /** Paint unfilled placeholder prompts (layout picker cards). Slide thumbnails keep them hidden. */
   showPlaceholders?: boolean
+  /** Export without the page background; element paint and contrast stay unchanged. */
+  transparentBackground?: boolean
+  /** Export-owned full-resolution images; thumbnails keep their lightweight cache. */
+  imageBitmaps?: ReadonlyMap<string, ImageBitmap>
 }
 
 const PATH_CACHE_MAX = 1800
@@ -178,7 +185,9 @@ const gradientPaint = (
   return paint
 }
 
-const bitmapFor = (src: string, invalidate: () => void) => {
+const bitmapFor = (src: string, invalidate: () => void, imageBitmaps?: ReadonlyMap<string, ImageBitmap>) => {
+  const full = imageBitmaps?.get(src)
+  if (full) return full
   const cached = getCachedPreviewImageBitmap(src)
   if (cached) return cached
   void loadPreviewImageBitmap(src).then(bitmap => {
@@ -211,6 +220,7 @@ const paintBackground = (
   width: number,
   height: number,
   invalidate: () => void,
+  imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
 ) => {
   const background = slide.background
   if (!background) {
@@ -232,7 +242,7 @@ const paintBackground = (
   ctx.fillRect(0, 0, width, height)
   const source = background.image?.src
   if (!source) return
-  const bitmap = bitmapFor(source, invalidate)
+  const bitmap = bitmapFor(source, invalidate, imageBitmaps)
   if (!bitmap) return
   if (background.image?.size === 'repeat') {
     const scale = Math.min(width / bitmap.width, height / bitmap.height)
@@ -268,12 +278,13 @@ const paintImage = (
   ctx: CanvasRenderingContext2D,
   element: PPTImageElement,
   invalidate: () => void,
+  imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
 ) => withRectTransform(ctx, element, () => {
   const clip = clipPathForImage(element)
   ctx.save()
   applyShadow(ctx, element.shadow)
   ctx.clip(clip)
-  const bitmap = bitmapFor(element.src, invalidate)
+  const bitmap = bitmapFor(element.src, invalidate, imageBitmaps)
   if (bitmap) {
     ctx.filter = imageFilter(element)
     if (element.clip) {
@@ -305,6 +316,7 @@ const paintShape = (
   slide: Slide,
   theme: SlideTheme,
   invalidate: () => void,
+  imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
 ) => withRectTransform(ctx, element, () => {
   const path = scaledPath(resolveShapePaintPath(element), element.width, element.height, element.viewBox)
   ctx.save()
@@ -313,7 +325,7 @@ const paintShape = (
   if (element.pattern) {
     ctx.save()
     ctx.clip(path, 'evenodd')
-    const bitmap = bitmapFor(element.pattern, invalidate)
+    const bitmap = bitmapFor(element.pattern, invalidate, imageBitmaps)
     if (bitmap) drawCover(ctx, bitmap, element.width, element.height)
     ctx.restore()
   }
@@ -707,8 +719,9 @@ const paintMedia = (
   ctx: CanvasRenderingContext2D,
   element: Extract<PPTElement, { type: 'video' | 'audio' }>,
   invalidate: () => void,
+  imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
 ) => withRectTransform(ctx, element, () => {
-  const bitmap = element.poster ? bitmapFor(element.poster, invalidate) : undefined
+  const bitmap = element.poster ? bitmapFor(element.poster, invalidate, imageBitmaps) : undefined
   ctx.save()
   ctx.beginPath()
   ctx.rect(0, 0, element.width, element.height)
@@ -742,11 +755,12 @@ const paintElement = (
   showPlaceholders: boolean,
   slideW: number,
   slideH: number,
+  imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
 ) => {
   switch (element.type) {
-    case 'shape': paintShape(ctx, element, slide, theme, invalidate); break
+    case 'shape': paintShape(ctx, element, slide, theme, invalidate, imageBitmaps); break
     case 'line': paintLine(ctx, element); break
-    case 'image': paintImage(ctx, element, invalidate); break
+    case 'image': paintImage(ctx, element, invalidate, imageBitmaps); break
     case 'text': paintTextElement(ctx, element, slide, theme, showPlaceholders, invalidate); break
     case 'table': paintTable(ctx, element, theme, invalidate); break
     case 'latex': paintLatex(ctx, element, invalidate); break
@@ -754,7 +768,7 @@ const paintElement = (
     case 'mermaid':
     case 'code': paintRasterElement(ctx, element, slide, theme, invalidate); break
     case 'video':
-    case 'audio': paintMedia(ctx, element, invalidate); break
+    case 'audio': paintMedia(ctx, element, invalidate, imageBitmaps); break
   }
 }
 
@@ -785,28 +799,47 @@ export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlid
   const pixelHeight = Math.max(1, Math.round(cssHeight * dpr))
   if (canvas.width !== pixelWidth) canvas.width = pixelWidth
   if (canvas.height !== pixelHeight) canvas.height = pixelHeight
-  const ctx = canvas.getContext('2d', { alpha: false })
+  const ctx = canvas.getContext('2d', { alpha: options.transparentBackground === true })
   if (!ctx) return
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, pixelWidth, pixelHeight)
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
-  ctx.setTransform(pixelWidth / logicalWidth, 0, 0, pixelHeight / logicalHeight, 0, 0)
+  const bounds = options.workspaceBounds
+  const sx = pixelWidth / (bounds?.width || logicalWidth), sy = pixelHeight / (bounds?.height || logicalHeight)
+  ctx.setTransform(sx, 0, 0, sy, -(bounds?.x || 0) * sx, -(bounds?.y || 0) * sy)
   ctx.save()
   ctx.beginPath()
-  ctx.rect(0, 0, logicalWidth, logicalHeight)
-  ctx.clip()
-  paintBackground(ctx, options.slide, logicalWidth, logicalHeight, options.invalidate)
+  if (bounds) {
+    ctx.rect(bounds.x, bounds.y, bounds.width, bounds.height)
+    ctx.rect(0, 0, logicalWidth, logicalHeight)
+    ctx.clip('evenodd')
+  } else {
+    ctx.rect(0, 0, logicalWidth, logicalHeight)
+    ctx.clip()
+  }
+  if (!options.transparentBackground) paintBackground(ctx, options.slide, logicalWidth, logicalHeight, options.invalidate, options.imageBitmaps)
   if (options.slide.skeleton) paintSkeleton(ctx, logicalWidth, logicalHeight)
   for (const element of options.slide.elements) {
+    ctx.save()
     try {
-      paintElement(ctx, element, options.slide, options.theme, options.invalidate, !!options.showPlaceholders, logicalWidth, logicalHeight)
+      const clip = frameClipPolygon(element, options.slide.elements)
+      if (clip) {
+        if (!clip.length) continue
+        ctx.beginPath()
+        ctx.moveTo(clip[0].x, clip[0].y)
+        for (const point of clip.slice(1)) ctx.lineTo(point.x, point.y)
+        ctx.closePath()
+        ctx.clip()
+      }
+      paintElement(ctx, element, options.slide, options.theme, options.invalidate, !!options.showPlaceholders, logicalWidth, logicalHeight, options.imageBitmaps)
     }
     catch (error) {
       if (import.meta.env.MODE === 'development') {
         console.warn('[slidePainter] element paint failed', element.id, element.type, error)
       }
     }
+    finally { ctx.restore() }
   }
   ctx.restore()
 }

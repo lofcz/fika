@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './Button.module.scss'
 const cx = bindStyles(styles)
-import type { ReactNode } from 'react'
+import type { ReactNode, MouseEvent } from 'react'
 
 export type IButtonProps = {
   checked?: boolean
@@ -10,7 +10,7 @@ export type IButtonProps = {
   size?: 'small' | 'normal'
   first?: boolean
   last?: boolean
-  onClick?: () => void
+  onClick?: (event: MouseEvent<HTMLButtonElement>) => void
   children?: ReactNode
   style?: React.CSSProperties
   className?: string
@@ -57,9 +57,9 @@ export default function Button({
       data-align={dataAlign}
       disabled={disabled}
       onMouseDown={(event) => event.preventDefault()}
-      onClick={() => {
+      onClick={event => {
         if (disabled) return
-        onClick?.()
+        onClick?.(event)
       }}
     >
       {children}

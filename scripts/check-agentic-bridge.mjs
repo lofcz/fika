@@ -1,4 +1,4 @@
-﻿import { readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -15,6 +15,7 @@ const qa = readFileSync(join(root, 'src/embed/agentic/qa.ts'), 'utf8')
 const e2eCommands = readFileSync(join(root, 'scripts/e2e-agentic-commands.mjs'), 'utf8')
 
 const expectedCommands = [
+  'canvas.get', 'canvas.apply',
   'deck.get',
   'deck.set',
   'deck.patch',
@@ -216,6 +217,7 @@ const expectedCommands = [
 ]
 
 const expectedCommandDomains = [
+  'canvas',
   'animations',
   'audio',
   'charts',

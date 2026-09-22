@@ -1,5 +1,6 @@
 .table-generator {
   width: 232px;
+  max-width: 100%;
 }
 
 .header {
@@ -66,6 +67,10 @@
 }
 
 .cell {
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  &:focus-visible { outline: 2px solid $ink; outline-offset: 1px; }
   aspect-ratio: 1;
   border-radius: 3px;
   background: $surface;

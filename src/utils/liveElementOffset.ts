@@ -106,6 +106,10 @@ export const setLiveElementOffset = (
   multiOrigin?: { left: number; top: number } | null,
 ) => {
   for (const origin of origins) {
+    // Frame titles live in visual space, outside the scaled artwork subtree.
+    // Keep them on the same transient drag path as the element and handles.
+    const title = document.getElementById(`myna-frame-title-${origin.id}`)
+    if (title) title.style.translate = `${dxSlide * canvasScale}px ${dySlide * canvasScale}px`
     const box = editableBox(origin.id)
     if (box && usesGpuDrag(box)) {
       applyGpuDrag(box, dxSlide, dySlide)
@@ -140,6 +144,8 @@ export const settleLiveElementOffset = (
   canvasScale: number,
 ) => {
   for (const { id, left, top } of positions) {
+    const title = document.getElementById(`myna-frame-title-${id}`)
+    if (title) title.style.translate = ''
     const box = editableBox(id)
     applyLivePositionStyles({
       box,

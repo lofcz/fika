@@ -18,5 +18,5 @@ export const commitSlideElements = (liveList: PPTElement[]) => {
   const storeSlide = selectCurrentSlide(useSlidesStore.getState())
   const next = storeSlide ? applyLiveLayoutOntoStore(liveList, storeSlide.elements) : liveList
   useSlidesStore.getState().updateSlide({ elements: next })
-  return next
+  return selectCurrentSlide(useSlidesStore.getState())?.elements || next
 }

@@ -178,6 +178,26 @@ const pendingPreviewJobs = () => {
 }
 
 const decodeBlob = async (blob: Blob, maxEdge?: number) => {
+  // Chromium does not decode SVG Blob sources with createImageBitmap directly.
+  // An image element uses the browser's inert SVG image decoder (no scripts).
+  if (blob.type.split(';')[0].toLowerCase() === 'image/svg+xml') {
+    const url = URL.createObjectURL(blob)
+    try {
+      const image = new Image()
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve()
+        image.onerror = () => reject(new Error('SVG image could not be decoded'))
+        image.src = url
+      })
+      const size = maxEdge ? resizeToMaxEdge(image.naturalWidth, image.naturalHeight, maxEdge) : { width: image.naturalWidth, height: image.naturalHeight }
+      const canvas = document.createElement('canvas')
+      canvas.width = size.width; canvas.height = size.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('SVG image canvas is unavailable')
+      ctx.drawImage(image, 0, 0, size.width, size.height)
+      return await createImageBitmap(canvas)
+    } finally { URL.revokeObjectURL(url) }
+  }
   if (!maxEdge) return createImageBitmap(blob)
   const header = new Uint8Array(await blob.slice(0, 64 * 1024).arrayBuffer())
   const size = readImageSize(header)

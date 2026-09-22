@@ -1,0 +1,131 @@
+import assert from 'node:assert/strict'
+import { mkdir, readFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { chromium } from 'playwright'
+const base = process.env.FIKA_TEST_URL || 'http://127.0.0.1:5178'
+const browser = await chromium.launch({ headless: true })
+const page = await browser.newPage({ viewport: { width: 1500, height: 1000 }, acceptDownloads: true })
+const errors = []
+page.on('pageerror', error => errors.push(error.message))
+const store = () => page.evaluate(() => {
+  const s = window.__FIKA_SLIDES__.getState()
+  return { width: s.viewportSize, ratio: s.viewportRatio, index: s.slideIndex, slides: s.slides }
+})
+try {
+  await page.goto(`${base}/?mode=myna`, { waitUntil: 'networkidle' })
+  await page.locator('[data-myna-workspace]').waitFor()
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotLength > 0)
+  assert.equal((await store()).ratio, 1)
+  await page.getByRole('button', { name: /The workshop Events/ }).click()
+  await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides.length === 2)
+  assert.equal((await store()).index, 1)
+  await page.getByRole('button', { name: 'Duplicate page', exact: true }).click()
+  await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides.length === 3)
+  const before = await store()
+  assert.notEqual(before.slides[1].elements[0].id, before.slides[2].elements[0].id)
+  await page.getByRole('button', { name: 'Move page left', exact: true }).click()
+  assert.equal((await store()).index, 1)
+  await page.getByRole('button', { name: 'Delete page', exact: true }).click()
+  await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides.length === 2)
+  const previousSnapshots = await page.evaluate(() => window.__FIKA_SNAPSHOT__.getState().snapshotLength)
+  await page.getByRole('button', { name: /^Resize/ }).click()
+  await page.getByRole('button', { name: /Story 1080/ }).click()
+  assert.equal((await store()).ratio, 1920 / 1080)
+  await page.waitForFunction(previous => window.__FIKA_SNAPSHOT__.getState().snapshotLength > previous, previousSnapshots)
+  await page.evaluate(() => window.__FIKA_SNAPSHOT__.getState().unDo())
+  assert.equal((await store()).ratio, 1)
+  await page.evaluate(() => window.__FIKA_SNAPSHOT__.getState().reDo())
+  assert.equal((await store()).ratio, 1920 / 1080)
+  await page.getByRole('button', { name: 'Add page', exact: true }).click()
+  await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides.length === 3)
+  assert.equal((await store()).slides[2].elements.length, 0)
+  await page.getByRole('button', { name: 'Text', exact: true }).click()
+  await page.getByRole('button', { name: 'Add a heading', exact: true }).click()
+  await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides[2].elements.length === 1)
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Layers', exact: true }).click()
+  await page.getByRole('button', { name: 'Lock layer', exact: true }).click()
+  assert.equal((await store()).slides[2].elements[0].lock, true)
+  await page.getByRole('button', { name: 'Unlock layer', exact: true }).click()
+  assert.equal((await store()).slides[2].elements[0].lock, false)
+  await page.getByRole('button', { name: 'Hide layer', exact: true }).click()
+  assert.equal(await page.evaluate(() => window.__FIKA_MAIN__.getState().hiddenElementIdList.length), 1)
+  await page.getByRole('button', { name: 'Show layer', exact: true }).click()
+  await page.getByRole('button', { name: 'Download', exact: true }).click()
+  await page.locator('.myna-download').getByLabel('Transparent page background').check()
+  const downloadPromise = page.waitForEvent('download')
+  await page.locator('.myna-download').getByRole('button', { name: 'Download', exact: true }).click()
+  const download = await downloadPromise
+  assert.match(download.suggestedFilename(), /\.png$/)
+  await mkdir('output/myna', { recursive: true })
+  await download.saveAs('output/myna/export.png')
+  const png = await readFile('output/myna/export.png')
+  assert.equal(png.readUInt32BE(16), 1080)
+  assert.equal(png.readUInt32BE(20), 1920)
+  const alpha = await page.evaluate(async data => {
+    const image = await createImageBitmap(await (await fetch(`data:image/png;base64,${data}`)).blob())
+    const canvas = document.createElement('canvas'); canvas.width = 1; canvas.height = 1
+    const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0); image.close()
+    return ctx.getImageData(0, 0, 1, 1).data[3]
+  }, png.toString('base64'))
+  assert.equal(alpha, 0)
+  await page.getByRole('button', { name: 'Uploads', exact: true }).click()
+  await page.locator('#myna-library input[type=file]').setInputFiles('output/myna/export.png')
+  await page.locator('#myna-library [data-editor-insert=media]').click()
+  await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides[2].elements.some(e => e.type === 'image'))
+  await page.getByRole('button', { name: 'Download', exact: true }).click()
+  await page.locator('.myna-download').getByLabel('File type').selectOption('pdf')
+  await page.locator('.myna-download').getByLabel('Pages', { exact: true }).selectOption('all')
+  const pdfPromise = page.waitForEvent('download')
+  await page.locator('.myna-download').getByRole('button', { name: 'Download', exact: true }).click()
+  await (await pdfPromise).saveAs('output/myna/export.pdf')
+  const pdf = await readFile('output/myna/export.pdf')
+  assert.equal(pdf.subarray(0, 8).toString(), '%PDF-1.4')
+  // Poppler is an optional independent parser; the browser path always runs.
+  try {
+    const info = execFileSync('pdfinfo', ['output/myna/export.pdf'], { encoding: 'utf8' })
+    assert.match(info, /Pages:\s+3/)
+    assert.match(info, /810 x 1440 pts/)
+  } catch (error) { if (error.code !== 'ENOENT') throw error }
+  await page.locator('.myna-download').waitFor({ state: 'detached' })
+  await page.evaluate(() => window.__FIKA_MAIN__.getState().setReadOnly(true))
+  assert.equal(await page.getByRole('button', { name: 'Add page', exact: true }).isDisabled(), true)
+  await page.getByRole('button', { name: 'Page 1', exact: true }).click()
+  assert.equal((await store()).index, 0)
+  await page.evaluate(() => window.__FIKA_MAIN__.getState().setReadOnly(false))
+  await page.getByRole('button', { name: 'Close library' }).click()
+  if (await page.getByRole('button', { name: 'Close properties' }).isVisible()) await page.getByRole('button', { name: 'Close properties' }).click()
+  await page.setViewportSize({ width: 600, height: 850 })
+  await page.screenshot({ path: 'output/myna/narrow.png' })
+  assert.ok((await page.locator('.myna-canvas').boundingBox()).width > 300)
+  // A 1024px source with alternating 1px stripes detects accidental reuse of
+  // the 512px thumbnail bitmap in a full-resolution download.
+  await page.evaluate(() => {
+    const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 32
+    const ctx = canvas.getContext('2d')
+    for (let x = 0; x < 1024; x++) { ctx.fillStyle = x % 2 ? '#ffffff' : '#000000'; ctx.fillRect(x, 0, 1, 32) }
+    const state = window.__FIKA_SLIDES__.getState()
+    state.setViewportSize(1024); state.setViewportRatio(.25); state.updateSlideIndex(0)
+    state.setSlides([{ id: 'image-fidelity', elements: [{ type: 'image', id: 'stripes', src: canvas.toDataURL(), left: 0, top: 0, width: 1024, height: 256, rotate: 0, fixedRatio: false }] }])
+  })
+  await page.getByRole('button', { name: 'Download', exact: true }).click()
+  const sharpPromise = page.waitForEvent('download')
+  await page.locator('.myna-download').getByRole('button', { name: 'Download', exact: true }).click()
+  await (await sharpPromise).saveAs('output/myna/full-resolution.png')
+  const sharp = await readFile('output/myna/full-resolution.png')
+  const pixels = await page.evaluate(async data => {
+    const image = await createImageBitmap(await (await fetch(`data:image/png;base64,${data}`)).blob())
+    const canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height
+    const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0); image.close()
+    const rgba = ctx.getImageData(200, 50, 10, 1).data
+    return Array.from({ length: 10 }, (_, i) => rgba[i * 4])
+  }, sharp.toString('base64'))
+  assert.deepEqual(pixels, [0, 255, 0, 255, 0, 255, 0, 255, 0, 255])
+  await page.goto(`${base}/?mode=canva`, { waitUntil: 'networkidle' })
+  await page.locator('[data-myna-workspace]').waitFor()
+  await page.goto(base, { waitUntil: 'networkidle' })
+  await page.locator('.layout-content-left').waitFor()
+  assert.equal(await page.locator('[data-myna-workspace]').count(), 0)
+  assert.deepEqual(errors, [])
+  console.log('Myna: templates, duplication, ordering, deletion, resize, text, layers, PNG/PDF export, read-only, and narrow viewport passed.')
+} finally { await browser.close() }

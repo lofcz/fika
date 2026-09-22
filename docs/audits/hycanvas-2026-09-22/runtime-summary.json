@@ -1,0 +1,660 @@
+{
+  "url": "http://127.0.0.1:13000/editor/9e0c7e56-5ad7-49a5-bb32-dbcf1f794967/",
+  "state": {
+    "url": "http://127.0.0.1:13000/editor/9e0c7e56-5ad7-49a5-bb32-dbcf1f794967/",
+    "text": "Instagram post\nLive\nUnsaved changes\nShare\nSave\nTemplates\nElements\nText\nAI\nUploads\nStock\nApps\nBrand\nLayers\nElements\nRECENTLY USED\n2 photos\nSHAPES\nRectangle\nRounded\nEllipse\nTriangle\nPentagon\nHexagon\nStar\nDiamond\nOctagon\nBurst\nPill\nFRAMES & GRIDS\nFrame\nCircle frame\nRounded frame\n2 photos\n3 photos\n4 photos\n6 photos\n9 photos\nFeature left\nFeature right\nFeature top\nHero mosaic\nDATA & CODES\nGRAPHICS\n429\nSHAPES (11)\nShow all\nBADGES (4)\nNATURE (31)\nShow all\nSYMBOLS (11)\nShow all\nFUN (11)\nShow all\nARROWS (26)\nShow all\nABSTRACT (28)\nShow all\nBANNERS & BADGES (26)\nShow all\nCALLOUTS (26)\nShow all\nBUSINESS (29)\nShow all\nTECHNOLOGY (28)\nShow all\nSOCIAL (22)\nShow all\nFOOD & DRINK (29)\nShow all\nANIMALS (27)\nShow all\nTRAVEL (27)\nShow all\nCELEBRATION (24)\nShow all\nSCHOOL & HEALTH (23)\nShow all\nMUSIC & SPORT (22)\nShow all\nINFOGRAPHIC (24)\nShow all\nANIMATED\n0\n100\n200\n300\n400\n500\n600\n700\n800\n900\n1000\n0\n100\n200\n300\n400\n500\n600\n700\n800\n900\n1000\nPage 1\n- Page 1\nPage 2\n- Page 1 copy\nAdd page\n1. Photo grid\n2. Icon\n3. Add a heading\n4. QR code\n72%\nFit\nSelection\nPAGE SIZE\nInstagram Post (1080×1080)\nInstagram Story (1080×1920)\nPresentation 16:9 (1920×1080)\nFacebook Post (1200×630)\nPoster (1080×1350)\nA4 Document (1240×1754)\nLogo (500×500)\nBusiness Card (1050×600)\nW\nH\n\nResize the current page. Units: px.\n\nMagic Resize\nSLIDE LAYOUT\nNo layout\nSave page as layout\n\nLayouts keep repeated slides consistent: apply one to reuse its background and text slots.\n\nBACKGROUND\nNone\nLAYOUT\n\nSlide layouts give each slide a title and content placeholders, and make slide titles readable by screen readers.\n\nAdd slide layouts\nExtract layouts from this deck\nDECK THEME\nPROFESSIONAL\nSlate\nForest\nAzure\nOcean\nRoyal\nTeal\nDenim\nMINIMAL\nMint\nGraphite\nPorcelain\nSage\nEDITORIAL\nBlossom\nCopper\nOrchid\nBlush\nBOLD\nPlum\nLavender\nCrimson\nMango\nWARM\nSunset\nSand\nTerra\nOlive\nCocoa\nTECH\nCobalt\nCircuit\nDARK\nNoir\nIndigo\nGilded\nEmber\nMidnight\nNeon\nFern\nCreate theme from image\n\nThemes set the deck's palette and fonts. Content painted with the previous theme follows the swap; your own colors and fonts are never changed.\n\nTRANSITION\nNone\nFade\nSlide\nPush\nDissolve\nMorph (lite)\nMorph (magic move)\nWipe\nFlip\nZoom\nExit transition\nNone\nFade\nSlide\nPush\nWipe\nZoom\nFlip\n\nPlays when advancing to this page in present mode.\n\nApply to all slides\nAnimate all slides\nBUILD ORDER\nPRESENT\nHide slide while presenting\nSpeaker notes\nAuto-advance after\ns\n\nAutopilot uses this dwell; blank falls back to the default.\n\nPage 1\nPage 1 copy\nPage 1 of 2",
+    "buttons": [
+      {
+        "text": "",
+        "label": "Back to dashboard",
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Undo",
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Redo",
+        "title": null
+      },
+      {
+        "text": "",
+        "label": null,
+        "title": "Rulers & guides"
+      },
+      {
+        "text": "",
+        "label": null,
+        "title": "Grid"
+      },
+      {
+        "text": "",
+        "label": null,
+        "title": "Snapping"
+      },
+      {
+        "text": "",
+        "label": null,
+        "title": "No animations on this page yet"
+      },
+      {
+        "text": "",
+        "label": null,
+        "title": "Present (fullscreen)"
+      },
+      {
+        "text": "",
+        "label": null,
+        "title": "Comments"
+      },
+      {
+        "text": "",
+        "label": "Notifications",
+        "title": "Notifications"
+      },
+      {
+        "text": "",
+        "label": "More actions",
+        "title": "More actions"
+      },
+      {
+        "text": "",
+        "label": null,
+        "title": "Download"
+      },
+      {
+        "text": "Share",
+        "label": null,
+        "title": "Share this design"
+      },
+      {
+        "text": "Save",
+        "label": null,
+        "title": "Save a snapshot"
+      },
+      {
+        "text": "Templates",
+        "label": "Open Templates",
+        "title": "Templates"
+      },
+      {
+        "text": "Elements",
+        "label": "Hide Elements",
+        "title": "Hide Elements"
+      },
+      {
+        "text": "Text",
+        "label": "Open Text",
+        "title": "Text"
+      },
+      {
+        "text": "AI",
+        "label": "Open AI",
+        "title": "AI"
+      },
+      {
+        "text": "Uploads",
+        "label": "Open Uploads",
+        "title": "Uploads"
+      },
+      {
+        "text": "Stock",
+        "label": "Open Stock",
+        "title": "Stock"
+      },
+      {
+        "text": "Apps",
+        "label": "Open Apps",
+        "title": "Apps"
+      },
+      {
+        "text": "Brand",
+        "label": "Open Brand",
+        "title": "Brand"
+      },
+      {
+        "text": "Layers",
+        "label": "Open Layers",
+        "title": "Layers"
+      },
+      {
+        "text": "Recently used",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "2 photos",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Shapes",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Rectangle",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Rounded",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Ellipse",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Triangle",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Pentagon",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Hexagon",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Star",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Diamond",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Octagon",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Burst",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Pill",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Frames & grids",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Frame",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Circle frame",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Rounded frame",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "2 photos",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "3 photos",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "4 photos",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "6 photos",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "9 photos",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Feature left",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Feature right",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Feature top",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Hero mosaic",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Data & codes",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Graphics429",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "Show all",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Star",
+        "title": "Star"
+      },
+      {
+        "text": "",
+        "label": "Heart",
+        "title": "Heart"
+      },
+      {
+        "text": "",
+        "label": "Diamond",
+        "title": "Diamond"
+      },
+      {
+        "text": "",
+        "label": "Hexagon",
+        "title": "Hexagon"
+      },
+      {
+        "text": "",
+        "label": "Sparkle",
+        "title": "Sparkle"
+      },
+      {
+        "text": "",
+        "label": "Lightning",
+        "title": "Lightning"
+      },
+      {
+        "text": "",
+        "label": "Plus",
+        "title": "Plus"
+      },
+      {
+        "text": "",
+        "label": "Arrow",
+        "title": "Arrow"
+      },
+      {
+        "text": "",
+        "label": "Speech bubble",
+        "title": "Speech bubble"
+      },
+      {
+        "text": "",
+        "label": "Banner",
+        "title": "Banner"
+      },
+      {
+        "text": "",
+        "label": "Seal badge",
+        "title": "Seal badge"
+      },
+      {
+        "text": "",
+        "label": "Location pin",
+        "title": "Location pin"
+      },
+      {
+        "text": "Show all",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Leaf",
+        "title": "Leaf"
+      },
+      {
+        "text": "",
+        "label": "Cloud",
+        "title": "Cloud"
+      },
+      {
+        "text": "",
+        "label": "Flower",
+        "title": "Flower"
+      },
+      {
+        "text": "",
+        "label": "Crown",
+        "title": "Crown"
+      },
+      {
+        "text": "",
+        "label": "Tree",
+        "title": "Tree"
+      },
+      {
+        "text": "",
+        "label": "Mountain",
+        "title": "Mountain"
+      },
+      {
+        "text": "",
+        "label": "Raindrop",
+        "title": "Raindrop"
+      },
+      {
+        "text": "",
+        "label": "Moon",
+        "title": "Moon"
+      },
+      {
+        "text": "Show all",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Check",
+        "title": "Check"
+      },
+      {
+        "text": "",
+        "label": "Cross out",
+        "title": "Cross out"
+      },
+      {
+        "text": "",
+        "label": "Info",
+        "title": "Info"
+      },
+      {
+        "text": "",
+        "label": "Shield",
+        "title": "Shield"
+      },
+      {
+        "text": "",
+        "label": "Bookmark",
+        "title": "Bookmark"
+      },
+      {
+        "text": "",
+        "label": "Tag",
+        "title": "Tag"
+      },
+      {
+        "text": "",
+        "label": "Bell",
+        "title": "Bell"
+      },
+      {
+        "text": "",
+        "label": "Quote",
+        "title": "Quote"
+      },
+      {
+        "text": "Show all",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Smiley",
+        "title": "Smiley"
+      },
+      {
+        "text": "",
+        "label": "Flame",
+        "title": "Flame"
+      },
+      {
+        "text": "",
+        "label": "Gift",
+        "title": "Gift"
+      },
+      {
+        "text": "",
+        "label": "Balloon",
+        "title": "Balloon"
+      },
+      {
+        "text": "",
+        "label": "Idea",
+        "title": "Idea"
+      },
+      {
+        "text": "",
+        "label": "Paper plane",
+        "title": "Paper plane"
+      },
+      {
+        "text": "",
+        "label": "Music note",
+        "title": "Music note"
+      },
+      {
+        "text": "",
+        "label": "Rainbow",
+        "title": "Rainbow"
+      },
+      {
+        "text": "Show all",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Chevron Right",
+        "title": "Chevron Right"
+      },
+      {
+        "text": "",
+        "label": "Double Chevron",
+        "title": "Double Chevron"
+      },
+      {
+        "text": "",
+        "label": "Bold Arrow Right",
+        "title": "Bold Arrow Right"
+      },
+      {
+        "text": "",
+        "label": "Thin Arrow Right",
+        "title": "Thin Arrow Right"
+      },
+      {
+        "text": "",
+        "label": "Arrow Up Right",
+        "title": "Arrow Up Right"
+      },
+      {
+        "text": "",
+        "label": "Arrow Down",
+        "title": "Arrow Down"
+      },
+      {
+        "text": "",
+        "label": "Curved Arrow",
+        "title": "Curved Arrow"
+      },
+      {
+        "text": "",
+        "label": "U-Turn Arrow",
+        "title": "U-Turn Arrow"
+      },
+      {
+        "text": "Show all",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Rounded Blob",
+        "title": "Rounded Blob"
+      },
+      {
+        "text": "",
+        "label": "Lumpy Blob",
+        "title": "Lumpy Blob"
+      },
+      {
+        "text": "",
+        "label": "Tall Blob",
+        "title": "Tall Blob"
+      },
+      {
+        "text": "",
+        "label": "Wave Band",
+        "title": "Wave Band"
+      },
+      {
+        "text": "",
+        "label": "Half Circle",
+        "title": "Half Circle"
+      },
+      {
+        "text": "",
+        "label": "Quarter Pie",
+        "title": "Quarter Pie"
+      },
+      {
+        "text": "",
+        "label": "Donut Ring",
+        "title": "Donut Ring"
+      },
+      {
+        "text": "",
+        "label": "Open Ring",
+        "title": "Open Ring"
+      },
+      {
+        "text": "Show all",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Ribbon Banner",
+        "title": "Ribbon Banner"
+      },
+      {
+        "text": "",
+        "label": "Curved Ribbon",
+        "title": "Curved Ribbon"
+      },
+      {
+        "text": "",
+        "label": "Bookmark Ribbon",
+        "title": "Bookmark Ribbon"
+      },
+      {
+        "text": "",
+        "label": "Price Tag",
+        "title": "Price Tag"
+      },
+      {
+        "text": "",
+        "label": "Sale Starburst",
+        "title": "Sale Starburst"
+      },
+      {
+        "text": "",
+        "label": "Discount Badge",
+        "title": "Discount Badge"
+      },
+      {
+        "text": "",
+        "label": "Corner Ribbon",
+        "title": "Corner Ribbon"
+      },
+      {
+        "text": "",
+        "label": "Certificate Rosette",
+        "title": "Certificate Rosette"
+      },
+      {
+        "text": "Show all",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Speech Bubble",
+        "title": "Speech Bubble"
+      },
+      {
+        "text": "",
+        "label": "Chat Message",
+        "title": "Chat Message"
+      },
+      {
+        "text": "",
+        "label": "Thought Cloud",
+        "title": "Thought Cloud"
+      },
+      {
+        "text": "",
+        "label": "Overlapping Chats",
+        "title": "Overlapping Chats"
+      },
+      {
+        "text": "",
+        "label": "Shout Burst",
+        "title": "Shout Burst"
+      },
+      {
+        "text": "",
+        "label": "Typing Bubble",
+        "title": "Typing Bubble"
+      },
+      {
+        "text": "",
+        "label": "Love Bubble",
+        "title": "Love Bubble"
+      },
+      {
+        "text": "",
+        "label": "Alert Bubble",
+        "title": "Alert Bubble"
+      },
+      {
+        "text": "Show all",
+        "label": null,
+        "title": null
+      },
+      {
+        "text": "",
+        "label": "Briefcase",
+        "title": "Briefcase"
+      }
+    ]
+  },
+  "errors": []
+}

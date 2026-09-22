@@ -164,6 +164,8 @@ export interface ElementSource {
  * source?: OOXML provenance when imported from a retained PPTX package
  */
 interface PPTBaseElement {
+  /** Nested frame ownership; geometry remains in page coordinates. */
+  parentFrameId?: string;
   id: string;
   left: number;
   top: number;
@@ -277,6 +279,10 @@ export interface PPTImageElement extends PPTBaseElement {
   radius?: number;
   colorMask?: string;
   imageType?: ImageType;
+  /** Offline editable QR payload; SVG src remains portable through ordinary image render/export. */
+  qrCode?: { text: string; errorCorrection: 'L' | 'M' | 'Q' | 'H'; foreground: string; background: string };
+  /** Editable photo-frame metadata; native image geometry/clip remain authoritative. */
+  photoFrame?: { layout: string; cell: number; gutter: number; empty: boolean; sourceWidth?: number; sourceHeight?: number };
 }
 
 /**
@@ -312,6 +318,8 @@ export interface ShapeText {
  * keypoints?: keypoint positions as percentages
  */
 export interface PPTShapeElement extends PPTBaseElement {
+  /** Native rectangular frame container. */
+  frame?: { clipContent: boolean };
   type: 'shape';
   viewBox: [number, number];
   path: string;
@@ -607,9 +615,39 @@ export type SlideType = 'cover' | 'contents' | 'transition' | 'content' | 'end';
  *   on the canvas, not editable; cleared by the first `slides.update` that
  *   omits or falsifies it.
  */
+/** Persistent page guides, expressed in unscaled document pixels. Never exported as artwork. */
+export interface SlideGuide {
+  id: string;
+  /** x is a vertical guide; y is a horizontal guide. */
+  axis: 'x' | 'y';
+  position: number;
+}
+
+/** Freeform workspace annotation, deliberately excluded from page artwork and exports. */
+export interface WorkspaceLabel {
+  /** Workspace-only section or local comment thread; omitted for plain labels. */
+  kind?: 'section' | 'comment';
+  width?: number;
+  height?: number;
+  pageIds?: string[];
+  resolved?: boolean;
+  replies?: string[];
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  fontSize: number;
+}
+
 export interface Slide {
+  workspaceLabels?: WorkspaceLabel[];
+  /** Freeform Myna workspace origin in document pixels; independent of export order. */
+  canvasPosition?: { x: number; y: number };
+  /** Optional author-assigned page title shown in the Myna workspace. */
+  canvasName?: string;
   id: string;
   elements: PPTElement[];
+  guides?: SlideGuide[];
   notes?: Note[];
   remark?: string;
   background?: SlideBackground;

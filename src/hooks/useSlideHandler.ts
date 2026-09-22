@@ -105,6 +105,9 @@ export default () => {
   const copyAndPasteSlide = () => {
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
     const slide = JSON.parse(JSON.stringify(currentSlide))
+    // A duplicate gets its own free canvas slot, rather than covering its source.
+    delete slide.canvasPosition
+    delete slide.workspaceLabels
     addSlidesFromData([slide])
   }
 

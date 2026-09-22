@@ -136,6 +136,10 @@ export function resizeDeckSlides(slides: readonly Slide[], from: SlideCanvas, to
   const result = structuredClone(slides) as Slide[];
   if (from.width === to.width && from.height === to.height) return result;
   for (const slide of result) {
+    // Guides describe page coordinates; resize them proportionally along their own axis.
+    if (slide.guides) slide.guides = slide.guides.map(guide => ({ ...guide,
+      position: guide.position * (guide.axis === 'x' ? to.width / from.width : to.height / from.height),
+    }));
     const groups = new Map<string, Bounds>();
     for (const el of slide.elements) {
       if ((el.type === 'line' && !el.groupId) || isBackdrop(el, from) || isDecor(el, from) || edgeBand(el, from)) continue;

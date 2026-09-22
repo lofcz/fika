@@ -2,7 +2,7 @@ import { bindStyles } from '@/utils/cssm'
 import { Icon } from '@/components/Icon'
 import styles from './TableGenerator.module.scss'
 const cx = bindStyles(styles)
-import { useRef, useState, type CSSProperties, type ChangeEvent } from 'react'
+import { useState, type CSSProperties, type ChangeEvent } from 'react'
 import message from '@/utils/message'
 import Button from '@/components/Button'
 import { useI18nContext } from '@/i18n/useI18nContext'
@@ -29,8 +29,6 @@ export default function TableGenerator({
   const maxDim = 20
 
   const [endCell, setEndCell] = useState<number[]>([])
-  const endCellRef = useRef(endCell)
-  endCellRef.current = endCell
   const [customRow, setCustomRow] = useState(3)
   const [customCol, setCustomCol] = useState(3)
   const [isCustom, setIsCustom] = useState(false)
@@ -60,12 +58,6 @@ export default function TableGenerator({
     else setCustomCol(next)
   }
 
-  const handleClickTable = () => {
-    if (!endCellRef.current.length) return
-    const [row, col] = endCellRef.current
-    onInsert?.({ row, col })
-  }
-
   const insertCustomTable = () => {
     if (customRow < minDim || customRow > maxDim) return message.warning(LL.editor.canvasTool.tableGenerator.rowColRangeWarning())
     if (customCol < minDim || customCol > maxDim) return message.warning(LL.editor.canvasTool.tableGenerator.rowColRangeWarning())
@@ -77,7 +69,7 @@ export default function TableGenerator({
   const cols = Array.from({ length: gridSize }, (_, j) => j + 1)
 
   return (
-    <div className={cx('table-generator', className)} style={style}>
+    <div className={cx('table-generator', className)} style={style} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation() }}>
       <div className={cx('header')}>
         {isCustom ? (
           <button type="button" className={cx('back-btn')} onClick={() => setIsCustom(false)}>
@@ -96,16 +88,18 @@ export default function TableGenerator({
         <div
           className={cx('grid')}
           onMouseLeave={() => setEndCell([])}
-          onClick={() => handleClickTable()}
         >
           {rows.flatMap(row => cols.map(col => (
-            <div
+            <button
+              type="button"
+              aria-label={LL.editor.canvasTool.tableGenerator.tableWithSize({ rows: row, cols: col })}
               key={`${row}-${col}`}
               className={cx('cell', { active: isActive(row, col) })}
               data-table-cell={`${row}x${col}`}
+              onFocus={() => setEndCell([row, col])}
+              onClick={() => onInsert?.({ row, col })}
               onMouseEnter={() => {
                 const next = [row, col]
-                endCellRef.current = next
                 setEndCell(next)
               }}
             />
@@ -120,6 +114,7 @@ export default function TableGenerator({
                 <button type="button" className={cx('step')} onClick={() => nudge('row', -1)}>−</button>
                 <input
                   className={cx('step-value')}
+                  type="number" min={minDim} max={maxDim} aria-label={LL.editor.canvasTool.tableGenerator.rows()}
                   value={customRow}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => setDim('row', event.target.value)}
                 />
@@ -132,6 +127,7 @@ export default function TableGenerator({
                 <button type="button" className={cx('step')} onClick={() => nudge('col', -1)}>−</button>
                 <input
                   className={cx('step-value')}
+                  type="number" min={minDim} max={maxDim} aria-label={LL.editor.canvasTool.tableGenerator.cols()}
                   value={customCol}
                   onChange={(event: ChangeEvent<HTMLInputElement>) => setDim('col', event.target.value)}
                 />

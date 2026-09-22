@@ -4,16 +4,22 @@ import type { PPTElement } from '@/types/slides'
 
 let toolbarStoreVersion = 0
 
+const toolbarListeners = new Set<() => void>()
+let unsubscribeToolbarStores: (() => void) | undefined
 function subscribeToolbarStores(onChange: () => void) {
-  const notify = () => {
-    toolbarStoreVersion += 1
-    onChange()
+  toolbarListeners.add(onChange)
+  if (!unsubscribeToolbarStores) {
+    const notify = () => {
+      // One revision per store publication, not one revision per subscribing control.
+      toolbarStoreVersion += 1
+      for (const listener of [...toolbarListeners]) listener()
+    }
+    const offMain = useMainStore.subscribe(notify), offSlides = useSlidesStore.subscribe(notify)
+    unsubscribeToolbarStores = () => { offMain(); offSlides() }
   }
-  const unsubMain = useMainStore.subscribe(notify)
-  const unsubSlides = useSlidesStore.subscribe(notify)
   return () => {
-    unsubMain()
-    unsubSlides()
+    toolbarListeners.delete(onChange)
+    if (!toolbarListeners.size) { unsubscribeToolbarStores?.(); unsubscribeToolbarStores = undefined }
   }
 }
 

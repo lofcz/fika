@@ -1,0 +1,43 @@
+{
+  "pan": {
+    "renders": {
+      "Canvas": 45,
+      "MynaPageCanvas": 45,
+      "WorkspaceLabelsCanvas": 45,
+      "WorkspaceObject": 225
+    },
+    "paints": 0,
+    "notifications": 0,
+    "frameP95": 36.6,
+    "longTasks": 0
+  },
+  "element": {
+    "renders": {
+      "MynaWorkspace": 44,
+      "Canvas": 88,
+      "MynaPageCanvas": 44,
+      "WorkspaceLabelsCanvas": 44,
+      "WorkspaceObject": 220,
+      "ThumbnailSlide": 44,
+      "CanvasSlideThumb": 44
+    },
+    "paints": 1,
+    "notifications": 44,
+    "frameP95": 68,
+    "longTasks": 12
+  },
+  "section": {
+    "renders": {
+      "MynaWorkspace": 45,
+      "Canvas": 45,
+      "MynaPageCanvas": 45,
+      "WorkspaceLabelsCanvas": 45,
+      "WorkspaceObject": 225,
+      "ThumbnailSlide": 45
+    },
+    "paints": 0,
+    "notifications": 45,
+    "frameP95": 49.2,
+    "longTasks": 2
+  }
+}

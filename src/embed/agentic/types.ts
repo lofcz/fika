@@ -1197,7 +1197,41 @@ export interface FikaAgentApi {
   import: FikaAgentImportApi;
   export: FikaAgentExportApi;
 }
+export type FikaCanvasOperation =
+  | { op: 'title'; title: string }
+  | { op: 'viewport'; width: number; height: number }
+  | { op: 'page'; id?: string; name?: string; x?: number; y?: number; background?: string }
+  | { op: 'pageUpdate'; id: string; patch: Partial<Slide> }
+  | { op: 'text'; pageId?: string; id?: string; x: number; y: number; width: number; height: number; text: string; fontSize?: number; fontName?: string; color?: string; bold?: boolean; align?: 'left' | 'center' | 'right' | 'justify' }
+  | { op: 'textUpdate'; pageId?: string; id: string; text: string; style?: TextRunStyle }
+  | { op: 'shape'; pageId?: string; id?: string; x: number; y: number; width: number; height: number; shape: 'rect' | 'ellipse'; fill?: string }
+  | { op: 'element'; pageId?: string; element: Partial<PPTElement> & { type: PPTElement['type'] } }
+  | { op: 'update'; pageId?: string; id: string; patch: Partial<PPTElement> }
+  | { op: 'remove'; pageId?: string; id: string };
+export interface FikaCanvasApplyResult { results: Array<{ op: FikaCanvasOperation['op']; id?: string; pageId?: string }> }
+
+export interface FikaCanvasReadOptions {
+  pageId?: string;
+  offset?: number;
+  limit?: number;
+  textLimit?: number;
+}
+export interface FikaCanvasContext {
+  viewport: { width: number; height: number };
+  activePageId?: string;
+  selectedIds: string[];
+  pageCount: number;
+  pages: Array<{ id: string; name?: string; x: number; y: number; elementCount: number }>;
+  pageId?: string;
+  elementCount: number;
+  offset: number;
+  nextOffset?: number;
+  elements: Array<{ id: string; type: string; name?: string; x: number; y: number; width: number; height?: number; parentFrameId?: string; groupId?: string; frame?: { clipContent: boolean }; text?: string }>;
+}
+
 export interface FikaCommandPayloadMap {
+  'canvas.get': FikaCanvasReadOptions | undefined;
+  'canvas.apply': { operations: FikaCanvasOperation[] };
   'deck.get': undefined;
   'deck.set': FikaDeckInput | FikaDocument;
   'deck.patch': FikaDeckPatch | Partial<FikaDocument>;
@@ -1892,6 +1926,8 @@ export interface FikaCommandPayloadMap {
   'view.exitPresentation': undefined;
 }
 export interface FikaCommandResultDataMap {
+  'canvas.get': FikaCanvasContext;
+  'canvas.apply': FikaCanvasApplyResult;
   'deck.get': FikaDeckDocument;
   'deck.set': FikaDeckDocument;
   'deck.patch': FikaDeckDocument;

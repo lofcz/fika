@@ -1,0 +1,38 @@
+.panel { margin-bottom: 24px; border-bottom: 1px solid #dedee2; padding-bottom: 20px; }
+.actions { display: grid; gap: 6px; }
+.panel .actions button { width: 100%; border: 1px solid #d4d4d8 !important; background: #fff !important; padding: 9px !important; }
+.fields { margin-top: 14px; border: 1px solid #dedee2; border-radius: 8px; padding: 10px; }
+.fields summary { font-size: 12px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+.fields textarea { box-sizing: border-box; width: 100%; min-height: 64px; border: 1px solid #d4d4d8 !important; background: #fff !important; padding: 8px; resize: vertical; font: inherit; }
+.fields fieldset { border: 0; padding: 8px 0; font-size: 12px; }
+.fields fieldset label { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.fields fieldset input { width: 14px !important; min-height: 14px !important; }
+.fields button { margin-top: 6px; margin-right: 6px; }
+.replies p { border-left: 2px solid #d4d4d8; padding-left: 8px; }
+.section { position: absolute; z-index: 0; pointer-events: none; box-sizing: border-box; border: 1px solid #c9c9ce; border-radius: 9px; background: #e4e4e833; }
+.comment { position: absolute; z-index: 5; pointer-events: auto; box-sizing: border-box; border: 1px solid #d4cbb7; border-radius: 8px; background: #fffcf2; box-shadow: 0 5px 18px #00000009; display: flex; flex-direction: column; }
+.section .handle, .comment .handle { pointer-events: auto; touch-action: none; cursor: grab !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; border-radius: 0 !important; background: transparent !important; color: #43434b !important; padding: 8px 10px !important; font-weight: 600; line-height: 1.2; width: 100%; flex-shrink: 0; }
+.handle span { font-weight: 400; opacity: .5; margin-left: 7px; }
+.comment .handle { border-bottom: 1px solid #e6dfd0 !important; }
+.body { overflow: auto; line-height: 1.5; padding: 0 10px 10px; color: #4b473f; }
+.body p { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.body .reply { border-top: 1px solid #e6dfd0; padding-top: 8px; }
+.body button { font-size: 10px !important; background: transparent !important; color: #6a6255 !important; text-decoration: underline; }
+.section .resize, .comment .resize { position: absolute; pointer-events: auto; right: -3px; bottom: -3px; padding: 0 !important; width: 17px; height: 17px; font-size: 16px !important; color: #71717a; cursor: nwse-resize !important; touch-action: none; border-radius: 2px !important; background: #ffffffbb !important; opacity: 0; }
+.section:hover .resize, .comment:hover .resize, .resize:focus-visible { opacity: 1; }
+.edit { position: absolute; top: 30px; left: 8px; width: calc(100% - 20px); min-height: 80px; pointer-events: auto; font: 12px/1.5 sans-serif; border: 1px solid #a1a1aa; background: white; z-index: 8; }
+.section .handle, .comment .handle { justify-content: flex-start !important; }
+.body input { box-sizing: border-box; width: 100%; min-width: 0; font: inherit; background: white !important; border: 1px solid #d4cbb7 !important; padding: 5px; }
+
+/* Section titles occupy an external screen-space header lane. Page titles stay
+   inside the section's reserved world-space padding at every zoom. */
+.section > .handle { position: absolute; top: -32px; left: 0; padding: 3px 0 !important; height: 24px; font-size: 12px !important; line-height: 18px !important; }
+.section > .edit { top: -90px; }
+/* Scale the entire comment card as one world-space object: never mix fixed-size
+   paragraph/control styles with a shrinking box. */
+.comment > .handle { font-size: 40px !important; line-height: 1.2 !important; padding: 24px 28px !important; }
+.comment .body { padding: 0 28px 24px; font-size: 32px !important; }
+.comment .body p { font-size: inherit !important; line-height: 1.5 !important; margin: 24px 0 !important; }
+.comment .body button { font-size: 32px !important; line-height: 1.4 !important; padding: 8px 12px !important; }
+.comment .body .reply { padding-top: 24px; }
+.comment .edit { top: 90px; font-size: 24px; min-height: 180px; }

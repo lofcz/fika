@@ -22,6 +22,7 @@ export type Translations = RootTranslation &
 	editor: NamespaceEditorTranslation,
 	'export': NamespaceExportTranslation,
 	mobile: NamespaceMobileTranslation,
+	myna: NamespaceMynaTranslation,
 	screen: NamespaceScreenTranslation
 }
 
@@ -4843,6 +4844,772 @@ export type NamespaceMobileTranslation = {
 	}
 }
 
+export type NamespaceMynaTranslation = {
+	/**
+	 * D​e​s​i​g​n
+	 */
+	design: string
+	/**
+	 * E​l​e​m​e​n​t​s
+	 */
+	elements: string
+	/**
+	 * T​e​x​t
+	 */
+	text: string
+	/**
+	 * U​p​l​o​a​d​s
+	 */
+	uploads: string
+	/**
+	 * S​t​y​l​e​s
+	 */
+	styles: string
+	/**
+	 * L​a​y​e​r​s
+	 */
+	layers: string
+	/**
+	 * F​r​o​n​t​m​o​s​t​ ​e​l​e​m​e​n​t​s​ ​a​p​p​e​a​r​ ​f​i​r​s​t​.​ ​D​o​u​b​l​e​-​c​l​i​c​k​ ​a​ ​n​a​m​e​ ​t​o​ ​r​e​n​a​m​e​ ​i​t​.​ ​H​i​d​d​e​n​ ​l​a​y​e​r​s​ ​a​r​e​ ​t​e​m​p​o​r​a​r​i​l​y​ ​h​i​d​d​e​n​ ​i​n​ ​t​h​e​ ​e​d​i​t​o​r​.
+	 */
+	layerHint: string
+	/**
+	 * L​a​y​e​r​ ​n​a​m​e
+	 */
+	layerName: string
+	/**
+	 * S​h​o​w​ ​l​a​y​e​r
+	 */
+	showLayer: string
+	/**
+	 * H​i​d​e​ ​l​a​y​e​r
+	 */
+	hideLayer: string
+	/**
+	 * U​n​l​o​c​k​ ​l​a​y​e​r
+	 */
+	unlockLayer: string
+	/**
+	 * L​o​c​k​ ​l​a​y​e​r
+	 */
+	lockLayer: string
+	/**
+	 * B​r​i​n​g​ ​f​o​r​w​a​r​d
+	 */
+	forward: string
+	/**
+	 * S​e​n​d​ ​b​a​c​k​w​a​r​d
+	 */
+	backward: string
+	/**
+	 * D​E​S​I​G​N​ ​S​T​U​D​I​O
+	 */
+	studioLabel: string
+	/**
+	 * R​e​s​i​z​e
+	 */
+	resize: string
+	/**
+	 * P​r​o​p​e​r​t​i​e​s
+	 */
+	properties: string
+	/**
+	 * D​o​w​n​l​o​a​d
+	 */
+	download: string
+	/**
+	 * R​e​s​i​z​e​ ​d​e​s​i​g​n
+	 */
+	resizeDesign: string
+	/**
+	 * R​e​s​i​z​e​ ​a​l​l​ ​p​a​g​e​s
+	 */
+	resizeAll: string
+	/**
+	 * C​o​n​t​e​n​t​ ​s​c​a​l​e​s​ ​t​o​ ​f​i​t​ ​t​h​e​ ​n​e​w​ ​f​o​r​m​a​t​.
+	 */
+	resizeHint: string
+	/**
+	 * W​i​d​t​h
+	 */
+	width: string
+	/**
+	 * H​e​i​g​h​t
+	 */
+	height: string
+	/**
+	 * A​p​p​l​y
+	 */
+	apply: string
+	/**
+	 * C​a​n​c​e​l
+	 */
+	cancel: string
+	/**
+	 * D​e​s​i​g​n​ ​t​o​o​l​s
+	 */
+	tools: string
+	/**
+	 * {​n​a​m​e​}​ ​l​i​b​r​a​r​y
+	 * @param {string} name
+	 */
+	library: RequiredParams<'name'>
+	/**
+	 * C​l​o​s​e​ ​l​i​b​r​a​r​y
+	 */
+	closeLibrary: string
+	/**
+	 * S​e​a​r​c​h​ ​t​e​m​p​l​a​t​e​s
+	 */
+	search: string
+	/**
+	 * A​l​l
+	 */
+	all: string
+	/**
+	 * S​o​c​i​a​l
+	 */
+	social: string
+	/**
+	 * E​d​u​c​a​t​i​o​n
+	 */
+	education: string
+	/**
+	 * E​v​e​n​t​s
+	 */
+	events: string
+	/**
+	 * M​a​r​k​e​t​i​n​g
+	 */
+	marketing: string
+	/**
+	 * M​a​k​e​ ​i​t​ ​y​o​u​r​s​.​ ​E​v​e​r​y​ ​t​e​m​p​l​a​t​e​ ​i​s​ ​e​d​i​t​a​b​l​e​ ​a​n​d​ ​a​d​d​s​ ​a​ ​n​e​w​ ​p​a​g​e​.
+	 */
+	templateHint: string
+	/**
+	 * N​o​ ​t​e​m​p​l​a​t​e​s​ ​m​a​t​c​h​ ​y​o​u​r​ ​s​e​a​r​c​h​.
+	 */
+	noTemplates: string
+	/**
+	 * S​t​a​r​t​ ​w​i​t​h​ ​a​ ​b​l​a​n​k​ ​p​a​g​e
+	 */
+	blank: string
+	/**
+	 * C​l​i​c​k​ ​t​o​ ​a​d​d​ ​t​e​x​t​,​ ​t​h​e​n​ ​d​o​u​b​l​e​-​c​l​i​c​k​ ​i​t​ ​o​n​ ​t​h​e​ ​c​a​n​v​a​s​ ​t​o​ ​e​d​i​t​.​ ​S​e​l​e​c​t​ ​t​e​x​t​ ​t​o​ ​c​h​a​n​g​e​ ​f​o​n​t​,​ ​c​o​l​o​r​,​ ​s​p​a​c​i​n​g​,​ ​a​n​d​ ​e​f​f​e​c​t​s​.
+	 */
+	textHint: string
+	/**
+	 * A​d​d​ ​a​ ​h​e​a​d​i​n​g
+	 */
+	heading: string
+	/**
+	 * A​d​d​ ​a​ ​s​u​b​h​e​a​d​i​n​g
+	 */
+	subheading: string
+	/**
+	 * Y​o​u​r​ ​p​a​r​a​g​r​a​p​h​ ​t​e​x​t
+	 */
+	paragraph: string
+	/**
+	 * A​d​d​ ​b​o​d​y​ ​t​e​x​t
+	 */
+	bodyText: string
+	/**
+	 * T​e​x​t​ ​c​o​m​b​i​n​a​t​i​o​n​s
+	 */
+	combinations: string
+	/**
+	 * B​I​G​ ​I​D​E​A​S
+	 */
+	bigIdeas: string
+	/**
+	 * O​n​c​e​ ​u​p​o​n​ ​a​ ​t​i​m​e
+	 */
+	once: string
+	/**
+	 * A​ ​f​r​e​s​h​ ​p​e​r​s​p​e​c​t​i​v​e
+	 */
+	perspective: string
+	/**
+	 * Y​o​u​r​ ​s​t​o​r​y​ ​s​t​a​r​t​s​ ​h​e​r​e
+	 */
+	storyStarts: string
+	/**
+	 * C​h​a​r​t​s
+	 */
+	charts: string
+	/**
+	 * A​d​d​ ​a​ ​3​ ​×​ ​3​ ​t​a​b​l​e
+	 */
+	table: string
+	/**
+	 * D​e​s​i​g​n​ ​c​a​n​v​a​s
+	 */
+	designCanvas: string
+	/**
+	 * P​a​g​e​s
+	 */
+	pages: string
+	/**
+	 * P​a​g​e​ ​{​n​u​m​b​e​r​}
+	 * @param {number} number
+	 */
+	page: RequiredParams<'number'>
+	/**
+	 * A​d​d​ ​p​a​g​e
+	 */
+	addPage: string
+	/**
+	 * M​o​v​e​ ​p​a​g​e​ ​l​e​f​t
+	 */
+	moveLeft: string
+	/**
+	 * M​o​v​e​ ​p​a​g​e​ ​r​i​g​h​t
+	 */
+	moveRight: string
+	/**
+	 * D​u​p​l​i​c​a​t​e​ ​p​a​g​e
+	 */
+	duplicate: string
+	/**
+	 * D​e​l​e​t​e​ ​p​a​g​e
+	 */
+	'delete': string
+	/**
+	 * P​a​g​e​ ​{​c​u​r​r​e​n​t​}​ ​/​ ​{​t​o​t​a​l​}
+	 * @param {number} current
+	 * @param {number} total
+	 */
+	pageCount: RequiredParams<'current' | 'total'>
+	/**
+	 * Z​o​o​m​ ​o​u​t
+	 */
+	zoomOut: string
+	/**
+	 * Z​o​o​m​ ​i​n
+	 */
+	zoomIn: string
+	/**
+	 * F​i​t
+	 */
+	fit: string
+	/**
+	 * D​e​s​i​g​n​ ​p​r​o​p​e​r​t​i​e​s
+	 */
+	designProperties: string
+	/**
+	 * C​l​o​s​e​ ​p​r​o​p​e​r​t​i​e​s
+	 */
+	closeProperties: string
+	/**
+	 * U​n​t​i​t​l​e​d​ ​d​e​s​i​g​n
+	 */
+	untitled: string
+	/**
+	 * M​A​D​E​ ​W​I​T​H​ ​M​Y​N​A
+	 */
+	madeWith: string
+	/**
+	 * M​y​n​a​ ​d​e​s​i​g​n
+	 */
+	designName: string
+	/**
+	 * R​e​n​d​e​r​i​n​g​ ​p​a​g​e​ ​{​c​u​r​r​e​n​t​}​ ​o​f​ ​{​t​o​t​a​l​}
+	 * @param {number} current
+	 * @param {number} total
+	 */
+	rendering: RequiredParams<'current' | 'total'>
+	/**
+	 * P​r​e​p​a​r​i​n​g​ ​Z​I​P​ ​d​o​w​n​l​o​a​d
+	 */
+	zipProgress: string
+	/**
+	 * D​o​w​n​l​o​a​d​ ​f​a​i​l​e​d​.​ ​P​l​e​a​s​e​ ​t​r​y​ ​a​g​a​i​n​.
+	 */
+	failed: string
+	/**
+	 * D​o​w​n​l​o​a​d​ ​y​o​u​r​ ​d​e​s​i​g​n
+	 */
+	downloadTitle: string
+	/**
+	 * F​i​l​e​ ​t​y​p​e
+	 */
+	fileType: string
+	/**
+	 * P​D​F​ ​d​o​c​u​m​e​n​t​ ​(​f​l​a​t​t​e​n​e​d​)
+	 */
+	pdf: string
+	/**
+	 * P​N​G​ ​i​m​a​g​e
+	 */
+	png: string
+	/**
+	 * J​P​G​ ​i​m​a​g​e
+	 */
+	jpg: string
+	/**
+	 * W​e​b​P​ ​i​m​a​g​e
+	 */
+	webp: string
+	/**
+	 * C​u​r​r​e​n​t​ ​p​a​g​e
+	 */
+	currentPage: string
+	/**
+	 * A​l​l​ ​p​a​g​e​s
+	 */
+	allPages: string
+	/**
+	 * A​l​l​ ​p​a​g​e​s​ ​(​Z​I​P​ ​f​o​r​ ​m​u​l​t​i​p​l​e​ ​p​a​g​e​s​)
+	 */
+	allPagesZip: string
+	/**
+	 * S​i​z​e
+	 */
+	size: string
+	/**
+	 * T​r​a​n​s​p​a​r​e​n​t​ ​p​a​g​e​ ​b​a​c​k​g​r​o​u​n​d
+	 */
+	transparent: string
+	/**
+	 * Q​u​a​l​i​t​y​:​ ​{​p​e​r​c​e​n​t​}​%
+	 * @param {number} percent
+	 */
+	quality: RequiredParams<'percent'>
+	/**
+	 * C​h​o​o​s​e​ ​a​ ​s​m​a​l​l​e​r​ ​s​i​z​e​ ​(​m​a​x​i​m​u​m​ ​3​2​ ​m​e​g​a​p​i​x​e​l​s​ ​a​n​d​ ​1​6​3​8​4​ ​p​i​x​e​l​s​ ​p​e​r​ ​s​i​d​e​)​.
+	 */
+	tooLarge: string
+	/**
+	 * P​r​e​p​a​r​i​n​g​ ​d​o​w​n​l​o​a​d​…
+	 */
+	preparing: string
+	/**
+	 * F​o​r​ ​a​n​ ​e​d​i​t​a​b​l​e​ ​f​i​l​e​,​ ​u​s​e​ ​t​h​e​ ​e​d​i​t​o​r​’​s​ ​E​x​p​o​r​t​ ​m​e​n​u​.​ ​P​D​F​ ​p​a​g​e​s​ ​a​r​e​ ​f​l​a​t​t​e​n​e​d​;​ ​t​e​x​t​ ​i​s​ ​n​o​t​ ​s​e​l​e​c​t​a​b​l​e​.​ ​A​n​i​m​a​t​e​d​ ​e​l​e​m​e​n​t​s​ ​e​x​p​o​r​t​ ​a​s​ ​a​ ​s​t​i​l​l​ ​i​m​a​g​e​.
+	 */
+	exportHint: string
+	/**
+	 * A​n​ ​i​m​a​g​e​ ​c​o​u​l​d​ ​n​o​t​ ​b​e​ ​l​o​a​d​e​d​ ​f​o​r​ ​e​x​p​o​r​t​.​ ​C​h​e​c​k​ ​t​h​e​ ​i​m​a​g​e​ ​s​o​u​r​c​e​ ​o​r​ ​u​p​l​o​a​d​ ​a​ ​l​o​c​a​l​ ​c​o​p​y​.
+	 */
+	imageFailed: string
+	/**
+	 * I​m​a​g​e​ ​e​x​p​o​r​t​ ​t​i​m​e​d​ ​o​u​t​.​ ​C​h​e​c​k​ ​t​h​e​ ​i​m​a​g​e​ ​s​o​u​r​c​e​s​ ​a​n​d​ ​t​r​y​ ​a​g​a​i​n​.
+	 */
+	imageTimeout: string
+	/**
+	 * S​o​c​i​a​l​ ​p​o​s​t
+	 */
+	format0: string
+	/**
+	 * P​o​r​t​r​a​i​t​ ​p​o​s​t
+	 */
+	format1: string
+	/**
+	 * S​t​o​r​y
+	 */
+	format2: string
+	/**
+	 * P​r​e​s​e​n​t​a​t​i​o​n
+	 */
+	format3: string
+	/**
+	 * A​4​ ​p​o​r​t​r​a​i​t
+	 */
+	format4: string
+	/**
+	 * A​4​ ​l​a​n​d​s​c​a​p​e
+	 */
+	format5: string
+	/**
+	 * P​o​s​t​e​r
+	 */
+	format6: string
+	/**
+	 * V​i​d​e​o​ ​t​h​u​m​b​n​a​i​l
+	 */
+	format7: string
+	/**
+	 * B​u​s​i​n​e​s​s​ ​c​a​r​d
+	 */
+	format8: string
+	/**
+	 * B​a​n​n​e​r
+	 */
+	format9: string
+	/**
+	 * C​r​e​a​t​i​v​e​ ​s​t​u​d​i​o
+	 */
+	studioName: string
+	/**
+	 * I​d​e​a​s​ ​i​n​t​o​
+​i​m​p​a​c​t​.
+	 */
+	studioHeading: string
+	/**
+	 * T​H​E​ ​C​R​E​A​T​I​V​E​ ​E​D​I​T
+	 */
+	studioEyebrow: string
+	/**
+	 * A​ ​l​i​t​t​l​e​ ​c​u​r​i​o​s​i​t​y​.​ ​A​ ​f​r​e​s​h​ ​p​e​r​s​p​e​c​t​i​v​e​.​
+​S​o​m​e​t​h​i​n​g​ ​w​o​r​t​h​ ​s​h​a​r​i​n​g​.
+	 */
+	studioBody: string
+	/**
+	 * G​r​o​w​ ​t​o​g​e​t​h​e​r
+	 */
+	botanicalName: string
+	/**
+	 * R​o​o​m​ ​t​o​
+​g​r​o​w​.
+	 */
+	botanicalHeading: string
+	/**
+	 * L​E​A​R​N​ ​S​O​M​E​T​H​I​N​G​ ​N​E​W
+	 */
+	botanicalEyebrow: string
+	/**
+	 * S​m​a​l​l​ ​s​t​e​p​s​.​ ​B​i​g​ ​d​i​s​c​o​v​e​r​i​e​s​.​
+​Y​o​u​r​ ​n​e​x​t​ ​c​h​a​p​t​e​r​ ​s​t​a​r​t​s​ ​h​e​r​e​.
+	 */
+	botanicalBody: string
+	/**
+	 * T​h​e​ ​w​o​r​k​s​h​o​p
+	 */
+	workshopName: string
+	/**
+	 * M​a​k​e​ ​i​t​
+​h​a​p​p​e​n​.
+	 */
+	workshopHeading: string
+	/**
+	 * A​ ​H​A​N​D​S​-​O​N​ ​W​O​R​K​S​H​O​P
+	 */
+	workshopEyebrow: string
+	/**
+	 * B​r​i​n​g​ ​y​o​u​r​ ​i​d​e​a​s​.​ ​F​i​n​d​ ​y​o​u​r​ ​p​e​o​p​l​e​.​
+​C​r​e​a​t​e​ ​s​o​m​e​t​h​i​n​g​ ​e​x​t​r​a​o​r​d​i​n​a​r​y​.
+	 */
+	workshopBody: string
+	/**
+	 * F​r​e​s​h​ ​l​a​u​n​c​h
+	 */
+	launchName: string
+	/**
+	 * M​e​e​t​ ​y​o​u​r​
+​n​e​w​ ​f​a​v​o​r​i​t​e​.
+	 */
+	launchHeading: string
+	/**
+	 * S​O​M​E​T​H​I​N​G​ ​G​O​O​D​ ​I​S​ ​H​E​R​E
+	 */
+	launchEyebrow: string
+	/**
+	 * T​h​o​u​g​h​t​f​u​l​l​y​ ​m​a​d​e​.​ ​R​e​a​d​y​ ​f​o​r​ ​y​o​u​.​
+​D​i​s​c​o​v​e​r​ ​t​h​e​ ​c​o​l​l​e​c​t​i​o​n​.
+	 */
+	launchBody: string
+	/**
+	 * A​ ​c​u​r​i​o​u​s​ ​m​i​n​d
+	 */
+	lessonName: string
+	/**
+	 * S​t​a​y​
+​c​u​r​i​o​u​s​.
+	 */
+	lessonHeading: string
+	/**
+	 * T​O​D​A​Y​’​S​ ​B​I​G​ ​Q​U​E​S​T​I​O​N
+	 */
+	lessonEyebrow: string
+	/**
+	 * W​h​a​t​ ​w​i​l​l​ ​y​o​u​ ​d​i​s​c​o​v​e​r​ ​t​o​d​a​y​?​
+​E​x​p​l​o​r​e​.​ ​E​x​p​e​r​i​m​e​n​t​.​ ​E​x​p​l​a​i​n​.
+	 */
+	lessonBody: string
+	/**
+	 * W​o​r​d​s​ ​t​o​ ​k​e​e​p
+	 */
+	quoteName: string
+	/**
+	 * G​o​o​d​ ​t​h​i​n​g​s​
+​t​a​k​e​ ​t​i​m​e​.
+	 */
+	quoteHeading: string
+	/**
+	 * A​ ​N​O​T​E​ ​T​O​ ​Y​O​U​R​S​E​L​F
+	 */
+	quoteEyebrow: string
+	/**
+	 * K​e​e​p​ ​s​h​o​w​i​n​g​ ​u​p​.​
+​T​h​e​ ​b​e​s​t​ ​i​s​ ​s​t​i​l​l​ ​a​h​e​a​d​.
+	 */
+	quoteBody: string
+	/**
+	 * A​s​s​e​t​s
+	 */
+	assets: string
+	/**
+	 * R​e​u​s​e​ ​m​e​d​i​a​ ​a​l​r​e​a​d​y​ ​i​n​ ​t​h​i​s​ ​d​e​s​i​g​n​.
+	 */
+	assetHint: string
+	/**
+	 * S​e​a​r​c​h​ ​a​s​s​e​t​s
+	 */
+	searchAssets: string
+	/**
+	 * A​l​l​ ​m​e​d​i​a
+	 */
+	allAssets: string
+	/**
+	 * I​m​a​g​e​s
+	 */
+	assetImage: string
+	/**
+	 * V​i​d​e​o​s
+	 */
+	assetVideo: string
+	/**
+	 * A​u​d​i​o
+	 */
+	assetAudio: string
+	/**
+	 * U​p​l​o​a​d​ ​m​e​d​i​a​ ​t​o​ ​b​u​i​l​d​ ​y​o​u​r​ ​l​i​b​r​a​r​y​.
+	 */
+	noAssets: string
+	/**
+	 * N​o​ ​a​s​s​e​t​s​ ​m​a​t​c​h​ ​y​o​u​r​ ​s​e​a​r​c​h​.
+	 */
+	noAssetResults: string
+	/**
+	 * C​o​u​l​d​ ​n​o​t​ ​i​n​s​e​r​t​ ​t​h​i​s​ ​a​s​s​e​t​.​ ​P​l​e​a​s​e​ ​t​r​y​ ​a​g​a​i​n​.
+	 */
+	assetInsertFailed: string
+	/**
+	 * I​n​s​e​r​t​ ​{​n​a​m​e​}
+	 * @param {string} name
+	 */
+	insertAsset: RequiredParams<'name'>
+	/**
+	 * U​s​e​d​ ​{​c​o​u​n​t​}​ ​t​i​m​e​s
+	 * @param {number} count
+	 */
+	assetUses: RequiredParams<'count'>
+	/**
+	 * S​e​a​r​c​h​ ​p​a​g​e​s
+	 */
+	searchPages: string
+	/**
+	 * N​o​ ​p​a​g​e​s​ ​m​a​t​c​h​ ​y​o​u​r​ ​s​e​a​r​c​h​.
+	 */
+	noPages: string
+	/**
+	 * M​a​n​a​g​e​ ​a​n​d​ ​a​r​r​a​n​g​e​ ​y​o​u​r​ ​d​e​s​i​g​n​’​s​ ​p​a​g​e​s​.
+	 */
+	pagesHint: string
+	/**
+	 * P​i​n​ ​p​a​n​e​l
+	 */
+	pinDrawer: string
+	/**
+	 * U​n​p​i​n​ ​p​a​n​e​l
+	 */
+	unpinDrawer: string
+	/**
+	 * R​e​s​i​z​e​ ​p​a​n​e​l
+	 */
+	resizeDrawer: string
+	/**
+	 * R​e​s​e​t​ ​p​a​n​e​l​ ​w​i​d​t​h
+	 */
+	resetDrawerWidth: string
+	/**
+	 * F​i​l​e​ ​m​e​n​u
+	 */
+	fileMenu: string
+	/**
+	 * D​e​s​i​g​n​ ​t​i​t​l​e
+	 */
+	designTitle: string
+	/**
+	 * N​e​w​ ​d​e​s​i​g​n
+	 */
+	newDesign: string
+	resetConfirm: {
+		/**
+		 * N​E​W​ ​D​E​S​I​G​N
+		 */
+		kicker: string
+		/**
+		 * S​t​a​r​t​ ​a​ ​n​e​w​ ​d​e​s​i​g​n​?
+		 */
+		title: string
+		/**
+		 * Y​o​u​r​ ​c​u​r​r​e​n​t​ ​d​e​s​i​g​n​ ​h​a​s​ ​{​c​o​u​n​t​}​ ​p​a​g​e​s​.​ ​D​o​w​n​l​o​a​d​ ​a​ ​c​o​p​y​ ​b​e​f​o​r​e​ ​r​e​p​l​a​c​i​n​g​ ​i​t​ ​w​i​t​h​ ​a​ ​b​l​a​n​k​ ​p​a​g​e​.
+		 * @param {number} count
+		 */
+		description: RequiredParams<'count'>
+		/**
+		 * C​r​e​a​t​e​ ​n​e​w​ ​d​e​s​i​g​n
+		 */
+		actionTitle: string
+		/**
+		 * R​e​p​l​a​c​e​ ​t​h​e​ ​c​u​r​r​e​n​t​ ​d​e​s​i​g​n​ ​w​i​t​h​ ​a​ ​f​r​e​s​h​ ​c​a​n​v​a​s​.
+		 */
+		actionHint: string
+	}
+	/**
+	 * M​o​v​e​ ​p​a​g​e​ ​u​p
+	 */
+	pageMoveUp: string
+	/**
+	 * M​o​v​e​ ​p​a​g​e​ ​d​o​w​n
+	 */
+	pageMoveDown: string
+	/**
+	 * D​u​p​l​i​c​a​t​e​ ​l​a​y​e​r
+	 */
+	duplicateLayer: string
+	/**
+	 * D​e​l​e​t​e​ ​l​a​y​e​r
+	 */
+	deleteLayer: string
+	/**
+	 * R​e​n​a​m​e​ ​l​a​y​e​r
+	 */
+	renameLayer: string
+	/**
+	 * S​e​a​r​c​h​ ​l​a​y​e​r​s
+	 */
+	searchLayers: string
+	/**
+	 * N​o​ ​l​a​y​e​r​s​ ​m​a​t​c​h​ ​y​o​u​r​ ​s​e​a​r​c​h​.
+	 */
+	noLayersFound: string
+	/**
+	 * V​i​e​w
+	 */
+	viewSettings: string
+	/**
+	 * S​h​o​w​ ​r​u​l​e​r​s
+	 */
+	showRulers: string
+	/**
+	 * S​h​o​w​ ​g​u​i​d​e​s
+	 */
+	showGuides: string
+	/**
+	 * S​n​a​p​ ​t​o​ ​g​u​i​d​e​s
+	 */
+	snapToGuides: string
+	/**
+	 * L​o​c​k​ ​g​u​i​d​e​s
+	 */
+	lockGuides: string
+	/**
+	 * C​l​e​a​r​ ​p​a​g​e​ ​g​u​i​d​e​s
+	 */
+	clearGuides: string
+	/**
+	 * S​h​o​w​ ​l​a​y​o​u​t​ ​g​r​i​d
+	 */
+	showGrid: string
+	/**
+	 * G​r​i​d​ ​s​p​a​c​i​n​g
+	 */
+	gridSpacing: string
+	/**
+	 * D​r​a​g​ ​f​r​o​m​ ​a​ ​r​u​l​e​r​ ​t​o​ ​a​d​d​ ​a​ ​g​u​i​d​e​.​ ​D​r​a​g​ ​a​ ​g​u​i​d​e​ ​b​a​c​k​ ​o​n​t​o​ ​a​ ​r​u​l​e​r​ ​t​o​ ​r​e​m​o​v​e​ ​i​t​.
+	 */
+	guideHint: string
+	/**
+	 * p​x
+	 */
+	pixels: string
+	/**
+	 * H​o​r​i​z​o​n​t​a​l​ ​r​u​l​e​r​;​ ​d​r​a​g​ ​o​r​ ​p​r​e​s​s​ ​E​n​t​e​r​ ​o​r​ ​S​p​a​c​e​ ​t​o​ ​a​d​d​ ​a​ ​h​o​r​i​z​o​n​t​a​l​ ​g​u​i​d​e
+	 */
+	horizontalRuler: string
+	/**
+	 * V​e​r​t​i​c​a​l​ ​r​u​l​e​r​;​ ​d​r​a​g​ ​o​r​ ​p​r​e​s​s​ ​E​n​t​e​r​ ​o​r​ ​S​p​a​c​e​ ​t​o​ ​a​d​d​ ​a​ ​v​e​r​t​i​c​a​l​ ​g​u​i​d​e
+	 */
+	verticalRuler: string
+	/**
+	 * H​o​r​i​z​o​n​t​a​l​ ​g​u​i​d​e​ ​a​t​ ​{​p​o​s​i​t​i​o​n​}​ ​p​x
+	 * @param {number} position
+	 */
+	horizontalGuide: RequiredParams<'position'>
+	/**
+	 * V​e​r​t​i​c​a​l​ ​g​u​i​d​e​ ​a​t​ ​{​p​o​s​i​t​i​o​n​}​ ​p​x
+	 * @param {number} position
+	 */
+	verticalGuide: RequiredParams<'position'>
+	/**
+	 * D​r​a​g​ ​t​o​ ​m​o​v​e​.​ ​D​r​a​g​ ​b​a​c​k​ ​o​n​t​o​ ​a​ ​r​u​l​e​r​ ​t​o​ ​r​e​m​o​v​e​.​ ​A​r​r​o​w​ ​k​e​y​s​ ​m​o​v​e​ ​b​y​ ​1​ ​p​x​;​ ​S​h​i​f​t​ ​m​o​v​e​s​ ​b​y​ ​1​0​ ​p​x​.​ ​D​e​l​e​t​e​ ​r​e​m​o​v​e​s​ ​t​h​e​ ​g​u​i​d​e​.
+	 */
+	guideHelp: string
+	/**
+	 * {​p​o​s​i​t​i​o​n​}​ ​p​x
+	 * @param {number} position
+	 */
+	guidePosition: RequiredParams<'position'>
+	/**
+	 * p​x
+	 */
+	rulerUnit: string
+	/**
+	 * H​o​l​d​ ​A​l​t​ ​w​h​i​l​e​ ​d​r​a​g​g​i​n​g​ ​a​n​ ​e​l​e​m​e​n​t​ ​t​o​ ​s​n​a​p​ ​t​o​ ​t​h​e​ ​g​r​i​d​.
+	 */
+	gridHint: string
+	/**
+	 * S​e​l​e​c​t​e​d​ ​p​a​g​e​s
+	 */
+	selectedPages: string
+	/**
+	 * P​a​g​e​ ​n​u​m​b​e​r​s​ ​o​r​ ​r​a​n​g​e​s
+	 */
+	pageRange: string
+	/**
+	 * F​o​r​ ​e​x​a​m​p​l​e​:​ ​1​,​ ​3​-​5​.​ ​P​a​g​e​s​ ​e​x​p​o​r​t​ ​i​n​ ​t​h​e​ ​o​r​d​e​r​ ​e​n​t​e​r​e​d​.
+	 */
+	pageRangeHint: string
+	/**
+	 * E​n​t​e​r​ ​v​a​l​i​d​ ​p​a​g​e​ ​n​u​m​b​e​r​s​ ​o​r​ ​a​s​c​e​n​d​i​n​g​ ​r​a​n​g​e​s​ ​w​i​t​h​i​n​ ​t​h​i​s​ ​d​e​s​i​g​n​.
+	 */
+	invalidPageRange: string
+	/**
+	 * C​a​n​c​e​l​ ​e​x​p​o​r​t
+	 */
+	cancelExport: string
+	/**
+	 * C​a​n​c​e​l​l​i​n​g​ ​a​f​t​e​r​ ​t​h​e​ ​c​u​r​r​e​n​t​ ​p​a​g​e​…
+	 */
+	cancellingExport: string
+	/**
+	 * S​V​G​ ​·​ ​V​e​c​t​o​r​ ​i​m​a​g​e
+	 */
+	svg: string
+	/**
+	 * S​e​l​e​c​t​e​d​ ​o​b​j​e​c​t​s
+	 */
+	svgSelection: string
+	/**
+	 * V​e​c​t​o​r​s​ ​a​n​d​ ​t​e​x​t​ ​s​t​a​y​ ​e​d​i​t​a​b​l​e​.​ ​P​h​o​t​o​s​ ​a​r​e​ ​e​m​b​e​d​d​e​d​.​ ​C​o​m​p​l​e​x​ ​e​f​f​e​c​t​s​ ​a​n​d​ ​u​n​s​u​p​p​o​r​t​e​d​ ​e​l​e​m​e​n​t​s​ ​m​a​y​ ​b​e​ ​e​m​b​e​d​d​e​d​ ​a​s​ ​i​m​a​g​e​s​.​ ​T​e​x​t​ ​r​e​q​u​i​r​e​s​ ​t​h​e​ ​m​a​t​c​h​i​n​g​ ​f​o​n​t​s​.
+	 */
+	svgHint: string
+	/**
+	 * S​o​m​e​ ​c​o​n​t​e​n​t​ ​w​a​s​ ​e​m​b​e​d​d​e​d​ ​a​s​ ​i​m​a​g​e​s​ ​t​o​ ​p​r​e​s​e​r​v​e​ ​i​t​s​ ​a​p​p​e​a​r​a​n​c​e​.
+	 */
+	svgFallback: string
+	/**
+	 * S​V​G​ ​e​x​p​o​r​t​ ​c​o​m​p​l​e​t​e​.
+	 */
+	svgComplete: string
+	/**
+	 * S​e​l​e​c​t​ ​a​t​ ​l​e​a​s​t​ ​o​n​e​ ​o​b​j​e​c​t​ ​o​n​ ​t​h​e​ ​c​u​r​r​e​n​t​ ​p​a​g​e​.
+	 */
+	svgEmpty: string
+}
+
 export type NamespaceScreenTranslation = {
 	presenter: {
 		/**
@@ -5222,6 +5989,7 @@ export type Namespaces =
 	| 'editor'
 	| 'export'
 	| 'mobile'
+	| 'myna'
 	| 'screen'
 
 type DisallowNamespaces = {
@@ -5266,6 +6034,12 @@ type DisallowNamespaces = {
 	 * you need to use the `./mobile/index.ts` file instead
 	 */
 	mobile?: "[typesafe-i18n] reserved for 'mobile'-namespace. You need to use the `./mobile/index.ts` file instead."
+
+	/**
+	 * reserved for 'myna'-namespace\
+	 * you need to use the `./myna/index.ts` file instead
+	 */
+	myna?: "[typesafe-i18n] reserved for 'myna'-namespace. You need to use the `./myna/index.ts` file instead."
 
 	/**
 	 * reserved for 'screen'-namespace\
@@ -10032,6 +10806,758 @@ export type TranslationFunctions = {
 			 */
 			exitPlayback: () => LocalizedString
 		}
+	}
+	myna: {
+		/**
+		 * Design
+		 */
+		design: () => LocalizedString
+		/**
+		 * Elements
+		 */
+		elements: () => LocalizedString
+		/**
+		 * Text
+		 */
+		text: () => LocalizedString
+		/**
+		 * Uploads
+		 */
+		uploads: () => LocalizedString
+		/**
+		 * Styles
+		 */
+		styles: () => LocalizedString
+		/**
+		 * Layers
+		 */
+		layers: () => LocalizedString
+		/**
+		 * Frontmost elements appear first. Double-click a name to rename it. Hidden layers are temporarily hidden in the editor.
+		 */
+		layerHint: () => LocalizedString
+		/**
+		 * Layer name
+		 */
+		layerName: () => LocalizedString
+		/**
+		 * Show layer
+		 */
+		showLayer: () => LocalizedString
+		/**
+		 * Hide layer
+		 */
+		hideLayer: () => LocalizedString
+		/**
+		 * Unlock layer
+		 */
+		unlockLayer: () => LocalizedString
+		/**
+		 * Lock layer
+		 */
+		lockLayer: () => LocalizedString
+		/**
+		 * Bring forward
+		 */
+		forward: () => LocalizedString
+		/**
+		 * Send backward
+		 */
+		backward: () => LocalizedString
+		/**
+		 * DESIGN STUDIO
+		 */
+		studioLabel: () => LocalizedString
+		/**
+		 * Resize
+		 */
+		resize: () => LocalizedString
+		/**
+		 * Properties
+		 */
+		properties: () => LocalizedString
+		/**
+		 * Download
+		 */
+		download: () => LocalizedString
+		/**
+		 * Resize design
+		 */
+		resizeDesign: () => LocalizedString
+		/**
+		 * Resize all pages
+		 */
+		resizeAll: () => LocalizedString
+		/**
+		 * Content scales to fit the new format.
+		 */
+		resizeHint: () => LocalizedString
+		/**
+		 * Width
+		 */
+		width: () => LocalizedString
+		/**
+		 * Height
+		 */
+		height: () => LocalizedString
+		/**
+		 * Apply
+		 */
+		apply: () => LocalizedString
+		/**
+		 * Cancel
+		 */
+		cancel: () => LocalizedString
+		/**
+		 * Design tools
+		 */
+		tools: () => LocalizedString
+		/**
+		 * {name} library
+		 */
+		library: (arg: { name: string }) => LocalizedString
+		/**
+		 * Close library
+		 */
+		closeLibrary: () => LocalizedString
+		/**
+		 * Search templates
+		 */
+		search: () => LocalizedString
+		/**
+		 * All
+		 */
+		all: () => LocalizedString
+		/**
+		 * Social
+		 */
+		social: () => LocalizedString
+		/**
+		 * Education
+		 */
+		education: () => LocalizedString
+		/**
+		 * Events
+		 */
+		events: () => LocalizedString
+		/**
+		 * Marketing
+		 */
+		marketing: () => LocalizedString
+		/**
+		 * Make it yours. Every template is editable and adds a new page.
+		 */
+		templateHint: () => LocalizedString
+		/**
+		 * No templates match your search.
+		 */
+		noTemplates: () => LocalizedString
+		/**
+		 * Start with a blank page
+		 */
+		blank: () => LocalizedString
+		/**
+		 * Click to add text, then double-click it on the canvas to edit. Select text to change font, color, spacing, and effects.
+		 */
+		textHint: () => LocalizedString
+		/**
+		 * Add a heading
+		 */
+		heading: () => LocalizedString
+		/**
+		 * Add a subheading
+		 */
+		subheading: () => LocalizedString
+		/**
+		 * Your paragraph text
+		 */
+		paragraph: () => LocalizedString
+		/**
+		 * Add body text
+		 */
+		bodyText: () => LocalizedString
+		/**
+		 * Text combinations
+		 */
+		combinations: () => LocalizedString
+		/**
+		 * BIG IDEAS
+		 */
+		bigIdeas: () => LocalizedString
+		/**
+		 * Once upon a time
+		 */
+		once: () => LocalizedString
+		/**
+		 * A fresh perspective
+		 */
+		perspective: () => LocalizedString
+		/**
+		 * Your story starts here
+		 */
+		storyStarts: () => LocalizedString
+		/**
+		 * Charts
+		 */
+		charts: () => LocalizedString
+		/**
+		 * Add a 3 × 3 table
+		 */
+		table: () => LocalizedString
+		/**
+		 * Design canvas
+		 */
+		designCanvas: () => LocalizedString
+		/**
+		 * Pages
+		 */
+		pages: () => LocalizedString
+		/**
+		 * Page {number}
+		 */
+		page: (arg: { number: number }) => LocalizedString
+		/**
+		 * Add page
+		 */
+		addPage: () => LocalizedString
+		/**
+		 * Move page left
+		 */
+		moveLeft: () => LocalizedString
+		/**
+		 * Move page right
+		 */
+		moveRight: () => LocalizedString
+		/**
+		 * Duplicate page
+		 */
+		duplicate: () => LocalizedString
+		/**
+		 * Delete page
+		 */
+		'delete': () => LocalizedString
+		/**
+		 * Page {current} / {total}
+		 */
+		pageCount: (arg: { current: number, total: number }) => LocalizedString
+		/**
+		 * Zoom out
+		 */
+		zoomOut: () => LocalizedString
+		/**
+		 * Zoom in
+		 */
+		zoomIn: () => LocalizedString
+		/**
+		 * Fit
+		 */
+		fit: () => LocalizedString
+		/**
+		 * Design properties
+		 */
+		designProperties: () => LocalizedString
+		/**
+		 * Close properties
+		 */
+		closeProperties: () => LocalizedString
+		/**
+		 * Untitled design
+		 */
+		untitled: () => LocalizedString
+		/**
+		 * MADE WITH MYNA
+		 */
+		madeWith: () => LocalizedString
+		/**
+		 * Myna design
+		 */
+		designName: () => LocalizedString
+		/**
+		 * Rendering page {current} of {total}
+		 */
+		rendering: (arg: { current: number, total: number }) => LocalizedString
+		/**
+		 * Preparing ZIP download
+		 */
+		zipProgress: () => LocalizedString
+		/**
+		 * Download failed. Please try again.
+		 */
+		failed: () => LocalizedString
+		/**
+		 * Download your design
+		 */
+		downloadTitle: () => LocalizedString
+		/**
+		 * File type
+		 */
+		fileType: () => LocalizedString
+		/**
+		 * PDF document (flattened)
+		 */
+		pdf: () => LocalizedString
+		/**
+		 * PNG image
+		 */
+		png: () => LocalizedString
+		/**
+		 * JPG image
+		 */
+		jpg: () => LocalizedString
+		/**
+		 * WebP image
+		 */
+		webp: () => LocalizedString
+		/**
+		 * Current page
+		 */
+		currentPage: () => LocalizedString
+		/**
+		 * All pages
+		 */
+		allPages: () => LocalizedString
+		/**
+		 * All pages (ZIP for multiple pages)
+		 */
+		allPagesZip: () => LocalizedString
+		/**
+		 * Size
+		 */
+		size: () => LocalizedString
+		/**
+		 * Transparent page background
+		 */
+		transparent: () => LocalizedString
+		/**
+		 * Quality: {percent}%
+		 */
+		quality: (arg: { percent: number }) => LocalizedString
+		/**
+		 * Choose a smaller size (maximum 32 megapixels and 16384 pixels per side).
+		 */
+		tooLarge: () => LocalizedString
+		/**
+		 * Preparing download…
+		 */
+		preparing: () => LocalizedString
+		/**
+		 * For an editable file, use the editor’s Export menu. PDF pages are flattened; text is not selectable. Animated elements export as a still image.
+		 */
+		exportHint: () => LocalizedString
+		/**
+		 * An image could not be loaded for export. Check the image source or upload a local copy.
+		 */
+		imageFailed: () => LocalizedString
+		/**
+		 * Image export timed out. Check the image sources and try again.
+		 */
+		imageTimeout: () => LocalizedString
+		/**
+		 * Social post
+		 */
+		format0: () => LocalizedString
+		/**
+		 * Portrait post
+		 */
+		format1: () => LocalizedString
+		/**
+		 * Story
+		 */
+		format2: () => LocalizedString
+		/**
+		 * Presentation
+		 */
+		format3: () => LocalizedString
+		/**
+		 * A4 portrait
+		 */
+		format4: () => LocalizedString
+		/**
+		 * A4 landscape
+		 */
+		format5: () => LocalizedString
+		/**
+		 * Poster
+		 */
+		format6: () => LocalizedString
+		/**
+		 * Video thumbnail
+		 */
+		format7: () => LocalizedString
+		/**
+		 * Business card
+		 */
+		format8: () => LocalizedString
+		/**
+		 * Banner
+		 */
+		format9: () => LocalizedString
+		/**
+		 * Creative studio
+		 */
+		studioName: () => LocalizedString
+		/**
+		 * Ideas into
+	impact.
+		 */
+		studioHeading: () => LocalizedString
+		/**
+		 * THE CREATIVE EDIT
+		 */
+		studioEyebrow: () => LocalizedString
+		/**
+		 * A little curiosity. A fresh perspective.
+	Something worth sharing.
+		 */
+		studioBody: () => LocalizedString
+		/**
+		 * Grow together
+		 */
+		botanicalName: () => LocalizedString
+		/**
+		 * Room to
+	grow.
+		 */
+		botanicalHeading: () => LocalizedString
+		/**
+		 * LEARN SOMETHING NEW
+		 */
+		botanicalEyebrow: () => LocalizedString
+		/**
+		 * Small steps. Big discoveries.
+	Your next chapter starts here.
+		 */
+		botanicalBody: () => LocalizedString
+		/**
+		 * The workshop
+		 */
+		workshopName: () => LocalizedString
+		/**
+		 * Make it
+	happen.
+		 */
+		workshopHeading: () => LocalizedString
+		/**
+		 * A HANDS-ON WORKSHOP
+		 */
+		workshopEyebrow: () => LocalizedString
+		/**
+		 * Bring your ideas. Find your people.
+	Create something extraordinary.
+		 */
+		workshopBody: () => LocalizedString
+		/**
+		 * Fresh launch
+		 */
+		launchName: () => LocalizedString
+		/**
+		 * Meet your
+	new favorite.
+		 */
+		launchHeading: () => LocalizedString
+		/**
+		 * SOMETHING GOOD IS HERE
+		 */
+		launchEyebrow: () => LocalizedString
+		/**
+		 * Thoughtfully made. Ready for you.
+	Discover the collection.
+		 */
+		launchBody: () => LocalizedString
+		/**
+		 * A curious mind
+		 */
+		lessonName: () => LocalizedString
+		/**
+		 * Stay
+	curious.
+		 */
+		lessonHeading: () => LocalizedString
+		/**
+		 * TODAY’S BIG QUESTION
+		 */
+		lessonEyebrow: () => LocalizedString
+		/**
+		 * What will you discover today?
+	Explore. Experiment. Explain.
+		 */
+		lessonBody: () => LocalizedString
+		/**
+		 * Words to keep
+		 */
+		quoteName: () => LocalizedString
+		/**
+		 * Good things
+	take time.
+		 */
+		quoteHeading: () => LocalizedString
+		/**
+		 * A NOTE TO YOURSELF
+		 */
+		quoteEyebrow: () => LocalizedString
+		/**
+		 * Keep showing up.
+	The best is still ahead.
+		 */
+		quoteBody: () => LocalizedString
+		/**
+		 * Assets
+		 */
+		assets: () => LocalizedString
+		/**
+		 * Reuse media already in this design.
+		 */
+		assetHint: () => LocalizedString
+		/**
+		 * Search assets
+		 */
+		searchAssets: () => LocalizedString
+		/**
+		 * All media
+		 */
+		allAssets: () => LocalizedString
+		/**
+		 * Images
+		 */
+		assetImage: () => LocalizedString
+		/**
+		 * Videos
+		 */
+		assetVideo: () => LocalizedString
+		/**
+		 * Audio
+		 */
+		assetAudio: () => LocalizedString
+		/**
+		 * Upload media to build your library.
+		 */
+		noAssets: () => LocalizedString
+		/**
+		 * No assets match your search.
+		 */
+		noAssetResults: () => LocalizedString
+		/**
+		 * Could not insert this asset. Please try again.
+		 */
+		assetInsertFailed: () => LocalizedString
+		/**
+		 * Insert {name}
+		 */
+		insertAsset: (arg: { name: string }) => LocalizedString
+		/**
+		 * Used {count} times
+		 */
+		assetUses: (arg: { count: number }) => LocalizedString
+		/**
+		 * Search pages
+		 */
+		searchPages: () => LocalizedString
+		/**
+		 * No pages match your search.
+		 */
+		noPages: () => LocalizedString
+		/**
+		 * Manage and arrange your design’s pages.
+		 */
+		pagesHint: () => LocalizedString
+		/**
+		 * Pin panel
+		 */
+		pinDrawer: () => LocalizedString
+		/**
+		 * Unpin panel
+		 */
+		unpinDrawer: () => LocalizedString
+		/**
+		 * Resize panel
+		 */
+		resizeDrawer: () => LocalizedString
+		/**
+		 * Reset panel width
+		 */
+		resetDrawerWidth: () => LocalizedString
+		/**
+		 * File menu
+		 */
+		fileMenu: () => LocalizedString
+		/**
+		 * Design title
+		 */
+		designTitle: () => LocalizedString
+		/**
+		 * New design
+		 */
+		newDesign: () => LocalizedString
+		resetConfirm: {
+			/**
+			 * NEW DESIGN
+			 */
+			kicker: () => LocalizedString
+			/**
+			 * Start a new design?
+			 */
+			title: () => LocalizedString
+			/**
+			 * Your current design has {count} pages. Download a copy before replacing it with a blank page.
+			 */
+			description: (arg: { count: number }) => LocalizedString
+			/**
+			 * Create new design
+			 */
+			actionTitle: () => LocalizedString
+			/**
+			 * Replace the current design with a fresh canvas.
+			 */
+			actionHint: () => LocalizedString
+		}
+		/**
+		 * Move page up
+		 */
+		pageMoveUp: () => LocalizedString
+		/**
+		 * Move page down
+		 */
+		pageMoveDown: () => LocalizedString
+		/**
+		 * Duplicate layer
+		 */
+		duplicateLayer: () => LocalizedString
+		/**
+		 * Delete layer
+		 */
+		deleteLayer: () => LocalizedString
+		/**
+		 * Rename layer
+		 */
+		renameLayer: () => LocalizedString
+		/**
+		 * Search layers
+		 */
+		searchLayers: () => LocalizedString
+		/**
+		 * No layers match your search.
+		 */
+		noLayersFound: () => LocalizedString
+		/**
+		 * View
+		 */
+		viewSettings: () => LocalizedString
+		/**
+		 * Show rulers
+		 */
+		showRulers: () => LocalizedString
+		/**
+		 * Show guides
+		 */
+		showGuides: () => LocalizedString
+		/**
+		 * Snap to guides
+		 */
+		snapToGuides: () => LocalizedString
+		/**
+		 * Lock guides
+		 */
+		lockGuides: () => LocalizedString
+		/**
+		 * Clear page guides
+		 */
+		clearGuides: () => LocalizedString
+		/**
+		 * Show layout grid
+		 */
+		showGrid: () => LocalizedString
+		/**
+		 * Grid spacing
+		 */
+		gridSpacing: () => LocalizedString
+		/**
+		 * Drag from a ruler to add a guide. Drag a guide back onto a ruler to remove it.
+		 */
+		guideHint: () => LocalizedString
+		/**
+		 * px
+		 */
+		pixels: () => LocalizedString
+		/**
+		 * Horizontal ruler; drag or press Enter or Space to add a horizontal guide
+		 */
+		horizontalRuler: () => LocalizedString
+		/**
+		 * Vertical ruler; drag or press Enter or Space to add a vertical guide
+		 */
+		verticalRuler: () => LocalizedString
+		/**
+		 * Horizontal guide at {position} px
+		 */
+		horizontalGuide: (arg: { position: number }) => LocalizedString
+		/**
+		 * Vertical guide at {position} px
+		 */
+		verticalGuide: (arg: { position: number }) => LocalizedString
+		/**
+		 * Drag to move. Drag back onto a ruler to remove. Arrow keys move by 1 px; Shift moves by 10 px. Delete removes the guide.
+		 */
+		guideHelp: () => LocalizedString
+		/**
+		 * {position} px
+		 */
+		guidePosition: (arg: { position: number }) => LocalizedString
+		/**
+		 * px
+		 */
+		rulerUnit: () => LocalizedString
+		/**
+		 * Hold Alt while dragging an element to snap to the grid.
+		 */
+		gridHint: () => LocalizedString
+		/**
+		 * Selected pages
+		 */
+		selectedPages: () => LocalizedString
+		/**
+		 * Page numbers or ranges
+		 */
+		pageRange: () => LocalizedString
+		/**
+		 * For example: 1, 3-5. Pages export in the order entered.
+		 */
+		pageRangeHint: () => LocalizedString
+		/**
+		 * Enter valid page numbers or ascending ranges within this design.
+		 */
+		invalidPageRange: () => LocalizedString
+		/**
+		 * Cancel export
+		 */
+		cancelExport: () => LocalizedString
+		/**
+		 * Cancelling after the current page…
+		 */
+		cancellingExport: () => LocalizedString
+		/**
+		 * SVG · Vector image
+		 */
+		svg: () => LocalizedString
+		/**
+		 * Selected objects
+		 */
+		svgSelection: () => LocalizedString
+		/**
+		 * Vectors and text stay editable. Photos are embedded. Complex effects and unsupported elements may be embedded as images. Text requires the matching fonts.
+		 */
+		svgHint: () => LocalizedString
+		/**
+		 * Some content was embedded as images to preserve its appearance.
+		 */
+		svgFallback: () => LocalizedString
+		/**
+		 * SVG export complete.
+		 */
+		svgComplete: () => LocalizedString
+		/**
+		 * Select at least one object on the current page.
+		 */
+		svgEmpty: () => LocalizedString
 	}
 	screen: {
 		presenter: {

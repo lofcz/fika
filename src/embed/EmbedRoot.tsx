@@ -7,6 +7,7 @@ import { deleteDiscardedDB } from '@/utils/database'
 import { isPC } from '@/utils/common'
 import { importScreen, prefetchScreen } from '@/views/Screen/lazy'
 import Editor from '@/views/Editor/index'
+import { createMynaDocument } from '@/views/Myna/catalog'
 import Mobile from '@/views/Mobile/index'
 import FullscreenSpin from '@/components/FullscreenSpin'
 import ScreenShell from '@/views/Screen/ScreenShell'
@@ -26,6 +27,7 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
   const { LL, setLocale } = useI18nContext()
   const _isPC = isPC()
   const presentationOnly = init.viewMode === 'presentation'
+  const myna = init.viewMode === 'canva' || init.viewMode === 'myna'
   const slides = useSlidesStore(s => s.slides)
   const setSlides = useSlidesStore(s => s.setSlides)
   const setTemplates = useSlidesStore(s => s.setTemplates)
@@ -58,7 +60,7 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
       return
     }
     if (init.loadDocument && !useSlidesStore.getState().slides.length) {
-      applyDocumentToStores(buildStarterPresentation(LL, init.starterPresentation))
+      applyDocumentToStores(myna ? createMynaDocument(LL.myna) : buildStarterPresentation(LL, init.starterPresentation))
     }
   }
 
@@ -109,7 +111,7 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
     return (
       <>
         <Activity mode={screening ? 'hidden' : 'visible'}>
-          {_isPC ? <Editor /> : <Mobile />}
+          {myna ? <Editor myna /> : _isPC ? <Editor /> : <Mobile />}
         </Activity>
         {screening ? (
           <Suspense fallback={<ScreenShell />}>

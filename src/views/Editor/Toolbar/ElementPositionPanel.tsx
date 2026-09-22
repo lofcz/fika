@@ -192,13 +192,15 @@ const ElementPositionPanel = memo(function ElementPositionPanel() {
           <div className={cx('field')}>
             <NumberInput min={minSize} max={1500} step={5} disabled={isAutoWidthText} value={width} onUpdateValue={value => updateWidth(value)} prefix={LL.editor.positionPanel.width()} />
             {['image', 'shape', 'audio'].includes(handleElement.type) ? (
-              <span
+              <button type="button"
+                aria-label={fixedRatio ? LL.editor.positionPanel.unlockAspectRatio() : LL.editor.positionPanel.lockAspectRatio()}
+                aria-pressed={fixedRatio}
                 className={cx('icon-btn', { active: fixedRatio })}
                 data-tooltip={fixedRatio ? LL.editor.positionPanel.unlockAspectRatio() : LL.editor.positionPanel.lockAspectRatio()}
                 onClick={() => updateFixedRatio(!fixedRatio)}
               >
                 {fixedRatio ? <Icon icon="lock" /> : <Icon icon="unlock" />}
-              </span>
+              </button>
             ) : null}
             <NumberInput min={minSize} max={800} step={5} disabled={isAutoHeightText || handleElement.type === 'table'} value={height} onUpdateValue={value => updateHeight(value)} prefix={LL.editor.positionPanel.height()} />
           </div>
@@ -209,12 +211,12 @@ const ElementPositionPanel = memo(function ElementPositionPanel() {
         <PanelSection>
           <div className={cx('field')}>
             <NumberInput min={-180} max={180} step={5} value={rotate} onUpdateValue={value => updateRotate(value)} prefix={LL.editor.positionPanel.rotate()} />
-            <div className={cx('text-btn')} onClick={() => updateRotate45('-')}>
+            <button type="button" aria-label={`${LL.editor.positionPanel.rotate()} −45°`} className={cx('text-btn')} onClick={() => updateRotate45('-')}>
               <Icon icon="rotate-cw" /> -45°
-            </div>
-            <div className={cx('text-btn')} onClick={() => updateRotate45('+')}>
+            </button>
+            <button type="button" aria-label={`${LL.editor.positionPanel.rotate()} +45°`} className={cx('text-btn')} onClick={() => updateRotate45('+')}>
               <Icon icon="rotate-cw" style={{ transform: 'rotateY(180deg)' }} /> +45°
-            </div>
+            </button>
           </div>
         </PanelSection>
       ) : null}

@@ -1,5 +1,10 @@
+import { frameDomClip } from '@/utils/frameDomClip'
+import { queryFika } from '@/utils/portal'
+import { frameDescendantIds } from '@/utils/nestedFrames'
+import type { MynaViewPreferences } from '@/views/Myna/viewStore'
+import { snapToPageGuides, validPageGuides } from '@/utils/pageGuides'
 import { useRef, useCallback } from 'react'
-import { useMainStore, useSlidesStore, useKeyboardStore, syncPointerModifiers } from '@/store'
+import { useMainStore, useSlidesStore, useKeyboardStore, syncPointerModifiers, selectCurrentSlide } from '@/store'
 import type { PPTElement } from '@/types/slides'
 import type { AlignmentLineProps } from '@/types/edit'
 import { createElementIdMap, getElementRange, getRectRotatedRange } from '@/utils/element'
@@ -11,6 +16,8 @@ import { resolveGridSize, sameSnapGuides, snapMovingBox, type SnapBox } from '@/
 import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { commitSlideElements } from '@/utils/commitSlideElements'
+import { resolvePagePositions } from '@/views/Myna/pageLayout'
+import { clientToCanvas } from '@/utils/canvasPointer'
 
 export default (
   elementList: PPTElement[],
@@ -18,7 +25,10 @@ export default (
   _alignmentLines: AlignmentLineProps[],
   setAlignmentLines: (value: AlignmentLineProps[]) => void,
   canvasScale: number,
+  mynaView?: MynaViewPreferences,
 ) => {
+  const mynaViewRef = useRef(mynaView)
+  mynaViewRef.current = mynaView
   const activeElementIdList = useMainStore(s => s.activeElementIdList)
   const activeGroupElementId = useMainStore(s => s.activeGroupElementId)
   const shiftKeyState = useKeyboardStore(s => s.shiftKeyState)
@@ -50,7 +60,7 @@ export default (
     const isTouchEvent = !(e instanceof MouseEvent)
     if (isTouchEvent && (!e.changedTouches || !e.changedTouches[0])) return
 
-    const activeElementIdList = useMainStore.getState().activeElementIdList
+    const activeElementIdList = frameDescendantIds(elementListRef.current, useMainStore.getState().activeElementIdList)
     const activeGroupElementId = activeGroupElementIdRef.current
     const viewportSize = viewportSizeRef.current
     const viewportRatio = viewportRatioRef.current
@@ -78,6 +88,14 @@ export default (
     const elOriginRotate = ('rotate' in element && element.rotate) ? element.rotate : 0
   
     const viewport = findSlideViewport(e.target)
+    const sourcePageId = selectCurrentSlide(useSlidesStore.getState())?.id
+    const clip = viewport?.parentElement
+    const oldOverflow = clip?.style.overflow || ''
+    const dragRoots = mynaViewRef.current ? originActiveElementList
+      .filter(el => !el.parentFrameId || !activeIds.has(el.parentFrameId))
+      .flatMap(el => { const node = document.getElementById(`editable-element-${el.id}`); return node ? [node] : [] }) : []
+    for (const node of dragRoots) node.setAttribute('data-myna-drag-root', '')
+    if (mynaViewRef.current && clip) clip.style.overflow = 'visible'
     const startPointer = getPointerClient(e)
     const copyOnDrag = !isTouchEvent && (e.ctrlKey || e.metaKey)
 
@@ -107,6 +125,8 @@ export default (
     const multiOrigin = readLiveMultiOrigin(canvasScaleRef.current)
     let lastGuides: AlignmentLineProps[] = []
     const endGesture = () => {
+      if (clip) clip.style.overflow = oldOverflow
+      for (const node of dragRoots) node.removeAttribute('data-myna-drag-root')
       requestAnimationFrame(() => {
         useMainStore.getState().setGesturingState(false)
       })
@@ -122,6 +142,7 @@ export default (
       const { groupIdMap, elIdMap } = createElementIdMap(sourceElements)
       const duplicatedElements = sourceElements.map(item => {
         item.id = elIdMap[item.id]
+        if (item.parentFrameId) item.parentFrameId = elIdMap[item.parentFrameId]
         if (isActiveGroupElement && item.groupId) delete item.groupId
         else if (item.groupId) item.groupId = groupIdMap[item.groupId]
         item.left += dx
@@ -236,17 +257,25 @@ export default (
       if ('altKey' in e) syncPointerModifiers(e)
       const altGrid = 'altKey' in e && e.altKey
       const ctrlHeld = eventCtrl || useKeyboardStore.getState().ctrlKeyState
-      const { offsetX, offsetY, guides } = snapMovingBox(
+      const view = mynaViewRef.current
+      let snapped = snapMovingBox(
         { minX: targetMinX, maxX: targetMaxX, minY: targetMinY, maxY: targetMaxY },
         others,
         {
           mode: altGrid ? 'grid' : 'smart',
           canvas: { width: edgeWidth, height: edgeHeight },
-          gridSize: resolveGridSize(gridLineSizeRef.current, altGrid),
+          gridSize: resolveGridSize(view ? (altGrid ? view.gridSize : 0) : gridLineSizeRef.current, altGrid),
           index: snapIndex,
           ctrlMeasures: ctrlHeld,
         },
       )
+      if (!altGrid && view?.showGuides && view.snapToGuides) {
+        snapped = snapToPageGuides(
+          { minX: targetMinX, maxX: targetMaxX, minY: targetMinY, maxY: targetMaxY },
+          validPageGuides(selectCurrentSlide(useSlidesStore.getState())?.guides), canvasScaleRef.current, snapped,
+        )
+      }
+      const { offsetX, offsetY, guides } = snapped
       targetLeft += offsetX
       targetTop += offsetY
       if (!sameSnapGuides(lastGuides, guides)) {
@@ -254,12 +283,22 @@ export default (
         setAlignmentLines(guides)
       }
       setLiveElementOffset(liveOrigins, targetLeft - elOriginLeft, targetTop - elOriginTop, canvasScaleRef.current, multiOrigin)
+      if (originElementList.some(el => el.parentFrameId)) {
+        const live = originElementList.map(el => movingIds.includes(el.id) ? { ...el, left: el.left + targetLeft - elOriginLeft, top: el.top + targetTop - elOriginTop, ...(mynaViewRef.current && el.parentFrameId && !movingIds.includes(el.parentFrameId) ? { parentFrameId: undefined } : {}) } : el)
+        for (const el of live) if (el.parentFrameId) {
+          const node = queryFika<HTMLElement>(`#editable-element-${CSS.escape(el.id)}`)
+          if (node) node.style.clipPath = String(frameDomClip(el, live)?.clipPath || '')
+        }
+      }
       lastLeft = targetLeft
       lastTop = targetTop
     }
 
     const handleMouseup = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
+      // Include the release position even when the last RAF-coalesced move has
+      // not run yet; otherwise fast cross-page drops use stale geometry.
+      handleMousemove(e)
       isMouseDown = false
       stopGesture?.()
       stopGesture = null
@@ -296,6 +335,31 @@ export default (
         )
       }
       commitLiveList(commitSlideElements(next))
+      if (mynaViewRef.current && viewport && sourcePageId) {
+        const store = useSlidesStore.getState()
+        const positions = resolvePagePositions(store.slides, store.viewportSize, store.viewportSize * store.viewportRatio)
+        const from = positions.get(sourcePageId)!
+        const local = clientToCanvas(e, viewport, canvasScaleRef.current)
+        const x = local.x + from.x, y = local.y + from.y
+        const target = [...store.slides].reverse().find(page => {
+          const point = positions.get(page.id)!
+          return x >= point.x && y >= point.y && x <= point.x + store.viewportSize && y <= point.y + store.viewportSize * store.viewportRatio
+        })
+        if (target && target.id !== sourcePageId) {
+          const transferIds = duplicateTriggered ? next.filter(el => !originElementList.some(old => old.id === el.id)).map(el => el.id) : movingIds
+          store.transferPageElements(sourcePageId, target.id, transferIds)
+          commitLiveList(selectCurrentSlide(useSlidesStore.getState()).elements)
+        }
+        else if (!target && !duplicateTriggered) {
+          // A pasteboard drop escapes the old clipping frame while retaining
+          // the source page as its serialization/export owner.
+          const source = store.slides.find(page => page.id === sourcePageId)!
+          if (source.elements.some(el => movingIds.includes(el.id) && el.parentFrameId && !movingIds.includes(el.parentFrameId))) {
+            store.updateSlide({ elements: source.elements.map(el => movingIds.includes(el.id) && el.parentFrameId && !movingIds.includes(el.parentFrameId) ? { ...el, parentFrameId: undefined } : el) }, sourcePageId)
+            commitLiveList(selectCurrentSlide(useSlidesStore.getState()).elements)
+          }
+        }
+      }
       addHistorySnapshot()
       endGesture()
     }

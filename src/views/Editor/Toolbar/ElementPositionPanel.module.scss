@@ -59,3 +59,10 @@
     background-color: $surfaceActive;
   }
 }
+
+.icon-btn, .text-btn {
+  border: 0;
+  font-family: inherit;
+  &:focus-visible { outline: 2px solid $ink; outline-offset: 2px; }
+}
+.icon-btn { background: transparent; padding: 0; }

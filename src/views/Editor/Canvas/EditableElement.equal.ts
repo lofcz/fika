@@ -66,7 +66,7 @@ export const areEditableElementPropsEqual = (
   if (!!prev.isEditing !== !!next.isEditing) return false
   if (prev.isMultiSelect !== next.isMultiSelect) return false
   if (prev.elementIndex !== next.elementIndex) return false
-  if (prev.style?.display !== next.style?.display) return false
+  if (prev.style?.display !== next.style?.display || prev.style?.clipPath !== next.style?.clipPath) return false
 
   const a = prev.elementInfo
   const b = next.elementInfo

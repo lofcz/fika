@@ -25,6 +25,7 @@ export const namespaces: Namespaces[] = [
 	'editor',
 	'export',
 	'mobile',
+	'myna',
 	'screen'
 ]
 

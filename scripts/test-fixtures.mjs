@@ -41,6 +41,41 @@ export const unitScripts = [
 ]
 
 export const e2eScripts = [
+  'scripts/e2e-myna-performance.mjs',
+  'scripts/e2e-myna-editing-isolation.mjs',
+  'scripts/e2e-myna-school-showcase.mjs',
+  'scripts/e2e-myna-workspace-objects.mjs',
+  'scripts/e2e-myna-workspace-zoom-spacing.mjs',
+  'scripts/check-myna-svg-watermark.mjs',
+  'scripts/e2e-myna-svg.mjs',
+  'scripts/e2e-myna-nested-frame-export.mjs',
+  'scripts/e2e-myna-nested-frame-ui.mjs',
+  'scripts/e2e-myna-page-drag-stability.mjs',
+  'scripts/e2e-myna-group-label-stability.mjs',
+  'scripts/e2e-myna-cross-page-drag.mjs',
+  'scripts/e2e-canvas-agentic.mjs',
+  'scripts/e2e-myna-pasteboard-drop.mjs',
+  'scripts/e2e-myna-middle-pan.mjs',
+  'scripts/e2e-myna-page-canvas.mjs',
+  'scripts/e2e-myna-page-snapping.mjs',
+  'scripts/e2e-myna-workspace-labels.mjs',
+  'scripts/e2e-myna-qr.mjs',
+  'scripts/e2e-myna-zoom.mjs',
+  'scripts/e2e-myna-library.mjs',
+  'scripts/e2e-myna-export.mjs',
+  'scripts/e2e-myna-outline.mjs',
+  'scripts/e2e-myna-inspector.mjs',
+  'scripts/e2e-myna-frames.mjs',
+  'scripts/e2e-myna.mjs',
+  'scripts/e2e-myna-view.mjs',
+  'scripts/e2e-myna-rulers.mjs',
+  'scripts/e2e-myna-guide-snap.mjs',
+  'scripts/e2e-myna-overflow.mjs',
+  'scripts/e2e-myna-elements.mjs',
+  'scripts/e2e-myna-locales.mjs',
+  'scripts/e2e-myna-layers.mjs',
+  'scripts/e2e-myna-drawers.mjs',
+  'scripts/e2e-myna-header.mjs',
   'scripts/e2e-guidelines.mjs',
   'scripts/e2e-autoheight-styles.mjs',
   'scripts/e2e-autoheight-stuck.mjs',
@@ -75,6 +110,15 @@ export const e2eScripts = [
 ]
 
 export const rstestFiles = [
+  'tests/mynaQrCode.test.ts',
+  'tests/mynaTemplateLibrary.test.ts',
+  'tests/mynaExportPages.test.ts',
+  'tests/photoFrames.test.ts',
+  'tests/pageLayout.test.ts',
+  'tests/pageSnapping.test.ts',
+  'tests/nestedFrames.test.ts',
+  'tests/myna.test.ts',
+  'tests/pageGuides.test.ts',
   'tests/live-paint.test.ts',
   'tests/font-embed-css.test.ts',
   'tests/latex-box.test.ts',
@@ -129,10 +173,10 @@ export const matchFixtures = (queries) => {
       if (e2eOnly && item.kind !== 'e2e') return false
       return true
     })
-    const exact = eligible.filter(item => item.idents.includes(query))
+    const exact = eligible.filter(item => item.idents.some(ident => normalize(ident) === query))
     const hits = exact.length
       ? exact
-      : eligible.filter(item => query.length >= 4 && item.idents.some(ident => ident.startsWith(query) || ident.includes(query)))
+      : eligible.filter(item => query.length >= 4 && item.idents.some(ident => normalize(ident).startsWith(query) || normalize(ident).includes(query)))
     if (!hits.length) {
       unknown.push(raw)
       continue

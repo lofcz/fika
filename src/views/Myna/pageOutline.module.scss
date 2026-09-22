@@ -1,0 +1,11 @@
+.outline { border: 1px solid var(--myna-border); border-radius: 8px; padding: 10px; margin-bottom: 14px;
+  summary { cursor: pointer; font-weight: 600; font-size: 12px; }
+  ol { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 5px; }
+  li { min-width: 0; strong { display: block; padding: 8px 4px; font-size: 12px; } button { display: grid !important; width: 100%; text-align: start; gap: 4px; &[aria-current=page] { background: var(--myna-surface); } span { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; } } }
+  fieldset { border: 0; padding: 0; min-width: 0; }
+  form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  label { display: grid; gap: 5px; width: 100%; font-size: 12px; }
+  input, textarea { box-sizing: border-box; width: 100%; min-width: 0; }
+  textarea { border: 1px solid var(--myna-border); background: var(--myna-paper); color: var(--myna-ink); padding: 8px; border-radius: 6px; resize: vertical; font: inherit; }
+  small { color: var(--myna-muted); line-height: 1.5; }
+}
