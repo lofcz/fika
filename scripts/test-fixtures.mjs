@@ -122,6 +122,7 @@ export const rstestFiles = [
   'tests/live-paint.test.ts',
   'tests/font-embed-css.test.ts',
   'tests/latex-box.test.ts',
+  'tests/latex-omml.test.ts',
   'tests/text-wrap.test.ts',
 ]
 

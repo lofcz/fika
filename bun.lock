@@ -15,6 +15,7 @@
         "@dnd-kit/sortable": "^10.0.0",
         "@dnd-kit/utilities": "^3.2.2",
         "@karibash/pixel-units": "^2.3.0",
+        "@rgrove/parse-xml": "^4.2.3",
         "@tanstack/react-virtual": "^3.14.10",
         "@use-gesture/react": "^10.3.1",
         "@use-gesture/vanilla": "^10.3.1",

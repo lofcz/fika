@@ -12,7 +12,7 @@ import { type AST, toAST } from '@/utils/htmlParser';
 import { type SvgPoints, toPoints } from '@/utils/svgPathParser';
 import { LATEX_ELEMENT_FONT_SIZE, MATH_CLASS } from '@/utils/math';
 import { latexPaintScale } from '@/utils/latex';
-import { applyOmmlRunStyle, prepareLatexToOmml, tryLatexToOmmlSync } from '@/utils/latexToOmml';
+import { applyOmmlRunStyle, prepareLatexToOmml, stripXmlIllegalChars, tryLatexToOmmlSync } from '@/utils/latexToOmml';
 import { collectEmbeddedFonts } from '@/utils/exportFonts';
 import { svg2Base64 } from '@/utils/svg2Base64';
 import { renderMermaidForImage } from '@/utils/mermaid';
@@ -742,7 +742,7 @@ export default () => {
               });
             } else {
               slices.push({
-                text: latex || '',
+                text: stripXmlIllegalChars(latex || ''),
                 options
               });
             }
@@ -1357,7 +1357,8 @@ export default () => {
       let stamp: ResolvedExportWatermark | null;
       try {
         stamp = await resolveExportWatermark();
-      } catch {
+      } catch (error) {
+        console.error('PPTX export failed to resolve the watermark:', error);
         message.error(getLL().export.exportFailed());
         return;
       }
@@ -2011,7 +2012,7 @@ export default () => {
                   }
                 }], options);
               } else {
-                pptxSlide.addText(el.latex, options);
+                pptxSlide.addText(stripXmlIllegalChars(el.latex), options);
               }
             } else if (el.type === 'mermaid') {
               let imageData = '';
@@ -2106,11 +2107,13 @@ export default () => {
           if (failedSources.size) {
             message.warning(`${getLL().export.exportPartial()} (${failedSources.size})`);
           }
-        } catch {
+        } catch (error) {
+          console.error('PPTX export failed while writing the package:', error);
           const detail = failedSources.size ? ` (${failedSources.size})` : '';
           message.error(`${getLL().export.exportFailed()}${detail}`);
         }
-      } catch {
+      } catch (error) {
+        console.error('PPTX export failed:', error);
         message.error(getLL().export.exportFailed());
       }
     } finally {
