@@ -15,12 +15,14 @@ import JobProgressOverlay from '@/components/JobProgressOverlay'
 const ExportDialog = memo((props: { className?: string }) => {
   const { LL } = useI18nContext()
   const slides = useSlidesStore(s => s.slides)
-  const { exportPPTX, exporting, exportProgress, exportSlide, exportSlideTotal } = useExport()
+  const { exportPPTX, exportPDF, exporting, exportProgress, exportSlide, exportSlideTotal } = useExport()
 
   const pptxEnabled = isExportTabEnabled('pptx')
+  const pdfEnabled = isExportTabEnabled('pdf')
   const jsonEnabled = isExportTabEnabled('json')
   const formats = [
     ...(pptxEnabled ? ['pptx'] : []),
+    ...(pdfEnabled ? ['pdf'] : []),
     ...(jsonEnabled ? ['json'] : []),
   ]
 
@@ -34,7 +36,7 @@ const ExportDialog = memo((props: { className?: string }) => {
 
   const downloadPptx = useCallback(() => {
     if (exporting) return
-    exportPPTX(useSlidesStore.getState().slides, true)
+    void exportPPTX(useSlidesStore.getState().slides, true)
   }, [exporting, exportPPTX])
 
   const downloadJson = useCallback(() => {
@@ -80,6 +82,22 @@ const ExportDialog = memo((props: { className?: string }) => {
                 onClick={downloadPptx}
               >
                 <Icon icon="download" /> {LL.export.pptx.exportButton()}
+              </Button>
+            </div>
+          </article>
+        ) : null}
+
+        {pdfEnabled ? (
+          <article className={cx('format-card', exporting && 'busy')} onClick={() => void exportPDF()}>
+            <div className={cx('glyph')} aria-hidden="true">PDF</div>
+            <div className={cx('body')}>
+              <div className={cx('name')}>{LL.export.pdf.title()}</div>
+              <div className={cx('desc')}>{LL.export.pdf.description()}</div>
+              <div className={cx('meta')}>{slideCountLabel}</div>
+            </div>
+            <div className={cx('btns')} onClick={event => event.stopPropagation()}>
+              <Button className={cx('btn', 'export')} type="primary" data-export-format="pdf" disabled={exporting} onClick={() => void exportPDF()}>
+                <Icon icon="download" /> {LL.export.pdf.exportButton()}
               </Button>
             </div>
           </article>

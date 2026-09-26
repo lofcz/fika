@@ -1,3 +1,4 @@
+export { exportPresentationPptx, exportPresentationPdf, type FikaExportOptions } from './export'
 // Saved-deck rendering for background exports; does not mount an editor.
 export { renderSlideImage, renderDeckAtlas } from "./render"
 export { mountFika, unmountFika } from './mount'

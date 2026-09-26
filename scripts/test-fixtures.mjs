@@ -41,6 +41,7 @@ export const unitScripts = [
 ]
 
 export const e2eScripts = [
+  'scripts/e2e-presentation-export.mjs',
   'scripts/e2e-myna-performance.mjs',
   'scripts/e2e-myna-editing-isolation.mjs',
   'scripts/e2e-myna-school-showcase.mjs',

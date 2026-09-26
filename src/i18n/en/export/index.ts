@@ -19,6 +19,11 @@ const en_export: BaseTranslation = {
     description: 'Editable PPTX with fonts, media, and native layout preserved.',
     exportButton: 'Download PPTX',
   },
+  pdf: {
+    title: 'PDF',
+    description: 'High-resolution slides, one per page.',
+    exportButton: 'Download PDF',
+  },
   json: {
     title: 'JSON',
     description: 'Complete deck model for backup or re-import.',

@@ -19,6 +19,11 @@ const pl_export: NamespaceExportTranslation = {
     description: 'Edytowalny PPTX z zachowanymi czcionkami, mediami i oryginalnym układem.',
     exportButton: 'Pobierz PPTX',
   },
+  pdf: {
+    title: 'PDF',
+    description: 'Slajdy w wysokiej rozdzielczości, każdy na osobnej stronie.',
+    exportButton: 'Pobierz PDF',
+  },
   json: {
     title: 'JSON',
     description: 'Pełny model prezentacji do kopii zapasowej lub ponownego importu.',

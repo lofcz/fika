@@ -1,11 +1,11 @@
 
-import { createElement, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { saveAs } from 'file-saver';
 import pptxgen from 'pptxgenjs-plus';
 import tinycolor from 'tinycolor2';
 import { useMainStore, useSlidesStore } from '@/store';
 import { captureToJpegDataUrl, captureToPngDataUrl } from '@/utils/snapdomCapture';
-import type { Gradient, ImageElementFilters, LinePoint, PPTAnimation, PPTElementEffects, PPTElementOutline, PPTElementShadow, PPTElementLink, PPTTextElement, Slide } from '@/types/slides';
+import type { Gradient, ImageElementFilters, LinePoint, PPTAnimation, PPTElementEffects, PPTElementOutline, PPTElementShadow, PPTElementLink, PPTTextElement, Slide, SlideTheme } from '@/types/slides';
 import { outlineRadiusToPptxRectRadius, resolveShapePaintPath } from '@/utils/elementOutline';
 import { getElementRange, getLineElementPath, getTableThemeColors } from '@/utils/element';
 import { type AST, toAST } from '@/utils/htmlParser';
@@ -25,9 +25,9 @@ import { getPlaceholderBaselineHeight } from '@/utils/placeholderLayout';
 import { preferredInk, resolveChartLabelColor, resolveSlideSurfaceColors } from '@/utils/textContrast';
 import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
-import { getFikaExportMediaResolver } from '@/configs/exportMediaResolver';
-import { getFikaExportWatermark, type FikaExportWatermark, type FikaWatermarkSurface } from '@/configs/exportWatermark';
-import { applyPptxExportWatermark, downloadPptxBytes, loadWatermarkImage, type WatermarkImage } from '@/utils/pptxExportWatermark';
+import { getFikaExportMediaResolver, type FikaExportMediaResolver } from '@/configs/exportMediaResolver';
+import { getFikaExportWatermark, type FikaExportWatermarkResolver, type FikaExportWatermark, type FikaWatermarkSurface } from '@/configs/exportWatermark';
+import { applyPptxExportWatermark, loadWatermarkImage, type WatermarkImage } from '@/utils/pptxExportWatermark';
 import { getInternedBlob, isBlobUrl, persistableMediaSrc } from '@/utils/mediaIntern';
 import { transitionExportForMode } from '@/configs/transitions';
 import { createJobProgress, slideJobProgress } from '@/utils/jobProgress';
@@ -47,8 +47,7 @@ function slideWatermarkSurface(background: Slide['background'], themeBackgroundC
  * Asks the host whether this download must carry a watermark and preloads the
  * mark. Failures propagate: a host-required mark is never silently skipped.
  */
-async function resolveExportWatermark(): Promise<ResolvedExportWatermark | null> {
-  const resolver = getFikaExportWatermark();
+async function resolveExportWatermark(resolver: FikaExportWatermarkResolver | null): Promise<ResolvedExportWatermark | null> {
   if (!resolver) return null;
   const watermark = await resolver();
   if (!watermark) return null;
@@ -105,14 +104,29 @@ const svgToPngDataURL = (svg: string, width: number, height: number, pixelRatio 
     image.src = url;
   });
 };
-export default () => {
-  const [, setTick] = useState(0);
-  useEffect(() => exportJob.subscribe(() => setTick(n => n + 1)), []);
-  const slides = useSlidesStore(s => s.slides);
-  const theme = useSlidesStore(s => s.theme);
-  const viewportRatio = useSlidesStore(s => s.viewportRatio);
-  const title = useSlidesStore(s => s.title);
-  const viewportSize = useSlidesStore(s => s.viewportSize);;
+/** A per-call deck snapshot: exporting never mounts or mutates an editor. */
+export interface PresentationExportState {
+  slides: Slide[]
+  theme: SlideTheme
+  viewportRatio: number
+  viewportSize: number
+  title: string
+}
+export interface PresentationExportOptions {
+  /** Only the live editor can certify the retained source package is unchanged. */
+  preserveSourcePackage?: boolean
+  hiddenElementIds?: string[]
+  mediaResolver?: FikaExportMediaResolver | null
+  watermark?: FikaExportWatermarkResolver | null
+}
+export function createPresentationExporter(
+  { slides, theme, viewportRatio, title, viewportSize }: PresentationExportState,
+  options: PresentationExportOptions = {},
+  job = createJobProgress(),
+) {
+  const exportJob = job;
+  const mediaResolver = options.mediaResolver === undefined ? getFikaExportMediaResolver() : options.mediaResolver;
+  const watermarkResolver = options.watermark === undefined ? getFikaExportWatermark() : options.watermark;
   const defaultFontSize = 16;
   const ratioPx2Inch = (() => {
     return 96 * (viewportSize / 960);
@@ -1232,7 +1246,7 @@ export default () => {
       return blobToDataUrl(blob);
     };
     const tryResolver = async (): Promise<string | null> => {
-      const resolver = getFikaExportMediaResolver();
+      const resolver = mediaResolver;
       if (!resolver) return null;
       try {
         const resolved = await resolver(src);
@@ -1252,7 +1266,7 @@ export default () => {
       return null;
     };
 
-    if (isCrossOriginHttp(src) && getFikaExportMediaResolver()) {
+    if (isCrossOriginHttp(src) && mediaResolver) {
       const viaProxy = await tryResolver();
       if (viaProxy) return viaProxy;
       failed.add(src);
@@ -1348,23 +1362,21 @@ export default () => {
     }
   };
 
-  const exportPPTX = async (_slides: Slide[], masterOverwrite = true, ignoreMedia = true) => {
-    if (exportJob.running.value) return;
+  const exportPPTX = async (_slides: Slide[], masterOverwrite = true, ignoreMedia = true): Promise<Blob> => {
+    if (exportJob.running.value) throw new Error('An export is already running');
     const gen = exportJob.start(_slides.length);
     try {
       await tickExportProgress(0, 0, gen);
 
       let stamp: ResolvedExportWatermark | null;
       try {
-        stamp = await resolveExportWatermark();
+        stamp = await resolveExportWatermark(watermarkResolver);
       } catch (error) {
         console.error('PPTX export failed to resolve the watermark:', error);
-        message.error(getLL().export.exportFailed());
-        return;
+        throw error;
       }
-      const fileName = `${title}.pptx`;
 
-      const retained = tryGetCleanRetainedPackage(_slides);
+      const retained = options.preserveSourcePackage ? tryGetCleanRetainedPackage(_slides) : null;
       if (retained) {
         try {
           await tickExportProgress(1, _slides.length, gen);
@@ -1376,15 +1388,14 @@ export default () => {
               masterSurface: slideWatermarkSurface(undefined, theme.backgroundColor),
             })
             : new Uint8Array(retained);
-          downloadPptxBytes(bytes, fileName);
-          return;
+          return new Blob([new Uint8Array(bytes)], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
         } catch {
         }
       }
       const pptx = new pptxgen();
       applyPresentationMeta(pptx);
       applyPPTXTheme(pptx);
-      const hiddenIds = new Set(useMainStore.getState().hiddenElementIdList);
+      const hiddenIds = new Set(options.hiddenElementIds ?? []);
       const failedSources = new Set<string>();
       let sources: Map<string, string> = new Map();
       try {
@@ -2092,29 +2103,25 @@ export default () => {
         }
         await tickExportProgress(0.96, slideCount + 1, gen);
         try {
-          if (stamp) {
-            const packed = await pptx.write({ outputType: 'arraybuffer' }) as ArrayBuffer;
-            downloadPptxBytes(await applyPptxExportWatermark(packed, stamp.watermark, {
-              onLight: stamp.onLight,
-              onDark: stamp.onDark,
-              slideSurfaces: _slides.map((slide) => slideWatermarkSurface(slide.background, theme.backgroundColor)),
-              masterSurface: slideWatermarkSurface(undefined, theme.backgroundColor),
-            }), fileName);
-          } else {
-            await pptx.writeFile({ fileName });
-          }
+          const packed = await pptx.write({ outputType: 'arraybuffer' }) as ArrayBuffer;
+          const bytes = stamp ? await applyPptxExportWatermark(packed, stamp.watermark, {
+            onLight: stamp.onLight,
+            onDark: stamp.onDark,
+            slideSurfaces: _slides.map((slide) => slideWatermarkSurface(slide.background, theme.backgroundColor)),
+            masterSurface: slideWatermarkSurface(undefined, theme.backgroundColor),
+          }) : new Uint8Array(packed);
           await tickExportProgress(1, slideCount + 1, gen);
           if (failedSources.size) {
             message.warning(`${getLL().export.exportPartial()} (${failedSources.size})`);
           }
+          return new Blob([new Uint8Array(bytes)], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
         } catch (error) {
           console.error('PPTX export failed while writing the package:', error);
-          const detail = failedSources.size ? ` (${failedSources.size})` : '';
-          message.error(`${getLL().export.exportFailed()}${detail}`);
+          throw error;
         }
       } catch (error) {
         console.error('PPTX export failed:', error);
-        message.error(getLL().export.exportFailed());
+        throw error;
       }
     } finally {
       exportJob.finish(gen);
@@ -2132,3 +2139,42 @@ export default () => {
     exportPPTX
   };
 };
+
+export default function useExport() {
+  const [, setTick] = useState(0);
+  useEffect(() => exportJob.subscribe(() => setTick(n => n + 1)), []);
+  const slides = useSlidesStore(s => s.slides);
+  const theme = useSlidesStore(s => s.theme);
+  const viewportRatio = useSlidesStore(s => s.viewportRatio);
+  const title = useSlidesStore(s => s.title);
+  const viewportSize = useSlidesStore(s => s.viewportSize);
+  const state = { slides, theme, viewportRatio, title, viewportSize };
+  const exporter = createPresentationExporter(state, { preserveSourcePackage: true, hiddenElementIds: useMainStore.getState().hiddenElementIdList }, exportJob);
+  return {
+    ...exporter,
+    exportPDF: async () => {
+      if (exportJob.running.value) return;
+      const deck = structuredClone({ title: state.title, slides: state.slides, theme: state.theme, viewport: { size: state.viewportSize, ratio: state.viewportRatio } });
+      const gen = exportJob.start(deck.slides.length);
+      try {
+        const { exportPresentationPdf } = await import('@/embed/export');
+        const blob = await exportPresentationPdf(deck, {
+          onProgress: (done, total) => { void exportJob.tick(done / Math.max(1, total), done, gen); },
+        });
+        saveAs(blob, `${deck.title}.pdf`);
+      } catch (error) {
+        console.error('PDF export failed:', error);
+        message.error(getLL().export.exportFailed());
+      } finally { exportJob.finish(gen); }
+    },
+    exportPPTX: async (slides: Slide[], masterOverwrite = true, ignoreMedia = true) => {
+      try {
+        const blob = await exporter.exportPPTX(structuredClone(slides), masterOverwrite, ignoreMedia);
+        saveAs(blob, `${state.title}.pptx`);
+      } catch (error) {
+        console.error('PPTX export failed:', error);
+        message.error(getLL().export.exportFailed());
+      }
+    },
+  };
+}

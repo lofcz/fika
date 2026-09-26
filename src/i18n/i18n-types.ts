@@ -4731,6 +4731,20 @@ export type NamespaceExportTranslation = {
 		 */
 		exportButton: string
 	}
+	pdf: {
+		/**
+		 * P​D​F
+		 */
+		title: string
+		/**
+		 * H​i​g​h​-​r​e​s​o​l​u​t​i​o​n​ ​s​l​i​d​e​s​,​ ​o​n​e​ ​p​e​r​ ​p​a​g​e​.
+		 */
+		description: string
+		/**
+		 * D​o​w​n​l​o​a​d​ ​P​D​F
+		 */
+		exportButton: string
+	}
 	json: {
 		/**
 		 * J​S​O​N
@@ -10693,6 +10707,20 @@ export type TranslationFunctions = {
 			description: () => LocalizedString
 			/**
 			 * Download PPTX
+			 */
+			exportButton: () => LocalizedString
+		}
+		pdf: {
+			/**
+			 * PDF
+			 */
+			title: () => LocalizedString
+			/**
+			 * High-resolution slides, one per page.
+			 */
+			description: () => LocalizedString
+			/**
+			 * Download PDF
 			 */
 			exportButton: () => LocalizedString
 		}

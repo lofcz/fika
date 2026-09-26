@@ -5,10 +5,11 @@ export type ExportTabId = Exclude<DialogForExportTypes, ''>
 
 export type FikaExportTabsConfig = Partial<Record<ExportTabId, boolean>>
 
-const ALL_EXPORT_TAB_IDS: ExportTabId[] = ['pptx', 'json']
+const ALL_EXPORT_TAB_IDS: ExportTabId[] = ['pptx', 'pdf', 'json']
 
 const DEFAULT_EXPORT_TABS: Record<ExportTabId, boolean> = {
   pptx: true,
+  pdf: true,
   json: true,
 }
 

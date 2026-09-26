@@ -1,7 +1,7 @@
 import type { Slide, SlideTheme } from '@/types/slides'
 import { paintSlideToCanvas } from '@/paint/slidePainter'
 import { collectSlidePreviewSrcs, loadImageBitmap } from '@/utils/imageBitmapCache'
-import { getFikaExportMediaResolver } from '@/configs/exportMediaResolver'
+import { getFikaExportMediaResolver, type FikaExportMediaResolver } from '@/configs/exportMediaResolver'
 import { hasPendingRasters } from '@/paint/rasterResources'
 import { deckHasMath, ensureMathliveReady } from '@/utils/math'
 
@@ -32,6 +32,10 @@ export interface FikaRenderSlideOptions {
   transparentBackground?: boolean
   /** Load original image pixels, using the host media resolver if needed. Fail if an image cannot load. */
   fullResolutionImages?: boolean
+  /** Per-export resolver; does not replace the mounted editor's configuration. */
+  mediaResolver?: FikaExportMediaResolver | null
+  /** Reject instead of encoding incomplete asynchronous resources. */
+  strictResources?: boolean
 }
 
 export interface FikaDeckAtlasOptions extends Omit<FikaRenderSlideOptions, 'width'> {
@@ -85,9 +89,9 @@ const IDLE_WINDOW_MS = 220
  * settled) or the deadline passes. `invalidate` fires once per resolved
  * resource, so an idle window after the last repaint means the frame is final.
  */
-async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, cssWidth: number, dpr: number, timeoutMs: number, transparentBackground = false, imageBitmaps?: ReadonlyMap<string, ImageBitmap>): Promise<void> {
+async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, cssWidth: number, dpr: number, timeoutMs: number, transparentBackground = false, imageBitmaps?: ReadonlyMap<string, ImageBitmap>, strictResources = false): Promise<void> {
   if (deckHasMath([target.slide])) {
-    await ensureMathliveReady().catch(() => undefined)
+    await ensureMathliveReady().catch(error => { if (strictResources) throw error })
   }
   await document.fonts?.ready?.catch(() => undefined)
   const deadline = performance.now() + timeoutMs
@@ -112,7 +116,10 @@ async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, css
       imageBitmaps,
     })
     const remaining = deadline - performance.now()
-    if (remaining <= 0) return
+    if (remaining <= 0) {
+      if (strictResources && (pending || hasPendingRasters())) throw new Error('Slide export resources timed out')
+      return
+    }
     // Wait for either a resource to resolve (repaint) or an idle window (done).
     // Slow producers (MathLive typesetting, SnapDOM) take longer than
     // the idle window, so an idle frame only counts once nothing is in flight.
@@ -143,7 +150,7 @@ function encode(canvas: HTMLCanvasElement, format: NonNullable<FikaRenderSlideOp
 
 
 /** Copies belong to this export, so cache eviction cannot close them mid-paint. */
-async function loadExportBitmaps(slide: Slide, timeoutMs: number, transparent: boolean): Promise<Map<string, ImageBitmap>> {
+async function loadExportBitmaps(slide: Slide, timeoutMs: number, transparent: boolean, resolver = getFikaExportMediaResolver()): Promise<Map<string, ImageBitmap>> {
   const sources = [...new Set(collectSlidePreviewSrcs(transparent ? { ...slide, background: undefined } : slide))]
   const bitmaps = new Map<string, ImageBitmap>()
   let cancelled = false
@@ -153,7 +160,7 @@ async function loadExportBitmaps(slide: Slide, timeoutMs: number, transparent: b
       Promise.all(sources.map(async src => {
         let bitmap = await loadImageBitmap(src)
         if (!bitmap && !cancelled) {
-          const resolved = await getFikaExportMediaResolver()?.(src)
+          const resolved = await resolver?.(src)
           if (resolved && !cancelled) bitmap = await loadImageBitmap(resolved)
         }
         if (cancelled) return
@@ -177,9 +184,9 @@ export async function renderSlideImage(target: RenderTarget, options: FikaRender
   const width = Math.max(64, Math.round(options.width ?? 1280))
   const dpr = Math.max(1, options.dpr ?? 1)
   const canvas = document.createElement('canvas')
-  const bitmaps = options.fullResolutionImages ? await loadExportBitmaps(target.slide, options.timeoutMs ?? 15000, options.transparentBackground === true && options.format !== 'image/jpeg') : undefined
+  const bitmaps = options.fullResolutionImages ? await loadExportBitmaps(target.slide, options.timeoutMs ?? 15000, options.transparentBackground === true && options.format !== 'image/jpeg', options.mediaResolver) : undefined
   try {
-    await paintSettled(canvas, target, width, dpr, options.timeoutMs ?? 4000, options.transparentBackground === true && options.format !== 'image/jpeg', bitmaps)
+    await paintSettled(canvas, target, width, dpr, options.timeoutMs ?? 4000, options.transparentBackground === true && options.format !== 'image/jpeg', bitmaps, options.strictResources)
     const blob = await encode(canvas, options.format ?? 'image/png', options.quality ?? 0.9)
     return { blob, width: canvas.width, height: canvas.height }
   } finally { bitmaps?.forEach(bitmap => bitmap.close()) }
@@ -254,7 +261,7 @@ export async function renderDeckAtlas(deck: {
     // and resource loads, not paint time, so the sheet costs one slide's wait.
     const painted = await Promise.all(batch.map(async ({ slide }) => {
       const tile = document.createElement('canvas')
-      const bitmaps = options.fullResolutionImages ? await loadExportBitmaps(slide, timeoutMs, options.transparentBackground === true) : undefined
+      const bitmaps = options.fullResolutionImages ? await loadExportBitmaps(slide, timeoutMs, options.transparentBackground === true, options.mediaResolver) : undefined
       try {
         await paintSettled(tile, {
           slide,

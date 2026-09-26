@@ -1,1 +1,1 @@
-export type DialogForExportTypes = 'json' | 'pptx' | ''
+export type DialogForExportTypes = 'json' | 'pptx' | 'pdf' | ''

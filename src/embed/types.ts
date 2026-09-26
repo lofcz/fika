@@ -96,7 +96,7 @@ export interface FikaMountOptions {
   /** Fired when Fika enters or exits slideshow/presentation mode. */
   onPresentationModeChange?: (screening: boolean) => void;
   /**
-   * Toggle export dialog formats (`pptx`, `json`). Omitted keys stay enabled.
+   * Toggle export dialog formats (`pptx`, `pdf`, `json`). Omitted keys stay enabled.
    */
   exportTabs?: FikaExportTabsConfig;
   /**

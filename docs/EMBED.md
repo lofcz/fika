@@ -552,3 +552,34 @@ ordinary Fika document and viewport. `createMynaDocument()` and `MYNA_FORMATS`
 are exported for hosts that need the starter or format catalog. The same
 controller, history, media uploader, read-only options, and change callbacks
 apply. See [Myna integration and capabilities](./MYNA.md).
+
+
+### Export without a mounted editor
+
+`exportPresentationPptx(document, options)` and `exportPresentationPdf(document, options)`
+return `Promise<Blob>`. They snapshot the supplied `FikaDocument`, do not open
+an export dialog, and do not trigger a browser download. A saved deck can be
+exported while another deck remains open and editable.
+
+```ts
+import { exportPresentationPptx, exportPresentationPdf } from 'fika-editor/embed'
+
+const options = { assetBaseUrl: '/fika-assets' }
+const pptx = await exportPresentationPptx(document, options)
+const pdf = await exportPresentationPdf(document, options)
+```
+
+PPTX retains editable elements. PDF uses the existing slide painter with one
+high-resolution PNG per page (2560 pixels wide by default), preserving slide
+order and aspect ratio. PDF text is rasterized. No additional document IR is
+required. Load `fika-embed.css` before PDF export so bundled fonts are available.
+
+Options include `mediaResolver`, `watermark`, and `onProgress(completed, total)`.
+Omitted resolvers use the current embed configuration. Pass `null` explicitly
+to disable a resolver. PDF also accepts `width` (64 to 8192 pixels) and
+`timeoutMs` (default 30000 per slide). Required watermark and PDF image failures
+reject the promise. PPTX retains its existing partial-media warning behavior.
+
+The native export dialog now offers `pptx`, `pdf`, and `json`; control their
+visibility with `exportTabs`. Host exports should call these APIs directly,
+without simulating export button clicks or mounting an offscreen editor.

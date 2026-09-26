@@ -19,6 +19,11 @@ const sk_export: NamespaceExportTranslation = {
     description: 'Upraviteľný PPTX so zachovanými písmami, médiami a pôvodným rozložením.',
     exportButton: 'Stiahnuť PPTX',
   },
+  pdf: {
+    title: 'PDF',
+    description: 'Snímky vo vysokom rozlíšení, každá na vlastnej strane.',
+    exportButton: 'Stiahnuť PDF',
+  },
   json: {
     title: 'JSON',
     description: 'Kompletný model prezentácie na zálohu alebo opätovný import.',
