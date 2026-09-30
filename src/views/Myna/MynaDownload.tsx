@@ -53,6 +53,8 @@ export default function MynaDownload({ onClose }: { onClose: () => void }) {
       const indices = scope === 'all' ? doc.slides.map((_, index) => index) : scope === 'selected' ? parseExportPages(pageRange, doc.slides.length) : [doc.index]
       if (!indices?.length) return
       const pages = indices.map(index => doc.slides[index])
+      // Filenames must exclude control characters on supported filesystems.
+      // eslint-disable-next-line no-control-regex
       const name = (doc.title || t.untitled()).replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').slice(0, 150)
       const zip = new JSZip()
       const pdfPages: MynaPdfPage[] = []
