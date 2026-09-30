@@ -36,6 +36,7 @@ import { buildStarterPresentation } from '@/configs/starterPresentation'
 import { getLL } from '@/i18n/getLL'
 import type { FikaController, FikaMountOptions, FikaMountResult } from './types'
 
+let activeHost: HTMLElement | null = null
 const activeMounts = new WeakMap<HTMLElement, Promise<FikaMountResult>>()
 
 function resolveHostElement(target: HTMLElement | string): HTMLElement {
@@ -59,6 +60,10 @@ export async function mountFika(
   // Validate before tearing down an existing mount or modifying the host DOM.
   resolveDesignThemes(options.designThemes)
 
+  if (activeHost && activeHost !== el) {
+    throw new Error('Fika supports one active editor per module. Destroy the previous editor before mounting another deck.')
+  }
+  activeHost = el
   const previousMount = activeMounts.get(el)
   if (previousMount) {
     try {
@@ -69,6 +74,7 @@ export async function mountFika(
     }
   }
 
+  activeHost = el
   const mountPromise = (async () => {
     el.classList.add('fika-embed-root')
     el.innerHTML = ''
@@ -171,7 +177,10 @@ export async function mountFika(
       originalDestroy()
       unmount()
       useMainStore.getState().setReadOnly(false)
-      if (activeMounts.get(el) === mountPromise) activeMounts.delete(el)
+      if (activeMounts.get(el) === mountPromise) {
+        activeMounts.delete(el)
+        if (activeHost === el) activeHost = null
+      }
       setFikaExportMediaResolver(null)
       setFikaExportWatermark(null)
       setFikaMediaConfig(null)
@@ -196,7 +205,10 @@ export async function mountFika(
     return await mountPromise
   }
   catch (error) {
-    if (activeMounts.get(el) === mountPromise) activeMounts.delete(el)
+    if (activeMounts.get(el) === mountPromise) {
+      activeMounts.delete(el)
+      if (activeHost === el) activeHost = null
+    }
     throw error
   }
 }

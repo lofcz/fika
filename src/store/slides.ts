@@ -1,3 +1,4 @@
+import { drainCommitQueue } from '@/utils/commitQueue'
 import { reconcileFrameTransforms, frameDescendantIds } from '@/utils/nestedFrames'
 import { transferPageElements } from '@/utils/transferPageElements'
 import { create } from 'zustand'
@@ -427,6 +428,8 @@ export const useSlidesStore = create<SlidesStore>()(
     },
 
     updateSlideIndex(index) {
+      if (get().slideIndex === index) return
+      drainCommitQueue()
       set((state) => {
         if (state.slideIndex === index) return
         state.slideIndex = index

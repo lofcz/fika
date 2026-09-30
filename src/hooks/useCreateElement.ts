@@ -115,6 +115,9 @@ export default () => {
    * @param src Image address
    */
   const createImageElement = (src: string) => {
+    drainCommitQueue();
+    const targetSlideId = getSlideEnv().currentSlide?.id;
+    if (!targetSlideId) return;
     // Warm the blob alias for fast painting, but persist the durable src:
     // blob: URLs die with the session and must never enter the document.
     internMediaSrc(src).then(interned => probeImageSize(interned).then(({
@@ -123,7 +126,7 @@ export default () => {
     }) => {
       const { viewportRatio, viewportSize } = getSlideEnv();
       const size = fitImageToViewport(width, height);
-      createElement({
+      const element: PPTImageElement = {
         type: 'image',
         id: nanoid(10),
         src,
@@ -133,7 +136,13 @@ export default () => {
         top: (viewportSize * viewportRatio - size.height) / 2,
         fixedRatio: true,
         rotate: 0
-      });
+      };
+      const store = useSlidesStore.getState();
+      const target = store.slides.find(slide => slide.id === targetSlideId);
+      if (!target) return;
+      store.updateSlide({ elements: [...target.elements, element] }, targetSlideId);
+      if (selectCurrentSlide(store)?.id === targetSlideId) selectInsertedElements([element.id]);
+      addHistorySnapshot();
     }));
   };
   const createMediaElements = async (items: Array<FikaMediaUploadResult & {

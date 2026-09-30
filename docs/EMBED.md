@@ -583,3 +583,12 @@ reject the promise. PPTX retains its existing partial-media warning behavior.
 The native export dialog now offers `pptx`, `pdf`, and `json`; control their
 visibility with `exportTabs`. Host exports should call these APIs directly,
 without simulating export button clicks or mounting an offscreen editor.
+
+### Multiple presentation tabs
+
+The embed uses shared module-level stores and permits one active editor per
+module. Destroy the previous controller before mounting a different deck;
+mounting a second host concurrently throws before changing any document.
+Cache each deck separately in the host and pass its latest snapshot on remount.
+`destroy()` flushes pending rich-text changes and the final `onChange` before
+releasing the editor. Hosts should flush their own autosave queue on teardown.

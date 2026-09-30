@@ -1,3 +1,4 @@
+import { flushCommitQueue } from '@/utils/commitQueue'
 import { setFikaDesignThemes } from '@/configs/designThemes'
 import { useSlidesStore } from '@/store/slides'
 import { useScreenStore } from '@/store/screen'
@@ -237,6 +238,8 @@ export function createController(
 
     destroy() {
       if (destroyed) return
+      flushCommitQueue()
+      emitChange?.flush()
       destroyed = true
       useMainStore.getState().setAiReveal(null)
       stopChangeWatch?.()

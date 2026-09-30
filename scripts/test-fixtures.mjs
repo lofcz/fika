@@ -106,6 +106,8 @@ export const e2eScripts = [
   'scripts/e2e-shift-select.mjs',
   'scripts/e2e-slide-reorder.mjs',
   'scripts/e2e-slide-mutate.mjs',
+  'scripts/e2e-presentation-persistence.mjs',
+  'scripts/e2e-embed-persistence.mjs',
   'scripts/e2e-thumb-snapshot.mjs',
   'scripts/e2e-agentic-commands.mjs',
 ]

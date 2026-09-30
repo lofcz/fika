@@ -51,6 +51,7 @@ export default (canvasRef: { current: HTMLElement | null }) => {
     if (!canvasRef.current) return
     const canvasWidth = canvasRef.current.clientWidth
     const canvasHeight = canvasRef.current.clientHeight
+    if (canvasWidth <= 0 || canvasHeight <= 0) return
     if (
       !force &&
       lastCanvasWidthRef.current > 0 &&
@@ -98,6 +99,7 @@ export default (canvasRef: { current: HTMLElement | null }) => {
     if (!canvasRef.current) return
     const canvasWidth = canvasRef.current.clientWidth
     const canvasHeight = canvasRef.current.clientHeight
+    if (canvasWidth <= 0 || canvasHeight <= 0) return
     const { viewportRatio: ratio, viewportSize: size } = useSlidesStore.getState()
 
     if (canvasHeight / canvasWidth > ratio) {
