@@ -43,6 +43,9 @@ jobs:
       - name: Lint
         run: bun --canary x oxlint --quiet
 
+      - name: Build embed for package regression tests
+        run: bun --canary run build:embed
+
       - name: Start dev server
         run: |
           bun --canary run dev &
