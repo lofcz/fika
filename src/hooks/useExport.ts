@@ -27,10 +27,12 @@ import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
 import { getFikaExportMediaResolver, type FikaExportMediaResolver } from '@/configs/exportMediaResolver';
 import { getFikaExportWatermark, type FikaExportWatermarkResolver, type FikaExportWatermark, type FikaWatermarkSurface } from '@/configs/exportWatermark';
-import { applyPptxExportWatermark, loadWatermarkImage, type WatermarkImage } from '@/utils/pptxExportWatermark';
+import { loadWatermarkImage, type WatermarkImage } from '@/utils/pptxExportWatermark';
 import { getInternedBlob, isBlobUrl, persistableMediaSrc } from '@/utils/mediaIntern';
 import { transitionExportForMode } from '@/configs/transitions';
-import { createJobProgress, slideJobProgress } from '@/utils/jobProgress';
+import { createJobProgress } from '@/utils/jobProgress';
+import { createExportWorker, exportTimeSlice } from '@/utils/exportWorker';
+import { recordPptxExport } from '@/utils/pptxExportCommands';
 const exportJob = createJobProgress();
 
 interface ResolvedExportWatermark {
@@ -1364,7 +1366,9 @@ export function createPresentationExporter(
 
   const exportPPTX = async (_slides: Slide[], masterOverwrite = true, ignoreMedia = true): Promise<Blob> => {
     if (exportJob.running.value) throw new Error('An export is already running');
+    const worker = createExportWorker();
     const gen = exportJob.start(_slides.length);
+    const yieldIfNeeded = exportTimeSlice();
     try {
       await tickExportProgress(0, 0, gen);
 
@@ -1379,20 +1383,20 @@ export function createPresentationExporter(
       const retained = options.preserveSourcePackage ? tryGetCleanRetainedPackage(_slides) : null;
       if (retained) {
         try {
-          await tickExportProgress(1, _slides.length, gen);
+          await tickExportProgress(0.96, _slides.length + 1, gen);
           const bytes = stamp
-            ? await applyPptxExportWatermark(retained, stamp.watermark, {
+            ? new Uint8Array(await worker.request<ArrayBuffer>('stamp', { bytes: retained, watermark: stamp.watermark, images: {
               onLight: stamp.onLight,
               onDark: stamp.onDark,
               slideSurfaces: _slides.map((slide) => slideWatermarkSurface(slide.background, theme.backgroundColor)),
               masterSurface: slideWatermarkSurface(undefined, theme.backgroundColor),
-            })
+            } }))
             : new Uint8Array(retained);
           return new Blob([new Uint8Array(bytes)], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
         } catch {
         }
       }
-      const pptx = new pptxgen();
+      const { pptx, commands } = recordPptxExport();
       applyPresentationMeta(pptx);
       applyPPTXTheme(pptx);
       const hiddenIds = new Set(options.hiddenElementIds ?? []);
@@ -1409,6 +1413,7 @@ export function createPresentationExporter(
         if (theme.fontName) usedFontFamilies.add(theme.fontName);
         for (const slide of _slides) {
           for (const el of slide.elements) {
+            await yieldIfNeeded();
             if (el.type === 'text' && el.defaultFontName) usedFontFamilies.add(el.defaultFontName);else if (el.type === 'shape' && el.text?.defaultFontName) usedFontFamilies.add(el.text.defaultFontName);else if (el.type === 'table') {
               for (const row of el.data) {
                 for (const cell of row) {
@@ -1445,7 +1450,7 @@ export function createPresentationExporter(
         const SLIDE_END = 0.92;
         for (let i = 0; i < slideCount; i++) {
           const slide = _slides[i];
-          await tickExportProgress(slideJobProgress(i, slideCount, SLIDE_START, SLIDE_END), i + 1, gen);
+          await tickExportProgress(SLIDE_START + i / Math.max(1, slideCount) * (SLIDE_END - SLIDE_START), i, gen);
           if (slide.sectionTag && !seenSections.has(slide.sectionTag.id)) {
             seenSections.add(slide.sectionTag.id);
             pptx.addSection({
@@ -1583,6 +1588,7 @@ export function createPresentationExporter(
           }
           if (!slide.elements) continue;
           for (const el of slide.elements) {
+            await yieldIfNeeded();
             if (el.type === 'text') {
               const phName = phBindings.get(el.id);
 
@@ -2103,13 +2109,12 @@ export function createPresentationExporter(
         }
         await tickExportProgress(0.96, slideCount + 1, gen);
         try {
-          const packed = await pptx.write({ outputType: 'arraybuffer' }) as ArrayBuffer;
-          const bytes = stamp ? await applyPptxExportWatermark(packed, stamp.watermark, {
+          const bytes = await worker.request<ArrayBuffer>('pptx', { commands, stamp: stamp ? { watermark: stamp.watermark, images: {
             onLight: stamp.onLight,
             onDark: stamp.onDark,
             slideSurfaces: _slides.map((slide) => slideWatermarkSurface(slide.background, theme.backgroundColor)),
             masterSurface: slideWatermarkSurface(undefined, theme.backgroundColor),
-          }) : new Uint8Array(packed);
+          } } : null });
           await tickExportProgress(1, slideCount + 1, gen);
           if (failedSources.size) {
             message.warning(`${getLL().export.exportPartial()} (${failedSources.size})`);
@@ -2124,6 +2129,7 @@ export function createPresentationExporter(
         throw error;
       }
     } finally {
+      worker.close();
       exportJob.finish(gen);
     }
   };
@@ -2159,7 +2165,7 @@ export default function useExport() {
       try {
         const { exportPresentationPdf } = await import('@/embed/export');
         const blob = await exportPresentationPdf(deck, {
-          onProgress: (done, total) => { void exportJob.tick(done / Math.max(1, total), done, gen); },
+          onProgress: (done, total, detail) => { void exportJob.tick(detail?.progress ?? done / Math.max(1, total), detail?.phase === 'packaging' ? total + 1 : done, gen); },
         });
         saveAs(blob, `${deck.title}.pdf`);
       } catch (error) {

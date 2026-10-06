@@ -574,7 +574,16 @@ high-resolution PNG per page (2560 pixels wide by default), preserving slide
 order and aspect ratio. PDF text is rasterized. No additional document IR is
 required. Load `fika-embed.css` before PDF export so bundled fonts are available.
 
-Options include `mediaResolver`, `watermark`, and `onProgress(completed, total)`.
+Options include `mediaResolver`, `watermark`, and `onProgress(completed, total, detail)`.
+The optional `detail` (`FikaExportProgress`) includes `phase` (`preparing`, `rendering`,
+`packaging`, or `complete`) and normalized `progress` (0–1). Counted slides are
+completed slides; packaging continues after all slides render, and `progress: 1`
+is emitted only when the returned Blob is ready. Errors reject without a completion event.
+
+PPTX generation, PDF image compression/packaging, and font decoding run in module
+workers. Serve the complete `dist/embed` directory, including worker and chunk
+files, under `assetBaseUrl`; the host's CSP must permit same-origin workers.
+DOM-dependent preparation still runs on the main thread with cooperative yields.
 Omitted resolvers use the current embed configuration. Pass `null` explicitly
 to disable a resolver. PDF also accepts `width` (64 to 8192 pixels) and
 `timeoutMs` (default 30000 per slide). Required watermark and PDF image failures

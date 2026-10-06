@@ -12,6 +12,7 @@
  * boot inside a bundled web build, hanging exports forever with no error.
  */
 import type pptxgen from 'pptxgenjs-plus';
+import { createExportWorker } from './exportWorker';
 import { isSystemFont } from '@/utils/font';
 type AddFontOptions = Parameters<pptxgen['addFont']>[0];
 
@@ -88,9 +89,10 @@ export const collectEmbeddedFonts = async (usedFamilies: string[]): Promise<AddF
         const res = await fetch(fileUrl);
         if (!res.ok) continue;
         const woff2 = new Uint8Array(await res.arrayBuffer());
-        const { woff2Decode } = await import('woff-lib/woff2/decode');
-        const ttf = await withTimeout(woff2Decode(woff2), FONT_DECODE_TIMEOUT_MS, `woff2 decode ${family}`);
-        const fontFile = new Uint8Array(ttf).buffer;
+        const worker = createExportWorker();
+        let fontFile: ArrayBuffer;
+        try { fontFile = await withTimeout(worker.request<ArrayBuffer>('font', woff2.buffer, [woff2.buffer]), FONT_DECODE_TIMEOUT_MS, `woff2 decode ${family}`); }
+        finally { worker.close(); }
         out.push({
           fontFace: FONT_FACE_NAMES[family] ?? FONT_FACE_NAMES[family.replace(/\s+/g, '')] ?? family,
           fontFile,

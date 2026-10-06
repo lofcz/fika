@@ -55,20 +55,43 @@ try {
         { id: 'second', background: { type: 'solid', color: '#0000ff' }, elements: [] },
       ],
     }
-    const options = { assetBaseUrl: '/fika-assets', watermark: null }
+    const progress = []
+    const workerUrls = []
+    const NativeWorker = window.Worker
+    window.Worker = class extends NativeWorker { constructor(url, options) { super(url, options); workerUrls.push(String(url)) } }
+    const options = { onProgress: (_done, _total, detail) => { if (detail) progress.push(detail) }, assetBaseUrl: '/fika-assets', watermark: null }
+    const box = { left: 30, top: 30, width: 400, height: 140, rotate: 0 }
+    const rich = { ...deck, slides: [{ id: 'rich', elements: [
+      { ...box, id: 'chart', type: 'chart', chartType: 'bar', data: { labels: ['A', 'B'], legends: ['Results'], series: [[2, 4]] }, themeColors: ['#4477aa'] },
+      { ...box, id: 'table', type: 'table', colWidths: [0.5, 0.5], cellMinHeight: 30, outline: { color: '#111111', width: 1, style: 'solid' }, data: [[{ id: 'a', colspan: 1, rowspan: 1, text: 'Table sentinel' }, { id: 'b', colspan: 1, rowspan: 1, text: '42' }]] },
+      { ...box, id: 'code', type: 'code', code: 'const answer = 42;', language: 'javascript', theme: 'github-dark', fontSize: 20, showLineNumbers: true },
+      { ...box, id: 'text', type: 'text', content: '<p>Native worker font</p>', defaultFontName: 'Inter', defaultColor: '#111111' },
+    ] }] }
+    const richBlob = await window.fika.exportPresentationPptx(rich, options)
     const originalClick = HTMLAnchorElement.prototype.click
     // First export is deliberately before any editor mount.
     const first = await window.fika.exportPresentationPptx(deck, options)
     const { controller } = await window.fika.mountFika(document.getElementById('host'), { document: structuredClone(deck), locale: 'en', assetBaseUrl: '/fika-assets' })
     await new Promise(resolve => setTimeout(resolve, 500))
     const before = JSON.stringify(controller.getDocument())
+    const stress = { ...deck, slides: Array.from({ length: 24 }, (_, i) => ({ ...deck.slides[0], id: `stress-${i}`, elements: Array.from({ length: 40 }, (_, n) => ({ ...deck.slides[0].elements[0], id: `t-${i}-${n}`, top: n * 5, content: `<p>Editable stress ${i}/${n}</p>` })) })) }
+    let heartbeat = 0, maxGap = 0, lastTick = performance.now()
+    const interval = setInterval(() => { const now = performance.now(); maxGap = Math.max(maxGap, now - lastTick); lastTick = now; heartbeat++ }, 16)
+    const stressBlob = await window.fika.exportPresentationPptx(stress, options)
+    clearInterval(interval)
+    if (stressBlob.size < 1000 || heartbeat < 5 || maxGap > 750) throw new Error(`Export blocked UI: heartbeat=${heartbeat}, maxGap=${maxGap}`)
+
     const element = document.querySelector('.fika-embed-app')
     const observerRecords = []
     const observer = new MutationObserver(records => observerRecords.push(...records))
     observer.observe(document.getElementById('host'), { childList: true })
+    let pdfHeartbeat = 0, pdfMaxGap = 0, pdfLastTick = performance.now()
+    const pdfInterval = setInterval(() => { const now = performance.now(); pdfMaxGap = Math.max(pdfMaxGap, now - pdfLastTick); pdfLastTick = now; pdfHeartbeat++ }, 16)
     const pdfPromise = window.fika.exportPresentationPdf(deck, { ...options, width: 2560 })
     deck.slides.reverse() // The asynchronous export must retain its original snapshot.
     const pdf = await pdfPromise
+    clearInterval(pdfInterval)
+    if (pdfHeartbeat < 3 || pdfMaxGap > 750) throw new Error(`PDF export blocked UI: heartbeat=${pdfHeartbeat}, maxGap=${pdfMaxGap}`)
     const other = { ...deck, title: 'Other deck', viewport: { size: 500, ratio: 1.5 }, slides: [deck.slides[0]] }
     const portrait = await window.fika.exportPresentationPdf(other, { ...options, width: 1280 })
     const pptx = await window.fika.exportPresentationPptx(other, options)
@@ -79,6 +102,7 @@ try {
     const marked = await window.fika.exportPresentationPdf(other, { ...options, watermark: () => ({ image: canvas.toDataURL(), opacity: 0.5 }) })
     observer.disconnect()
     const result = {
+      rich: Array.from(new Uint8Array(await richBlob.arrayBuffer())),
       first: Array.from(new Uint8Array(await first.arrayBuffer())),
       pptx: Array.from(new Uint8Array(await pptx.arrayBuffer())),
       pdf: Array.from(new Uint8Array(await pdf.arrayBuffer())),
@@ -88,11 +112,17 @@ try {
       mounted: element.isConnected && element === document.querySelector('.fika-embed-app'),
       dialogs: document.querySelectorAll('[data-export-format]').length,
       clicksUnchanged: originalClick === HTMLAnchorElement.prototype.click,
-      emptyError, markError,
+      emptyError, markError, progress, workerUrls, heartbeat, maxGap, pdfHeartbeat, pdfMaxGap,
     }
     window.controller = controller
     return result
   })
+  assert.ok(output.workerUrls.some(url => /worker|chunks/.test(url)), 'exports start background workers')
+  assert.ok(output.progress.some(p => p.phase === 'packaging' && p.progress < 1))
+  assert.ok(output.progress.some(p => p.phase === 'complete' && p.progress === 1))
+  assert.ok(output.progress.every(p => p.progress < 1 || p.phase === 'complete'))
+  console.log(`Responsiveness: ${output.heartbeat} heartbeat ticks, maximum gap ${Math.round(output.maxGap)}ms; ${output.workerUrls.length} workers`)
+  console.log(`PDF responsiveness: ${output.pdfHeartbeat} heartbeat ticks, maximum gap ${Math.round(output.pdfMaxGap)}ms`)
   assert.equal(output.unchanged, true)
   assert.equal(output.mounted, true)
   assert.equal(output.dialogs, 0)
@@ -101,6 +131,12 @@ try {
   assert.match(output.emptyError, /no slides/)
   assert.equal(output.markError, 'watermark unavailable')
   assert.deepEqual(errors, [])
+  const rich = await JSZip.loadAsync(Uint8Array.from(output.rich))
+  assert.ok(rich.file('ppt/charts/chart1.xml'))
+  const richSlide = await rich.file('ppt/slides/slide1.xml').async('string')
+  assert.match(richSlide, /Table sentinel/)
+  assert.match(richSlide, /answer/)
+  assert.ok(Object.keys(rich.files).some(name => /^ppt\/fonts\/.*fntdata$/.test(name)), 'custom font is embedded after worker decompression')
   const pptx = await JSZip.loadAsync(Uint8Array.from(output.first))
   assert.match(await pptx.file('ppt/slides/slide1.xml').async('string'), /Editable Czech/)
   assert.ok(pptx.file('ppt/slides/slide2.xml'))

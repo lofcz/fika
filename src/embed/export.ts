@@ -5,6 +5,15 @@ import type { PresentationExportOptions, PresentationExportState } from '@/hooks
 import { useSlidesStore } from '@/store'
 import { getFikaExportWatermark } from '@/configs/exportWatermark'
 import { getFikaExportMediaResolver } from '@/configs/exportMediaResolver'
+import { createExportWorker, yieldExportTask } from '@/utils/exportWorker'
+
+export interface FikaExportProgress {
+  phase: 'preparing' | 'rendering' | 'packaging' | 'complete'
+  completed: number
+  total: number
+  /** Normalized 0..1; reaches 1 only when downloadable bytes are ready. */
+  progress: number
+}
 
 export interface FikaExportOptions extends Pick<PresentationExportOptions, 'mediaResolver' | 'watermark'> {
   /** Runtime assets/chunks when exporting before mounting an editor. */
@@ -13,7 +22,7 @@ export interface FikaExportOptions extends Pick<PresentationExportOptions, 'medi
   width?: number
   /** Resource timeout per slide in milliseconds. Default 30000. */
   timeoutMs?: number
-  onProgress?: (completed: number, total: number) => void
+  onProgress?: (completed: number, total: number, detail?: FikaExportProgress) => void
 }
 
 function configureAssets(options: FikaExportOptions) {
@@ -41,7 +50,9 @@ function snapshot(document: FikaDocument): PresentationExportState {
 
 /** Editable PPTX bytes. No mount, dialog, browser download, or editor mutations. */
 export async function exportPresentationPptx(document: FikaDocument, options: FikaExportOptions = {}): Promise<Blob> {
+  options.onProgress?.(0, document.slides?.length ?? 0, { phase: 'preparing', completed: 0, total: document.slides?.length ?? 0, progress: 0 })
   const deck = snapshot(document)
+  await yieldExportTask()
   configureAssets(options)
   const config = {
     mediaResolver: options.mediaResolver === undefined ? getFikaExportMediaResolver() : options.mediaResolver,
@@ -50,23 +61,33 @@ export async function exportPresentationPptx(document: FikaDocument, options: Fi
   const { createPresentationExporter } = await import('@/hooks/useExport')
   const { createJobProgress } = await import('@/utils/jobProgress')
   const job = createJobProgress()
-  const unsubscribe = job.subscribe(() => options.onProgress?.(Math.min(job.current.value, deck.slides.length), deck.slides.length))
+  const total = deck.slides.length
+  const unsubscribe = job.subscribe(() => {
+    if (!job.running.value) return
+    const completed = Math.min(job.current.value, total)
+    const phase = job.current.value > total ? 'packaging' : job.progress.value < 0.1 ? 'preparing' : 'rendering'
+    options.onProgress?.(completed, total, { phase, completed, total, progress: Math.min(0.99, job.progress.value) })
+  })
   try {
-    return await createPresentationExporter(deck, config, job).exportPPTX(deck.slides)
+    const blob = await createPresentationExporter(deck, config, job).exportPPTX(deck.slides)
+    options.onProgress?.(total, total, { phase: 'complete', completed: total, total, progress: 1 })
+    return blob
   } finally { unsubscribe() }
 }
 
 /** High-resolution image PDF, one slide per page, using Fika's existing painter. */
 export async function exportPresentationPdf(document: FikaDocument, options: FikaExportOptions = {}): Promise<Blob> {
+  options.onProgress?.(0, document.slides?.length ?? 0, { phase: 'preparing', completed: 0, total: document.slides?.length ?? 0, progress: 0 })
   const deck = snapshot(document)
+  await yieldExportTask()
   configureAssets(options)
   const resolver = options.watermark === undefined ? getFikaExportWatermark() : options.watermark
   const mediaResolver = options.mediaResolver === undefined ? getFikaExportMediaResolver() : options.mediaResolver
   const rasterWidth = options.width ?? 2560
   if (!Number.isFinite(rasterWidth) || rasterWidth < 64 || rasterWidth > 8192) throw new Error('PDF raster width must be between 64 and 8192')
   if (options.timeoutMs !== undefined && (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0)) throw new Error('Invalid resource timeout')
-  const [{ PDFDocument }, { renderSlideImage }, { loadWatermarkImage }, { preferredInk, resolveSlideSurfaceColors }] = await Promise.all([
-    import('pdf-lib'), import('./render'), import('@/utils/pptxExportWatermark'), import('@/utils/textContrast'),
+  const [{ renderSlideImage }, { loadWatermarkImage }, { preferredInk, resolveSlideSurfaceColors }] = await Promise.all([
+    import('./render'), import('@/utils/pptxExportWatermark'), import('@/utils/textContrast'),
   ])
   // A saved deck may use fonts that the mounted editor has never requested.
   const fonts = collectSlidesFonts({ slides: deck.slides, theme: deck.theme })
@@ -79,44 +100,32 @@ export async function exportPresentationPdf(document: FikaDocument, options: Fik
       ])
     } finally { clearTimeout(timer!) }
   }
-  const pdf = await PDFDocument.create()
-  pdf.setTitle(deck.title || 'Presentation')
-  pdf.setCreator('Fika')
   const watermark = await resolver?.()
-  const embedMark = async (src: string) => {
-    const image = await loadWatermarkImage(src)
-    return image.mime === 'image/png' ? pdf.embedPng(image.bytes) : pdf.embedJpg(image.bytes)
-  }
-  const lightMark = watermark ? await embedMark(watermark.image) : null
-  const darkMark = watermark?.imageOnDark ? await embedMark(watermark.imageOnDark) : lightMark
-  // Match PPTX's 10-inch-wide layout, including custom/portrait aspect ratios.
-  const width = 720
-  const height = width * deck.viewportRatio
-  options.onProgress?.(0, deck.slides.length)
-  for (let i = 0; i < deck.slides.length; i++) {
-    const slide = deck.slides[i]
-    const capture = await renderSlideImage({ ...deck, slide }, {
-      width: rasterWidth, format: 'image/png', fullResolutionImages: true,
-      timeoutMs: options.timeoutMs ?? 30000, mediaResolver, strictResources: true,
-    })
-    const image = await pdf.embedPng(await capture.blob.arrayBuffer())
-    const page = pdf.addPage([width, height])
-    page.drawImage(image, { x: 0, y: 0, width, height })
-    if (watermark && lightMark) {
-      const dark = preferredInk(resolveSlideSurfaceColors(slide.background, deck.theme.backgroundColor)) === '#ffffff'
-      const mark = dark ? darkMark! : lightMark
-      const ratio = (value: number | undefined, fallback: number) => Number.isFinite(value) && value! > 0 && value! <= 1 ? value! : fallback
-      const markWidth = width * ratio(watermark.widthRatio, 0.12)
-      const markHeight = markWidth * mark.height / mark.width
-      const margin = width * ratio(watermark.marginRatio, 0.02)
-      const position = watermark.position ?? 'bottom-right'
-      page.drawImage(mark, {
-        x: position.endsWith('left') ? margin : width - markWidth - margin,
-        y: position.startsWith('top') ? height - markHeight - margin : margin,
-        width: markWidth, height: markHeight, opacity: ratio(watermark.opacity, 1),
+  const light = watermark ? await loadWatermarkImage(watermark.image) : null
+  const dark = watermark?.imageOnDark ? await loadWatermarkImage(watermark.imageOnDark) : null
+  const worker = createExportWorker()
+  try {
+    await worker.request('pdf-start', { title: deck.title, watermark, light, dark })
+    // Match PPTX's 10-inch-wide layout, including custom/portrait aspect ratios.
+    const width = 720
+    const height = width * deck.viewportRatio
+    options.onProgress?.(0, deck.slides.length, { phase: 'rendering', completed: 0, total: deck.slides.length, progress: 0.05 })
+    for (let i = 0; i < deck.slides.length; i++) {
+      const slide = deck.slides[i]
+      const capture = await renderSlideImage({ ...deck, slide }, {
+        width: rasterWidth, format: 'image/png', fullResolutionImages: true,
+        timeoutMs: options.timeoutMs ?? 30000, mediaResolver, strictResources: true,
       })
+      const bytes = await capture.blob.arrayBuffer()
+      const dark = preferredInk(resolveSlideSurfaceColors(slide.background, deck.theme.backgroundColor)) === '#ffffff'
+      await worker.request('pdf-page', { bytes, width, height, dark }, [bytes])
+      options.onProgress?.(i + 1, deck.slides.length, { phase: 'rendering', completed: i + 1, total: deck.slides.length, progress: 0.05 + 0.85 * (i + 1) / deck.slides.length })
+      await yieldExportTask()
     }
-    options.onProgress?.(i + 1, deck.slides.length)
-  }
-  return new Blob([new Uint8Array(await pdf.save())], { type: 'application/pdf' })
+    options.onProgress?.(deck.slides.length, deck.slides.length, { phase: 'packaging', completed: deck.slides.length, total: deck.slides.length, progress: 0.92 })
+    const bytes = await worker.request<ArrayBuffer>('pdf-save', null)
+    const blob = new Blob([bytes], { type: 'application/pdf' })
+    options.onProgress?.(deck.slides.length, deck.slides.length, { phase: 'complete', completed: deck.slides.length, total: deck.slides.length, progress: 1 })
+    return blob
+  } finally { worker.close() }
 }

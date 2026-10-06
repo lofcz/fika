@@ -56,12 +56,10 @@ export function slideJobProgress(index: number, count: number, start = 0.1, end 
 export const isAbortError = (error: unknown) => typeof error === 'object' && error !== null && 'name' in error && (error as {
   name: string;
 }).name === 'AbortError';
-const yieldToPaint = () => {
-  if (typeof requestAnimationFrame !== 'function') return Promise.resolve();
-  return new Promise<void>(resolve => {
-    requestAnimationFrame(() => resolve());
-  });
-};
+// A task boundary lets React commit and the browser paint, and continues when
+// the embedding tab is hidden (requestAnimationFrame can stop indefinitely).
+const yieldToPaint = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
 export function createJobProgress(): JobProgress {
   const running: JobProgressBox<boolean> = {
     value: false
