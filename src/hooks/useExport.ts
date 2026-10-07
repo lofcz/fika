@@ -13,7 +13,7 @@ import { type SvgPoints, toPoints } from '@/utils/svgPathParser';
 import { LATEX_ELEMENT_FONT_SIZE, MATH_CLASS } from '@/utils/math';
 import { latexPaintScale } from '@/utils/latex';
 import { applyOmmlRunStyle, prepareLatexToOmml, stripXmlIllegalChars, tryLatexToOmmlSync } from '@/utils/latexToOmml';
-import { collectEmbeddedFonts } from '@/utils/exportFonts';
+import { collectEmbeddedFonts, preparePptxFontFamilies } from '@/utils/exportFonts';
 import { svg2Base64 } from '@/utils/svg2Base64';
 import { renderMermaidForImage } from '@/utils/mermaid';
 import { codeElementPptxBox, codeElementToPptxText } from '@/utils/codePptxExport';
@@ -1409,23 +1409,6 @@ export function createPresentationExporter(
         sources = await resolveSlideSources(_slides, failedSources);
         await tickExportProgress(0.08, 0);
 
-        const usedFontFamilies = new Set<string>();
-        if (theme.fontName) usedFontFamilies.add(theme.fontName);
-        for (const slide of _slides) {
-          for (const el of slide.elements) {
-            await yieldIfNeeded();
-            if (el.type === 'text' && el.defaultFontName) usedFontFamilies.add(el.defaultFontName);else if (el.type === 'shape' && el.text?.defaultFontName) usedFontFamilies.add(el.text.defaultFontName);else if (el.type === 'table') {
-              for (const row of el.data) {
-                for (const cell of row) {
-                  if (cell.style?.fontname) usedFontFamilies.add(cell.style.fontname);
-                }
-              }
-            }
-          }
-        }
-        for (const font of await collectEmbeddedFonts([...usedFontFamilies])) {
-          await pptx.addFont(font);
-        }
         await tickExportProgress(0.1, 0);
         setPPTXLayout(pptx);
         if (masterOverwrite) {
@@ -2109,6 +2092,10 @@ export function createPresentationExporter(
         }
         await tickExportProgress(0.96, slideCount + 1, gen);
         try {
+          // Collect after recording so inline runs and all element types are covered.
+          for (const font of await collectEmbeddedFonts(preparePptxFontFamilies(commands))) {
+            await pptx.addFont(font);
+          }
           const bytes = await worker.request<ArrayBuffer>('pptx', { commands, stamp: stamp ? { watermark: stamp.watermark, images: {
             onLight: stamp.onLight,
             onDark: stamp.onDark,

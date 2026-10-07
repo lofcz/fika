@@ -13,7 +13,7 @@
  */
 import type pptxgen from 'pptxgenjs-plus';
 import { createExportWorker } from './exportWorker';
-import { isSystemFont } from '@/utils/font';
+import type { PptxExportCommand } from './pptxExportCommands';
 type AddFontOptions = Parameters<pptxgen['addFont']>[0];
 
 const FONT_FILES: Record<string, string> = {
@@ -55,7 +55,7 @@ const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promis
 };
 
 /** Normalize a CSS font-family token to a comparable lowercase key. */
-const normalizeFamily = (family: string) => family.replace(/^['"]+|['"]+$/g, '').trim().toLowerCase();
+const normalizeFamily = (family: string) => family.trim().replace(/^['"]+|['"]+$/g, '').trim().toLowerCase();
 
 /** Collect candidate font families from a CSS font-family string. */
 export const parseFontFamilyList = (value?: string): string[] => {
@@ -63,16 +63,16 @@ export const parseFontFamilyList = (value?: string): string[] => {
   return value.split(',').map(normalizeFamily).filter(Boolean);
 };
 
-/** Decide whether a family should be embedded (custom, not a system font). */
+/** Bundled fonts travel with the deck, even when installed on this computer. */
 export const isEmbeddableFont = (family: string): boolean => {
-  if (!family) return false;
-  return !isSystemFont(family);
+  return !!FONT_FILES[normalizeFamily(family).replace(/\s+/g, '')];
 };
 
 /**
  * Embed fonts used in the deck into the PPTX.
  * `usedFamilies` should be the raw font-family strings gathered from elements/theme.
- * Silently skips families that are system fonts, have no bundled file, or fail to load.
+ * Unbundled families remain available for the viewer to resolve. A bundled font
+ * failing to load rejects export instead of silently losing portability.
  */
 export const collectEmbeddedFonts = async (usedFamilies: string[]): Promise<AddFontOptions[]> => {
   const out: AddFontOptions[] = [];
@@ -87,7 +87,7 @@ export const collectEmbeddedFonts = async (usedFamilies: string[]): Promise<AddF
       if (!fileUrl) continue;
       try {
         const res = await fetch(fileUrl);
-        if (!res.ok) continue;
+        if (!res.ok) throw new Error(`Font fetch failed: ${res.status}`);
         const woff2 = new Uint8Array(await res.arrayBuffer());
         const worker = createExportWorker();
         let fontFile: ArrayBuffer;
@@ -98,9 +98,33 @@ export const collectEmbeddedFonts = async (usedFamilies: string[]): Promise<AddF
           fontFile,
           fontType: 'ttf'
         });
-      } catch {
+      } catch (error) {
+        throw new Error(`Could not embed presentation font ${family}`, { cause: error });
       }
     }
   }
   return out;
+};
+
+/**
+ * Inspect the final generator commands, including rich text runs, shape text,
+ * tables, charts and theme defaults. CSS fallback lists are not OOXML typefaces;
+ * use their first family and the same canonical name as our embedded font.
+ */
+export const preparePptxFontFamilies = (commands: PptxExportCommand[]): string[] => {
+  const families = new Set<string>();
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) { value.forEach(visit); return; }
+    if (!value || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value)) {
+      if (['fontFace', 'headFontFace', 'bodyFontFace'].includes(key) && typeof child === 'string') {
+        const first = child.split(',')[0].trim().replace(/^['"]+|['"]+$/g, '').trim();
+        const family = FONT_FACE_NAMES[normalizeFamily(first).replace(/\s+/g, '')] ?? first;
+        (value as Record<string, unknown>)[key] = family;
+        if (family) families.add(family);
+      } else visit(child);
+    }
+  };
+  visit(commands);
+  return [...families];
 };

@@ -601,3 +601,17 @@ mounting a second host concurrently throws before changing any document.
 Cache each deck separately in the host and pass its latest snapshot on remount.
 `destroy()` flushes pending rich-text changes and the final `onChange` before
 releasing the editor. Hosts should flush their own autosave queue on teardown.
+
+### Portable PPTX fonts
+
+PPTX exports automatically embed bundled fonts used by the exported text runs,
+tables, shapes, charts and theme, including fonts that are installed on the
+exporting computer. Inline-only font choices are included. CSS fallback stacks
+are converted to a single OOXML typeface, and bundled family aliases use their
+canonical names. No host option is required.
+
+Serve the package's font assets alongside its workers and chunks. If a required
+bundled font cannot be fetched or decoded, export rejects instead of silently
+omitting it. Fonts outside the bundled catalog still depend on the receiving
+application's font availability. Embedded fonts improve portability in viewers
+that support them; PDF is available for a fixed visual result.

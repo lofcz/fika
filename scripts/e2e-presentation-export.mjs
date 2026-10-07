@@ -51,7 +51,7 @@ try {
     const deck = {
       title: 'Export regression', viewport: { size: 1000, ratio: 0.75 },
       slides: [
-        { id: 'first', background: { type: 'solid', color: '#ff0000' }, elements: [{ id: 'text', type: 'text', left: 50, top: 50, width: 700, height: 100, rotate: 0, content: '<p>Editable Czech: Příliš žluťoučký kůň</p>', defaultFontName: 'Arial', defaultColor: '#ffffff' }] },
+        { id: 'first', background: { type: 'solid', color: '#ff0000' }, elements: [{ id: 'text', type: 'text', left: 50, top: 50, width: 700, height: 100, rotate: 0, content: '<p><span style="font-family: Inter;">Editable Czech: Příliš žluťoučký kůň</span><span style="font-family: Montserrat;"> Řešení</span></p>', defaultFontName: 'Arial', defaultColor: '#ffffff' }] },
         { id: 'second', background: { type: 'solid', color: '#0000ff' }, elements: [] },
       ],
     }
@@ -67,6 +67,8 @@ try {
       { ...box, id: 'code', type: 'code', code: 'const answer = 42;', language: 'javascript', theme: 'github-dark', fontSize: 20, showLineNumbers: true },
       { ...box, id: 'text', type: 'text', content: '<p>Native worker font</p>', defaultFontName: 'Inter', defaultColor: '#111111' },
     ] }] }
+    // Loaded webfonts used to be mistaken for system fonts and omitted.
+    await Promise.all(['Inter', 'Montserrat'].map(font => document.fonts.load(`16px ${font}`)))
     const richBlob = await window.fika.exportPresentationPptx(rich, options)
     const originalClick = HTMLAnchorElement.prototype.click
     // First export is deliberately before any editor mount.
@@ -139,6 +141,10 @@ try {
   assert.ok(Object.keys(rich.files).some(name => /^ppt\/fonts\/.*fntdata$/.test(name)), 'custom font is embedded after worker decompression')
   const pptx = await JSZip.loadAsync(Uint8Array.from(output.first))
   assert.match(await pptx.file('ppt/slides/slide1.xml').async('string'), /Editable Czech/)
+  const fontManifest = await pptx.file('ppt/presentation.xml').async('string')
+  assert.match(fontManifest, /<p:font typeface="Inter"/)
+  assert.match(fontManifest, /<p:font typeface="Montserrat"/)
+  assert.equal(Object.keys(pptx.files).filter(name => name.endsWith('.fntdata')).length, 2, 'inline-only bundled fonts travel with the deck')
   assert.ok(pptx.file('ppt/slides/slide2.xml'))
   const other = await JSZip.loadAsync(Uint8Array.from(output.pptx))
   assert.equal(other.file('ppt/slides/slide2.xml'), null)
