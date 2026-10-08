@@ -25,7 +25,7 @@ for (const [index, name] of ['react', 'react-dom', 'react-dom/client', 'react/js
 const server = createServer(async (req, res) => {
   try {
     const path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname)
-    if (path === '/') {
+    if (path === '/create/export-regression') {
       res.setHeader('Content-Type', 'text/html')
       res.end(`<script type="importmap">${JSON.stringify({ imports })}</script><link rel="stylesheet" href="/fika-assets/fika-embed.css"><div id="host" style="height:800px"></div><script type="module">window.fika = await import('/fika-assets/fika-embed.js')</script>`)
       return
@@ -45,7 +45,7 @@ page.on('console', msg => { if (msg.type() === 'error') console.error(msg.text()
 let downloads = 0
 page.on('download', () => downloads++)
 try {
-  await page.goto(`http://127.0.0.1:${server.address().port}/`)
+  await page.goto(`http://127.0.0.1:${server.address().port}/create/export-regression`)
   await page.waitForFunction(() => window.fika, { timeout: 30000 })
   const output = await page.evaluate(async () => {
     const deck = {

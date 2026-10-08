@@ -4,6 +4,7 @@ import { woff2Decode } from 'woff-lib/woff2/decode'
 import PptxGen from 'pptxgenjs-plus'
 import { JSZip } from '@node-projects/jszip'
 import { collectEmbeddedFonts, isEmbeddableFont, preparePptxFontFamilies } from '../src/utils/exportFonts'
+import { setFikaAssetBase } from '../src/utils/assetBase'
 import { recordPptxExport } from '../src/utils/pptxExportCommands'
 
 const nativeFetch = globalThis.fetch
@@ -16,7 +17,7 @@ class FontWorker {
     this.onmessage?.({ data: { id, value } })
   }
 }
-afterEach(() => { globalThis.fetch = nativeFetch; globalThis.Worker = nativeWorker })
+afterEach(() => { globalThis.fetch = nativeFetch; globalThis.Worker = nativeWorker; setFikaAssetBase(null) })
 
 // Read a BMP format-4 cmap from the actual embedded TrueType, not just the XML.
 function glyphFor(ttf: Uint8Array, code: number): number {
@@ -87,6 +88,20 @@ describe('portable presentation fonts', () => {
       const ttf = eot.slice(-fontSize)
       for (const char of czech) expect(glyphFor(ttf, char.charCodeAt(0))).toBeGreaterThan(0)
     }
+  })
+
+  it('resolves fonts against the asset base configured after module import', async () => {
+    globalThis.Worker = FontWorker as unknown as typeof Worker
+    const urls: string[] = []
+    globalThis.fetch = (async (url: string) => {
+      urls.push(url)
+      return new Response(readFileSync('src/assets/fonts/Inter.woff2'))
+    }) as typeof fetch
+    setFikaAssetBase('/fika-assets')
+    await collectEmbeddedFonts(['Inter'])
+    setFikaAssetBase('https://cdn.example.test/presentation')
+    await collectEmbeddedFonts(['Inter'])
+    expect(urls).toEqual(['/fika-assets/fonts/Inter.woff2', 'https://cdn.example.test/presentation/fonts/Inter.woff2'])
   })
 
   it('rejects a failed bundled font download instead of silently exporting without it', async () => {
