@@ -75,6 +75,9 @@ try {
     const first = await window.fika.exportPresentationPptx(deck, options)
     const { controller } = await window.fika.mountFika(document.getElementById('host'), { document: structuredClone(deck), locale: 'en', assetBaseUrl: '/fika-assets' })
     await new Promise(resolve => setTimeout(resolve, 500))
+    const defaultFont = controller.getDocument().theme.fontName
+    const calibriFaces = await Promise.all(['400', '700', 'italic 400', 'italic 700'].map(style => document.fonts.load(`${style} 16px Calibri`)))
+    if (calibriFaces.some(faces => faces.length === 0)) throw new Error('Bundled Calibri fallback is missing')
     const before = JSON.stringify(controller.getDocument())
     const stress = { ...deck, slides: Array.from({ length: 24 }, (_, i) => ({ ...deck.slides[0], id: `stress-${i}`, elements: Array.from({ length: 40 }, (_, n) => ({ ...deck.slides[0].elements[0], id: `t-${i}-${n}`, top: n * 5, content: `<p>Editable stress ${i}/${n}</p>` })) })) }
     let heartbeat = 0, maxGap = 0, lastTick = performance.now()
@@ -117,7 +120,7 @@ try {
       mounted: element.isConnected && element === document.querySelector('.fika-embed-app'),
       dialogs: document.querySelectorAll('[data-export-format]').length,
       clicksUnchanged: originalClick === HTMLAnchorElement.prototype.click,
-      emptyError, markError, invalidQuality, imageError, progress, workerUrls, heartbeat, maxGap, pdfHeartbeat, pdfMaxGap,
+      defaultFont, emptyError, markError, invalidQuality, imageError, progress, workerUrls, heartbeat, maxGap, pdfHeartbeat, pdfMaxGap,
     }
     window.controller = controller
     return result
@@ -128,6 +131,7 @@ try {
   assert.ok(output.progress.every(p => p.progress < 1 || p.phase === 'complete'))
   console.log(`Responsiveness: ${output.heartbeat} heartbeat ticks, maximum gap ${Math.round(output.maxGap)}ms; ${output.workerUrls.length} workers`)
   console.log(`PDF responsiveness: ${output.pdfHeartbeat} heartbeat ticks, maximum gap ${Math.round(output.pdfMaxGap)}ms`)
+  assert.equal(output.defaultFont, 'Calibri')
   assert.equal(output.unchanged, true)
   assert.equal(output.mounted, true)
   assert.equal(output.dialogs, 0)

@@ -7,3 +7,33 @@ $fonts: 'SourceSerif4', 'Inter', 'JetBrainsMono', 'Literata', 'Roboto', 'OpenSan
     src: url('../fonts/#{$font}.woff2') format('woff2');
   }
 }
+
+// Native Calibri when available; bundled metric-compatible Carlito otherwise.
+@font-face {
+  font-family: 'Calibri';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Calibri'), url('../fonts/Carlito-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Calibri';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Calibri Bold'), url('../fonts/Carlito-Bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Calibri';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Calibri Italic'), url('../fonts/Carlito-Italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Calibri';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Calibri Bold Italic'), url('../fonts/Carlito-BoldItalic.woff2') format('woff2');
+}

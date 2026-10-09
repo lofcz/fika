@@ -227,7 +227,7 @@ export const useSlidesStore = create<SlidesStore>()(
     theme: {
       themeColors: [...DEFAULT_THEME_COLORS],
       fontColor: '#333',
-      fontName: '',
+      fontName: 'Calibri',
       backgroundColor: '#fff',
       shadow: { h: 3, v: 3, blur: 2, color: '#808080' },
       outline: { width: 2, color: '#525252', style: 'solid' },

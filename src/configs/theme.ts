@@ -29,7 +29,7 @@ export interface PresetTheme {
 export const DEFAULT_PRESET_THEME: PresetTheme = {
   background: '#fff',
   fontColor: '#333',
-  fontname: '',
+  fontname: 'Calibri',
   colors: [...DEFAULT_THEME_COLORS],
   borderColor: '#525252',
 };
@@ -174,7 +174,7 @@ export const PRESET_THEMES: PresetTheme[] = [{
   background: '#0b1c33',
   fontColor: '#f4f8ff',
   featureFontColor: '#f4f8ff',
-  fontname: '',
+  fontname: 'Calibri',
   colors: ['#2a9d8f', '#5b8fd4', '#e07a5f', '#f2cc8f', '#1d3557', '#9b7ebd'],
   borderColor: '#5b8fd4',
   ...vibe(
@@ -190,7 +190,7 @@ export const PRESET_THEMES: PresetTheme[] = [{
   background: '#3a1424',
   fontColor: '#fff6ee',
   featureFontColor: '#fff6ee',
-  fontname: '',
+  fontname: 'Calibri',
   colors: ['#c45c3e', '#ee9b60', '#7a3b4a', '#d4a373', '#2c1810', '#e8c39e'],
   borderColor: '#c45c3e',
   ...vibe(
@@ -206,7 +206,7 @@ export const PRESET_THEMES: PresetTheme[] = [{
   background: '#0c0d10',
   fontColor: '#f5f5f4',
   featureFontColor: '#f5f5f4',
-  fontname: '',
+  fontname: 'Calibri',
   colors: ['#2563eb', '#171717', '#64748b', '#60a5fa', '#e5e7eb', '#f59e0b'],
   chartColors: ['#2563eb', '#38bdf8', '#94a3b8', '#60a5fa', '#e5e7eb', '#f59e0b'],
   borderColor: '#2563eb',
@@ -223,7 +223,7 @@ export const PRESET_THEMES: PresetTheme[] = [{
   background: '#14261c',
   fontColor: '#f3faf4',
   featureFontColor: '#f3faf4',
-  fontname: '',
+  fontname: 'Calibri',
   colors: ['#3d7a5a', '#c4a35a', '#d47b4e', '#6b9080', '#1c3d32', '#a7c4a0'],
   borderColor: '#3d7a5a',
   ...vibe(
@@ -239,7 +239,7 @@ export const PRESET_THEMES: PresetTheme[] = [{
   background: '#061830',
   fontColor: '#eef7fb',
   featureFontColor: '#eef7fb',
-  fontname: '',
+  fontname: 'Calibri',
   colors: ['#1565a8', '#2eb7c9', '#0a2342', '#f4a261', '#e9c46a', '#7eb8da'],
   borderColor: '#1565a8',
   ...vibe(
@@ -255,7 +255,7 @@ export const PRESET_THEMES: PresetTheme[] = [{
   background: '#1c0a32',
   fontColor: '#faf5ff',
   featureFontColor: '#faf5ff',
-  fontname: '',
+  fontname: 'Calibri',
   colors: ['#7c3aed', '#db2777', '#c4b5fd', '#f9a8d4', '#2b1248', '#f59e0b'],
   borderColor: '#7c3aed',
   ...vibe(
@@ -271,7 +271,7 @@ export const PRESET_THEMES: PresetTheme[] = [{
   background: '#3d2a1c',
   fontColor: '#faf6f0',
   featureFontColor: '#faf6f0',
-  fontname: '',
+  fontname: 'Calibri',
   colors: ['#c2410c', '#2a2118', '#78716c', '#d6b48a', '#57534e', '#a8a29e'],
   borderColor: '#c2410c',
   ...vibe(
@@ -287,7 +287,7 @@ export const PRESET_THEMES: PresetTheme[] = [{
   background: '#09090b',
   fontColor: '#fafafa',
   featureFontColor: '#fafafa',
-  fontname: '',
+  fontname: 'Calibri',
   colors: ['#eab308', '#a78bfa', '#f43f5e', '#27203a', '#a1a1aa', '#fafafa'],
   borderColor: '#eab308',
   ...vibe(

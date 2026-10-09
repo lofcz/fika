@@ -22,7 +22,7 @@ export const DEFAULT_TEXT_FONT_SIZE = 16;
  * empty. Canvas wrap must use the same stack — generic `sans-serif` is a
  * different face and packs a different number of words per line.
  */
-export const DEFAULT_TEXT_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"'
+export const DEFAULT_TEXT_FONT_FAMILY = 'Calibri, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"'
 /** @deprecated Use DEFAULT_TEXT_FONT_FAMILY */
 export const DEFAULT_FIT_FONT_FAMILY = DEFAULT_TEXT_FONT_FAMILY
 

@@ -620,3 +620,10 @@ bundled font cannot be fetched or decoded, export rejects instead of silently
 omitting it. Fonts outside the bundled catalog still depend on the receiving
 application's font availability. Embedded fonts improve portability in viewers
 that support them; PDF is available for a fixed visual result.
+
+New presentations and theme presets default to Calibri for text. Browsers use
+installed Calibri where available, otherwise bundled Carlito (OFL, metrically
+compatible) in regular, bold, italic, and bold italic. This fallback needs no
+Google Fonts request. PPTX retains the Calibri family name for native Office
+rendering; it does not embed Carlito under the Calibri name. Explicit document
+font choices are preserved.

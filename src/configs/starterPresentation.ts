@@ -87,7 +87,7 @@ const textPlaceholder = (textType: 'title' | 'subtitle' | 'content' | 'item', pl
 };
 const defaultThemeColors = [...DEFAULT_THEME_COLORS];
 const normalizeStarterOptions = (LL: TranslationFunctions, options: StarterPresentationOptions = {}) => {
-  const fontName = options.fontName ?? '';
+  const fontName = options.fontName ?? 'Calibri';
   const backgroundColor = options.backgroundColor ?? '#fff';
   const ink = preferredInk(backgroundColor);
   const placeholderColor = options.placeholderColor ?? ink;

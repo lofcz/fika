@@ -103,7 +103,7 @@ export async function exportPresentationPdf(document: FikaDocument, options: Fik
     let timer: ReturnType<typeof setTimeout>
     try {
       await Promise.race([
-        Promise.all(fonts.map(font => globalThis.document.fonts.load(`16px ${JSON.stringify(font)}`))),
+        Promise.all(fonts.flatMap(font => ['400', '700', 'italic 400', 'italic 700'].map(style => globalThis.document.fonts.load(`${style} 16px ${JSON.stringify(font)}`)))),
         new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('PDF font loading timed out')), options.timeoutMs ?? 30000) }),
       ])
     } finally { clearTimeout(timer!) }

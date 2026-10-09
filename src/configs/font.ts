@@ -26,7 +26,7 @@ export function stepFontSize(size: number, direction: 1 | -1, min = FONT_SIZE_MI
 export function fontSizeToPx(size: number): string {
   return `${clampFontSize(size)}px`;
 }
-export const FONT_VALUES = ['', 'SourceSerif4', 'JetBrainsMono', 'Literata', 'Inter', 'Roboto', 'OpenSans', 'Montserrat', 'SourceSansPro', 'Merriweather', 'Lato'] as const;
+export const FONT_VALUES = ['', 'Calibri', 'SourceSerif4', 'JetBrainsMono', 'Literata', 'Inter', 'Roboto', 'OpenSans', 'Montserrat', 'SourceSansPro', 'Merriweather', 'Lato'] as const;
 export interface FontOption {
   label: string;
   value: string;
@@ -42,6 +42,9 @@ export function getFonts(): FontOption[] {
   return [{
     label: f.defaultFont(),
     value: ''
+  }, {
+    label: 'Calibri',
+    value: 'Calibri'
   }, {
     label: f.sourceSerif4(),
     value: 'SourceSerif4'
