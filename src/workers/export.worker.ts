@@ -41,7 +41,7 @@ async function run(task: string, data: any): Promise<any> {
   }
   if (task === 'pdf-page') {
     if (!pdf) throw new Error('PDF export has not started')
-    const image = await pdf.embedPng(data.bytes)
+    const image = data.format === 'image/jpeg' ? await pdf.embedJpg(data.bytes) : await pdf.embedPng(data.bytes)
     const { width, height } = data
     const page = pdf.addPage([width, height])
     page.drawImage(image, { x: 0, y: 0, width, height })

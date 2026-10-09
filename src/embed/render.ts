@@ -115,6 +115,9 @@ async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, css
       transparentBackground,
       imageBitmaps,
     })
+    // Export owns every image already. Raster producers register synchronously
+    // during paint, so a settled frame needs no speculative 220ms idle delay.
+    if (imageBitmaps && !pending && !hasPendingRasters()) return
     const remaining = deadline - performance.now()
     if (remaining <= 0) {
       if (strictResources && (pending || hasPendingRasters())) throw new Error('Slide export resources timed out')
@@ -140,6 +143,19 @@ async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, css
 }
 
 function encode(canvas: HTMLCanvasElement, format: NonNullable<FikaRenderSlideOptions['format']>, quality: number): Promise<Blob> {
+  // HTMLCanvasElement.toBlob schedules encoding as idle work in Chromium,
+  // which becomes a long serial tail for large decks. OffscreenCanvas uses
+  // an asynchronous encoder without waiting for main-thread idle periods.
+  if (typeof OffscreenCanvas !== 'undefined') {
+    const offscreen = new OffscreenCanvas(canvas.width, canvas.height)
+    const context = offscreen.getContext('2d')
+    if (context) {
+      context.drawImage(canvas, 0, 0)
+      return offscreen.convertToBlob({ type: format, quality }).finally(() => {
+        offscreen.width = offscreen.height = 0
+      })
+    }
+  }
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
       if (blob) resolve(blob)
@@ -189,7 +205,10 @@ export async function renderSlideImage(target: RenderTarget, options: FikaRender
     await paintSettled(canvas, target, width, dpr, options.timeoutMs ?? 4000, options.transparentBackground === true && options.format !== 'image/jpeg', bitmaps, options.strictResources)
     const blob = await encode(canvas, options.format ?? 'image/png', options.quality ?? 0.9)
     return { blob, width: canvas.width, height: canvas.height }
-  } finally { bitmaps?.forEach(bitmap => bitmap.close()) }
+  } finally {
+    bitmaps?.forEach(bitmap => bitmap.close())
+    canvas.width = canvas.height = 0
+  }
 }
 
 function resolveAtlasSlides(slides: Slide[], wanted: Array<string | number> | undefined): Array<{ slide: Slide; index: number }> {

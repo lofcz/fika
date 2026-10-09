@@ -570,7 +570,7 @@ const pdf = await exportPresentationPdf(document, options)
 ```
 
 PPTX retains editable elements. PDF uses the existing slide painter with one
-high-resolution PNG per page (2560 pixels wide by default), preserving slide
+high-resolution JPEG per page (2560 pixels wide by default), preserving slide
 order and aspect ratio. PDF text is rasterized. No additional document IR is
 required. Load `fika-embed.css` before PDF export so bundled fonts are available.
 
@@ -580,13 +580,18 @@ The optional `detail` (`FikaExportProgress`) includes `phase` (`preparing`, `ren
 completed slides; packaging continues after all slides render, and `progress: 1`
 is emitted only when the returned Blob is ready. Errors reject without a completion event.
 
-PPTX generation, PDF image compression/packaging, and font decoding run in module
+PPTX generation, PDF packaging, and font decoding run in module
 workers. Serve the complete `dist/embed` directory, including worker and chunk
 files, under `assetBaseUrl`; the host's CSP must permit same-origin workers.
 DOM-dependent preparation still runs on the main thread with cooperative yields.
 Omitted resolvers use the current embed configuration. Pass `null` explicitly
 to disable a resolver. PDF also accepts `width` (64 to 8192 pixels) and
-`timeoutMs` (default 30000 per slide). Required watermark and PDF image failures
+`timeoutMs` (default 30000 per slide). `imageFormat` defaults to `image/jpeg` with
+`quality: 0.95`; use `imageFormat: 'image/png'` for lossless output. JPEG bytes are
+embedded directly without decoding and recompressing each page. Rendering uses
+bounded concurrency and skips idle waits when all resources are ready. Export
+time still depends on slide count, image downloads, raster size, and hardware.
+Required watermark and PDF image failures
 reject the promise. PPTX retains its existing partial-media warning behavior.
 
 The native export dialog now offers `pptx`, `pdf`, and `json`; control their

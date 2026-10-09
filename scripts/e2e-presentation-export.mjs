@@ -89,7 +89,7 @@ try {
     observer.observe(document.getElementById('host'), { childList: true })
     let pdfHeartbeat = 0, pdfMaxGap = 0, pdfLastTick = performance.now()
     const pdfInterval = setInterval(() => { const now = performance.now(); pdfMaxGap = Math.max(pdfMaxGap, now - pdfLastTick); pdfLastTick = now; pdfHeartbeat++ }, 16)
-    const pdfPromise = window.fika.exportPresentationPdf(deck, { ...options, width: 2560 })
+    const pdfPromise = window.fika.exportPresentationPdf(deck, { ...options, width: 2560, imageFormat: 'image/png' })
     deck.slides.reverse() // The asynchronous export must retain its original snapshot.
     const pdf = await pdfPromise
     clearInterval(pdfInterval)
@@ -97,6 +97,9 @@ try {
     const other = { ...deck, title: 'Other deck', viewport: { size: 500, ratio: 1.5 }, slides: [deck.slides[0]] }
     const portrait = await window.fika.exportPresentationPdf(other, { ...options, width: 1280 })
     const pptx = await window.fika.exportPresentationPptx(other, options)
+    const invalidQuality = await window.fika.exportPresentationPdf(deck, { ...options, quality: 2 }).then(() => '', e => e.message)
+    const missingImage = { ...other, slides: [{ id: 'missing', elements: [{ id: 'image', type: 'image', src: 'data:image/png;base64,AAAA', left: 0, top: 0, width: 100, height: 100, rotate: 0 }] }] }
+    const imageError = await window.fika.exportPresentationPdf(missingImage, { ...options, mediaResolver: null }).then(() => '', e => e.message)
     const emptyError = await window.fika.exportPresentationPdf({ ...deck, slides: [] }, options).then(() => '', e => e.message)
     const markError = await window.fika.exportPresentationPdf(deck, { ...options, watermark: () => { throw new Error('watermark unavailable') } }).then(() => '', e => e.message)
     const canvas = document.createElement('canvas'); canvas.width = 10; canvas.height = 10
@@ -114,7 +117,7 @@ try {
       mounted: element.isConnected && element === document.querySelector('.fika-embed-app'),
       dialogs: document.querySelectorAll('[data-export-format]').length,
       clicksUnchanged: originalClick === HTMLAnchorElement.prototype.click,
-      emptyError, markError, progress, workerUrls, heartbeat, maxGap, pdfHeartbeat, pdfMaxGap,
+      emptyError, markError, invalidQuality, imageError, progress, workerUrls, heartbeat, maxGap, pdfHeartbeat, pdfMaxGap,
     }
     window.controller = controller
     return result
@@ -131,6 +134,8 @@ try {
   assert.equal(output.clicksUnchanged, true)
   assert.equal(downloads, 0)
   assert.match(output.emptyError, /no slides/)
+  assert.match(output.invalidQuality, /quality/)
+  assert.match(output.imageError, /image could not be loaded/)
   assert.equal(output.markError, 'watermark unavailable')
   assert.deepEqual(errors, [])
   const rich = await JSZip.loadAsync(Uint8Array.from(output.rich))
@@ -158,6 +163,7 @@ try {
   assert.deepEqual(Array.from(inflateSync(images[1].contents).subarray(0, 3)), [0, 0, 255])
   const portrait = await PDFDocument.load(Uint8Array.from(output.portrait))
   assert.deepEqual(portrait.getPage(0).getSize(), { width: 720, height: 1080 })
+  assert.ok(portrait.context.enumerateIndirectObjects().some(([, value]) => value instanceof PDFRawStream && value.dict.get(PDFName.of('Filter')) === PDFName.of('DCTDecode')), 'default PDF directly embeds JPEG')
   const marked = await PDFDocument.load(Uint8Array.from(output.marked))
   assert.ok(marked.context.enumerateIndirectObjects().filter(([, value]) => value instanceof PDFRawStream && value.dict.get(PDFName.of('Subtype')) === PDFName.of('Image')).length >= 2)
   await page.locator('[data-editor-tool="export"]').click()

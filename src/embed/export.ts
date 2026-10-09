@@ -20,6 +20,10 @@ export interface FikaExportOptions extends Pick<PresentationExportOptions, 'medi
   assetBaseUrl?: string
   /** PDF raster width in pixels. Default 2560, maximum 8192. */
   width?: number
+  /** JPEG avoids PNG decode/recompression in the PDF writer. Default image/jpeg. */
+  imageFormat?: 'image/jpeg' | 'image/png'
+  /** JPEG quality, 0–1. Default 0.95. PNG remains available for lossless output. */
+  quality?: number
   /** Resource timeout per slide in milliseconds. Default 30000. */
   timeoutMs?: number
   onProgress?: (completed: number, total: number, detail?: FikaExportProgress) => void
@@ -84,6 +88,10 @@ export async function exportPresentationPdf(document: FikaDocument, options: Fik
   const resolver = options.watermark === undefined ? getFikaExportWatermark() : options.watermark
   const mediaResolver = options.mediaResolver === undefined ? getFikaExportMediaResolver() : options.mediaResolver
   const rasterWidth = options.width ?? 2560
+  const format = options.imageFormat ?? 'image/jpeg'
+  const quality = options.quality ?? 0.95
+  if (format !== 'image/jpeg' && format !== 'image/png') throw new Error('Invalid PDF image format')
+  if (!Number.isFinite(quality) || quality < 0 || quality > 1) throw new Error('PDF quality must be between 0 and 1')
   if (!Number.isFinite(rasterWidth) || rasterWidth < 64 || rasterWidth > 8192) throw new Error('PDF raster width must be between 64 and 8192')
   if (options.timeoutMs !== undefined && (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0)) throw new Error('Invalid resource timeout')
   const [{ renderSlideImage }, { loadWatermarkImage }, { preferredInk, resolveSlideSurfaceColors }] = await Promise.all([
@@ -110,16 +118,26 @@ export async function exportPresentationPdf(document: FikaDocument, options: Fik
     const width = 720
     const height = width * deck.viewportRatio
     options.onProgress?.(0, deck.slides.length, { phase: 'rendering', completed: 0, total: deck.slides.length, progress: 0.05 })
-    for (let i = 0; i < deck.slides.length; i++) {
-      const slide = deck.slides[i]
-      const capture = await renderSlideImage({ ...deck, slide }, {
-        width: rasterWidth, format: 'image/png', fullResolutionImages: true,
+    // Bound canvas memory (~128 MiB, except a single oversized slide) while overlapping image loads and native
+    // encoding. Consume in deck order even when later slides finish first.
+    const concurrency = Math.max(1, Math.min(4, Math.floor(128 * 1024 * 1024 / (rasterWidth * rasterWidth * deck.viewportRatio * 8))))
+    for (let start = 0; start < deck.slides.length; start += concurrency) {
+      const batch = deck.slides.slice(start, start + concurrency)
+      // Wait for every capture on failure as well, so its canvases are released
+      // before rejecting the export (no unhandled background jobs).
+      const captures = await Promise.allSettled(batch.map(slide => renderSlideImage({ ...deck, slide }, {
+        width: rasterWidth, format, quality, fullResolutionImages: true,
         timeoutMs: options.timeoutMs ?? 30000, mediaResolver, strictResources: true,
-      })
-      const bytes = await capture.blob.arrayBuffer()
-      const dark = preferredInk(resolveSlideSurfaceColors(slide.background, deck.theme.backgroundColor)) === '#ffffff'
-      await worker.request('pdf-page', { bytes, width, height, dark }, [bytes])
-      options.onProgress?.(i + 1, deck.slides.length, { phase: 'rendering', completed: i + 1, total: deck.slides.length, progress: 0.05 + 0.85 * (i + 1) / deck.slides.length })
+      })))
+      for (let offset = 0; offset < captures.length; offset++) {
+        const capture = captures[offset]
+        if (capture.status === 'rejected') throw capture.reason
+        const bytes = await capture.value.blob.arrayBuffer()
+        const dark = preferredInk(resolveSlideSurfaceColors(batch[offset].background, deck.theme.backgroundColor)) === '#ffffff'
+        await worker.request('pdf-page', { bytes, format, width, height, dark }, [bytes])
+        const completed = start + offset + 1
+        options.onProgress?.(completed, deck.slides.length, { phase: 'rendering', completed, total: deck.slides.length, progress: 0.05 + 0.85 * completed / deck.slides.length })
+      }
       await yieldExportTask()
     }
     options.onProgress?.(deck.slides.length, deck.slides.length, { phase: 'packaging', completed: deck.slides.length, total: deck.slides.length, progress: 0.92 })
