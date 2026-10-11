@@ -119,26 +119,57 @@ export async function exportPresentationPdf(document: FikaDocument, options: Fik
     const height = width * deck.viewportRatio
     options.onProgress?.(0, deck.slides.length, { phase: 'rendering', completed: 0, total: deck.slides.length, progress: 0.05 })
     // Bound canvas memory (~128 MiB, except a single oversized slide) while overlapping image loads and native
-    // encoding. Consume in deck order even when later slides finish first.
+    // encoding. A sliding window keeps that many renders in flight, so slides finish (and report) one by one
+    // instead of in lockstep batches. Pages are still written in deck order.
     const concurrency = Math.max(1, Math.min(4, Math.floor(128 * 1024 * 1024 / (rasterWidth * rasterWidth * deck.viewportRatio * 8))))
-    for (let start = 0; start < deck.slides.length; start += concurrency) {
-      const batch = deck.slides.slice(start, start + concurrency)
-      // Wait for every capture on failure as well, so its canvases are released
-      // before rejecting the export (no unhandled background jobs).
-      const captures = await Promise.allSettled(batch.map(slide => renderSlideImage({ ...deck, slide }, {
+    const total = deck.slides.length
+    type Capture = Awaited<ReturnType<typeof renderSlideImage>>
+    const captures: Array<Promise<PromiseSettledResult<Capture>>> = []
+    let launched = 0
+    let rendered = 0
+    let failed = false
+    /** Rasters landed per in-flight slide: math-heavy slides report between completions too. */
+    const partial = new Map<number, number>()
+    let reported = 0.05
+    const reportRendering = () => {
+      let inFlight = 0
+      partial.forEach(fraction => { inFlight += 0.9 * fraction })
+      const progress = 0.05 + 0.85 * (rendered + inFlight) / total
+      if (progress <= reported) return
+      reported = progress
+      options.onProgress?.(rendered, total, { phase: 'rendering', completed: rendered, total, progress })
+    }
+    const launch = () => {
+      const index = launched++
+      const slide = deck.slides[index]
+      captures.push(renderSlideImage({ ...deck, slide }, {
         width: rasterWidth, format, quality, fullResolutionImages: true,
         timeoutMs: options.timeoutMs ?? 30000, mediaResolver, strictResources: true,
-      })))
-      for (let offset = 0; offset < captures.length; offset++) {
-        const capture = captures[offset]
-        if (capture.status === 'rejected') throw capture.reason
-        const bytes = await capture.value.blob.arrayBuffer()
-        const dark = preferredInk(resolveSlideSurfaceColors(batch[offset].background, deck.theme.backgroundColor)) === '#ffffff'
-        await worker.request('pdf-page', { bytes, format, width, height, dark }, [bytes])
-        const completed = start + offset + 1
-        options.onProgress?.(completed, deck.slides.length, { phase: 'rendering', completed, total: deck.slides.length, progress: 0.05 + 0.85 * completed / deck.slides.length })
+        onResourceProgress: fraction => { partial.set(index, fraction); reportRendering() },
+      }).then(
+        value => ({ status: 'fulfilled' as const, value }),
+        (reason: unknown) => ({ status: 'rejected' as const, reason }),
+      ).then(result => {
+        rendered++
+        partial.delete(index)
+        if (result.status === 'rejected') failed = true
+        else reportRendering()
+        if (!failed && launched < total) launch()
+        return result
+      }))
+    }
+    while (launched < Math.min(concurrency, total)) launch()
+    for (let index = 0; index < total; index++) {
+      const capture = await captures[index]
+      if (capture.status === 'rejected') {
+        // Let in-flight renders release their canvases before rejecting (no unhandled background jobs).
+        await Promise.all(captures)
+        throw capture.reason
       }
-      await yieldExportTask()
+      const bytes = await capture.value.blob.arrayBuffer()
+      const dark = preferredInk(resolveSlideSurfaceColors(deck.slides[index].background, deck.theme.backgroundColor)) === '#ffffff'
+      await worker.request('pdf-page', { bytes, format, width, height, dark }, [bytes])
+      if (index % concurrency === concurrency - 1) await yieldExportTask()
     }
     options.onProgress?.(deck.slides.length, deck.slides.length, { phase: 'packaging', completed: deck.slides.length, total: deck.slides.length, progress: 0.92 })
     const bytes = await worker.request<ArrayBuffer>('pdf-save', null)

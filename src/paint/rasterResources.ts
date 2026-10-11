@@ -32,7 +32,15 @@ const rasters = new Map<string, Raster>()
 const jobs = new Map<string, Promise<Raster | null>>()
 const listeners = new Map<string, Set<() => void>>()
 const workQueue: Array<{ key: string; produce: RasterProducer; resolve: (value: Raster | null) => void }> = []
-let draining = false
+/**
+ * Producers mostly await (SnapDOM serialization, SVG image decode), so a few
+ * in flight overlap that latency. One at a time made a math-heavy slide wait
+ * for every formula in turn — seconds per slide on a cold cache.
+ */
+const MAX_IN_FLIGHT = 4
+let inFlight = 0
+/** Set while a paint runs: jobs that paint is waiting for (see `collectRasterJobs`). */
+let collecting: Map<string, Promise<Raster | null>> | null = null
 
 const hash = (value: string) => {
   let h = 2166136261
@@ -63,27 +71,28 @@ const notify = (key: string) => {
 }
 
 const drain = () => {
-  if (draining) return
-  const next = workQueue.shift()
-  if (!next) return
-  draining = true
-  setTimeout(() => {
-    Promise.resolve()
-      .then(next.produce)
-      .then(value => {
-        if (value) touch(next.key, value)
-        next.resolve(value)
-      })
-      .catch(() => next.resolve(null))
-      .finally(() => {
-        draining = false
-        notify(next.key)
-        drain()
-      })
-  }, 0)
+  while (inFlight < MAX_IN_FLIGHT) {
+    const next = workQueue.shift()
+    if (!next) return
+    inFlight++
+    setTimeout(() => {
+      Promise.resolve()
+        .then(next.produce)
+        .then(value => {
+          if (value) touch(next.key, value)
+          next.resolve(value)
+        })
+        .catch(() => next.resolve(null))
+        .finally(() => {
+          inFlight--
+          notify(next.key)
+          drain()
+        })
+    }, 0)
+  }
 }
 
-const requestRaster = (key: string, produce: RasterProducer, invalidate: () => void): Raster | undefined => {
+export const requestRaster = (key: string, produce: RasterProducer, invalidate: () => void): Raster | undefined => {
   const hit = rasters.get(key)
   if (hit) {
     touch(key, hit)
@@ -95,15 +104,35 @@ const requestRaster = (key: string, produce: RasterProducer, invalidate: () => v
     listeners.set(key, set)
   }
   set.add(invalidate)
-  if (!jobs.has(key)) {
-    const job = new Promise<Raster | null>(resolve => {
+  let job = jobs.get(key)
+  if (!job) {
+    job = new Promise<Raster | null>(resolve => {
       workQueue.push({ key, produce, resolve })
       drain()
     })
     jobs.set(key, job)
     void job.finally(() => jobs.delete(key))
   }
+  collecting?.set(key, job)
   return undefined
+}
+
+/**
+ * Run a paint and return the raster jobs it is missing, keyed by resource.
+ * Offscreen renders wait for exactly these instead of every pending raster in
+ * the page, so slides rendered side by side no longer wait for each other.
+ */
+export const collectRasterJobs = (paint: () => void): Map<string, Promise<Raster | null>> => {
+  const outer = collecting
+  const jobsForPaint = new Map<string, Promise<Raster | null>>()
+  collecting = jobsForPaint
+  try {
+    paint()
+  } finally {
+    collecting = outer
+    if (outer) jobsForPaint.forEach((job, key) => outer.set(key, job))
+  }
+  return jobsForPaint
 }
 
 const canvas = (width: number, height: number) => {

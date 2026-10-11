@@ -2,7 +2,7 @@ import type { Slide, SlideTheme } from '@/types/slides'
 import { paintSlideToCanvas } from '@/paint/slidePainter'
 import { collectSlidePreviewSrcs, loadImageBitmap } from '@/utils/imageBitmapCache'
 import { getFikaExportMediaResolver, type FikaExportMediaResolver } from '@/configs/exportMediaResolver'
-import { hasPendingRasters } from '@/paint/rasterResources'
+import { collectRasterJobs } from '@/paint/rasterResources'
 import { deckHasMath, ensureMathliveReady } from '@/utils/math'
 
 /**
@@ -36,6 +36,8 @@ export interface FikaRenderSlideOptions {
   mediaResolver?: FikaExportMediaResolver | null
   /** Reject instead of encoding incomplete asynchronous resources. */
   strictResources?: boolean
+  /** Share (0..1) of this slide's asynchronous rasters that have landed, as they land. */
+  onResourceProgress?: (fraction: number) => void
 }
 
 export interface FikaDeckAtlasOptions extends Omit<FikaRenderSlideOptions, 'width'> {
@@ -86,10 +88,11 @@ const IDLE_WINDOW_MS = 220
 
 /**
  * Paint until the painter stops asking for a repaint (all async resources
- * settled) or the deadline passes. `invalidate` fires once per resolved
- * resource, so an idle window after the last repaint means the frame is final.
+ * settled) or the deadline passes. Rasters (math, charts, code) this slide is
+ * missing are awaited directly; other async resources fire `invalidate`, so an
+ * idle window after the last repaint means the frame is final.
  */
-async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, cssWidth: number, dpr: number, timeoutMs: number, transparentBackground = false, imageBitmaps?: ReadonlyMap<string, ImageBitmap>, strictResources = false): Promise<void> {
+async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, cssWidth: number, dpr: number, timeoutMs: number, transparentBackground = false, imageBitmaps?: ReadonlyMap<string, ImageBitmap>, strictResources = false, onResourceProgress?: (fraction: number) => void): Promise<void> {
   if (deckHasMath([target.slide])) {
     await ensureMathliveReady().catch(error => { if (strictResources) throw error })
   }
@@ -101,9 +104,19 @@ async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, css
     pending = true
     wake?.()
   }
+  /** Rasters already awaited once; still missing after that means the producer failed. */
+  const awaited = new Set<string>()
+  let landed = 0
+  let reported = 0
+  const report = () => {
+    const fraction = awaited.size ? landed / awaited.size : 0
+    if (fraction <= reported) return
+    reported = fraction
+    onResourceProgress?.(fraction)
+  }
   for (;;) {
     pending = false
-    paintSlideToCanvas(canvas, {
+    const missing = collectRasterJobs(() => paintSlideToCanvas(canvas, {
       slide: target.slide,
       theme: target.theme,
       viewportSize: target.viewportSize,
@@ -114,18 +127,34 @@ async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, css
       invalidate,
       transparentBackground,
       imageBitmaps,
-    })
-    // Export owns every image already. Raster producers register synchronously
-    // during paint, so a settled frame needs no speculative 220ms idle delay.
-    if (imageBitmaps && !pending && !hasPendingRasters()) return
-    const remaining = deadline - performance.now()
-    if (remaining <= 0) {
-      if (strictResources && (pending || hasPendingRasters())) throw new Error('Slide export resources timed out')
+    }))
+    const failed = [...missing.keys()].some(key => awaited.has(key))
+    if (failed) {
+      if (strictResources) throw new Error('A slide resource could not be rendered for export')
       return
     }
+    // Export owns every image already, so a frame with no missing raster is final.
+    if (imageBitmaps && !pending && missing.size === 0) return
+    const remaining = deadline - performance.now()
+    if (remaining <= 0) {
+      if (strictResources && (pending || missing.size > 0)) throw new Error('Slide export resources timed out')
+      return
+    }
+    if (missing.size > 0) {
+      // Repaint once this slide's own rasters land; work for other slides is irrelevant.
+      missing.forEach((job, key) => {
+        awaited.add(key)
+        void job.finally(() => { landed++; report() })
+      })
+      let timer: ReturnType<typeof setTimeout> | undefined
+      await Promise.race([
+        Promise.allSettled(missing.values()),
+        new Promise<void>(resolve => { timer = setTimeout(resolve, remaining) }),
+      ])
+      clearTimeout(timer)
+      continue
+    }
     // Wait for either a resource to resolve (repaint) or an idle window (done).
-    // Slow producers (MathLive typesetting, SnapDOM) take longer than
-    // the idle window, so an idle frame only counts once nothing is in flight.
     const woke = await new Promise<boolean>(resolve => {
       const timer = window.setTimeout(() => {
         wake = null
@@ -138,7 +167,7 @@ async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, css
       }
       if (pending) wake()
     })
-    if (!woke && !hasPendingRasters()) return
+    if (!woke) return
   }
 }
 
@@ -202,7 +231,7 @@ export async function renderSlideImage(target: RenderTarget, options: FikaRender
   const canvas = document.createElement('canvas')
   const bitmaps = options.fullResolutionImages ? await loadExportBitmaps(target.slide, options.timeoutMs ?? 15000, options.transparentBackground === true && options.format !== 'image/jpeg', options.mediaResolver) : undefined
   try {
-    await paintSettled(canvas, target, width, dpr, options.timeoutMs ?? 4000, options.transparentBackground === true && options.format !== 'image/jpeg', bitmaps, options.strictResources)
+    await paintSettled(canvas, target, width, dpr, options.timeoutMs ?? 4000, options.transparentBackground === true && options.format !== 'image/jpeg', bitmaps, options.strictResources, options.onResourceProgress)
     const blob = await encode(canvas, options.format ?? 'image/png', options.quality ?? 0.9)
     return { blob, width: canvas.width, height: canvas.height }
   } finally {
