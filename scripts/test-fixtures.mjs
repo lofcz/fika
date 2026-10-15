@@ -94,7 +94,6 @@ export const e2eScripts = [
   'scripts/e2e-present-commit-drain.mjs',
   'scripts/e2e-present-edit-sync.mjs',
   'scripts/e2e-preview-sync.mjs',
-  'scripts/e2e-preview-raster.mjs',
   'scripts/e2e-resize-commit-match.mjs',
   'scripts/e2e-resize-elements.mjs',
   'scripts/e2e-resize-shapes.mjs',
