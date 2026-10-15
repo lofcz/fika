@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type CSSProperties, type RefObject } from 'react'
-import { setLocale as setPretextLocale } from '@chenglou/pretext'
 import type { PPTShapeElement, PPTTextElement, TextInset } from '@/types/slides'
 import { authoredTextFitSize, elementLocksTextBox } from '@/utils/placeholderLayout'
 import { subscribeLiveBox } from '@/utils/liveElementSize'
@@ -138,7 +137,7 @@ export default (
     const defaultSize = authoredSize()
     const key = fitSessionKey(content, fontFamily, lineHeight, letterSpacing, localeRef.current, defaultSize)
     if (sessionRef.current?.key === key) return sessionRef.current
-    setPretextLocale(localeRef.current)
+    // Follow the page language rather than overriding it with the UI locale.
     sessionRef.current = createFitMeasureSession(content, {
       key,
       defaultFontFamily: fontFamily,

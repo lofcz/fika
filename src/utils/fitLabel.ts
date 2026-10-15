@@ -1,4 +1,4 @@
-import { measureNaturalWidth, prepareWithSegments, setLocale as setPretextLocale } from '@chenglou/pretext'
+import { measureNaturalWidth, prepareWithSegments } from '@chenglou/pretext'
 
 export type FitLabelParams = {
   text: string
@@ -27,7 +27,6 @@ const sizeKey = (params: FitLabelParams) => (
 )
 
 const lastSizeByLabel = new Map<string, number>()
-let activeLocale = ''
 
 export const lastFitLabelSize = (params: Omit<FitLabelParams, 'width' | 'height'>) => (
   lastSizeByLabel.get(preparedKey(params))
@@ -40,10 +39,7 @@ export function fitLabelFontSize(params: FitLabelParams): number {
   const cached = sizeCache.get(sizeKey(params))
   if (cached != null) return cached
 
-  if (activeLocale !== params.locale) {
-    activeLocale = params.locale
-    setPretextLocale(params.locale)
-  }
+  // Pretext follows the page language; the UI locale is only a cache key.
   const key = preparedKey(params)
   let prepared = preparedCache.get(key)
   if (!prepared) {
