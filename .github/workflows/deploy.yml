@@ -22,17 +22,17 @@ jobs:
       - name: Install dependencies
         run: |
           for attempt in 1 2 3 4 5; do
-            echo "bun --canary install attempt ${attempt}/5"
-            if bun --canary install --frozen-lockfile; then
+            echo "bun install attempt ${attempt}/5"
+            if bun install --frozen-lockfile; then
               exit 0
             fi
-            echo "bun --canary install failed (attempt ${attempt}/5), retrying..."
+            echo "bun install failed (attempt ${attempt}/5), retrying..."
             sleep $((attempt * 10))
           done
           exit 1
 
       - name: Build
-        run: bun --canary run build
+        run: bun run build
 
       - name: Deploy to github pages
         uses: peaceiris/actions-gh-pages@v4

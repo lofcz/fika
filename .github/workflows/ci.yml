@@ -25,11 +25,11 @@ jobs:
       - name: Install dependencies
         run: |
           for attempt in 1 2 3 4 5; do
-            echo "bun --canary install attempt ${attempt}/5"
-            if bun --canary install --frozen-lockfile; then
+            echo "bun install attempt ${attempt}/5"
+            if bun install --frozen-lockfile; then
               exit 0
             fi
-            echo "bun --canary install failed (attempt ${attempt}/5), retrying..."
+            echo "bun install failed (attempt ${attempt}/5), retrying..."
             sleep $((attempt * 10))
           done
           exit 1
@@ -38,17 +38,17 @@ jobs:
         run: bunx playwright install --with-deps chromium
 
       - name: Typecheck
-        run: bun --canary run type-check
+        run: bun run type-check
 
       - name: Lint
-        run: bun --canary x oxlint --quiet
+        run: bun x oxlint --quiet
 
       - name: Build embed for package regression tests
-        run: bun --canary run build:embed
+        run: bun run build:embed
 
       - name: Start dev server
         run: |
-          bun --canary run dev &
+          bun run dev &
           echo $! > /tmp/fika-dev.pid
           for i in $(seq 1 60); do
             if curl -sf http://127.0.0.1:5173/ | grep -q fika-shell; then
@@ -61,4 +61,4 @@ jobs:
           exit 1
 
       - name: Tests
-        run: bun --canary run test
+        run: bun run test
