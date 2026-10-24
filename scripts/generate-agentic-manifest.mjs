@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /**
@@ -37,7 +37,7 @@ function read(path) {
   return readFileSync(path, 'utf8')
 }
 
-function stripComments(s) {
+export function stripComments(s) {
   return s
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
@@ -146,7 +146,7 @@ function extractRegisters(src) {
 }
 
 /** Extract top-level `interface`/`enum`/`type` declarations → Map(name → normalized text). */
-function extractDecls(srcStripped) {
+export function extractDecls(srcStripped) {
   const decls = new Map()
   const lines = srcStripped.split('\n')
   let i = 0
@@ -200,9 +200,26 @@ function consumeTypeAlias(lines, start) {
     }
     const trimmed = l.trim()
     const continues = /[=|&,<(+\-]$/.test(trimmed) || trimmed.endsWith('=>') || /\b(extends|keyof|typeof)$/.test(trimmed)
-    if (depth <= 0 && !continues) { i++; break }
+    if (depth <= 0 && !continues) {
+      // The declaration emitter puts documented union/intersection members on
+      // a new line. Stripping their comments leaves blank lines before `|`/`&`.
+      let next = i + 1
+      while (next < lines.length && !lines[next].trim()) next++
+      if (!/^[|&]/.test(lines[next]?.trim() ?? '')) { i++; break }
+    }
   }
   return { text, next: i }
+}
+
+/** Ensure published canvas schemas describe every operation in the public types. */
+export function validateCanvasOperations(manifest, declarations) {
+  const declaration = declarations.match(/export type FikaCanvasOperation\s*=([\s\S]*?)(?=\nexport\s|$)/)?.[1]
+  const operationNames = text => [...new Set([...text.matchAll(/\bop\s*:\s*['"]([^'"]+)['"]/g)].map(match => match[1]))].sort((a, b) => a.localeCompare(b))
+  const expected = operationNames(stripComments(declaration ?? ''))
+  const actual = operationNames(manifest.helperTypes?.FikaCanvasOperation ?? '')
+  if (!expected.length || JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`Canvas manifest operations differ from public types: expected [${expected.join(', ')}], found [${actual.join(', ')}]`)
+  }
 }
 
 /** Parse an interface body of `'key': Type;` members → Map(key → normalized type). */
@@ -494,6 +511,7 @@ function main() {
     modelTypes,
   }
 
+  validateCanvasOperations(manifest, read(AGENTIC_DTS))
   mkdirSync(dirname(OUT), { recursive: true })
   writeFileSync(OUT, `${JSON.stringify(manifest, null, 2)}\n`)
   const documentedCommands = commands.filter(c => c.doc).length
@@ -504,4 +522,4 @@ function main() {
   )
 }
 
-main()
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()

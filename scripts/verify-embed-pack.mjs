@@ -17,6 +17,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { validateCanvasOperations } from './generate-agentic-manifest.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const tarballFlag = process.argv.indexOf('--tarball')
@@ -29,6 +30,7 @@ const REQUIRED = [
   'dist/embed/fika-embed.css',
   'dist/embed/agentic-manifest.json',
   'dist/types/embed/index.d.ts',
+  'dist/types/embed/agentic/types.d.ts',
   'dist/layout/utils/resizeDeck.js',
   'dist/types/utils/resizeDeck.d.ts',
   'dist/text/index.js',
@@ -92,6 +94,12 @@ function assertOnDisk() {
     assert(existsSync(join(root, rel)), `missing ${rel} — run \`bun run build:embed\` before packing`)
   }
 
+  const manifestPath = join(root, 'dist/embed/agentic-manifest.json')
+  const agenticTypesPath = join(root, 'dist/types/embed/agentic/types.d.ts')
+  if (existsSync(manifestPath) && existsSync(agenticTypesPath)) {
+    validateCanvasOperations(JSON.parse(readFileSync(manifestPath, 'utf8')), readFileSync(agenticTypesPath, 'utf8'))
+  }
+
   if (!existsSync(join(root, 'dist/types/embed/index.d.ts'))) return
   const dts = readFileSync(join(root, 'dist/types/embed/index.d.ts'), 'utf8')
   assert(dts.includes('mountFika'), 'dist/types/embed/index.d.ts does not export mountFika')
@@ -131,6 +139,9 @@ function assertTarball(tarball) {
   }
   assert(files.size > 20, `tarball is too small (${files.size} files) — embed build was not packed`)
   assert(bytes > 100_000, `tarball is too small (${bytes} bytes) — embed build was not packed`)
+  const manifest = JSON.parse(execFileSync('tar', ['-xOzf', tarball, 'package/dist/embed/agentic-manifest.json'], { encoding: 'utf8' }))
+  const declarations = execFileSync('tar', ['-xOzf', tarball, 'package/dist/types/embed/agentic/types.d.ts'], { encoding: 'utf8' })
+  validateCanvasOperations(manifest, declarations)
 }
 
 assertOnDisk()
