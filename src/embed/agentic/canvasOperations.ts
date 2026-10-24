@@ -1,4 +1,5 @@
 import type { FikaAgentCommand, FikaCanvasOperation } from './types'
+import { imageElement } from './layouts'
 
 /** Expand concise canvas operations into the existing validated native handlers. */
 export function canvasOperationCommand(operation: FikaCanvasOperation): FikaAgentCommand {
@@ -9,6 +10,14 @@ export function canvasOperationCommand(operation: FikaCanvasOperation): FikaAgen
   if ('width' in op && (!Number.isFinite(op.width) || op.width <= 0)) throw new Error('width must be positive')
   if ('height' in op && (!Number.isFinite(op.height) || op.height <= 0)) throw new Error('height must be positive')
   switch (op.op) {
+    case 'image': {
+      if (!op.natural || !Number.isFinite(op.natural.width) || op.natural.width <= 0 || !Number.isFinite(op.natural.height) || op.natural.height <= 0) throw new Error('image natural width and height must be positive')
+      if (op.fit !== undefined && op.fit !== 'contain' && op.fit !== 'cover') throw new Error('image fit must be contain or cover')
+      return { type: 'elements.create', payload: { slideId: op.pageId, select: false, element: {
+        ...imageElement({ left: op.x, top: op.y, width: op.width, height: op.height, src: op.src, natural: op.natural, fit: op.fit ?? 'contain', sourceUrl: op.sourceUrl }),
+        ...(op.id ? { id: op.id } : {}),
+      } } }
+    }
     case 'title': return { type: 'deck.setTitle', payload: { title: op.title } }
     case 'viewport': return { type: 'deck.setViewport', payload: { size: op.width, ratio: op.height / op.width } }
     case 'page': return { type: 'slides.create', payload: { slide: { ...(op.id ? { id: op.id } : {}), canvasName: op.name, canvasPosition: { x: op.x || 0, y: op.y || 0 }, elements: [], background: { type: 'solid', color: op.background || '#ffffff' } }, select: true } }

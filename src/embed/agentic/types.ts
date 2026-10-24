@@ -1205,6 +1205,8 @@ export type FikaCanvasOperation =
   | { op: 'text'; pageId?: string; id?: string; x: number; y: number; width: number; height: number; text: string; fontSize?: number; fontName?: string; color?: string; bold?: boolean; align?: 'left' | 'center' | 'right' | 'justify' }
   | { op: 'textUpdate'; pageId?: string; id: string; text: string; style?: TextRunStyle }
   | { op: 'shape'; pageId?: string; id?: string; x: number; y: number; width: number; height: number; shape: 'rect' | 'ellipse'; fill?: string }
+  /** Aspect-preserving placement. Defaults to contain so the entire subject remains visible. */
+  | { op: 'image'; pageId?: string; id?: string; x: number; y: number; width: number; height: number; src: string; natural: { width: number; height: number }; fit?: 'contain' | 'cover'; sourceUrl?: string }
   | { op: 'element'; pageId?: string; element: Partial<PPTElement> & { type: PPTElement['type'] } }
   | { op: 'update'; pageId?: string; id: string; patch: Partial<PPTElement> }
   | { op: 'remove'; pageId?: string; id: string };

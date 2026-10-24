@@ -1153,6 +1153,21 @@ export function createAgenticApi(options: {
     slideCount: number;
     plan: ReturnType<typeof sequenceComposition>;
   } | undefined;
+  const captureAuthoringState = () => ({
+    lastAnchor,
+    anchors: new Map(anchorBySlideId),
+    recentLayouts: [...recentBodyLayoutIds],
+    plannedAnchors: plannedAnchors ? [...plannedAnchors] : undefined,
+    compositionSession: compositionSession ? clonePlain(compositionSession) : undefined,
+  });
+  const restoreAuthoringState = (state: ReturnType<typeof captureAuthoringState>) => {
+    lastAnchor = state.lastAnchor;
+    anchorBySlideId.clear();
+    for (const [id, anchor] of state.anchors) anchorBySlideId.set(id, anchor);
+    recentBodyLayoutIds.splice(0, recentBodyLayoutIds.length, ...state.recentLayouts);
+    plannedAnchors = state.plannedAnchors ? [...state.plannedAnchors] : undefined;
+    compositionSession = state.compositionSession ? clonePlain(state.compositionSession) : undefined;
+  };
   const syncPlanOnInsert = (index: number, count = 1) => {
     if (count <= 0) return;
     if (plannedAnchors) {
@@ -1316,7 +1331,7 @@ export function createAgenticApi(options: {
   const withMutation = async <TData,>(command: FikaAgentCommand, handler: () => TData | Promise<TData>, changed: boolean | ((data: TData) => boolean) = true, runOptions: RunCommandOptions = {}): Promise<FikaCommandResult<TData>> => {
     if (destroyed) return failResult(command, new Error('Fika controller has been destroyed')) as FikaCommandResult<TData>;
     const before = captureRuntimeState(stores);
-    const beforeLastAnchor = lastAnchor;
+    const beforeAuthoring = captureAuthoringState();
     const beforeVersion = documentVersion;
     const warnings: FikaCommandIssue[] = [];
     const previousWarnings = currentWarnings;
@@ -1327,19 +1342,19 @@ export function createAgenticApi(options: {
       if (destroyed) {
         restoreRuntimeState(stores, before);
         documentVersion = beforeVersion;
-        lastAnchor = beforeLastAnchor;
+        restoreAuthoringState(beforeAuthoring);
         return failResult(command, new Error('Fika controller has been destroyed')) as FikaCommandResult<TData>;
       }
       const didChange = typeof changed === 'function' ? changed(data) : changed;
       if (didChange && (runOptions.restoreOnSuccess ?? dryRun)) {
         restoreRuntimeState(stores, before);
-        lastAnchor = beforeLastAnchor;
+        restoreAuthoringState(beforeAuthoring);
       }
       const blocking = warnings.find(w => w.recoverable === false && w.code === 'SlideQualityError');
       if (blocking && didChange && !dryRun) {
         restoreRuntimeState(stores, before);
         documentVersion = beforeVersion;
-        lastAnchor = beforeLastAnchor;
+        restoreAuthoringState(beforeAuthoring);
         const result = makeResult(command, false, syncDataDocumentVersion(data), false, warnings);
         result.errors = [blocking];
         if (runOptions.emitEvents !== false) emit({ type: 'commandFailed',
@@ -1366,7 +1381,7 @@ export function createAgenticApi(options: {
     } catch (error) {
       restoreRuntimeState(stores, before);
       documentVersion = beforeVersion;
-      lastAnchor = beforeLastAnchor;
+      restoreAuthoringState(beforeAuthoring);
       const result = failResult(command, error);
       if (!destroyed && runOptions.emitEvents !== false) emit({
         type: 'commandFailed',
@@ -1525,7 +1540,7 @@ export function createAgenticApi(options: {
           ...operation.style,
         };
       }
-      if (['text', 'shape', 'element'].includes(operation.op)) {
+      if (['text', 'shape', 'image', 'element'].includes(operation.op)) {
         const id = operation.op === 'element' ? operation.element.id : 'id' in operation ? operation.id : undefined;
         if (id && stores.slides.slides.some(page => page.elements.some(element => element.id === id))) throw new Error(`Element id already exists: ${id}`);
       }
@@ -4463,7 +4478,7 @@ export function createAgenticApi(options: {
       return result as FikaCommandResult<TData>;
     }
   };
-  const execute = async <TData = unknown,>(command: FikaAgentCommand): Promise<FikaCommandResult<TData>> => {
+  const executeNow = async <TData = unknown,>(command: FikaAgentCommand): Promise<FikaCommandResult<TData>> => {
     if (destroyed) return failResult(command, new Error('Fika controller has been destroyed')) as FikaCommandResult<TData>;
     const failure = commandTypeFailure(command);
     if (failure) {
@@ -4488,11 +4503,11 @@ export function createAgenticApi(options: {
       version: changesDocument(command)
     });
   };
-  const executeBatch = async (commands: FikaAgentCommand[], batchOptions: FikaBatchOptions = {}) => {
+  const executeBatchNow = async (commands: FikaAgentCommand[], batchOptions: FikaBatchOptions = {}) => {
     if (destroyed) return commands.map(command => failResult(command, new Error('Fika controller has been destroyed')));
     const before = captureRuntimeState(stores);
     const beforeDocumentVersion = documentVersion;
-    const beforeLastAnchor = lastAnchor;
+    const beforeAuthoring = captureAuthoringState();
     const batchDryRun = batchOptions.dryRun === true;
     const atomic = batchOptions.atomic !== false;
     const results: FikaCommandResult[] = [];
@@ -4500,7 +4515,7 @@ export function createAgenticApi(options: {
       const command = commands[index];
       const descriptor = registry.get(command.type);
       const commandBefore = captureRuntimeState(stores);
-      const commandBeforeLastAnchor = lastAnchor;
+      const commandBeforeAuthoring = captureAuthoringState();
       const commandDryRun = command.meta?.dryRun === true && !batchDryRun;
       let result: FikaCommandResult;
       const commandFailure = commandTypeFailure(command);
@@ -4526,7 +4541,7 @@ export function createAgenticApi(options: {
           const blocking = warnings.find(w => w.recoverable === false && w.code === 'SlideQualityError');
           if (blocking && changed && !batchDryRun && !commandDryRun) {
             restoreRuntimeState(stores, commandBefore);
-            lastAnchor = commandBeforeLastAnchor;
+            restoreAuthoringState(commandBeforeAuthoring);
             result = makeResult(command, false, data, false, warnings);
             result.errors = [blocking];
           } else {
@@ -4535,11 +4550,11 @@ export function createAgenticApi(options: {
           }
           if (commandDryRun) {
             restoreRuntimeState(stores, commandBefore);
-            lastAnchor = commandBeforeLastAnchor;
+            restoreAuthoringState(commandBeforeAuthoring);
           }
           if (destroyed) {
             restoreRuntimeState(stores, before);
-            lastAnchor = beforeLastAnchor;
+            restoreAuthoringState(beforeAuthoring);
             documentVersion = beforeDocumentVersion;
             const destroyedResults = commands.map(command => failResult(command, new Error('Fika controller has been destroyed')));
             for (const result of destroyedResults) result.documentVersion = documentVersion;
@@ -4547,7 +4562,7 @@ export function createAgenticApi(options: {
           }
         } catch (error) {
           restoreRuntimeState(stores, commandBefore);
-          lastAnchor = commandBeforeLastAnchor;
+          restoreAuthoringState(commandBeforeAuthoring);
           result = failResult(command, error);
         } finally {
           currentWarnings = previousWarnings;
@@ -4556,7 +4571,7 @@ export function createAgenticApi(options: {
       results.push(result);
       if (!result.ok && atomic) {
         restoreRuntimeState(stores, before);
-        lastAnchor = beforeLastAnchor;
+        restoreAuthoringState(beforeAuthoring);
         for (let resultIndex = 0; resultIndex < results.length; resultIndex++) {
           if (results[resultIndex].changed) results[resultIndex] = markRolledBack(results[resultIndex]);
         }
@@ -4566,7 +4581,7 @@ export function createAgenticApi(options: {
     }
     if (batchDryRun) {
       restoreRuntimeState(stores, before);
-      lastAnchor = beforeLastAnchor;
+      restoreAuthoringState(beforeAuthoring);
     }
     const documentChangedResults = results.filter((result, index) => result.changed && !!commands[index] && changesDocument(commands[index]));
     documentVersion = beforeDocumentVersion;
@@ -4589,7 +4604,7 @@ export function createAgenticApi(options: {
         if (!destroyed) emitDocumentChanged(batchCommand);
       } catch (error) {
         restoreRuntimeState(stores, before);
-        lastAnchor = beforeLastAnchor;
+        restoreAuthoringState(beforeAuthoring);
         documentVersion = beforeDocumentVersion;
         for (let resultIndex = 0; resultIndex < results.length; resultIndex++) {
           if (results[resultIndex].changed) {
@@ -4613,6 +4628,21 @@ export function createAgenticApi(options: {
     }
     return results;
   };
+  // One public call owns its rollback/snapshot boundary until it settles.
+  // Without a shared queue an awaited template or snapshot can restore over a
+  // newer edit, and reads can expose a batch that will subsequently roll back.
+  let executionQueue: Promise<void> | null = null;
+  const enqueue = <T,>(run: () => Promise<T>): Promise<T> => {
+    const result = executionQueue ? executionQueue.then(run) : run();
+    const tail = result.then(() => undefined, () => undefined);
+    executionQueue = tail;
+    void tail.then(() => { if (executionQueue === tail) executionQueue = null; });
+    return result;
+  };
+  const execute = <TData = unknown,>(command: FikaAgentCommand): Promise<FikaCommandResult<TData>> =>
+    enqueue(() => executeNow<TData>(command));
+  const executeBatch = (commands: FikaAgentCommand[], batchOptions: FikaBatchOptions = {}) =>
+    enqueue(() => executeBatchNow(commands, batchOptions));
   const canExecute = (command: FikaAgentCommand): FikaAgentCapability => {
     if (destroyed) return {
       ok: false,

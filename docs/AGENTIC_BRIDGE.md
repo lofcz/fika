@@ -189,6 +189,8 @@ The bridge maintains a monotonic `documentVersion` and a separate `snapshotId`.
 - Passing `{ atomic: false }` keeps successful child changes, rolls back only the failed command, continues later commands, and returns the mixed success/failure result list for the caller to inspect.
 - Passing `{ commit: false }` to `executeBatch()` suppresses the final batch snapshot.
 - Passing `{ dryRun: true }` lets commands validate against the staged batch state, then restores the pre-batch runtime state, returns `changed: false`, and creates no snapshot.
+- Calls to `execute()` and `executeBatch()` share one queue, including reads, so concurrent host calls finish in submission order and a failed async command cannot undo a later edit.
+- Dry runs and failed batches restore the composition plan and layout history as well as document state. Validation does not consume planned layout positions or affect later repeat warnings.
 - `history.commit`, `history.undo`, and `history.redo` are command-layer operations and return bridge state.
 
 Events emitted through `subscribe()` include `documentChanged`, `selectionChanged`, `commandApplied`, `commandFailed`, and `destroyed`. Command events include the command envelope and result when available.
@@ -539,12 +541,18 @@ The default read is 40 elements with 160 text characters each; `offset`, `limit`
 `canvas.apply` accepts `{ operations: [...] }` (1–100 operations) and returns only
 operation acknowledgements and IDs. One call is one undoable transaction, and a
 failure rolls back the entire call. Operations are `title`, `viewport`, `page`,
-`pageUpdate`, `text`, `textUpdate`, `shape`, `element`, `update`, and `remove`.
+`pageUpdate`, `text`, `textUpdate`, `shape`, `image`, `element`, `update`, and `remove`.
 Use explicit IDs to reference newly created pages/elements in the same call.
 Text is authored as Markdown with fixed-size boxes. `textUpdate` preserves the
 existing first-run typography unless `style` overrides it. The `element` and
 `update` operations expose native artwork types and nested-frame properties.
 Existing bridge commands remain available for specialized editing.
+
+`image` takes `src`, `x`, `y`, `width`, `height`, and the source image's
+`natural: { width, height }`. It defaults to `fit: "contain"`, centering the
+complete image in the requested box without stretching or cutting off the
+subject. Use `fit: "cover"` for a centered crop that fills the box, and
+`sourceUrl` to keep its citation. Both modes use native editable image elements.
 
 For an initial invitation, batch the title, viewport, page, decorative shapes,
 and text. For a revision, read only the target page and send targeted operations;

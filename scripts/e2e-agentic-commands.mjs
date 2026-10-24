@@ -350,8 +350,17 @@ async function runSuite(page) {
 
     const canvasRead = await agent('canvas.get', { limit: 2 });
     rec('canvas.get bounds its response', canvasRead.result.ok && canvasRead.result.data.elements.length <= 2);
-    const canvasApply = await agent('canvas.apply', { operations: [{ op: 'title', title: 'Canvas agent test' }] });
-    rec('canvas.apply returns compact acknowledgements', canvasApply.result.ok && canvasApply.result.data.results.length === 1);
+    const canvasApply = await agent('canvas.apply', { operations: [
+      { op: 'title', title: 'Canvas agent test' },
+      { op: 'image', id: 'canvas_photo', src: PNG, x: 20, y: 40, width: 200, height: 200, natural: { width: 800, height: 400 } },
+    ] });
+    rec('canvas.apply returns compact acknowledgements', canvasApply.result.ok && canvasApply.result.data.results.length === 2);
+    const canvasPhoto = current()?.elements.find(element => element.id === 'canvas_photo');
+    rec('canvas image operation keeps the complete subject and its aspect ratio', canvasPhoto?.width === 200 && canvasPhoto?.height === 100 && canvasPhoto?.top === 90 && !canvasPhoto?.clip, { width: canvasPhoto?.width, height: canvasPhoto?.height });
+    const duplicatePhoto = await agent('canvas.apply', { operations: [
+      { op: 'image', id: 'canvas_photo', src: PNG, x: 0, y: 0, width: 200, height: 200, natural: { width: 800, height: 400 } },
+    ] });
+    rec('canvas image operation refuses duplicate IDs without changing the original', !duplicatePhoto.result.ok && current()?.elements.filter(element => element.id === 'canvas_photo').length === 1);
     const seeded = await seed()
     rec('deck.set seeds the golden document', seeded.ok && store().title === 'Agentic bridge golden deck' && slideById(IDS.slide)?.elements.length === 11, { slides: store().slides.length, error: err(seeded) })
 
@@ -1356,6 +1365,44 @@ async function runSuite(page) {
         { id: 'cmd_batch_remark', type: 'slides.update', payload: { slideId: 'slide_batch_ok', patch: { remark: '<p>batch</p>' } }, meta: { source: 'agent' } },
       ], { atomic: true, commit: false })
       rec('executeBatch success applies create then update', results.every(r => r.ok) && slideById('slide_batch_ok')?.remark === '<p>batch</p>', { ok: results.map(r => r.ok), remark: slideById('slide_batch_ok')?.remark })
+    }
+
+    {
+      await agent('deck.applyStyle', { styleId: 'minimal' })
+      const dryRun = await agent('deck.setup', { styleId: 'minimal', slideCount: 23 }, { dryRun: true })
+      const planned = await agent('deck.planComposition', { slideCount: 23 })
+      rec('dry-run setup does not leak its composition session', dryRun.result.ok && planned.result.ok && planned.result.data?.skipped !== true, { skipped: planned.result.data?.skipped })
+      await window.__FIKA_AGENTIC__.executeBatch([
+        { type: 'deck.planComposition', payload: { slideCount: 31 } },
+        { type: 'slides.delete', payload: { slideId: 'missing_after_plan' } },
+      ], { atomic: true, commit: false })
+      const afterRollback = await agent('deck.planComposition', { slideCount: 31 })
+      rec('atomic rollback restores the prior composition session', afterRollback.result.ok && afterRollback.result.data?.skipped !== true, { skipped: afterRollback.result.data?.skipped })
+    }
+    for (const batched of [false, true]) {
+      let release
+      let started
+      const entered = new Promise(resolve => { started = resolve })
+      window.__FIKA_TEMPLATES__.setLoaders({
+        e2e_slow_failure: async () => {
+          started()
+          await new Promise(resolve => { release = resolve })
+          throw new Error('Controlled template failure')
+        },
+      })
+      const failingCommand = { type: 'deck.applyTemplate', payload: { templateId: 'e2e_slow_failure' }, meta: { commit: false } }
+      const pending = batched
+        ? window.__FIKA_AGENTIC__.executeBatch([
+          { type: 'deck.setTitle', payload: { title: 'Uncommitted batch title' } }, failingCommand,
+        ], { commit: false })
+        : window.__FIKA_AGENTIC__.execute(failingCommand)
+      await entered
+      const title = `Concurrent ${batched ? 'batch' : 'command'} survives rollback`
+      const mutation = window.__FIKA_AGENTIC__.execute({ type: 'deck.setTitle', payload: { title }, meta: { commit: false } })
+      const read = window.__FIKA_AGENTIC__.execute({ type: 'deck.get' })
+      release()
+      const [failed, changed, observed] = await Promise.all([pending, mutation, read])
+      rec(`${batched ? 'batch' : 'command'} rollback cannot erase a later concurrent edit`, (batched ? failed.some(result => !result.ok) : !failed.ok) && changed.ok && store().title === title && observed.data?.title === title, { finalTitle: store().title, readTitle: observed.data?.title })
     }
 
     const missing = expectedCommands.filter(type => !seen.has(type))

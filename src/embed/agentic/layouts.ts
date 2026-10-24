@@ -508,7 +508,7 @@ export interface ImageNaturalSize {
  * When the natural size is unknown the box is used as-is; `fixedRatio` then
  * stays `false` because the box aspect is not the image's.
  */
-function imageElement(opts: {
+export function imageElement(opts: {
   left: number;
   top: number;
   width: number;

@@ -861,7 +861,7 @@
     },
     "canvas.apply": {
       "summary": "Create or edit a canvas using up to 100 compact operations in one undoable transaction.",
-      "details": "Operations: title, viewport, page, pageUpdate, text, shape, element, update, remove. Explicit page and element IDs allow references later in the same call. Text uses Markdown and fixed-size boxes. Rich native elements and frames use element/update. The first page operation replaces an untouched unnamed empty starter. Failure rolls back the entire call. Returns only operation names and IDs, never image data or complete elements."
+      "details": "Operations: title, viewport, page, pageUpdate, text, textUpdate, shape, image, element, update, remove. Explicit page and element IDs allow references later in the same call. Text uses Markdown and fixed-size boxes. image takes src, x/y/width/height, natural:{width,height}, optional sourceUrl and fit:contain|cover. It preserves aspect ratio; contain (default) keeps the entire subject visible, cover crops to fill the box. Rich native elements and frames use element/update. The first page operation replaces an untouched unnamed empty starter. Failure rolls back the entire call. Returns only operation names and IDs, never image data or complete elements."
     }
   },
   "guides": [
