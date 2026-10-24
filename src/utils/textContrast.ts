@@ -589,11 +589,9 @@ export const isDefaultInk = (color: string): boolean => {
   const c = tinycolor(color);
   if (!c.isValid()) return false;
   if (DEFAULT_INK_HEX.has(c.toHexString())) return true;
-  const {
-    s,
-    v
-  } = c.toHsv();
-  return s < 0.2 || v < 0.3;
+  // Darkness alone does not make an ink a default: saturated navy/teal brand
+  // colors can be darker than theme greys and must keep their authored hue.
+  return c.toHsv().s < 0.2;
 };
 
 /**
