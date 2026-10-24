@@ -61,6 +61,8 @@ export interface TextFitRun {
 export interface TextFitBlock {
   /** Plain text of the block (markers stripped). */
   text: string;
+  /** Explicit preformatted text and hard breaks retain authored whitespace. */
+  whiteSpace?: 'pre-wrap';
   /** Authored font size in px (its largest run, to stay safe). */
   size: number;
   bold?: boolean;
@@ -333,6 +335,7 @@ const measureRunsHeight = (
   width: number,
   lineHeight: number,
   letterSpacing?: number,
+  whiteSpace?: TextFitBlock['whiteSpace'],
 ): number => {
   const items = runs.map(run => richInlineFromRun(
     run,
@@ -342,10 +345,10 @@ const measureRunsHeight = (
   ))
   // Prepared rich-inline handles are immutable — cache them like the block
   // prepares so the fit search's repeated candidates stay cheap.
-  const key = `${items.map(item => `${item.font}\0${item.text}\0${item.extraWidth ?? 0}\0${item.break ?? ''}`).join('\x1f')}\0${letterSpacing ?? 0}`
+  const key = `${items.map(item => `${item.font}\0${item.text}\0${item.extraWidth ?? 0}\0${item.break ?? ''}`).join('\x1f')}\0${letterSpacing ?? 0}\0${whiteSpace ?? 'normal'}`
   let prepared = richInlineCache.get(key)
   if (!prepared) {
-    prepared = prepareRichInline(items)
+    prepared = prepareRichInline(items, { whiteSpace })
     if (richInlineCache.size >= RICH_INLINE_CACHE_MAX) {
       const oldest = richInlineCache.keys().next().value
       if (oldest !== undefined) richInlineCache.delete(oldest)
@@ -366,9 +369,9 @@ const measureRunsHeight = (
       const run = runs[fragment.itemIndex]
       if (run) lineRuns.push(run)
     }
-    height += lineBoxHeight(lineRuns, sizeScale, lineHeight)
+    height += lineBoxHeight(lineRuns.length ? lineRuns : runs, sizeScale, lineHeight)
   })
-  return height
+  return Math.max(height, lineBoxHeight(runs, sizeScale, lineHeight))
 }
 
 /**
@@ -378,11 +381,11 @@ const measureRunsHeight = (
  */
 const preparedHandleCache = new Map<string, ReturnType<typeof pretextPrepare>>()
 const PREPARED_CACHE_MAX = 600
-const prepareCached = (text: string, font: string, letterSpacing?: number) => {
-  const key = `${text.length}\0${text.slice(0, 64)}\0${font}\0${letterSpacing ?? 0}`
+const prepareCached = (text: string, font: string, letterSpacing?: number, whiteSpace?: TextFitBlock['whiteSpace']) => {
+  const key = `${text.length}\0${text.slice(0, 64)}\0${font}\0${letterSpacing ?? 0}\0${whiteSpace ?? 'normal'}`
   let prepared = preparedHandleCache.get(key)
   if (!prepared) {
-    prepared = pretextPrepare(text, font, letterSpacing ? { letterSpacing } : undefined)
+    prepared = pretextPrepare(text, font, { letterSpacing, whiteSpace })
     if (preparedHandleCache.size >= PREPARED_CACHE_MAX) {
       const oldest = preparedHandleCache.keys().next().value
       if (oldest !== undefined) preparedHandleCache.delete(oldest)
@@ -401,15 +404,15 @@ export function measureTextBlocksHeight(blocks: TextFitBlock[], options: Measure
     if (block.runs?.length) {
       // Mixed-size paragraph: measure exactly — rich-inline breaks lines across
       // the per-run fonts and each line costs its own max run size.
-      total += measureRunsHeight(block.runs, block.fontFamily, sizeScale, width, options.lineHeight, options.letterSpacing)
+      total += measureRunsHeight(block.runs, block.fontFamily, sizeScale, width, options.lineHeight, options.letterSpacing, block.whiteSpace)
       continue
     }
     const size = block.size * sizeScale;
     if (size <= 0) continue;
     const lineHeightPx = size * options.lineHeight;
     const font = canvasFont(block, size);
-    const prepared = prepareCached(block.text, font, options.letterSpacing || undefined);
-    total += pretextLayout(prepared, editorWrapWidth(width, font), lineHeightPx).height;
+    const prepared = prepareCached(block.text, font, options.letterSpacing || undefined, block.whiteSpace);
+    total += Math.max(lineHeightPx, pretextLayout(prepared, editorWrapWidth(width, font), lineHeightPx).height);
   }
   total += Math.max(0, blocks.length - 1) * (options.blockSpace ?? 0);
   return total
@@ -541,7 +544,7 @@ export function createFitMeasureSession(
       items: blocks.map(block => ({
         block,
         size: block.size,
-        handle: pretextPrepare(block.text, canvasFont(block, block.size), prepareOptions),
+        handle: pretextPrepare(block.text, canvasFont(block, block.size), { ...prepareOptions, whiteSpace: block.whiteSpace }),
       })),
     }
   }
@@ -561,7 +564,7 @@ export function measureSessionHeight(
   let total = 0
   for (const item of session.items) {
     const width = Math.max(1, innerWidth - listColumnInset(item.block, item.size, bulletIndent))
-    if (item.block.runs?.some(run => run.mathLatex)) {
+    if (item.block.runs?.length) {
       total += measureRunsHeight(
         item.block.runs,
         item.block.fontFamily,
@@ -569,11 +572,12 @@ export function measureSessionHeight(
         width,
         session.lineHeight,
         session.letterSpacing,
+        item.block.whiteSpace,
       )
       continue
     }
     const lineHeightPx = item.size * session.lineHeight
-    total += pretextLayout(item.handle, editorWrapWidth(width, canvasFont(item.block, item.size)), lineHeightPx).height
+    total += Math.max(lineHeightPx, pretextLayout(item.handle, editorWrapWidth(width, canvasFont(item.block, item.size)), lineHeightPx).height)
   }
   total += Math.max(0, session.items.length - 1) * blockSpace
   return total
@@ -826,6 +830,7 @@ const runSizeProfile = (
   block: Element,
   defaultSize: number,
   defaultFamily: string,
+  preserveWhitespace: boolean,
 ): NonNullable<TextFitBlock['runs']> => {
   const runs: NonNullable<TextFitBlock['runs']> = []
   const walk = (
@@ -856,11 +861,16 @@ const runSizeProfile = (
     }
     for (const node of el.childNodes) {
       if (node.nodeType === Node.TEXT_NODE) {
-        const text = (node.textContent || '').replace(/\s+/g, ' ')
+        const source = node.textContent || ''
+        const text = preserveWhitespace ? source : source.replace(/\s+/g, ' ')
         if (text) runs.push({ text, ...next })
       }
       else if (node.nodeType === Node.ELEMENT_NODE) {
         const child = node as HTMLElement
+        if (child.tagName === 'BR') {
+          if (!child.classList.contains('ProseMirror-trailingBreak')) runs.push({ text: '\n', ...next })
+          continue
+        }
         if (child.classList?.contains(MATH_CLASS)) {
           const latex = (child.getAttribute('data-latex') || '').trim()
           if (latex) {
@@ -898,7 +908,7 @@ const runSizeProfile = (
  * and top-level paragraph/quote becomes one block; a block's representative font
  * size is the largest inline size in it (so the clip pad never under-
  * estimates), while wrapping measures the mixed-size run profile.
- * Returns no blocks when there's no DOM parser or no text. List items are tagged
+ * Empty paragraphs occupy one native line. List items are tagged
  * so the marker indent is accounted for.
  */
 export function extractFitBlocksFromHtml(html: string, options: ExtractOptions): ExtractedContent {
@@ -916,12 +926,12 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
   const candidates = blockEls.length ? blockEls : Array.from(root.children);
   const blocks: TextFitBlock[] = [];
   for (const el of candidates) {
-    const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
     const isList = el.tagName === 'LI';
-    // Empty bullets still occupy a line (Enter on a list placeholder).
-    if (!text && !isList) continue;
-    const runs = runSizeProfile(el, defaultSize, defaultFamily)
-    const keepRuns = runs.length > 1 || runs.some(run => !!run.mathLatex)
+    const preserveWhitespace = /^(pre|pre-wrap|break-spaces)$/.test((el as HTMLElement).style?.whiteSpace || '')
+    const runs = runSizeProfile(el, defaultSize, defaultFamily, preserveWhitespace)
+    const sourceText = runs.map(run => run.text).join('')
+    const text = preserveWhitespace ? sourceText : sourceText.replace(/^ +| +$/g, '')
+    const whiteSpace = preserveWhitespace || sourceText.includes('\n') ? 'pre-wrap' as const : undefined
     const list = isList ? el.closest('ol, ul') : null
     const listMarker = isList
       ? (list?.tagName === 'OL'
@@ -930,16 +940,18 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
       : undefined
     const align = paragraphAlignOf(el)
     blocks.push({
-      text: text || ' ',
+      text,
+      ...(whiteSpace ? { whiteSpace } : {}),
       size: blockFontSize(el, defaultSize),
-      bold: !!el.querySelector('strong, b'),
-      italic: !!el.querySelector('em, i'),
+      bold: runs[0]?.bold || !!el.querySelector('strong, b'),
+      italic: runs[0]?.italic || !!el.querySelector('em, i'),
       fontFamily: blockFontFamily(el, defaultFamily),
       listItem: isList,
       align,
       listMarker,
       ...(isList ? listIndentFrom(el) : {}),
-      ...(keepRuns ? { runs } : {})
+      // A single styled run still carries color, weight, and italic metadata.
+      ...(runs.length ? { runs } : {})
     });
   }
 

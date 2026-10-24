@@ -193,7 +193,8 @@ const prepareLines = (
     }))
     const prepared = prepareRichInline(items.map(run => (
       richInlineFromRun(run, fontOf(run, family, scale), scale, letterSpacing || undefined)
-    )))
+    )), { whiteSpace: block.whiteSpace })
+    const firstLine = lines.length
     const lineWidth = Math.max(1, width - listInset(block, blockEm(items, scale)))
     const spaceRun = items.find(run => !run.mathLatex) || items[0]
     const wrapWidth = editorWrapWidth(lineWidth, fontOf(spaceRun, family, scale))
@@ -204,7 +205,7 @@ const prepareLines = (
         const run = items[fragment.itemIndex]
         if (run) lineRuns.push(run)
       }
-      if (!lineRuns.length) lineRuns.push({ text: '', size: DEFAULT_TEXT_FONT_SIZE })
+      if (!lineRuns.length) lineRuns.push(...items)
       lines.push({
         block,
         items,
@@ -212,6 +213,11 @@ const prepareLines = (
         width: line.width,
         height: Math.max(1, lineBoxHeight(lineRuns, scale, lineHeight)),
       })
+    })
+    // Empty paragraphs have no glyph fragments but still own an authored line.
+    if (lines.length === firstLine) lines.push({
+      block, items, fragments: [], width: 0,
+      height: Math.max(1, lineBoxHeight(items, scale, lineHeight)),
     })
   }
   return lines
