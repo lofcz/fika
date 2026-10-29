@@ -20,7 +20,9 @@ type VendorElement = HTMLElement & {
  * resort — fullscreening the page keeps that chrome on screen.
  */
 export function getFullscreenElement(): HTMLElement {
-  const screen = document.querySelector<HTMLElement>('[data-fika-screen]')
+  // The cold-load shell is replaced when the lazy slideshow resolves.
+  // Fullscreening it exits fullscreen as soon as React removes that node.
+  const screen = document.querySelector<HTMLElement>('[data-fika-screen]:not([data-fika-screen-shell])')
   const overlay = screen?.closest<HTMLElement>('.fika-embed-root')
   if (overlay) return overlay
 
