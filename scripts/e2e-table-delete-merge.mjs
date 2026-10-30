@@ -50,6 +50,42 @@ try {
       console.log(`PASS delete ${axis} ${position}`)
     } catch (error) { failures.push(error.message); console.error(error.message) }
   }
+  await page.locator('.viewport-wrapper').first().click({ position: { x: 10, y: 10 } })
+  await page.evaluate(() => {
+    const data = [0, 1].map(r => [0, 1].map(c => ({ id: `limit-${r}-${c}`, rowspan: 1, colspan: 1, text: 'Merged content' })))
+    data[0][0].rowspan = 2
+    data[0][0].colspan = 2
+    const store = window.__FIKA_SLIDES__.getState()
+    store.setSlides([{ id: 'limit-slide', elements: [{ id: 'delete-limit', type: 'table', left: 100, top: 100, width: 400, height: 160, rotate: 0, colWidths: [.5, .5], cellMinHeight: 80, outline: { width: 1, color: '#000', style: 'solid' }, data }] }])
+    store.updateSlideIndex(0)
+  })
+  const root = page.locator('#editable-element-delete-limit')
+  const cell = root.locator('[data-cell-index="0_0"]')
+  await cell.waitFor()
+  const box = await cell.boundingBox()
+  await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2)
+  await root.locator('.custom-textarea').focus()
+  await cell.click({ button: 'right', position: { x: 10, y: 10 } })
+  for (const label of ['Delete row', 'Delete column']) {
+    const disabled = await page.getByText(label, { exact: true }).evaluate(el => el.closest('li').className.includes('disable'))
+    assert.equal(disabled, false, `${label} is available for a 2x2 merged table`)
+  }
+  await page.getByText('Delete row', { exact: true }).click()
+  await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data.length === 1)
+  await cell.click({ button: 'right', position: { x: 10, y: 10 } })
+  const disabled = label => page.getByText(label, { exact: true }).evaluate(el => el.closest('li').className.includes('disable'))
+  assert.equal(await disabled('Delete row'), true, 'The final grid row is protected')
+  assert.equal(await disabled('Delete column'), false, 'Two merged columns can still be reduced')
+  await page.getByText('Delete column', { exact: true }).click()
+  await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data[0].length === 1)
+  await cell.click({ button: 'right', position: { x: 10, y: 10 } })
+  assert.equal(await disabled('Delete row'), true)
+  assert.equal(await disabled('Delete column'), true, 'The final grid column is protected')
+  const remaining = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data)
+  assert.equal(remaining[0][0].text, 'Merged content')
+  assert.equal(remaining[0][0].rowspan, 1)
+  assert.equal(remaining[0][0].colspan, 1)
+  console.log('PASS merged table deletion limits and final row/column protection')
   assert.deepEqual(errors, [])
   assert.deepEqual(failures, [])
 } finally { await browser.close() }

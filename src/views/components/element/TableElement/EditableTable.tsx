@@ -632,25 +632,10 @@ const EditableTable = memo((props: IEditableTableProps) => {
     writeGrid(next);
   };
 
-  const getEffectiveTableCells = () => {
-    const effectiveTableCells = [];
-    for (let i = 0; i < tableCells.length; i++) {
-      const rowCells = tableCells[i];
-      const _rowCells = [];
-      for (let j = 0; j < rowCells.length; j++) {
-        if (!isHideCell(i, j)) _rowCells.push(rowCells[j]);
-      }
-      if (_rowCells.length) effectiveTableCells.push(_rowCells);
-    }
-    return effectiveTableCells;
-  };
-
-  const checkCanDeleteRowOrCol = () => {
-    const effectiveTableCells = getEffectiveTableCells();
-    const canDeleteRow = effectiveTableCells.length > 1;
-    const canDeleteCol = effectiveTableCells[0].length > 1;
-    return { canDeleteRow, canDeleteCol };
-  };
+  const checkCanDeleteRowOrCol = () => ({
+    canDeleteRow: tableCells.length > 1,
+    canDeleteCol: (tableCells[0]?.length ?? 0) > 1
+  });
 
   const getCommandTargetCell = () => {
     const selectedCell = selectedCells.find(cell => !hideCells.includes(cell));
