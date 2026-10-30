@@ -49,6 +49,7 @@ export const e2eScripts = [
   'scripts/e2e-position-input-sync.mjs',
   'scripts/e2e-position-ratio-minimum.mjs',
   'scripts/e2e-position-size-precision.mjs',
+  'scripts/e2e-position-zero-size.mjs',
   'scripts/e2e-position-rotation-step.mjs',
   'scripts/e2e-number-input-disabled.mjs',
   'scripts/e2e-number-input-finite.mjs',

@@ -99,8 +99,8 @@ const ElementPositionPanel = memo(function ElementPositionPanel() {
     if (!live || live.type === 'line') return
     let w = value
     let h = live.height
-    if ('fixedRatio' in live && live.fixedRatio) {
-      const ratio = live.width / live.height
+    const ratio = live.width / live.height
+    if ('fixedRatio' in live && live.fixedRatio && Number.isFinite(ratio) && ratio > 0) {
       h = Math.max(value / ratio, minSize)
       w = h * ratio
     }
@@ -116,8 +116,8 @@ const ElementPositionPanel = memo(function ElementPositionPanel() {
     if (!live || live.type === 'line') return
     let w = live.width
     let h = value
-    if ('fixedRatio' in live && live.fixedRatio) {
-      const ratio = live.width / live.height
+    const ratio = live.width / live.height
+    if ('fixedRatio' in live && live.fixedRatio && Number.isFinite(ratio) && ratio > 0) {
       w = Math.max(value * ratio, minSize)
       h = w / ratio
     }
