@@ -225,6 +225,17 @@ async function thumbGradientRotate(page, shapeId) {
 // Pixel quantization makes angle measurements approximate; absent/flat paint fails.
 const sameAngle = (measured, expected) => measured !== null && Math.abs((measured - expected + 540) % 360 - 180) <= 3
 
+async function waitForThumbAngle(page, shapeId, expected) {
+  const deadline = Date.now() + 5000
+  let measured
+  do {
+    measured = await thumbGradientRotate(page, shapeId)
+    if (expected === null ? measured === null : sameAngle(measured, expected)) return measured
+    await sleep(50)
+  } while (Date.now() < deadline)
+  return measured
+}
+
 async function claimCurrentScratch(page, id) {
   await page.evaluate((elId) => {
     const slides = window.__FIKA_SLIDES__
@@ -348,16 +359,14 @@ try {
       const el = s.slides[s.slideIndex].elements.find(el => el.id === id)
       s.updateElement({ id, props: { gradient: { ...el.gradient, rotate } } })
     }, { id: gradientShape.id, rotate })
-    await sleep(250)
-    directions.push({ expected: rotate, measured: await thumbGradientRotate(page, gradientShape.id) })
+    directions.push({ expected: rotate, measured: await waitForThumbAngle(page, gradientShape.id, rotate) })
   }
   rec(9, directions.every(({ expected, measured }) => sameAngle(measured, expected)), directions)
   await page.evaluate(id => {
     const s = window.__FIKA_SLIDES__.getState()
     s.updateElement({ id, props: { gradient: { type: 'linear', rotate: 0, colors: [{ pos: 0, color: '#ffffff' }, { pos: 100, color: '#ffffff' }] } } })
   }, gradientShape.id)
-  await sleep(250)
-  const flat = await thumbGradientRotate(page, gradientShape.id)
+  const flat = await waitForThumbAngle(page, gradientShape.id, null)
   rec(10, flat === null, { flat })
 }
 finally {

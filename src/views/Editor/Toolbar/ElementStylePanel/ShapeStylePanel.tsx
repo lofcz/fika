@@ -4,7 +4,7 @@ const cx = bindStyles(styles)
 import { memo, useCallback, useMemo, useState, useEffect } from 'react'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { useMainStore, useSlidesStore } from '@/store'
-import { getHandleElement, useHandleElementId, useHandleElementSelect, useHandleElementShallow } from '../common/handleElement'
+import { findHandleElement, getHandleElement, useHandleElementId, useHandleElementSelect, useHandleElementShallow } from '../common/handleElement'
 import type { GradientType, PPTShapeElement, Gradient } from '@/types/slides'
 import { type ShapePoolItem, SHAPE_LIST, SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import { getImageDataURL } from '@/utils/image'
@@ -91,6 +91,14 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
 
   useEffect(() => {
     setCurrentGradientIndex(0)
+  }, [handleElementId])
+
+  useEffect(() => () => {
+    // Restore an unfinished live preview when leaving this shape's controls.
+    const element = findHandleElement(handleElementId)
+    if (element?.type === 'shape' && element.gradient) {
+      applyLiveGradient(handleElementId, element.gradient)
+    }
   }, [handleElementId])
 
   const commit = useCallback((props: Partial<PPTShapeElement>) => {
@@ -260,6 +268,7 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
                   <div className={cx('field')}>
                     <span className="field-label">{LL.editor.slideDesign.gradientAngle()}</span>
                     <Slider
+                      key={handleElementId}
                       min={0}
                       max={360}
                       step={15}
