@@ -89,7 +89,7 @@ export interface SlidesActions {
   addElement: (element: PPTElement | PPTElement[]) => void
   deleteElement: (elementId: string | string[]) => void
   updateElement: (data: UpdateElementData) => void
-  removeElementProps: (data: RemovePropData) => void
+  removeElementProps: (data: RemovePropData & { slideId?: string }) => void
 }
 
 export type SlidesStore = SlidesState & SlidesActions
@@ -481,7 +481,8 @@ export const useSlidesStore = create<SlidesStore>()(
     removeElementProps(data) {
       set((state) => {
         const propsNames = typeof data.propName === 'string' ? [data.propName] : data.propName
-        const slide = state.slides[state.slideIndex]
+        const slide = data.slideId ? state.slides.find(slide => slide.id === data.slideId) : state.slides[state.slideIndex]
+        if (!slide) return
         slide.elements = slide.elements.map(el => (
           el.id === data.id ? omit(el, propsNames) : el
         )) as PPTElement[]
