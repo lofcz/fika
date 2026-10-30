@@ -548,21 +548,25 @@ const EditableTable = memo((props: IEditableTableProps) => {
         e.preventDefault();
         const rowIndex = +selectedCells[0].split('_')[0];
         insertRow(rowIndex);
+        focusActiveCell();
       }
       else if ((e.ctrlKey || e.metaKey) && key === KEYS.DOWN) {
         e.preventDefault();
         const rowIndex = +selectedCells[0].split('_')[0];
         insertRow(rowIndex + 1);
+        focusActiveCell();
       }
       else if ((e.ctrlKey || e.metaKey) && key === KEYS.LEFT) {
         e.preventDefault();
         const colIndex = +selectedCells[0].split('_')[1];
         insertCol(colIndex);
+        focusActiveCell();
       }
       else if ((e.ctrlKey || e.metaKey) && key === KEYS.RIGHT) {
         e.preventDefault();
         const colIndex = +selectedCells[0].split('_')[1];
         insertCol(colIndex + 1);
+        focusActiveCell();
       }
       else if (key === KEYS.UP) {
         const range = getCaretPosition(e.target as HTMLDivElement);

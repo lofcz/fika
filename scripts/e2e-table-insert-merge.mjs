@@ -41,6 +41,15 @@ try {
       assert.equal(data[coveredRow][coveredCol].text, 'Cell 1 1', 'Original covered content stays intact')
       assert.equal(await root.locator(`[data-cell-index="${coveredRow}_${coveredCol}"]`).isVisible(), false, 'Previously covered cells remain covered')
       assert.equal(await root.locator('td[data-cell-index]:visible').count(), position === 'inside' ? 7 : 9, 'Inserted cells and merged area have the expected visible geometry')
+      const editor = root.locator('.custom-textarea')
+      assert.equal(await editor.evaluate(el => document.activeElement === el), true, 'Keyboard insertion preserves editing focus')
+      const selected = await editor.evaluate(el => el.closest('td').dataset.cellIndex.split('_').map(Number))
+      const selectedId = data[selected[0]][selected[1]].id
+      await page.keyboard.press('Control+A')
+      await page.keyboard.insertText('Continued typing')
+      await page.keyboard.press('Tab')
+      const committed = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data.flat())
+      assert.equal(committed.find(cell => cell.id === selectedId)?.text, 'Continued typing', 'Typing after insertion is committed to the active cell')
       console.log(`PASS insert ${axis} ${position} a merged region`)
     } catch (error) { failures.push(error.message); console.error(error.message) }
   }
