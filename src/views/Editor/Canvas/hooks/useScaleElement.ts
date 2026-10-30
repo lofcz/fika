@@ -438,6 +438,12 @@ export default (
       activeIds.has(el.id) ? clonePlain(el) : el
     ))
 
+    // A group must stop before its smallest member collapses. Preserve the
+    // relative sizes, including imported objects already below MIN_SIZE.
+    const selected = originElementList.filter((el): el is PPTImageElement | PPTShapeElement => activeIds.has(el.id) && (el.type === 'image' || el.type === 'shape'))
+    const minWidthScale = Math.max(...selected.map(el => Math.min(MIN_SIZE[el.type] || 20, el.width) / el.width))
+    const minHeightScale = Math.max(...selected.map(el => Math.min(MIN_SIZE[el.type] || 20, el.height) / el.height))
+
     const handleMousemove = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
       
@@ -489,8 +495,15 @@ export default (
       let widthScale = currentOppositeWidth / operateWidth
       let heightScale = currentOppositeHeight / operateHeight
 
-      if (widthScale <= 0) widthScale = 0
-      if (heightScale <= 0) heightScale = 0
+      widthScale = Math.max(widthScale, minWidthScale)
+      heightScale = Math.max(heightScale, minHeightScale)
+      if (ctrlOrShiftKeyActive && command.includes('-')) {
+        widthScale = heightScale = Math.max(widthScale, heightScale)
+      }
+      if ([OperateResizeHandlers.LEFT, OperateResizeHandlers.LEFT_TOP, OperateResizeHandlers.LEFT_BOTTOM].includes(command)) currentMinX = maxX - operateWidth * widthScale
+      else currentMaxX = minX + operateWidth * widthScale
+      if ([OperateResizeHandlers.TOP, OperateResizeHandlers.LEFT_TOP, OperateResizeHandlers.RIGHT_TOP].includes(command)) currentMinY = maxY - operateHeight * heightScale
+      else currentMaxY = minY + operateHeight * heightScale
       
       liveList = liveList.map(el => {
         if ((el.type === 'image' || el.type === 'shape') && activeElementIdList.includes(el.id)) {
