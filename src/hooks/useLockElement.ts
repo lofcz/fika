@@ -6,12 +6,13 @@ export default () => {
   const { addHistorySnapshot } = useHistorySnapshot()
 
   const lockElement = () => {
-    const { activeElementIdList, setActiveElementIdList } = useMainStore.getState()
+    const { activeElementIdList, activeGroupElementId, setActiveElementIdList } = useMainStore.getState()
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
     if (!currentSlide) return
+    const targetIds = activeGroupElementId ? [activeGroupElementId] : activeElementIdList
     const newElementList: PPTElement[] = JSON.parse(JSON.stringify(currentSlide.elements))
     for (const element of newElementList) {
-      if (activeElementIdList.includes(element.id)) element.lock = true
+      if (targetIds.includes(element.id)) element.lock = true
     }
     useSlidesStore.getState().updateSlide({ elements: newElementList })
     setActiveElementIdList([])

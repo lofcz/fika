@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react'
 import { useMainStore, useKeyboardStore } from '@/store'
 import type { PPTElement } from '@/types/slides'
+import { isElementSelectable } from '@/utils/selection'
 import { getPointerClient } from '@/utils/canvasPointer'
 import { richTextAttrsFromElement } from '@/utils/prosemirror/richTextAttrsFromElement'
 
@@ -45,7 +46,7 @@ export default (
       if (element.groupId) {
         const groupMembersId: string[] = []
         list.forEach(el => {
-          if (el.groupId === element.groupId) groupMembersId.push(el.id)
+          if (el.groupId === element.groupId && isElementSelectable(el, list, mainStore.hiddenElementIdList)) groupMembersId.push(el.id)
         })
         newActiveIdList = [...newActiveIdList, ...groupMembersId]
       }
