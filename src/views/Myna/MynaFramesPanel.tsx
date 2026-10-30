@@ -1,3 +1,4 @@
+import { isElementSelectable } from '@/utils/selection'
 import { selectInsertedElements } from '@/utils/selectInsertedElements'
 import { useRef, useState } from 'react'
 import { useMainStore, useSlidesStore } from '@/store'
@@ -16,6 +17,7 @@ export default function MynaFramesPanel({ query = '', kind = 'all', compact = fa
   const t = photoFrameLabels[locale] || photoFrameLabels.en
   const slides = useSlidesStore(s => s.slides), index = useSlidesStore(s => s.slideIndex)
   const selected = useMainStore(s => s.activeElementIdList), readOnly = useMainStore(s => s.readOnly)
+  const hiddenIds = useMainStore(s => s.hiddenElementIdList)
   const [cellId, setCellId] = useState(''), [busy, setBusy] = useState(false), [failed, setFailed] = useState(false)
   const picker = useRef<HTMLInputElement>(null)
   const { addHistorySnapshot } = useHistorySnapshot()
@@ -24,11 +26,15 @@ export default function MynaFramesPanel({ query = '', kind = 'all', compact = fa
   const first = selectedFrames[0]
   const cells = first?.groupId ? page.elements.filter((e): e is PPTImageElement => e.type === 'image' && !!e.photoFrame && e.groupId === first.groupId) : selectedFrames
   const current = cells.find(e => e.id === cellId) || first
-  const locked = readOnly || cells.some(e => e.lock) || busy
+  const locked = readOnly || cells.some(e => !isElementSelectable(e, page.elements, hiddenIds)) || busy
   const commit = (updates: PPTImageElement[], pageId = page?.id) => {
-    if (useMainStore.getState().readOnly || !pageId) return
+    const main = useMainStore.getState()
+    if (main.readOnly || !pageId) return
     const latest = useSlidesStore.getState().slides.find(s => s.id === pageId)
-    if (!latest || updates.some(u => latest.elements.find(e => e.id === u.id)?.lock)) return
+    if (!latest || updates.some(update => {
+      const element = latest.elements.find(e => e.id === update.id)
+      return !element || !isElementSelectable(element, latest.elements, main.hiddenElementIdList)
+    })) return
     drainCommitQueue()
     useSlidesStore.getState().updateSlide({ elements: latest.elements.map(e => updates.find(u => u.id === e.id) || e) }, pageId)
     addHistorySnapshot()
