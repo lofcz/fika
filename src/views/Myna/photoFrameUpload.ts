@@ -2,6 +2,9 @@ import { getMediaUploader } from '@/configs/mediaUpload'
 import { detectMediaKind, validateMediaFile } from '@/utils/mediaFile'
 // Sidebar choices and canvas drops must agree on the latest replacement.
 const replacements = new Map<string, symbol>()
+export function cancelPhotoFrameReplacement(pageId: string, elementId: string) {
+  replacements.delete(JSON.stringify([pageId, elementId]))
+}
 export function beginPhotoFrameReplacement(pageId: string, elementId: string) {
   const key = JSON.stringify([pageId, elementId])
   const token = Symbol()

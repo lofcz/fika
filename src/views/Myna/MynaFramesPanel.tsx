@@ -5,7 +5,7 @@ import { useMainStore, useSlidesStore } from '@/store'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { drainCommitQueue } from '@/utils/commitQueue'
-import { beginPhotoFrameReplacement, loadPhotoFrameImage } from './photoFrameUpload'
+import { beginPhotoFrameReplacement, cancelPhotoFrameReplacement, loadPhotoFrameImage } from './photoFrameUpload'
 import type { PPTImageElement } from '@/types/slides'
 import { FRAME_LAYOUTS, FRAME_PLACEHOLDER, createPhotoFrames, frameCells, fillPhotoFrame, layoutPhotoFrames, type FrameLayout } from './photoFrames'
 import { photoFrameLabels } from './photoFrameLabels'
@@ -35,6 +35,13 @@ export default function MynaFramesPanel({ query = '', kind = 'all', compact = fa
       const element = latest.elements.find(e => e.id === update.id)
       return !element || !isElementSelectable(element, latest.elements, main.hiddenElementIdList)
     })) return
+    // Changing a photo abandons pending loads even if undo later restores its source.
+    for (const update of updates) {
+      const previous = latest.elements.find(e => e.id === update.id)
+      if (previous?.type === 'image' && (previous.src !== update.src || previous.photoFrame?.empty !== update.photoFrame?.empty)) {
+        cancelPhotoFrameReplacement(pageId, update.id)
+      }
+    }
     drainCommitQueue()
     useSlidesStore.getState().updateSlide({ elements: latest.elements.map(e => updates.find(u => u.id === e.id) || e) }, pageId)
     addHistorySnapshot()
