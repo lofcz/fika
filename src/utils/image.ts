@@ -23,6 +23,10 @@ export const getImageSize = (src: string): Promise<ImageSize> => {
       const imgWidth = img.naturalWidth;
       const imgHeight = img.naturalHeight;
       cleanup();
+      if (imgWidth <= 0 || imgHeight <= 0) {
+        reject(new Error('Image dimensions must be positive'));
+        return;
+      }
       resolve({
         width: imgWidth,
         height: imgHeight
