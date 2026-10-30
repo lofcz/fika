@@ -58,6 +58,7 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
   // Prop synchronization must not emit a stale value back to the parent.
   // Only user actions may commit a number.
   const updateNumber = (input: string | number) => {
+    if (disabled) return
     setNumber(input)
     const next = +input
     if (isNaN(next) || next > max || next < min) return
@@ -65,13 +66,14 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
   }
 
   const checkAndEmitValue = useCallback(() => {
+    if (disabled) return
     let next = +number
     if (isNaN(next)) next = min
     else if (next > max) next = max
     else if (next < min) next = min
     setNumber(next)
     onUpdateValue?.(next)
-  }, [number, min, max, onUpdateValue])
+  }, [number, min, max, onUpdateValue, disabled])
 
   const handleEnter = (e: Event) => {
     checkAndEmitValue()
