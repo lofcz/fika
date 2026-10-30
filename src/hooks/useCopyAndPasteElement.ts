@@ -12,11 +12,14 @@ export default () => {
   const { deleteElement } = useDeleteElement()
 
   const copyElement = async () => {
-    const { activeElementIdList, setEditorareaFocus } = useMainStore.getState()
+    const { activeElementIdList, activeGroupElementId, setEditorareaFocus } = useMainStore.getState()
     if (!activeElementIdList.length) return false
     const state = useSlidesStore.getState()
     const elements = state.slides[state.slideIndex]?.elements || []
-    const ids = frameDescendantIds(elements, activeElementIdList)
+    const selectedIds = activeGroupElementId && activeElementIdList.includes(activeGroupElementId)
+      ? [activeGroupElementId]
+      : activeElementIdList
+    const ids = frameDescendantIds(elements, selectedIds)
     const activeElementList = elements.filter(e => ids.includes(e.id))
     const text = encrypt(JSON.stringify({
       type: 'elements',

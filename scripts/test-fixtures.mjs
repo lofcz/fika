@@ -41,6 +41,7 @@ export const unitScripts = [
 ]
 
 export const e2eScripts = [
+  'scripts/e2e-group-clipboard.mjs',
   'scripts/e2e-cut-clipboard.mjs',
   'scripts/e2e-table-clipboard.mjs',
   'scripts/e2e-clipboard-errors.mjs',
