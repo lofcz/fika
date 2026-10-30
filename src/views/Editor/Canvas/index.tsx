@@ -15,7 +15,7 @@ import type { ContextmenuItem } from '@/components/Contextmenu/types'
 import type { PPTElement, PPTShapeElement } from '@/types/slides'
 import type { AlignmentLineProps, CreateCustomShapeData } from '@/types/edit'
 import { SlideScaleContext } from '@/types/injectKey'
-import { removeAllRanges } from '@/utils/selection'
+import { isElementSelectable, removeAllRanges } from '@/utils/selection'
 import { clientToCanvas } from '@/utils/canvasPointer'
 import { clicksToEditText, collectVisualHitPlan, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInAnyVisualHitRect, pointInVisualHitRect, resizeHandleDirectionsFor, retryPendingCaret, type ClientCoords, type VisualHitRect } from '@/utils/canvasHitTest'
 import { layerStackAtPoint, nextSelectableLayer, type LayerStackEntry } from '@/utils/layerStack'
@@ -268,14 +268,18 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
     const point = clientToCanvas(event, viewportRef.current, canvasScale)
     const state = useSlidesStore.getState()
     const page = state.slides[state.slideIndex]
-    const target = layerStackAtPoint(page.elements, 1, useMainStore.getState().hiddenElementIdList, point.x, point.y)[0]?.element
+    const entry = layerStackAtPoint(page.elements, 1, useMainStore.getState().hiddenElementIdList, point.x, point.y)[0]
+    const target = entry?.element
     if (target?.type !== 'image' || !target.photoFrame) return false
     event.preventDefault(); event.stopPropagation()
-    if (target.lock) return true
+    if (entry.locked || !isElementSelectable(target, page.elements, useMainStore.getState().hiddenElementIdList)) return true
     void loadPhotoFrameImage(file).then(({ src, width, height }) => {
       const store = useSlidesStore.getState()
-      const latest = store.slides.find(slide => slide.id === page.id)?.elements.find(element => element.id === target.id)
-      if (useMainStore.getState().readOnly || latest?.type !== 'image' || !latest.photoFrame || latest.lock || latest.src !== target.src) return
+      const latestPage = store.slides.find(slide => slide.id === page.id)
+      const latest = latestPage?.elements.find(element => element.id === target.id)
+      const main = useMainStore.getState()
+      if (main.readOnly || !latestPage || latest?.type !== 'image' || !latest.photoFrame || latest.src !== target.src
+        || !isElementSelectable(latest, latestPage.elements, main.hiddenElementIdList)) return
       drainCommitQueue()
       store.updateElement({ id: latest.id, slideId: page.id, props: fillPhotoFrame(latest, src, width, height) })
       addHistorySnapshot()
