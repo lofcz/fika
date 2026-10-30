@@ -73,6 +73,17 @@ assert(separatedFront && ids(separatedFront) === 'b,c,a,d', 'front boundary memb
 const separatedBack = orderElementList(multi, ['a', 'd'], BOTTOM)
 assert(separatedBack && ids(separatedBack) === 'a,d,b,c', 'back boundary member does not prevent moving the rest of the selection')
 
+const frame = { ...el('frame'), frame: { clipContent: true } }
+const child = { ...el('child'), parentFrameId: 'frame' }
+assert(ids(orderElementList([el('x'),frame,child], ['x'], UP)) === 'frame,child,x', 'forward step crosses an entire frame')
+assert(ids(orderElementList([frame,child,el('x')], ['x'], DOWN)) === 'x,frame,child', 'backward step crosses an entire frame')
+const outer = { ...el('outer'), frame: { clipContent: true } }
+const inner = { ...frame, parentFrameId: 'outer' }
+const sibling = { ...el('sibling'), parentFrameId: 'outer' }
+assert(ids(orderElementList([outer,inner,child,sibling], ['sibling'], DOWN)) === 'outer,sibling,frame,child', 'nested frame moves as a neighboring unit within the shared parent')
+assert(ids(orderElementList([outer,inner,child,sibling], ['x'], DOWN) || []) === '', 'missing selections remain no-ops')
+assert(ids(orderElementList([outer,{...el('a'),parentFrameId:'outer'},{...el('b'),parentFrameId:'outer'}], ['b'], DOWN)) === 'outer,b,a', 'ordinary children still reorder within their frame')
+
 if (failures.length) {
   console.error('elementOrder checks failed:\n' + failures.map(f => ` - ${f}`).join('\n'))
   process.exit(1)

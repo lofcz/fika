@@ -1,4 +1,4 @@
-import { frameDescendantIds } from './nestedFrames'
+import { frameAncestors, frameDescendantIds } from './nestedFrames'
 import type { PPTElement } from '@/types/slides';
 export type ElementOrderCommand = 'up' | 'down' | 'top' | 'bottom';
 
@@ -34,25 +34,14 @@ function extractUnit(list: PPTElement[], unitIds: string[]): {
     unit
   };
 }
-function nextUnitLength(list: PPTElement[], startIndex: number): number {
-  const el = list[startIndex];
-  if (!el) return 0;
-  if (!el.groupId) return 1;
-  let count = 0;
-  for (let i = startIndex; i < list.length; i++) {
-    if (list[i].groupId === el.groupId) count++;else break;
-  }
-  return count;
-}
-function prevUnitLength(list: PPTElement[], endIndex: number): number {
-  const el = list[endIndex];
-  if (!el) return 0;
-  if (!el.groupId) return 1;
-  let count = 0;
-  for (let i = endIndex; i >= 0; i--) {
-    if (list[i].groupId === el.groupId) count++;else break;
-  }
-  return count;
+function neighboringUnitIds(list: PPTElement[], neighbor: PPTElement, movingIds: string[]): string[] {
+  const moving = new Set(movingIds);
+  const sharedFrames = new Set(list.filter(el => moving.has(el.id)).flatMap(el => frameAncestors(el, list).map(frame => frame.id)));
+  const ancestors = frameAncestors(neighbor, list).filter(frame => !sharedFrames.has(frame.id));
+  const root = ancestors.at(-1) || neighbor;
+  // A shared parent is not a neighboring frame unit.
+  if (sharedFrames.has(root.id)) return [root.id];
+  return collectOrderUnitIds(list, [root.id]);
 }
 function unitIndexRange(list: PPTElement[], unitIds: string[]): {
   first: number;
@@ -98,25 +87,23 @@ export function orderElementList(elementList: PPTElement[], seedIds: string[], c
   if (command === 'up') {
     if (last === elementList.length - 1) return null;
     const nextStart = last + 1;
-    const skip = nextUnitLength(elementList, nextStart);
-    const nextFirst = elementList[nextStart];
+    const nextIds = neighboringUnitIds(elementList, elementList[nextStart], unitIds);
     const {
       rest,
       unit
     } = extractUnit(elementList, unitIds);
-    const insertAt = rest.findIndex(el => el.id === nextFirst.id) + skip;
+    const insertAt = unitIndexRange(rest, nextIds).last + 1;
     return [...rest.slice(0, insertAt), ...unit, ...rest.slice(insertAt)];
   }
   if (command === 'down') {
     if (first === 0) return null;
     const prevEnd = first - 1;
-    const skip = prevUnitLength(elementList, prevEnd);
-    const prevStart = elementList[prevEnd - skip + 1];
+    const prevIds = neighboringUnitIds(elementList, elementList[prevEnd], unitIds);
     const {
       rest,
       unit
     } = extractUnit(elementList, unitIds);
-    const insertAt = rest.findIndex(el => el.id === prevStart.id);
+    const insertAt = unitIndexRange(rest, prevIds).first;
     return [...rest.slice(0, insertAt), ...unit, ...rest.slice(insertAt)];
   }
   return null;
