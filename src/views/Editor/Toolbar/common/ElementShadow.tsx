@@ -1,7 +1,7 @@
 import { memo } from 'react'
 
 import { useSlidesStore } from '@/store'
-import { getHandleElement, useHandleElementSelect } from './handleElement'
+import { getHandleElement, useHandleElementId, useHandleElementSelect } from './handleElement'
 import type { PPTElementShadow } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import PanelSection from './PanelSection'
@@ -12,6 +12,7 @@ import { useI18nContext } from '@/i18n/useI18nContext'
 
 const ElementShadow = memo(() => {
   const { LL } = useI18nContext()
+  const handleElementId = useHandleElementId()
   const theme = useSlidesStore(s => s.theme)
   const shadow = useHandleElementSelect(el => el && 'shadow' in el ? el.shadow : undefined)
   const hasShadow = !!shadow
@@ -47,15 +48,15 @@ const ElementShadow = memo(() => {
         <>
           <div className="field">
             <span className="field-label">{LL.editor.elementShadow.horizontalShadow()}</span>
-            <Slider min={-20} max={20} step={1} value={shadow.h} onUpdateValue={value => updateShadow({ h: value })} />
+            <Slider key={handleElementId} min={-20} max={20} step={1} value={shadow.h} onUpdateValue={value => updateShadow({ h: value })} />
           </div>
           <div className="field">
             <span className="field-label">{LL.editor.elementShadow.verticalShadow()}</span>
-            <Slider min={-20} max={20} step={1} value={shadow.v} onUpdateValue={value => updateShadow({ v: value })} />
+            <Slider key={handleElementId} min={-20} max={20} step={1} value={shadow.v} onUpdateValue={value => updateShadow({ v: value })} />
           </div>
           <div className="field">
             <span className="field-label">{LL.editor.elementShadow.blurDistance()}</span>
-            <Slider min={1} max={30} step={1} value={shadow.blur} onUpdateValue={value => updateShadow({ blur: value })} />
+            <Slider key={handleElementId} min={1} max={30} step={1} value={shadow.blur} onUpdateValue={value => updateShadow({ blur: value })} />
           </div>
           <ColorSwatches
             modelValue={shadow.color}
