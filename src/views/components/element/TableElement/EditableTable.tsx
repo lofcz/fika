@@ -538,6 +538,9 @@ const EditableTable = memo((props: IEditableTableProps) => {
 
   const keydownListener = (e: KeyboardEvent) => {
     if (!editable || !selectedCells.length) return;
+    // A cell selection can survive focus moving to the title or a toolbar.
+    // Keep shortcuts local, while allowing body focus for a dragged cell range.
+    if (e.target !== document.body && !(e.target instanceof Node && tableRef.current?.contains(e.target))) return;
     const key = e.key.toUpperCase();
     if (selectedCells.length < 2) {
       if (key === KEYS.TAB) {

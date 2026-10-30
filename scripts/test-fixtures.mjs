@@ -48,6 +48,7 @@ export const e2eScripts = [
   'scripts/e2e-cut-clipboard.mjs',
   'scripts/e2e-table-clipboard.mjs',
   'scripts/e2e-table-keyboard.mjs',
+  'scripts/e2e-table-keyboard-scope.mjs',
   'scripts/e2e-table-insert-merge.mjs',
   'scripts/e2e-table-delete-merge.mjs',
   'scripts/e2e-clipboard-errors.mjs',
