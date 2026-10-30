@@ -4,7 +4,7 @@ import styles from './VideoStylePanel.module.scss'
 const cx = bindStyles(styles)
 import { memo, useState } from 'react'
 
-import { useSlidesStore } from '@/store'
+import { useSlidesStore, selectCurrentSlide } from '@/store'
 import { getHandleElement, useHandleElementShallow } from '../common/handleElement'
 import type { PPTVideoElement } from '@/types/slides'
 import { getImageDataURL } from '@/utils/image'
@@ -14,6 +14,8 @@ import Button from '@/components/Button'
 import Switch from '@/components/Switch'
 import Divider from '@/components/Divider'
 import { useI18nContext } from '@/i18n/useI18nContext'
+
+const posterUploadRequests = new Map<string, symbol>()
 
 const VideoStylePanel = memo(() => {
   const { LL } = useI18nContext()
@@ -33,8 +35,23 @@ const VideoStylePanel = memo(() => {
 
   const setVideoPoster = (files: FileList) => {
     const imageFile = files[0]
-    if (!imageFile) return
-    getImageDataURL(imageFile).then(dataURL => updateVideo({ poster: dataURL }))
+    const element = getHandleElement()
+    const slideId = selectCurrentSlide(useSlidesStore.getState())?.id
+    if (!imageFile || element?.type !== 'video' || !slideId) return
+    const elementId = element.id
+    const key = JSON.stringify([slideId, elementId])
+    const request = Symbol()
+    posterUploadRequests.set(key, request)
+    getImageDataURL(imageFile).then(dataURL => {
+      if (posterUploadRequests.get(key) !== request) return
+      const store = useSlidesStore.getState()
+      const current = store.slides.find(slide => slide.id === slideId)?.elements.find(el => el.id === elementId)
+      if (current?.type !== 'video') return
+      store.updateElement({ id: elementId, slideId, props: { poster: dataURL } })
+      addHistorySnapshot()
+    }).finally(() => {
+      if (posterUploadRequests.get(key) === request) posterUploadRequests.delete(key)
+    })
   }
 
   const generatePoster = async () => {
