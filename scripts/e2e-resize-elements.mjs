@@ -177,7 +177,8 @@ const ELEMENTS = [
     rotate: 0,
     outline: { width: 1, color: '#333333', style: 'solid' },
     colWidths: [1 / 3, 1 / 3, 1 / 3],
-    cellMinHeight: 48,
+    // Two rows must start at the declared 160px height, leaving room to shrink.
+    cellMinHeight: 80,
     data: [
       [
         { id: 't1', colspan: 1, rowspan: 1, text: 'A' },
@@ -496,6 +497,7 @@ try {
   }
 
   const failed = results.filter(p => !p.pass)
+  for (const proof of failed) console.log("Resize failure detail:", JSON.stringify(proof))
   const width = 58
   console.log('#   result  case'.padEnd(width + 12) + 'measured')
   console.log('-'.repeat(96))
