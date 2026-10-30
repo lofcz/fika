@@ -45,6 +45,7 @@ export const e2eScripts = [
   'scripts/e2e-quick-undo.mjs',
   'scripts/e2e-history-queue.mjs',
   'scripts/e2e-group-clipboard.mjs',
+  'scripts/e2e-group-member-align.mjs',
   'scripts/e2e-cut-clipboard.mjs',
   'scripts/e2e-table-clipboard.mjs',
   'scripts/e2e-table-keyboard.mjs',

@@ -1,4 +1,4 @@
-import { useMainStore, useSlidesStore, selectActiveElementList, selectCurrentSlide } from '@/store';
+import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store';
 import type { PPTElement } from '@/types/slides';
 import { ElementAlignCommands } from '@/types/edit';
 import { getElementListRange } from '@/utils/element';
@@ -12,11 +12,13 @@ export default () => {
    * Align selected elements to the canvas.
    */
   const alignElementToCanvas = (command: ElementAlignCommands) => {
-    const { activeElementIdList } = useMainStore.getState();
-    const activeElementList = selectActiveElementList(useMainStore.getState());
+    const main = useMainStore.getState();
+    const activeElementIdList = main.activeGroupElementId ? [main.activeGroupElementId] : main.activeElementIdList;
     const slides = useSlidesStore.getState();
     const currentSlide = selectCurrentSlide(slides);
     if (!currentSlide) return;
+    const activeElementList = currentSlide.elements.filter(element => activeElementIdList.includes(element.id));
+    if (!activeElementList.length) return;
     const viewportWidth = slides.viewportSize;
     const viewportHeight = slides.viewportSize * slides.viewportRatio;
     const {
