@@ -6,6 +6,14 @@ const errors = []
 page.on('pageerror', error => errors.push(error.message))
 try {
   await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5178'}/?mode=myna&locale=en`, { waitUntil: 'networkidle' })
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
+  await page.evaluate(async () => {
+    const store = window.__FIKA_SLIDES__.getState()
+    store.setSlides([{ id: 'drawer-fixture', canvasName: 'Ideas into action', elements: [] }])
+    store.updateSlideIndex(0)
+    await window.__FIKA_SNAPSHOT__.getState().initSnapshotDatabase()
+  })
+  await page.getByRole('button', { name: 'Design', exact: true }).click()
   const drawer = page.locator('#myna-library')
   await drawer.waitFor()
   const separator = drawer.getByRole('separator')

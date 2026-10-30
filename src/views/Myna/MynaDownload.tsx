@@ -35,14 +35,21 @@ export default function MynaDownload({ onClose }: { onClose: () => void }) {
   const [scale, setScale] = useState(1)
   const [quality, setQuality] = useState(.92)
   const [busy, setBusy] = useState(false)
-  const svgNoticeRef = useRef<HTMLParagraphElement>(null)
-  useLayoutEffect(() => {
-    // Disabling the download button drops keyboard focus onto the page body.
-    // Keep focus in the retained result dialog so Escape and Tab still work.
-    if (svgNotice && !busy) svgNoticeRef.current?.focus({ preventScroll: true })
-  }, [svgNotice, busy])
   const [progress, setProgress] = useState<{ current: number; total: number } | 'zip' | null>(null)
   const [error, setError] = useState<'failed' | 'imageFailed' | 'imageTimeout' | null>(null)
+  const svgNoticeRef = useRef<HTMLParagraphElement>(null)
+  const errorRef = useRef<HTMLParagraphElement>(null)
+  const downloadRef = useRef<HTMLButtonElement>(null)
+  const wasBusy = useRef(false)
+  useLayoutEffect(() => {
+    // Disabled or removed export controls drop focus onto the page body.
+    // Restore it after completion, failure, or cancellation so Escape works.
+    if (wasBusy.current && !busy) {
+      const target = error ? errorRef.current : svgNotice ? svgNoticeRef.current : downloadRef.current
+      target?.focus({ preventScroll: true })
+    }
+    wasBusy.current = busy
+  }, [busy, error, svgNotice])
   const width = useSlidesStore(s => s.viewportSize)
   const ratio = useSlidesStore(s => s.viewportRatio)
   const outputWidth = Math.max(64, Math.round(width * scale))
@@ -131,9 +138,9 @@ export default function MynaDownload({ onClose }: { onClose: () => void }) {
     {format !== 'png' && format !== 'svg' && <label>{t.quality({ percent: Math.round(quality * 100) })}<input disabled={busy} type="range" min={.1} max={1} step={.01} value={quality} onChange={e => setQuality(Number(e.target.value))} /></label>}
     {tooLarge && <p role="alert">{t.tooLarge()}</p>}
     {svgNotice && <p ref={svgNoticeRef} tabIndex={-1} role="status">{t.svgComplete()} {t.svgFallback()}</p>}
-    {error && <p role="alert">{t[error]()}</p>}
+    {error && <p ref={errorRef} tabIndex={-1} role="alert">{t[error]()}</p>}
     <p role="status" aria-live="polite">{cancelling ? t.cancellingExport() : progress === 'zip' ? t.zipProgress() : progress ? t.rendering(progress) : ''}</p>
-    <button className={cx('myna-primary')} disabled={busy || tooLarge || !!invalidRange || emptySelection} onClick={() => void download()}>{busy ? t.preparing() : t.download()}</button>
+    <button ref={downloadRef} className={cx('myna-primary')} disabled={busy || tooLarge || !!invalidRange || emptySelection} onClick={() => void download()}>{busy ? t.preparing() : t.download()}</button>
     {busy && <button disabled={cancelling} onClick={() => { cancelled.current = true; abort.current?.abort(); setCancelling(true) }}>{t.cancelExport()}</button>}
     <p className={cx('myna-hint')}>{format === 'svg' ? t.svgHint() : t.exportHint()}</p>
   </div></Modal>

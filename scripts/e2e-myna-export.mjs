@@ -7,11 +7,12 @@ const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } })
 const base = process.env.FIKA_TEST_URL || 'http://127.0.0.1:5178'
 try {
   await page.goto(`${base}/?mode=myna&locale=en`, { waitUntil: 'networkidle' })
-  await page.waitForFunction(() => window.__FIKA_SLIDES__?.getState().slides.length > 0)
-  await page.evaluate(() => {
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
+  const dimensions = await page.evaluate(() => {
     const s = window.__FIKA_SLIDES__.getState()
     const first = structuredClone(s.slides[0])
     s.setSlides([first, { ...structuredClone(first), id: 'export-second' }, { ...structuredClone(first), id: 'export-third' }])
+    return { width: s.viewportSize, height: Math.round(s.viewportSize * s.viewportRatio) }
   })
   await page.getByRole('button', { name: 'Download', exact: true }).first().click()
   await page.getByRole('combobox', { name: 'Pages', exact: true }).selectOption('selected')
@@ -27,8 +28,8 @@ try {
   assert.deepEqual(Object.keys(zip.files), ['003.png', '001.png'])
   for (const name of Object.keys(zip.files)) {
     const png = await zip.file(name).async('nodebuffer')
-    assert.equal(png.readUInt32BE(16), 1080)
-    assert.equal(png.readUInt32BE(20), 1080)
+    assert.equal(png.readUInt32BE(16), dimensions.width)
+    assert.equal(png.readUInt32BE(20), dimensions.height)
   }
   await page.locator('.myna-download').waitFor({ state: 'detached' })
   await page.evaluate(() => {
@@ -44,5 +45,24 @@ try {
   await page.getByRole('button', { name: 'Cancel export', exact: true }).waitFor({ state: 'detached' })
   assert.equal(cancelledDownloads, 0)
   assert.equal(await page.locator('.myna-download').getByRole('button', { name: 'Download', exact: true }).isEnabled(), true)
-  console.log('Myna export: invalid range blocked, ordered noncontiguous selection exported with original page filenames and valid 1080px PNGs; cancellation prevented download and restored controls.')
+  assert.equal(await page.locator('.myna-download').evaluate(node => node.contains(document.activeElement)), true, 'Cancelled export retains keyboard focus inside its dialog')
+  await page.keyboard.press('Escape')
+  await page.locator('.myna-download').waitFor({ state: 'detached' })
+  await page.evaluate(() => {
+    const store = window.__FIKA_SLIDES__.getState()
+    store.setSlides([{ id: 'broken-image', elements: [{
+      id: 'broken', type: 'image', src: 'data:image/png;base64,invalid',
+      left: 0, top: 0, width: 100, height: 100, rotate: 0, fixedRatio: true,
+    }] }])
+    store.updateSlideIndex(0)
+  })
+  await page.getByRole('button', { name: 'Download', exact: true }).first().click()
+  const failedModal = page.locator('.myna-download')
+  await failedModal.getByRole('button', { name: 'Download', exact: true }).click()
+  await failedModal.getByRole('alert').waitFor()
+  await failedModal.getByRole('button', { name: 'Download', exact: true }).waitFor()
+  assert.equal(await failedModal.evaluate(node => node.contains(document.activeElement)), true, 'Failed export retains keyboard focus inside its dialog')
+  await page.keyboard.press('Escape')
+  await failedModal.waitFor({ state: 'detached' })
+  console.log('Myna export: invalid range blocked, ordered noncontiguous selection exported with original page filenames and correctly sized PNGs; cancellation prevented download and restored controls; failed export retains keyboard focus and Escape dismissal.')
 } finally { await browser.close() }

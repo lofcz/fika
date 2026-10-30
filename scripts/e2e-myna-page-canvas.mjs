@@ -17,6 +17,13 @@ try {
   await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5178'}/?mode=myna&locale=en`, { waitUntil: 'networkidle' })
   await page.locator('[data-myna-workspace]').waitFor()
   await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotLength > 0)
+  // Isolate page operations from the changing showcase document.
+  await page.evaluate(async () => {
+    const store = window.__FIKA_SLIDES__.getState()
+    store.setSlides([{ id: 'page-canvas-fixture', elements: [], background: { type: 'solid', color: '#ffffff' } }])
+    store.updateSlideIndex(0)
+    await window.__FIKA_SNAPSHOT__.getState().initSnapshotDatabase()
+  })
   await page.getByRole('button', { name: 'Add page', exact: true }).click()
   await page.getByRole('button', { name: 'Add page', exact: true }).click()
   const initial = await state()

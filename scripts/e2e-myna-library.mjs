@@ -8,6 +8,7 @@ page.on('pageerror', error => errors.push(error.message))
 const base = process.env.FIKA_TEST_URL || 'http://127.0.0.1:5178'
 try {
   await page.goto(`${base}/?mode=myna&locale=en`, { waitUntil: 'networkidle' })
+  await page.getByRole('button', { name: 'Design', exact: true }).click()
   const library = page.locator('details').filter({ has: page.locator('summary', { hasText: 'Personal templates' }) })
   await library.waitFor()
   assert.equal(await library.getAttribute('open'), null)
@@ -26,6 +27,8 @@ try {
   await page.locator('[data-canvas-tool=undo]').click()
   await page.waitForFunction(n => window.__FIKA_SLIDES__.getState().slides.length === n, before.length)
   await page.reload({ waitUntil: 'networkidle' })
+  await page.getByRole('button', { name: 'Design', exact: true }).click()
+  await library.waitFor()
   assert.notEqual(await library.getAttribute('open'), null)
   await library.getByRole('button', { name: 'Rename', exact: true }).click()
   await library.getByRole('textbox', { name: 'Template name', exact: true }).last().fill('Renamed design')
