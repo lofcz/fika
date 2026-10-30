@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useMainStore, useSlidesStore, useKeyboardStore, selectHandleElement, selectCurrentSlide } from '@/store'
 import { ElementOrderCommands } from '@/types/edit'
 import { KEYS } from '@/configs/hotkey'
+import { isElementSelectable } from '@/utils/selection'
 import { isTypingTarget } from '@/utils/hotkeyTarget'
 import { isAppOwnedEvent } from '@/utils/portal'
 
@@ -149,7 +150,7 @@ export default () => {
     const tabActiveElement = (backward: boolean) => {
       const currentSlide = selectCurrentSlide(useSlidesStore.getState())
       const { handleElementId, hiddenElementIdList, setActiveElementIdList } = useMainStore.getState()
-      const selectable = currentSlide?.elements.filter(el => !el.lock && !hiddenElementIdList.includes(el.id)) ?? []
+      const selectable = currentSlide?.elements.filter(el => isElementSelectable(el, currentSlide.elements, hiddenElementIdList)) ?? []
       if (!selectable.length) {
         setActiveElementIdList([])
         return

@@ -1,3 +1,4 @@
+import { isElementSelectable } from '@/utils/selection'
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 
 export default () => {
@@ -5,7 +6,7 @@ export default () => {
     const { hiddenElementIdList, setActiveElementIdList } = useMainStore.getState()
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
     if (!currentSlide) return
-    const unlockedElements = currentSlide.elements.filter(el => !el.lock && !hiddenElementIdList.includes(el.id))
+    const unlockedElements = currentSlide.elements.filter(el => isElementSelectable(el, currentSlide.elements, hiddenElementIdList))
     setActiveElementIdList(unlockedElements.map(el => el.id))
   }
 
@@ -15,8 +16,8 @@ export default () => {
     if (hiddenElementIdList.includes(id)) return
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
     if (!currentSlide) return
-    const lockedElements = currentSlide.elements.filter(el => el.lock)
-    if (lockedElements.some(el => el.id === id)) return
+    const element = currentSlide.elements.find(el => el.id === id)
+    if (!element || !isElementSelectable(element, currentSlide.elements, hiddenElementIdList)) return
     setActiveElementIdList([id])
   }
 
