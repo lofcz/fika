@@ -483,7 +483,7 @@ test('deck.setup can build the title slide in the same call', () => {
   assertIncludes(types, 'titleSlideId?: string', 'FikaSetupDeckResult must return titleSlideId')
   assertIncludes(source, 'titleSlots', 'deck.setup must read title.slots')
   assertIncludes(source, 'titleBuilt', 'deck.setup must report titleBuilt when the cover was built')
-  assertIncludes(source, "buildLayoutSlide(\n        'title'", 'deck.setup must build the title layout')
+  assert(/buildLayoutSlide\(\s*'title'/.test(source), 'deck.setup must build the title layout')
 })
 
 test('layout list slots strip leading bullets/numbers', () => {

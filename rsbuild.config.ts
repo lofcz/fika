@@ -10,9 +10,12 @@ import {
 
 export default defineConfig(({ command }) => {
   const isDev = command === 'dev'
+  const isCI = process.env.CI === 'true' || process.env.CI === '1'
 
   return {
     plugins: sharedPlugins(),
+    // Browser tests need a stable document and workers, without reload messages.
+    dev: { hmr: !isCI, liveReload: !isCI },
     html: {
       template: './index.html',
       inject: 'body',
@@ -21,7 +24,7 @@ export default defineConfig(({ command }) => {
     source: {
       tsconfigPath: sharedTsconfigPath,
       entry: {
-        index: isDev && process.env.CI !== 'true' && process.env.CI !== '1'
+        index: isDev && !isCI
           ? ['./src/react-scan.dev.ts', './src/main.tsx']
           : './src/main.tsx',
       },

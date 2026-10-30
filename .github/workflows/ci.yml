@@ -61,4 +61,6 @@ jobs:
           exit 1
 
       - name: Tests
+        env:
+          FIKA_TEST_URL: http://127.0.0.1:5173
         run: bun run test

@@ -1,3 +1,4 @@
+import './lib/register-typescript.mjs'
 import { existsSync, readFileSync } from 'node:fs'
 import { registerHooks } from 'node:module'
 import { dirname, join } from 'node:path'
