@@ -375,6 +375,7 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
                 options={gradientTypeOptions}
               />
               <GradientBar
+                key={slideId}
                 value={background.gradient?.colors || []}
                 index={currentGradientIndex}
                 onInput={value => paintGradientBackground({ colors: value })}

@@ -24,6 +24,7 @@ const GradientBar = memo((props: IGradientBarProps) => {
   const [points, setPoints] = useState<GradientColor[]>([]);
   const barRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
+  const removeDragListenersRef = useRef<() => void>(() => {});
   const onInputRef = useRef(props.onInput);
   const onUpdateValueRef = useRef(props.onUpdateValue);
   const onUpdateIndexRef = useRef(props.onUpdateIndex);
@@ -35,7 +36,10 @@ const GradientBar = memo((props: IGradientBarProps) => {
     onInputRef.current?.(next);
   }, LIVE_INPUT_MS), []);
 
-  useEffect(() => () => emitInput.cancel(), [emitInput]);
+  useEffect(() => () => {
+    emitInput.cancel();
+    removeDragListenersRef.current();
+  }, [emitInput]);
 
   useEffect(() => {
     if (draggingRef.current) return;
@@ -59,10 +63,11 @@ const GradientBar = memo((props: IGradientBarProps) => {
     onUpdateValueRef.current?.(values);
   }, [props.value, props.index]);
   const movePoint = useCallback((index: number) => {
+    removeDragListenersRef.current();
     let isMouseDown = true;
     let current = points;
     draggingRef.current = true;
-    document.onmousemove = e => {
+    const onMove = (e: MouseEvent) => {
       if (!isMouseDown) return;
       if (!barRef.current) return;
       let pos = Math.round((e.clientX - barRef.current.getBoundingClientRect().left) / barRef.current.clientWidth * 100);
@@ -78,10 +83,11 @@ const GradientBar = memo((props: IGradientBarProps) => {
       setPoints(current);
       emitInput(sortStops(current));
     };
-    document.onmouseup = () => {
+    const onEnd = () => {
       isMouseDown = false;
       draggingRef.current = false;
       emitInput.flush();
+      removeDragListenersRef.current();
       const point = current[index];
       const _points = [...current];
       _points.splice(index, 1);
@@ -92,9 +98,14 @@ const GradientBar = memo((props: IGradientBarProps) => {
       _points.splice(targetIndex, 0, point);
       onUpdateIndexRef.current?.(targetIndex);
       onUpdateValueRef.current?.(_points);
-      document.onmousemove = null;
-      document.onmouseup = null;
     };
+    removeDragListenersRef.current = () => {
+      isMouseDown = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onEnd);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
   }, [points, emitInput]);
   const addPoint = useCallback((e: ReactMouseEvent) => {
     if (props.value.length >= 6) return;

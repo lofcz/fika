@@ -263,6 +263,7 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
             {fillType === 'gradient' ? (
               <>
                 <GradientBar
+                  key={handleElementId}
                   value={gradient.colors}
                   index={currentGradientIndex}
                   onInput={value => paintGradient({ colors: value })}
