@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } })
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5173/'}?locale=en`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
+  await page.evaluate(() => {
+    const original = FileReader.prototype.readAsDataURL
+    window.pendingReads = {}
+    FileReader.prototype.readAsDataURL = function(file) {
+      window.pendingReads[file.name] = () => new Promise(resolve => {
+        this.addEventListener('load', () => setTimeout(resolve, 0), { once: true })
+        original.call(this, file)
+      })
+    }
+  })
+  const sources = {}
+  const choose = async color => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="200" height="100" fill="${color}"/></svg>`
+    sources[color] = 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64')
+    await page.locator('[class*="background-image"]').locator('..').locator('input[type=file]').setInputFiles({
+      name: `${color}.svg`, mimeType: 'image/svg+xml', buffer: Buffer.from(svg),
+    })
+  }
+  const finish = color => page.evaluate(color => window.pendingReads[`${color}.svg`](), color)
+  const failures = []
+  for (const mode of ['reset', 'reset-undo']) {
+    await page.evaluate(() => {
+      const slides = window.__FIKA_SLIDES__.getState()
+      const src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="gray"/></svg>')
+      slides.setSlides([0, 1].map(i => ({ id: `image-${i}`, elements: [0, 1].map(j => ({id:`shape-${i}-${j}`,type:'video',left:100+j*300,top:100,width:200,height:100,rotate:0,src:'',poster:src,autoplay:false})) })))
+      slides.updateSlideIndex(0)
+      const main = window.__FIKA_MAIN__.getState()
+      main.setActiveElementIdList(['shape-0-0'])
+      main.setToolbarState('elStyle')
+      main.setEditorareaFocus(true)
+      window.pendingReads = {}
+    })
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await page.evaluate(() => window.__FIKA_MAIN__.getState().setToolbarState('elStyle'))
+    await page.evaluate(() => window.__FIKA_SNAPSHOT__.getState().initSnapshotDatabase())
+    const before = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides)
+    await choose('red')
+    await page.getByRole('button', { name: 'Reset poster', exact: true }).click()
+    await page.waitForFunction(() => window.__FIKA_SNAPSHOT__.getState().snapshotCursor === 1)
+    if (mode === 'reset-undo') {
+      await page.locator('.viewport-wrapper').first().click({position:{x:10,y:10}})
+      await page.keyboard.press('Control+z')
+      await page.waitForFunction(() => window.__FIKA_SNAPSHOT__.getState().snapshotCursor === 0)
+    }
+    const expected = mode === 'reset' ? '' : before[0].elements[0].poster
+    await finish('red')
+    const after = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides)
+    console.log(mode, { originalRed: after[0].elements[0].poster === sources.red, originalBlue: after[0].elements[0].poster === sources.blue })
+    try {
+      assert.equal(after[0].elements[0].poster, expected, 'Resetting the poster cancels its pending upload, including after undo')
+      assert.deepEqual(after[1], before[1], 'The other slide remains unchanged')
+      assert.deepEqual(after[0].elements[1], before[0].elements[1], 'The other video remains unchanged')
+      if (mode === 'reset-undo') {
+        await page.waitForTimeout(350)
+        await page.keyboard.press('Control+y')
+        await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].poster === '')
+        assert.equal(await page.evaluate(() => window.__FIKA_SNAPSHOT__.getState().snapshotCursor), 1, 'Canceled uploads preserve redo history')
+      }
+      console.log(`PASS ${mode}`)
+    } catch (error) { failures.push(error.message) }
+  }
+  assert.deepEqual(failures, [])
+  assert.deepEqual(errors, [])
+} finally {
+  await browser.close()
+}

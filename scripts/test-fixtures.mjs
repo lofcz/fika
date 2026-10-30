@@ -69,6 +69,7 @@ export const e2eScripts = [
   'scripts/e2e-background-image-load.mjs',
   'scripts/e2e-shape-image-load.mjs',
   'scripts/e2e-video-poster-load.mjs',
+  'scripts/e2e-video-poster-reset-pending.mjs',
   'scripts/e2e-image-replacement-load.mjs',
   'scripts/e2e-image-replacement-invalid.mjs',
   'scripts/e2e-image-intrinsic-size.mjs',

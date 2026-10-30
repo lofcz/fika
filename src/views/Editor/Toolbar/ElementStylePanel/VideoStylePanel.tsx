@@ -54,6 +54,14 @@ const VideoStylePanel = memo(() => {
     })
   }
 
+  const resetPoster = () => {
+    const element = getHandleElement()
+    const slideId = selectCurrentSlide(useSlidesStore.getState())?.id
+    if (element?.type !== 'video' || !slideId) return
+    posterUploadRequests.delete(JSON.stringify([slideId, element.id]))
+    updateVideo({ poster: '' })
+  }
+
   const generatePoster = async () => {
     const el = getHandleElement() as PPTVideoElement | null
     if (!el?.src || synthesizing) return
@@ -102,7 +110,7 @@ const VideoStylePanel = memo(() => {
       </div>
       {handleVideoElement.poster ? (
         <div className={cx('row')}>
-          <Button style={{ flex: '1' }} onClick={() => updateVideo({ poster: '' })}>
+          <Button style={{ flex: '1' }} onClick={resetPoster}>
             <Icon icon="undo-2" /> {LL.editor.videoStyle.resetPoster()}
           </Button>
         </div>
