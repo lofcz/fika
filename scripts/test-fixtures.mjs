@@ -117,6 +117,7 @@ export const e2eScripts = [
   'scripts/e2e-frame-keyboard.mjs',
   'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-frame-marquee-clipping.mjs',
+  'scripts/e2e-rotated-marquee.mjs',
   'scripts/e2e-table-resize-floor.mjs',
   'scripts/e2e-resize-shapes.mjs',
   'scripts/e2e-shape-fixed-fit.mjs',

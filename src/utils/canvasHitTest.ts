@@ -686,9 +686,10 @@ export function visualHitIntersectsBox(rect: VisualHitRect, box: {
   if (!(box.width > 0) || !(box.height > 0)) return false;
   const aabb = visualHitAabb(rect);
   if (!(aabb.left < box.left + box.width && aabb.right > box.left && aabb.top < box.top + box.height && aabb.bottom > box.top)) return false;
-  if (!rect.frameClip) return true;
-  if (rect.frameClip.length < 3) return false;
-  const visible = intersectFramePolygons(visualHitCorners(rect), rect.frameClip);
+  if (!rect.frameClip && !rect.rotate) return true;
+  if (rect.frameClip && rect.frameClip.length < 3) return false;
+  const corners = visualHitCorners(rect);
+  const visible = rect.frameClip ? intersectFramePolygons(corners, rect.frameClip) : corners;
   const overlap = intersectFramePolygons(visible, [
     { x: box.left, y: box.top },
     { x: box.left + box.width, y: box.top },

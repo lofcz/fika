@@ -237,6 +237,15 @@ for (const [parent, hidden] of [[frame, []], [{ ...frame, lock: false }, new Set
   const allHit = elementIdsIntersectingSelection([parent, framedChild, outsideSibling], { left: 0, top: 0, width: 1200, height: 300 }, 1, hidden)
   assert(allHit.join() === 'outside-sibling', 'marquee excludes inherited frame restrictions for array and Set visibility inputs')
 }
+for (const rotate of [45, -45, 30, -30, 135, 225]) {
+  const rotated = { ...box, id: 'rotated-box', left: 200, top: 200, width: 200, height: 200, rotate }
+  for (const scale of [.5, 1, 2]) {
+    const empty = elementIdsIntersectingSelection([rotated], { left: 150*scale, top: 150*scale, width: 50*scale, height: 50*scale }, scale)
+    assert(empty.length === 0, 'rotated bounding-box corners are not selectable')
+    const visible = elementIdsIntersectingSelection([rotated], { left: 150*scale, top: 150*scale, width: 160*scale, height: 160*scale }, scale)
+    assert(visible.join() === 'rotated-box', 'selection crossing a rotated rectangle remains selectable at every zoom')
+  }
+}
 const rotatedFrame = { ...box, id: 'rotated-frame', type: 'shape', left: 0, top: 0, width: 100, height: 100, rotate: 45, frame: { clipContent: true } }
 const oversizedChild = { ...box, id: 'oversized-child', left: -50, top: -50, width: 200, height: 200, parentFrameId: rotatedFrame.id }
 for (const scale of [1, 2]) {
