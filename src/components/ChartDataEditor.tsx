@@ -232,7 +232,7 @@ const ChartDataEditor = memo((props: IChartDataEditorProps) => {
         clipboardDataFirstItem.getAsString(text => {
           const clipboardData = pasteCustomClipboardString(text);
           if (typeof clipboardData === 'object') return;
-          const excelData = pasteExcelClipboardString(text);
+          const excelData = pasteExcelClipboardString(text, true);
           if (excelData) {
             fillTableData(excelData, rowIndex, colIndex);
             return;

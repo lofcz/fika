@@ -57,7 +57,7 @@ export const pasteCustomClipboardString = (text: string) => {
   return clipboardData;
 };
 
-export const pasteExcelClipboardString = (text: string): string[][] | null => {
+export const pasteExcelClipboardString = (text: string, allowSingleColumn = false): string[][] | null => {
   // Spreadsheet clipboard TSV quotes cells containing tabs, newlines, or
   // quotes. Splitting on separators first destroys those cell boundaries.
   const source = text.replace(/\r\n?/g, '\n');
@@ -83,7 +83,8 @@ export const pasteExcelClipboardString = (text: string): string[][] | null => {
     data.push(row);
   }
   const colCount = data[0]?.length ?? 0;
-  if (colCount < 2 || data.some(cells => cells.length !== colCount)) return null;
+  const isGrid = colCount >= 2 || (allowSingleColumn && colCount === 1 && data.length > 1);
+  if (!isGrid || data.some(cells => cells.length !== colCount)) return null;
   return data;
 };
 
