@@ -223,6 +223,7 @@ const Slider = memo((vrProps: ISliderProps) => {
       data-style-slider={dataStyleSlider}
       ref={sliderRef}
       onMouseDown={handleMousedown}
+      onTouchStart={handleMousedown}
     >
       <div className={cx('bar')}>
         {!range ? (

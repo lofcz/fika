@@ -3,6 +3,7 @@
   height: 12px;
   padding: 4px 0;
   user-select: none;
+  touch-action: none;
 
   &.disabled {
     .track {
