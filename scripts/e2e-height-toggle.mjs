@@ -101,11 +101,22 @@ async function readState(page, boxIndex = 0) {
       panelFixed: fixedBtn?.getAttribute('aria-pressed') === 'true',
       text: (box?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
     }
-    // Live-DOM rail: the thumb IS the slide tree — count painted text chars
-    // instead of raster ink pixels.
+    // Read the rendered title area from the canvas thumbnail.
     let ink = 0
-    const thumbPm = document.querySelector('[class*=thumbnail-slide] .ProseMirror, [class*=thumbnail-slide] .ProseMirror-static')
-    if (thumbPm) ink = (thumbPm.textContent || '').replace(/\s+/g, '').length
+    const state = window.__FIKA_SLIDES__.getState()
+    const title = state.slides[0]?.elements.find(el => el.type === 'text' && /HeightTitle/.test(el.content))
+    const thumbCanvas = document.querySelector('[data-thumbnail-slide] canvas[data-canvas-painted]')
+    if (thumbCanvas && title) {
+      const sx = thumbCanvas.width / state.viewportSize
+      const sy = thumbCanvas.height / (state.viewportSize * state.viewportRatio)
+      const pixels = thumbCanvas.getContext('2d').getImageData(
+        Math.floor(title.left * sx), Math.floor(title.top * sy),
+        Math.max(1, Math.ceil(title.width * sx)), Math.max(1, Math.ceil(title.height * sy)),
+      ).data
+      for (let p = 0; p < pixels.length; p += 4) {
+        if (pixels[p + 3] > 128 && Math.min(pixels[p], pixels[p + 1], pixels[p + 2]) < 200) ink++
+      }
+    }
     return {
       id,
       mode: box?.getAttribute('data-text-box-mode') || '',
