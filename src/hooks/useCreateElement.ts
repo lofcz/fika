@@ -80,7 +80,7 @@ export default () => {
     };
   };
   const probeImageSize = (src: string) => {
-    return Promise.race([getImageSize(src), new Promise<{
+    return Promise.race([getImageSize(src).catch(() => ({ width: 400, height: 300 })), new Promise<{
       width: number;
       height: number;
     }>(resolve => {

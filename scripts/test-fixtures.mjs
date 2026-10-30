@@ -64,6 +64,7 @@ export const e2eScripts = [
   'scripts/e2e-background-image-load.mjs',
   'scripts/e2e-shape-image-load.mjs',
   'scripts/e2e-image-replacement-load.mjs',
+  'scripts/e2e-image-replacement-invalid.mjs',
   'scripts/e2e-number-input-finite.mjs',
   'scripts/e2e-number-input-unchanged.mjs',
   'scripts/e2e-number-input-step-bounds.mjs',

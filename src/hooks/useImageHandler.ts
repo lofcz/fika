@@ -3,6 +3,8 @@ import type { PPTImageElement } from '@/types/slides'
 import { getImageDataURL, getImageSize } from '@/utils/image'
 import { internMediaSrc } from '@/utils/mediaIntern'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import message from '@/utils/message'
+import { getLL } from '@/i18n/getLL'
 
 const replacementRequests = new Map<string, symbol>()
 
@@ -46,6 +48,9 @@ export default () => {
       }
       store.updateElement({ id: imageElementId, slideId, props })
       addHistorySnapshot()
+    }
+    catch {
+      if (replacementRequests.get(key) === request) message.error(getLL().common.fileParseError())
     }
     finally {
       if (replacementRequests.get(key) === request) replacementRequests.delete(key)

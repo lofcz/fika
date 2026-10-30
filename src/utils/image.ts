@@ -9,27 +9,30 @@ interface ImageSize {
  * @param src Image URL
  */
 export const getImageSize = (src: string): Promise<ImageSize> => {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const portalTarget = getFikaPortalTarget();
     const img = document.createElement('img');
-    img.src = src;
     img.style.opacity = '0';
     portalTarget.appendChild(img);
+    const cleanup = () => {
+      img.onload = null;
+      img.onerror = null;
+      img.remove();
+    };
     img.onload = () => {
       const imgWidth = img.clientWidth;
       const imgHeight = img.clientHeight;
-      img.onload = null;
-      img.onerror = null;
-      portalTarget.removeChild(img);
+      cleanup();
       resolve({
         width: imgWidth,
         height: imgHeight
       });
     };
     img.onerror = () => {
-      img.onload = null;
-      img.onerror = null;
+      cleanup();
+      reject(new Error('Unable to load image'));
     };
+    img.src = src;
   });
 };
 
