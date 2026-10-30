@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { deepEqual } from 'fast-equals'
 import { applyPatches, enablePatches, produceWithPatches, type Patch } from 'immer'
 import { db, type Snapshot } from '@/utils/database'
 import type { Slide, SlideTemplate, SlideTheme } from '@/types/slides'
@@ -130,6 +131,14 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
       const viewportSize = slidesStore.viewportSize
       const viewportRatio = slidesStore.viewportRatio
       const templates = structuredClone(slidesStore.templates)
+      // Blur/debounced editor commits may save the document again after undo.
+      // An unchanged save must not discard redo or consume a history slot.
+      if (cursorSlides && keptOldKeys.length && deepEqual(cursorSlides, nextSlides)) {
+        const current = await db.snapshots.get(keptOldKeys[keptOldKeys.length - 1])
+        if (current && current.title === title
+          && current.viewportSize === viewportSize && current.viewportRatio === viewportRatio
+          && deepEqual(current.theme, theme) && deepEqual(current.templates, templates)) return
+      }
       let entry: Omit<Snapshot, 'id'>
       if (!cursorSlides || keptOldKeys.length === 0) {
         entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, templates, slides: structuredClone(nextSlides) }

@@ -29,6 +29,23 @@ try {
   })
   assert.deepEqual(result, { after: { cursor: 2, length: 3 }, undo: 'First edit', baseline: 'Initial', redo: 'Second edit', cursor: 2 }, 'Overlapping history operations preserve every edit and their metadata')
   console.log('PASS overlapping snapshots, undo, and redo preserve edit ordering')
+  await page.waitForTimeout(500)
+  const noOp = await page.evaluate(async () => {
+    const history = window.__FIKA_SNAPSHOT__.getState()
+    const slides = window.__FIKA_SLIDES__.getState()
+    slides.setTitle('Initial')
+    await history.initSnapshotDatabase()
+    slides.setTitle('First edit')
+    await history.addSnapshot()
+    slides.setTitle('Second edit')
+    await history.addSnapshot()
+    await history.unDo()
+    await history.addSnapshot()
+    await history.reDo()
+    return { title: window.__FIKA_SLIDES__.getState().title, length: window.__FIKA_SNAPSHOT__.getState().snapshotLength }
+  })
+  assert.deepEqual(noOp, { title: 'Second edit', length: 3 }, 'Saving an unchanged document after undo must preserve redo')
+  console.log('PASS unchanged history saves preserve the redo branch')
   const branching = await page.evaluate(async () => {
     const slides = window.__FIKA_SLIDES__
     const history = window.__FIKA_SNAPSHOT__.getState()
