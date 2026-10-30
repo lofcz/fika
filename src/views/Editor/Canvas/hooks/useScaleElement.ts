@@ -8,7 +8,7 @@ import { clonePlain } from '@/utils/clonePlain'
 import { bindDocumentDrag, rafCoalesce } from '@/utils/gestureBind'
 import { findSlideViewport, getPointerClient, getViewportRenderedScale, pointerDeltaToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
-import { applyLiveSize, autoHeightInsetSum, measureAutoTextHeight, tableCellMinHeight } from '@/utils/liveElementSize'
+import { applyLiveSize, autoHeightInsetSum, measureAutoTextHeight, measureLiveTableHeight, tableCellMinHeight } from '@/utils/liveElementSize'
 import { placeholderHeightFloor } from '@/utils/placeholderLayout'
 import { commitSlideElements } from '@/utils/commitSlideElements'
 
@@ -370,6 +370,23 @@ export default (
       }
       else {
         applyLiveSize(element.id, left, top, width, height, canvasScaleRef.current, livePaint)
+        if (element.type === 'table') {
+          const measured = measureLiveTableHeight(element.id)
+          if (measured != null && measured > height + 0.5) {
+            const delta = measured - height
+            height = measured
+            if (elRotate) {
+              const opposite = getOppositePoint(command, getRotateElementPoints({ width, height, left, top }, elRotate))
+              left += baseLeft - opposite.left
+              top += baseTop - opposite.top
+            }
+            else if ([OperateResizeHandlers.TOP, OperateResizeHandlers.LEFT_TOP, OperateResizeHandlers.RIGHT_TOP].includes(command)) top -= delta
+            liveList = liveList.map(el => el.id === element.id
+              ? { ...el, left, top, height, cellMinHeight: tableCellMinHeight(height, element.data.length) }
+              : el)
+            applyLiveSize(element.id, left, top, width, height, canvasScaleRef.current)
+          }
+        }
       }
     }
 

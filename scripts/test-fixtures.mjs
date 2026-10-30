@@ -105,6 +105,7 @@ export const e2eScripts = [
   'scripts/e2e-preview-sync.mjs',
   'scripts/e2e-resize-commit-match.mjs',
   'scripts/e2e-resize-elements.mjs',
+  'scripts/e2e-table-resize-floor.mjs',
   'scripts/e2e-resize-shapes.mjs',
   'scripts/e2e-shape-fixed-fit.mjs',
   'scripts/e2e-fixed-fit-never-clips.mjs',

@@ -76,7 +76,18 @@ const TableElement = memo((props: ITableElementProps) => {
       }
       if (wasScaling && !next && elementRef.current) {
         const table = elementRef.current.querySelector('table');
-        if (table instanceof HTMLTableElement) delete table.dataset.liveColOrigin;
+        if (table instanceof HTMLTableElement) {
+          delete table.dataset.liveColOrigin;
+          // Release imperative drag constraints; React and the content-sized
+          // rows own the table again after the gesture.
+          for (const key of ['width', 'height', 'min-width', 'max-width']) table.style.removeProperty(key);
+          for (const cell of table.querySelectorAll<HTMLElement>('td, th')) cell.style.removeProperty('height');
+          for (const col of table.querySelectorAll<HTMLElement>('col')) col.style.removeProperty('width');
+          for (const key of ['min-width', 'max-width']) table.parentElement?.style.removeProperty(key);
+        }
+        const content = elementRef.current.querySelector<HTMLElement>('[data-live-box]');
+        content?.style.removeProperty('width');
+        content?.style.removeProperty('height');
       }
       wasScaling = next;
       isScalingRef.current = next;

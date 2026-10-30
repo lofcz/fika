@@ -215,6 +215,14 @@ export const autoHeightInsetSum = (el: {
   return null
 }
 
+/** Uniform table rows must remain tall enough for the content at live widths. */
+export const measureLiveTableHeight = (id: string): number | null => {
+  const table = editableRoot(id)?.querySelector<HTMLTableElement>('[data-live-table] table')
+  const rows = Array.from(table?.tBodies[0]?.rows ?? [])
+  if (!rows.length) return null
+  return Math.max(...rows.map(row => row.offsetHeight)) * rows.length
+}
+
 /**
  * Height the auto-height element's text actually needs at its CURRENT live
  * width (call after the width has been painted). scrollHeight reports the
