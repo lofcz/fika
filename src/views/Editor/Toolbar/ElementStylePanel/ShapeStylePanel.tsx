@@ -28,6 +28,7 @@ import GradientBar from '@/components/GradientBar'
 import FileInput from '@/components/FileInput'
 import { Icon } from '@/components/Icon'
 import { applyLiveGradient } from '@/utils/liveElementPaint'
+import { isElementSelectable } from '@/utils/selection'
 
 const patternImageRequests = new Map<string, symbol>()
 
@@ -157,17 +158,22 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
 
   const uploadPattern = (files: FileList) => {
     const imageFile = files[0]
-    const slideId = selectCurrentSlide(useSlidesStore.getState())?.id
+    const slide = selectCurrentSlide(useSlidesStore.getState())
     const elementId = handleElementId
-    if (!imageFile || !slideId || !elementId) return
+    const target = slide?.elements.find(el => el.id === elementId)
+    if (!imageFile || !slide || target?.type !== 'shape'
+      || !isElementSelectable(target, slide.elements, useMainStore.getState().hiddenElementIdList)) return
+    const slideId = slide.id
     const key = JSON.stringify([slideId, elementId])
     const request = Symbol()
     patternImageRequests.set(key, request)
     getImageDataURL(imageFile).then(dataURL => {
       if (patternImageRequests.get(key) !== request) return
       const store = useSlidesStore.getState()
-      const element = store.slides.find(slide => slide.id === slideId)?.elements.find(el => el.id === elementId)
-      if (element?.type !== 'shape' || element.pattern === undefined) return
+      const currentSlide = store.slides.find(slide => slide.id === slideId)
+      const element = currentSlide?.elements.find(el => el.id === elementId)
+      if (!currentSlide || element?.type !== 'shape' || element.pattern === undefined
+        || !isElementSelectable(element, currentSlide.elements, useMainStore.getState().hiddenElementIdList)) return
       store.updateElement({ id: elementId, slideId, props: { pattern: dataURL } })
       addHistorySnapshot()
     }).finally(() => {
