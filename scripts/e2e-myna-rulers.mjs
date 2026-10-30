@@ -37,7 +37,7 @@ async function aligned() {
 try {
   await page.goto(`${base}/?mode=myna&locale=en`, { waitUntil:'networkidle' })
   await page.locator('[data-myna-ruler="horizontal"]').waitFor()
-  await page.getByRole('button', { name:'Close library', exact:true }).click()
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
   await page.evaluate(async () => {
     const s = window.__FIKA_SLIDES__.getState()
     s.setViewportSize(1000); s.setViewportRatio(1); s.updateSlideIndex(0)

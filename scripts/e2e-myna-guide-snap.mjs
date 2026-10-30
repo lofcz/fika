@@ -8,7 +8,12 @@ try {
   await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5178'}/?mode=myna&locale=en`)
   await page.locator('[data-myna-workspace]').waitFor()
   await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotLength > 0)
-  await page.getByRole('button', { name: 'Close library', exact: true }).click()
+  await page.evaluate(() => {
+    const store = window.__FIKA_SLIDES__.getState()
+    store.setSlides([{ id: 'guide-snap-fixture', elements: [] }])
+    store.updateSlideIndex(0)
+    window.__FIKA_MAIN__.getState().setCanvasPercentage(65)
+  })
   const reset = async () => {
     await page.evaluate(() => {
       const slides = window.__FIKA_SLIDES__.getState()

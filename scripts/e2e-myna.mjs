@@ -12,9 +12,16 @@ const store = () => page.evaluate(() => {
   return { width: s.viewportSize, ratio: s.viewportRatio, index: s.slideIndex, slides: s.slides }
 })
 try {
-  await page.goto(`${base}/?mode=myna`, { waitUntil: 'networkidle' })
+  await page.goto(`${base}/?mode=myna&locale=en`, { waitUntil: 'networkidle' })
   await page.locator('[data-myna-workspace]').waitFor()
   await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotLength > 0)
+  await page.evaluate(async () => {
+    const store = window.__FIKA_SLIDES__.getState()
+    store.setSlides([{ id: 'myna-fixture', elements: [] }])
+    store.updateSlideIndex(0)
+    await window.__FIKA_SNAPSHOT__.getState().initSnapshotDatabase()
+  })
+  await page.getByRole('button', { name: 'Design', exact: true }).click()
   assert.equal((await store()).ratio, 1)
   await page.getByRole('button', { name: /The workshop Events/ }).click()
   await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides.length === 2)

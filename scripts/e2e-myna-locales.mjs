@@ -3,10 +3,10 @@ import { chromium } from 'playwright'
 const browser = await chromium.launch({ headless: true })
 const base = process.env.FIKA_TEST_URL || 'http://127.0.0.1:5178'
 const locales = [
-  { id: 'en', title: 'Untitled design', download: 'Download', name: 'English' },
-  { id: 'cs', title: 'Návrh bez názvu', download: 'Stáhnout', name: 'Čeština' },
-  { id: 'sk', title: 'Návrh bez názvu', download: 'Stiahnuť', name: 'Slovenčina' },
-  { id: 'pl', title: 'Projekt bez nazwy', download: 'Pobierz', name: 'Polski' },
+  { id: 'en', title: 'OBZOR — a school of possibilities', download: 'Download', name: 'English' },
+  { id: 'cs', title: 'OBZOR — škola otevřených možností', download: 'Stáhnout', name: 'Čeština' },
+  { id: 'sk', title: 'OBZOR — a school of possibilities', download: 'Stiahnuť', name: 'Slovenčina' },
+  { id: 'pl', title: 'OBZOR — a school of possibilities', download: 'Pobierz', name: 'Polski' },
 ]
 const errors = []
 try {
@@ -16,10 +16,12 @@ try {
     await page.goto(`${base}/?mode=myna&locale=${locale.id}`, { waitUntil: 'networkidle' })
     await page.locator('[data-myna-workspace]').waitFor()
     await page.getByRole('button', { name: locale.download, exact: true }).waitFor()
+    await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
     assert.equal(await page.evaluate(() => window.__FIKA_SLIDES__.getState().title), locale.title)
-    // The starter's editable content and template labels must be in the initial UI language.
+    // Showcase copy supports Czech and English, with English fallback for other UI locales.
     const contents = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements.filter(e => e.type === 'text').map(e => e.content).join(''))
-    if (locale.id !== 'en') assert.ok(!contents.includes('THE CREATIVE EDIT'))
+    assert.ok(contents.includes(locale.id === 'cs' ? 'ŠKOLA OTEVŘENÝCH MOŽNOSTÍ' : 'A SCHOOL OF POSSIBILITIES'))
+    assert.equal(await page.evaluate(() => document.documentElement.lang), locale.id)
     await page.close()
   }
   const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } })

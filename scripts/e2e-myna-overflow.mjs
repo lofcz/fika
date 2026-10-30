@@ -35,7 +35,7 @@ async function checkPaint() {
 try {
   await page.goto(`${base}/?mode=myna&locale=en`, { waitUntil: 'networkidle' })
   await page.locator('[data-myna-workspace]').waitFor()
-  await page.getByRole('button', { name: 'Close library', exact: true }).click()
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
   await page.evaluate(() => {
     const state = window.__FIKA_SLIDES__.getState()
     const shape = (id, left, top, fill) => ({ id, type: 'shape', left, top, width: 200, height: 200, rotate: 0, fill, fixedRatio: false, viewBox: [100,100], path:'M0 0 H100 V100 H0 Z' })
@@ -47,6 +47,9 @@ try {
     ] }])
     window.__FIKA_MAIN__.getState().setCanvasPercentage(60)
   })
+  // Recenter the isolated page after replacing the multi-page showcase.
+  await page.getByRole('button', { name: 'Fit all pages', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Zoom', exact: true }).selectOption('50')
   await page.waitForTimeout(700)
   assert.equal(await page.locator('.myna-canvas .viewport-clip').evaluate(el => getComputedStyle(el).overflow), 'visible')
   await checkPaint()
