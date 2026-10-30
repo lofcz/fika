@@ -124,6 +124,7 @@ try {
     }
     return {
       storeHeight: el?.height,
+      text: pm?.textContent ?? null,
       fixedHeight: !!el?.fixedHeight,
       contentStyleHeight: content?.style.height ?? null,
       autoAttr: content?.hasAttribute('data-live-auto-height') ?? null,
@@ -188,7 +189,10 @@ try {
 
   const typeMore = async (id, extra) => {
     await enterEdit(id)
-    await page.keyboard.press('Control+ArrowDown')
+    // A restored node selection can replace the last paragraph on typing.
+    // Move to the document end and add a paragraph so height must grow.
+    await page.keyboard.press('Control+End')
+    await page.keyboard.press('Enter')
     await page.keyboard.type(extra, { delay: 4 })
     await sleep(150)
     await exitEdit(id)
@@ -247,7 +251,9 @@ try {
     const hBefore = before.storeHeight
     await typeMore(id, 'qqq www eee rrr')
     const after = await settle(id)
-    rec(`${flow}: height reacts to typing`, after.storeHeight !== hBefore, { hBefore, after })
+    rec(`${flow}: typing appends text without replacing existing content`,
+      after.text === before.text + 'qqq www eee rrr', { before: before.text, after: after.text })
+    rec(`${flow}: height grows for the added paragraph`, after.storeHeight > hBefore, { hBefore, after })
     rec(
       `${flow}: box still hugs text after typing`,
       after.textExtent != null && Math.abs(after.storeHeight - after.textExtent) <= 34,
