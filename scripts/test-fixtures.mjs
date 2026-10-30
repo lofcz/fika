@@ -47,6 +47,7 @@ export const e2eScripts = [
   'scripts/e2e-group-clipboard.mjs',
   'scripts/e2e-cut-clipboard.mjs',
   'scripts/e2e-table-clipboard.mjs',
+  'scripts/e2e-table-keyboard.mjs',
   'scripts/e2e-clipboard-errors.mjs',
   'scripts/e2e-presentation-export.mjs',
   'scripts/e2e-import-append.mjs',

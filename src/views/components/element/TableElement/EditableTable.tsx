@@ -508,23 +508,23 @@ const EditableTable = memo((props: IEditableTableProps) => {
     });
   };
 
-  const tabActiveCell = () => {
+  const tabActiveCell = (backward: boolean) => {
     flushDraft();
-    const getNextCell = (i: number, j: number): [number, number] | null => {
-      if (!tableCells[i]) return null;
-      if (!tableCells[i][j]) return getNextCell(i + 1, 0);
-      if (isHideCell(i, j)) return getNextCell(i, j + 1);
-      return [i, j];
-    };
+    const visibleCells: [number, number][] = [];
+    tableCells.forEach((row, i) => row.forEach((_, j) => {
+      if (!isHideCell(i, j)) visibleCells.push([i, j]);
+    }));
+    const current = visibleCells.findIndex(([i, j]) => i === startCell[0] && j === startCell[1]);
+    const nextCell = visibleCells[current + (backward ? -1 : 1)];
     setEndCell([]);
-    const nextRow = startCell[0];
-    const nextCol = startCell[1] + 1;
-    const nextCell = getNextCell(nextRow, nextCol);
-    if (!nextCell) {
-      insertRow(nextRow + 1);
-      setStartCell([nextRow + 1, 0]);
+    if (nextCell) setStartCell(nextCell);
+    else if (!backward) {
+      // A final merged cell can span several rows. Append after the entire
+      // table, not inside that merge where the new active cell would be hidden.
+      const nextRow = tableCells.length;
+      insertRow(nextRow);
+      setStartCell([nextRow, 0]);
     }
-    else setStartCell(nextCell);
     focusActiveCell();
   };
 
@@ -593,7 +593,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
     if (selectedCells.length < 2) {
       if (key === KEYS.TAB) {
         e.preventDefault();
-        tabActiveCell();
+        tabActiveCell(e.shiftKey);
       }
       else if ((e.ctrlKey || e.metaKey) && key === KEYS.UP) {
         e.preventDefault();
