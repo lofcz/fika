@@ -57,7 +57,14 @@ try {
     await page.waitForFunction(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[0].left===125)
     await x.locator('xpath=..').locator('span').last().click()
     await page.waitForFunction(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[0].left===120)
-    console.log('PASS numeric input synchronization, typing, bounds and step controls')
+    for(const text of ['12.5','-12.5','.5','-.5']) {
+      await x.fill('')
+      await x.pressSequentially(text,{delay:40})
+      assert.equal(await x.inputValue(),text,'Decimal and sign characters remain while typing')
+      await x.press('Enter')
+      assert.equal(await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[0].left),Number(text),'Decimal typing commits the intended coordinate')
+    }
+    console.log('PASS numeric input synchronization, decimal typing, bounds and step controls')
   }
   assert.deepEqual(errors,[])
 } finally {await browser.close()}

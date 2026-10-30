@@ -51,18 +51,16 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
   const [focused, setFocused] = useState(false)
 
   useEffect(() => {
-    if (value !== number) setNumber(value)
+    // A parent echo of the same numeric value must preserve drafts like "12.".
+    if (value !== +number) setNumber(value)
   }, [value])
 
   // Prop synchronization must not emit a stale value back to the parent.
   // Only user actions may commit a number.
   const updateNumber = (input: string | number) => {
+    setNumber(input)
     const next = +input
-    if (isNaN(next) || next > max || next < min) {
-      setNumber(input)
-      return
-    }
-    setNumber(next)
+    if (isNaN(next) || next > max || next < min) return
     if (next !== value) onUpdateValue?.(next)
   }
 
