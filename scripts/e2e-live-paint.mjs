@@ -1,7 +1,6 @@
 /**
  * Live gradient / property updates must paint the canvas and the rail thumb
- * without remounting anything. The thumb IS the live slide DOM now, so a
- * gesture must never swap its tree — only update attributes in place.
+ * without remounting the canvas. Measure the displayed gradient from pixels.
  *
  *   node scripts/e2e-live-paint.mjs
  */
@@ -17,12 +16,14 @@ const DEV_PORTS = [5173, 5174, 5175, 5176]
 const CASES = [
   [1, 'angle slider updates the painted gradient during the drag'],
   [2, 'angle slider does not write gradient.rotate to the store until mouseup'],
-  [3, 'angle slider does not remount the thumb slide tree during the drag'],
+  [3, 'angle slider does not remount the thumbnail canvas during the drag'],
   [4, 'no capture/stage machinery exists on the thumbnail path'],
   [5, 'sibling shape path node stays the same during the drag'],
   [6, 'mouseup commits the painted rotate to the store and the thumb follows'],
   [7, 'a burst of store gradient writes lands the final angle in the thumb'],
-  [8, 'a burst of store gradient writes keeps the thumb tree mounted'],
+  [8, 'a burst of store gradient writes keeps the thumbnail canvas mounted'],
+  [9, 'thumbnail pixels distinguish all four cardinal gradient directions'],
+  [10, 'flat thumbnail paint cannot pass as a directional gradient'],
 ]
 
 const gradientShape = {
@@ -120,8 +121,8 @@ async function waitForStoreHook(page) {
 }
 
 async function waitForRasterHook(page) {
-  // The rail mounts live slide DOM now — wait for the first thumb tree.
-  await page.waitForSelector('[data-thumbnail-slide] .screen-slide', { timeout: 20000 })
+  // The rail mounts live slide DOM now — wait for the first thumbnail canvas.
+  await page.waitForSelector('[data-thumbnail-slide] canvas[data-canvas-painted]', { timeout: 20000 })
 }
 
 async function selectElement(page, id) {
@@ -170,7 +171,7 @@ async function snapshot(page) {
   }, { shapeId: gradientShape.id, siblingId: siblingShape.id })
 }
 
-/** The thumb's slide tree for the current slide (live DOM). */
+/** Track the mounted canvas for the current slide. */
 async function tagThumbTree(page) {
   await page.evaluate(() => {
     const slides = window.__FIKA_SLIDES__.getState()
@@ -178,7 +179,7 @@ async function tagThumbTree(page) {
     const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
       el.getAttribute('data-thumbnail-slide') === current?.id
     ))
-    const slide = host?.querySelector('.screen-slide')
+    const slide = host?.querySelector('canvas[data-canvas-painted]')
     if (slide) slide.dataset.e2eNode = String(Date.now())
   })
 }
@@ -190,42 +191,39 @@ async function readThumbNodeKey(page) {
     const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => (
       el.getAttribute('data-thumbnail-slide') === current?.id
     ))
-    return host?.querySelector('.screen-slide')?.dataset.e2eNode || null
+    return host?.querySelector('canvas[data-canvas-painted]')?.dataset.e2eNode || null
   })
 }
 
-/** The thumb's painted gradient rotate for the gradient shape. */
+/** Infer the painted gradient direction from color changes at three interior points. */
 async function thumbGradientRotate(page, shapeId) {
   return page.evaluate((id) => {
-    const def = document.getElementById(`base-gradient-${id}`)
-    if (!def) return null
-    const raw = def.getAttribute('gradientTransform') || ''
-    const match = raw.match(/rotate\(([-.\d]+)/)
-    return match ? Number(match[1]) : null
+    const state = window.__FIKA_SLIDES__.getState()
+    const slide = state.slides[state.slideIndex]
+    const shape = slide.elements.find(el => el.id === id)
+    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(el => el.dataset.thumbnailSlide === slide.id)
+    const canvas = host?.querySelector('canvas[data-canvas-painted]')
+    if (!shape || !canvas) return null
+    const sx = canvas.width / state.viewportSize
+    const sy = canvas.height / (state.viewportSize * state.viewportRatio)
+    const sample = (x, y) => {
+      const px = Math.round((shape.left + x * shape.width) * sx)
+      const py = Math.round((shape.top + y * shape.height) * sy)
+      const data = canvas.getContext('2d').getImageData(px - 1, py - 1, 3, 3).data
+      let red = 0
+      for (let i = 0; i < data.length; i += 4) red += data[i]
+      return { x: px, y: py, red: red / 9 }
+    }
+    const a = sample(.6, .6), b = sample(.9, .6), c = sample(.6, .9)
+    const dx = (b.red - a.red) / (b.x - a.x)
+    const dy = (c.red - a.red) / (c.y - a.y)
+    if (Math.hypot(dx, dy) < .05) return null
+    return (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360
   }, shapeId)
 }
 
-async function waitForIdleRaster(page, requirePaint = true) {
-  const start = Date.now()
-  let last = -1
-  let stable = 0
-  while (Date.now() - start < 8000) {
-    // oxlint-disable-next-line no-undef -- leftover raster helper; wait loop is best-effort
-    const stats = await rasterStats(page)
-    const token = stats.fullPaints + stats.patchPaints + stats.elementInvalidations
-    if (token === last) {
-      stable += 1
-      if (stable >= 3 && (!requirePaint || stats.fullPaints + stats.patchPaints > 0)) return stats
-    }
-    else {
-      stable = 0
-      last = token
-    }
-    await sleep(80)
-  }
-  // oxlint-disable-next-line no-undef -- leftover raster helper; wait loop is best-effort
-  return rasterStats(page)
-}
+// Pixel quantization makes angle measurements approximate; absent/flat paint fails.
+const sameAngle = (measured, expected) => measured !== null && Math.abs((measured - expected + 540) % 360 - 180) <= 3
 
 async function claimCurrentScratch(page, id) {
   await page.evaluate((elId) => {
@@ -303,8 +301,7 @@ try {
 
   rec(1, live.paintedRotate !== before.paintedRotate && live.paintedRotate != null, { before: before.paintedRotate, live: live.paintedRotate })
   rec(2, live.storeRotate === before.storeRotate, { store: live.storeRotate, painted: live.paintedRotate })
-  // During the drag the gesture lives on a fork — the store (and so the
-  // thumb) only moves on commit; the tree must stay mounted, not remount.
+  // During the drag, the store changes only on commit; the canvas stays mounted.
   rec(3, !!thumbKeyDuring && thumbKeyDuring === thumbKeyBefore, {
     thumbKeyDuring,
     thumbKeyBefore,
@@ -313,7 +310,7 @@ try {
   })
   rec(4, await page.evaluate(() => !document.querySelector('[data-slide-dom-stage], [data-preview-raster]')), {})
   rec(5, siblingPathBefore && siblingSame, { siblingPathBefore, siblingSame })
-  rec(6, after.storeRotate === after.paintedRotate && after.storeRotate !== before.storeRotate && thumbRotateAfter === after.storeRotate, {
+  rec(6, after.storeRotate === after.paintedRotate && after.storeRotate !== before.storeRotate && sameAngle(thumbRotateAfter, after.storeRotate), {
     store: after.storeRotate,
     painted: after.paintedRotate,
     thumb: thumbRotateAfter,
@@ -338,12 +335,30 @@ try {
   const burstStore = await snapshot(page)
   const burstThumb = await thumbGradientRotate(page, gradientShape.id)
   const burstKeyAfter = await readThumbNodeKey(page)
-  rec(7, burstThumb === burstStore.storeRotate, {
+  rec(7, sameAngle(burstThumb, burstStore.storeRotate), {
     burstMs: Math.round(burst),
     store: burstStore.storeRotate,
     thumb: burstThumb,
   })
   rec(8, burstKeyAfter === burstKeyBefore, { burstKeyBefore, burstKeyAfter })
+  const directions = []
+  for (const rotate of [0, 90, 180, 270]) {
+    await page.evaluate(({ id, rotate }) => {
+      const s = window.__FIKA_SLIDES__.getState()
+      const el = s.slides[s.slideIndex].elements.find(el => el.id === id)
+      s.updateElement({ id, props: { gradient: { ...el.gradient, rotate } } })
+    }, { id: gradientShape.id, rotate })
+    await sleep(250)
+    directions.push({ expected: rotate, measured: await thumbGradientRotate(page, gradientShape.id) })
+  }
+  rec(9, directions.every(({ expected, measured }) => sameAngle(measured, expected)), directions)
+  await page.evaluate(id => {
+    const s = window.__FIKA_SLIDES__.getState()
+    s.updateElement({ id, props: { gradient: { type: 'linear', rotate: 0, colors: [{ pos: 0, color: '#ffffff' }, { pos: 100, color: '#ffffff' }] } } })
+  }, gradientShape.id)
+  await sleep(250)
+  const flat = await thumbGradientRotate(page, gradientShape.id)
+  rec(10, flat === null, { flat })
 }
 finally {
   await browser.close()
