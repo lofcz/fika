@@ -36,7 +36,7 @@ export function frameCorners(element: PPTElement): FramePoint[] {
   return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => ({ x: cx + x * element.width / 2 * Math.cos(angle) - y * element.height / 2 * Math.sin(angle), y: cy + x * element.width / 2 * Math.sin(angle) + y * element.height / 2 * Math.cos(angle) }))
 }
 const cross = (a: FramePoint, b: FramePoint, p: FramePoint) => (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
-function intersect(subject: FramePoint[], clip: FramePoint[]) {
+export function intersectFramePolygons(subject: FramePoint[], clip: FramePoint[]) {
   let output = subject
   for (let i = 0; i < clip.length; i++) {
     const a = clip[i], b = clip[(i + 1) % clip.length], input = output; output = []
@@ -51,7 +51,7 @@ function intersect(subject: FramePoint[], clip: FramePoint[]) {
 }
 export function frameClipPolygon(element: PPTElement, elements: readonly PPTElement[]): FramePoint[] | null {
   let polygon: FramePoint[] | null = null
-  for (const frame of frameAncestors(element, elements)) if (frame.frame?.clipContent) polygon = polygon === null ? frameCorners(frame) : intersect(polygon, frameCorners(frame))
+  for (const frame of frameAncestors(element, elements)) if (frame.frame?.clipContent) polygon = polygon === null ? frameCorners(frame) : intersectFramePolygons(polygon, frameCorners(frame))
   return polygon
 }
 export function createFrameFromSelection(elements: readonly PPTElement[], ids: readonly string[], frameId: string, name: string): { elements: PPTElement[]; selection: string[] } {

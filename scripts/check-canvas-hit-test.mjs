@@ -237,6 +237,19 @@ for (const [parent, hidden] of [[frame, []], [{ ...frame, lock: false }, new Set
   const allHit = elementIdsIntersectingSelection([parent, framedChild, outsideSibling], { left: 0, top: 0, width: 1200, height: 300 }, 1, hidden)
   assert(allHit.join() === 'outside-sibling', 'marquee excludes inherited frame restrictions for array and Set visibility inputs')
 }
+const rotatedFrame = { ...box, id: 'rotated-frame', type: 'shape', left: 0, top: 0, width: 100, height: 100, rotate: 45, frame: { clipContent: true } }
+const oversizedChild = { ...box, id: 'oversized-child', left: -50, top: -50, width: 200, height: 200, parentFrameId: rotatedFrame.id }
+for (const scale of [1, 2]) {
+  const clippedCorner = elementIdsIntersectingSelection([rotatedFrame, oversizedChild], { left: -20*scale, top: -20*scale, width: 10*scale, height: 10*scale }, scale)
+  assert(!clippedCorner.includes(oversizedChild.id), 'rotated frame corners clip marquee hits at every zoom')
+  const visibleCenter = elementIdsIntersectingSelection([rotatedFrame, oversizedChild], { left: 45*scale, top: 45*scale, width: 10*scale, height: 10*scale }, scale)
+  assert(visibleCenter.includes(oversizedChild.id), 'visible child area remains selectable through a rotated clip')
+}
+const outerClip = { ...rotatedFrame, id: 'outer-clip', rotate: 0, width: 50, height: 50 }
+const innerClip = { ...rotatedFrame, id: 'inner-clip', rotate: 0, left: 25, top: 25, parentFrameId: outerClip.id }
+const nestedChild = { ...oversizedChild, left: 80, top: 80, width: 20, height: 20, parentFrameId: innerClip.id }
+assert(!elementIdsIntersectingSelection([outerClip, innerClip, nestedChild], { left: 80, top: 80, width: 10, height: 10 }, 1).includes(nestedChild.id), 'outer clipping constrains children of nested frames')
+assert(!elementIdsIntersectingSelection([outerClip, { ...innerClip, left: 100 }, nestedChild], { left: 80, top: 80, width: 10, height: 10 }, 1).includes(nestedChild.id), 'disjoint nested frame clips have no selectable child area')
 const clip = hitRectClipPath(underText, [overVideo])
 assert(typeof clip === 'string' && clip.startsWith('path(evenodd,'), 'selected media punches a hole in lower hit rects')
 assert(clip.includes('M80 40'), 'hole starts at the video origin in local coordinates')

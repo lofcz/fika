@@ -1,5 +1,5 @@
 import { isElementSelectable } from '@/utils/selection'
-import { frameClipPolygon } from '@/utils/nestedFrames'
+import { frameClipPolygon, intersectFramePolygons } from '@/utils/nestedFrames'
 import type { PPTElement } from '@/types/slides';
 import { getElementRange } from '@/utils/element';
 import { queryFika } from '@/utils/portal';
@@ -685,7 +685,22 @@ export function visualHitIntersectsBox(rect: VisualHitRect, box: {
 }): boolean {
   if (!(box.width > 0) || !(box.height > 0)) return false;
   const aabb = visualHitAabb(rect);
-  return aabb.left < box.left + box.width && aabb.right > box.left && aabb.top < box.top + box.height && aabb.bottom > box.top;
+  if (!(aabb.left < box.left + box.width && aabb.right > box.left && aabb.top < box.top + box.height && aabb.bottom > box.top)) return false;
+  if (!rect.frameClip) return true;
+  if (rect.frameClip.length < 3) return false;
+  const visible = intersectFramePolygons(visualHitCorners(rect), rect.frameClip);
+  const overlap = intersectFramePolygons(visible, [
+    { x: box.left, y: box.top },
+    { x: box.left + box.width, y: box.top },
+    { x: box.left + box.width, y: box.top + box.height },
+    { x: box.left, y: box.top + box.height },
+  ]);
+  // An edge or point touching the marquee has no selectable visible area.
+  const twiceArea = overlap.reduce((area, point, i) => {
+    const next = overlap[(i + 1) % overlap.length];
+    return area + point.x * next.y - next.x * point.y;
+  }, 0);
+  return Math.abs(twiceArea) > 1e-8;
 }
 
 /** Elements whose visual hit rect intersects a wrapper-space marquee. */
@@ -706,6 +721,9 @@ export function elementIdsIntersectingSelection(elements: PPTElement[], box: {
     const element = elements[i];
     if (!selectableIds.has(element.id)) continue;
     const rect = elementVisualHitRect(element, canvasScale, i + 1);
+    const clip = frameClipPolygon(element, elements);
+    if (clip && clip.length < 3) continue;
+    if (clip) rect.frameClip = clip.map(point => ({ x: point.x * canvasScale, y: point.y * canvasScale }));
     rects.push(rect);
     elementById.set(element.id, element);
   }
