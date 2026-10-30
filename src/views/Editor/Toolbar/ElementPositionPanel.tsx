@@ -94,27 +94,31 @@ const ElementPositionPanel = memo(function ElementPositionPanel() {
 
   const updateWidth = (value: number) => {
     if (handleElement.type === 'line' || isAutoWidthText) return
+    let w = value
     let h = height
     if (fixedRatio) {
       const ratio = width / height
-      h = value / ratio < minSize ? minSize : value / ratio
+      h = Math.max(value / ratio, minSize)
+      w = h * ratio
     }
-    let props: Partial<PPTElement> = { width: value, height: h }
-    const shapePathData = updateShapePathData(value, h)
-    if (shapePathData) props = { width: value, height: h, ...shapePathData }
+    let props: Partial<PPTElement> = { width: w, height: h }
+    const shapePathData = updateShapePathData(w, h)
+    if (shapePathData) props = { width: w, height: h, ...shapePathData }
     commit(props)
   }
 
   const updateHeight = (value: number) => {
     if (handleElement.type === 'line' || handleElement.type === 'table' || isAutoHeightText) return
     let w = width
+    let h = value
     if (fixedRatio) {
       const ratio = width / height
-      w = value * ratio < minSize ? minSize : value * ratio
+      w = Math.max(value * ratio, minSize)
+      h = w / ratio
     }
-    let props: Partial<PPTElement> = { width: w, height: value }
-    const shapePathData = updateShapePathData(w, value)
-    if (shapePathData) props = { width: w, height: value, ...shapePathData }
+    let props: Partial<PPTElement> = { width: w, height: h }
+    const shapePathData = updateShapePathData(w, h)
+    if (shapePathData) props = { width: w, height: h, ...shapePathData }
     commit(props)
   }
 
