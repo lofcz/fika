@@ -532,42 +532,28 @@ const EditableTable = memo((props: IEditableTableProps) => {
     flushDraft();
     const rowIndex = +selectedCells[0].split('_')[0];
     const colIndex = +selectedCells[0].split('_')[1];
-    const rowLen = tableCells.length;
-    const colLen = tableCells[0].length;
-    const getEffectivePos = (pos: [number, number]): [number, number] => {
-      if (pos[0] < 0 || pos[1] < 0 || pos[0] > rowLen - 1 || pos[1] > colLen - 1) return [0, 0];
-      const p = `${pos[0]}_${pos[1]}`;
-      if (!hideCells.includes(p)) return pos;
-      if (dir === 'UP') return getEffectivePos([pos[0], pos[1] - 1]);
-      if (dir === 'DOWN') return getEffectivePos([pos[0], pos[1] - 1]);
-      if (dir === 'LEFT') return getEffectivePos([pos[0] - 1, pos[1]]);
-      if (dir === 'RIGHT') return getEffectivePos([pos[0] - 1, pos[1]]);
-      return [0, 0];
-    };
-    if (dir === 'UP') {
-      const _rowIndex = rowIndex - 1;
-      if (_rowIndex < 0) return;
-      setEndCell([]);
-      setStartCell(getEffectivePos([_rowIndex, colIndex]));
+    const cell = tableCells[rowIndex][colIndex];
+    const targetRow = rowIndex + (dir === 'UP' ? -1 : dir === 'DOWN' ? cell.rowspan : 0);
+    const targetCol = colIndex + (dir === 'LEFT' ? -1 : dir === 'RIGHT' ? cell.colspan : 0);
+    if (targetRow < 0 || targetRow >= tableCells.length || targetCol < 0 || targetCol >= tableCells[0].length) return;
+
+    // The adjacent grid position can be covered by a merge anchored in a
+    // different row and column. Navigate to that visible cell's anchor.
+    let nextCell: [number, number] | undefined;
+    for (let row = 0; row <= targetRow; row++) {
+      for (let col = 0; col <= targetCol; col++) {
+        if (isHideCell(row, col)) continue;
+        const candidate = tableCells[row][col];
+        if (row + candidate.rowspan > targetRow && col + candidate.colspan > targetCol) {
+          nextCell = [row, col];
+          break;
+        }
+      }
+      if (nextCell) break;
     }
-    else if (dir === 'DOWN') {
-      const _rowIndex = rowIndex + 1;
-      if (_rowIndex > rowLen - 1) return;
-      setEndCell([]);
-      setStartCell(getEffectivePos([_rowIndex, colIndex]));
-    }
-    else if (dir === 'LEFT') {
-      const _colIndex = colIndex - 1;
-      if (_colIndex < 0) return;
-      setEndCell([]);
-      setStartCell(getEffectivePos([rowIndex, _colIndex]));
-    }
-    else if (dir === 'RIGHT') {
-      const _colIndex = colIndex + 1;
-      if (_colIndex > colLen - 1) return;
-      setEndCell([]);
-      setStartCell(getEffectivePos([rowIndex, _colIndex]));
-    }
+    if (!nextCell) return;
+    setEndCell([]);
+    setStartCell(nextCell);
     focusActiveCell();
   };
 

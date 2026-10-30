@@ -54,6 +54,41 @@ try {
       }
     }
   }
+  await page.locator('.viewport-wrapper').first().click({ position: { x: 10, y: 10 } })
+  await page.evaluate(() => {
+    const data = [0, 1, 2].map(r => [0, 1, 2].map(c => ({ id: `arrow-${r}-${c}`, rowspan: 1, colspan: 1, text: `Cell ${r} ${c}` })))
+    data[0][0].rowspan = 2
+    data[0][0].colspan = 2
+    window.__FIKA_SLIDES__.getState().setSlides([{ id: 'arrow-slide', elements: [{ id: 'nav-table-arrows', type: 'table', left: 100, top: 100, width: 600, height: 240, rotate: 0, colWidths: [1/3, 1/3, 1/3], cellMinHeight: 80, outline: { width: 1, color: '#000', style: 'solid' }, data }] }])
+  })
+  const mergedCell = page.locator('#editable-element-nav-table-arrows [data-cell-index="0_0"]')
+  await mergedCell.waitFor()
+  const mergedBox = await mergedCell.boundingBox()
+  await page.mouse.dblclick(mergedBox.x + mergedBox.width / 2, mergedBox.y + mergedBox.height / 2)
+  await active.focus()
+  const arrow = async (key, expected) => {
+    await page.keyboard.press(key === 'ArrowLeft' || key === 'ArrowUp' ? 'Control+Home' : 'Control+End')
+    await navigate(key, expected)
+  }
+  await active.fill('Merged draft')
+  await arrow('ArrowRight', '0_2')
+  assert.equal((await grid())[0][0].text, 'Merged draft', 'Arrow navigation commits the pending draft')
+  await arrow('ArrowDown', '1_2')
+  await arrow('ArrowLeft', '0_0')
+  await arrow('ArrowDown', '2_0')
+  await arrow('ArrowRight', '2_1')
+  await arrow('ArrowUp', '0_0')
+  await arrow('ArrowLeft', '0_0')
+  await arrow('ArrowUp', '0_0')
+  await arrow('ArrowRight', '0_2')
+  await arrow('ArrowRight', '0_2')
+  await arrow('ArrowDown', '1_2')
+  await arrow('ArrowDown', '2_2')
+  await arrow('ArrowDown', '2_2')
+  assert.equal((await grid()).length, 3, 'Arrow keys never append rows at a boundary')
+  await page.keyboard.press('Control+Home')
+  await navigate('ArrowRight', '2_2')
+  await navigate('ArrowLeft', '2_2')
   assert.deepEqual(errors, [])
-  console.log('PASS table keyboard navigation: reverse/forward traversal, row boundaries, draft commits, merged-cell skipping, visible focus, and append after merged final cells.')
+  console.log('PASS table keyboard navigation: reverse/forward traversal, row boundaries, draft commits, merged-cell skipping, visible focus, append after merged final cells, merged-region arrow navigation, boundaries, and normal caret movement.')
 } finally { await browser.close() }
