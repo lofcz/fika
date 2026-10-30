@@ -1,7 +1,7 @@
+import { thumbnailTextGeometry } from './lib/thumbnail-text.mjs'
 /**
  * Jan Hus import: the rail thumb must wrap and align text exactly like the
- * editor canvas. Both are the same live DOM now, so line breaks and glyph
- * positions are compared directly between the two trees.
+ * editor canvas. Compare editor line boxes with the actual rasterized thumbnail text.
  *
  *   node scripts/e2e-jan-hus-wrap.mjs
  */
@@ -74,6 +74,7 @@ async function titleElement(page) {
  * thumb): line count and first-glyph left/top, normalized to the surface.
  */
 async function readLines(page, surface) {
+  if (surface === 'thumb') return thumbnailTextGeometry(page, { needle: NEEDLE })
   return page.evaluate(({ needle, surface }) => {
     const scope = surface === 'thumb'
       ? (() => {

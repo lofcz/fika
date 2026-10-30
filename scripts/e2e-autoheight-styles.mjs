@@ -1,3 +1,4 @@
+import { thumbnailTextGeometry } from './lib/thumbnail-text.mjs'
 /**
  * Auto-height must track style changes on text boxes. Regression (imported
  * PPTX shape-text titles): after switching a box to auto height, enlarging the
@@ -118,26 +119,7 @@ try {
     }
   }, elId)
 
-  /** Line count in the rail thumbnail — the thumb renders the same DOM. */
-  const thumbLines = () => page.evaluate((id) => {
-    const slides = window.__FIKA_SLIDES__.getState()
-    const slide = slides.slides[slides.slideIndex]
-    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(n => n.getAttribute('data-thumbnail-slide') === slide.id)
-    const pm = host?.querySelector(`#screen-element-${id} .ProseMirror, #screen-element-${id} .ProseMirror-static`)
-    if (!pm) return { ok: false }
-    const walker = document.createTreeWalker(pm, NodeFilter.SHOW_TEXT)
-    const tops = new Set()
-    let n
-    while ((n = walker.nextNode())) {
-      const r = document.createRange()
-      r.selectNodeContents(n)
-      for (const rect of r.getClientRects()) {
-        if (rect.height > 0.5) tops.add(Math.round(rect.top))
-      }
-      r.detach()
-    }
-    return { ok: true, lines: tops.size }
-  }, elId)
+  const thumbLines = () => thumbnailTextGeometry(page, { id: elId })
 
   const editorLines = () => page.evaluate((id) => {
     const root = document.getElementById(`editable-element-${id}`)
