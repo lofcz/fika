@@ -51,6 +51,7 @@ export const e2eScripts = [
   'scripts/e2e-position-size-precision.mjs',
   'scripts/e2e-number-input-disabled.mjs',
   'scripts/e2e-number-input-finite.mjs',
+  'scripts/e2e-number-input-unchanged.mjs',
   'scripts/e2e-group-member-lock.mjs',
   'scripts/e2e-cut-clipboard.mjs',
   'scripts/e2e-table-clipboard.mjs',

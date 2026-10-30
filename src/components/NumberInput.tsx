@@ -72,7 +72,7 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
     if (next > max) next = max
     else if (next < min) next = min
     setNumber(next)
-    onUpdateValue?.(next)
+    if (next !== value) onUpdateValue?.(next)
   }, [number, value, min, max, onUpdateValue, disabled])
 
   const handleEnter = (e: Event) => {
