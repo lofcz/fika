@@ -1,3 +1,4 @@
+import { tableCellExportFill } from '@/utils/tableExport';
 
 import { useEffect, useState } from 'react'
 import { saveAs } from 'file-saver';
@@ -1380,7 +1381,10 @@ export function createPresentationExporter(
         throw error;
       }
 
-      const retained = options.preserveSourcePackage ? tryGetCleanRetainedPackage(_slides) : null;
+      const excludesMedia = ignoreMedia && _slides.some(slide => slide.elements.some(el => el.type === 'audio' || el.type === 'video'));
+      const retained = options.preserveSourcePackage && !options.hiddenElementIds?.length && !excludesMedia
+        ? tryGetCleanRetainedPackage(_slides, { title, theme, viewportSize, viewportRatio })
+        : null;
       if (retained) {
         try {
           await tickExportProgress(0.96, _slides.length + 1, gen);
@@ -1926,21 +1930,17 @@ export function createPresentationExporter(
                     fontFace: cell.style?.fontname || pptxDefaultFontFace(),
                     fontSize: (cell.style?.fontsize ? parseInt(cell.style?.fontsize) : 14) / ratioPx2Pt
                   };
+                  let fillColor: FormatColor | null = null;
                   if (theme && headerColor && stripeColor && stripeAltColor) {
                     let c: FormatColor = i % 2 === 0 ? stripeAltColor : stripeColor;
                     if (theme.rowHeader && i === 0) c = headerColor;else if (theme.rowFooter && i === el.data.length - 1) c = headerColor;else if (theme.colHeader && j === 0) c = headerColor;else if (theme.colFooter && j === row.length - 1) c = headerColor;
-                    cellOptions.fill = {
-                      color: c.color,
-                      transparency: (1 - c.alpha) * 100
-                    };
+                    fillColor = c;
                   }
                   if (cell.style?.backcolor) {
                     const c = formatColor(cell.style.backcolor);
-                    cellOptions.fill = {
-                      color: c.color,
-                      transparency: (1 - c.alpha) * 100
-                    };
+                    fillColor = c;
                   }
+                  if (fillColor) cellOptions.fill = tableCellExportFill(fillColor, !!theme);
                   if (cell.style && ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'].some(key => key in cell.style!)) {
                     cellOptions.border = [cell.style.borderTopWidth, cell.style.borderRightWidth, cell.style.borderBottomWidth, cell.style.borderLeftWidth].map(width => ({
                       type: (width ?? el.outline.width) === 0 ? 'none' as const : el.outline.style === 'solid' ? 'solid' as const : 'dash' as const,
@@ -1964,9 +1964,6 @@ export function createPresentationExporter(
                 w: el.width / ratioPx2Inch,
                 h: el.height / ratioPx2Inch,
                 colW: el.colWidths.map(item => el.width * item / ratioPx2Inch)
-              };
-              if (el.theme) options.fill = {
-                color: '#fafafa'
               };
               if (el.outline.width && el.outline.color) {
                 options.border = {

@@ -2,6 +2,7 @@ import { frameDescendantIds } from '@/utils/nestedFrames'
 import { selectInsertedElements } from '@/utils/selectInsertedElements'
 import { nanoid } from 'nanoid'
 import { useSlidesStore, selectCurrentSlide } from '@/store'
+import type { AddSlideOptions } from '@/store/slides'
 import type { PPTElement, Slide } from '@/types/slides'
 import { clonePlain } from '@/utils/clonePlain'
 import { createSlideIdMap, createElementIdMap, getElementRange } from '@/utils/element'
@@ -12,7 +13,7 @@ export default () => {
 
   const addElementsFromData = (elements: PPTElement[]) => {
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
-    if (!currentSlide) return
+    if (!currentSlide || !elements.length) return
     const ids = frameDescendantIds(currentSlide.elements, elements.map(e => e.id))
     const missing = currentSlide.elements.filter(e => ids.includes(e.id) && !elements.some(copy => copy.id === e.id))
     const cloned = clonePlain([...elements, ...missing])
@@ -46,7 +47,7 @@ export default () => {
     addHistorySnapshot()
   }
 
-  const addSlidesFromData = (slides: Slide[]) => {
+  const addSlidesFromData = (slides: Slide[], options?: AddSlideOptions) => {
     const cloned = clonePlain(slides)
     const slideIdMap = createSlideIdMap(cloned)
     for (const slide of cloned) {
@@ -72,7 +73,7 @@ export default () => {
         }
       }
     }
-    useSlidesStore.getState().addSlide(cloned)
+    useSlidesStore.getState().addSlide(cloned, options)
     addHistorySnapshot()
   }
 

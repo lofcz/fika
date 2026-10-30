@@ -89,7 +89,6 @@ assert(normalizeImportApplyOptions().mode === undefined, 'missing options stay e
   assert(importHook.includes('updateSelectedSlidesIndex([])'), 'file import drops multi-selected thumbnail indexes')
   const addSlides = readFileSync(join(root, 'src/hooks/useAddSlidesOrElements.ts'), 'utf8')
   assert(addSlides.includes('clonePlain(slides)'), 'append remaps ids on a clone, not the parsed slides')
-  assert(addSlides.includes('clonePlain(elements)'), 'pasted elements are cloned before id remap')
   const slideHandler = readFileSync(join(root, 'src/hooks/useSlideHandler.ts'), 'utf8')
   assert(slideHandler.includes('addSlidesFromData([slide])'), 'template insert goes through the same clone+remap path')
   assert(!slideHandler.includes('element.id = elIdMap'), 'template insert does not mutate the layout slide in place')

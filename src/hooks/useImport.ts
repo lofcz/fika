@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import tinycolor from 'tinycolor2';
 import { useSlidesStore, useMainStore, useImportConfirmStore } from '@/store';
 import { drainCommitQueue } from '@/utils/commitQueue';
+import { resizeDeckSlides } from '@/utils/resizeDeck';
 import { decrypt } from '@/utils/crypto';
 import { isFloatEqual } from '@/utils/common';
 import { type ShapePoolItem, SHAPE_LIST, SHAPE_PATH_FORMULAS } from '@/configs/shapes';
@@ -23,7 +24,7 @@ import { getPPTXImportScale } from '@/utils/pptxUnit';
 import { pptxImageClip, pptxPictureSource } from '@/utils/pptxImportPicture';
 import { PPTX_HYPERLINK_COLOR, linkifyPlainUrls, styleImportedHyperlinks, wrapHangingIndentParagraphsAsLists } from '@/utils/pptxImportText';
 import { importedParagraphMetrics, scalePptxTextInset } from '@/utils/pptxImportMetrics';
-import { markSourcePackageDirty, retainSourcePackage } from '@/utils/pptxSourcePackage';
+import { certifySourcePackageDocument, markSourcePackageDirty, retainSourcePackage } from '@/utils/pptxSourcePackage';
 import { htmlToStructuredText } from '@/utils/pptxStructuredText';
 import { importedCodeFontSize, importedCodeSource, parseCodeShapeName } from '@/utils/codeShapeTag';
 import { buildImportDiagnosticsReport, setLastImportDiagnostics } from '@/utils/pptxImportDiagnostics';
@@ -267,6 +268,8 @@ export function getImportApi() {
       turningMode: extras?.turningMode,
       defaultTurningMode: extras?.defaultTurningMode ?? DEFAULT_TURNING_MODE,
     })
+    if ((extras?.turningMode !== undefined || extras?.defaultTurningMode !== undefined)
+      && applied.slides.some((slide, index) => slide.turningMode !== slides[index].turningMode)) markSourcePackageDirty();
     await internSlidesMedia(applied.slides);
     resetEditorSelection();
     const store = slidesState();
@@ -286,7 +289,12 @@ export function getImportApi() {
       addHistorySnapshot();
       return;
     }
-    addSlidesFromData(applied.slides);
+    const sourceWidth = extras?.width || store.viewportSize;
+    const sourceRatio = extras?.aspectRatio ?? store.viewportRatio;
+    const incoming = resizeDeckSlides(applied.slides,
+      { width: sourceWidth, height: sourceWidth * sourceRatio },
+      { width: store.viewportSize, height: store.viewportSize * store.viewportRatio });
+    addSlidesFromData(incoming, { index: store.slides.length });
   };
   const decideImportApply = async (options?: boolean | ImportApplyOptions) => {
     const normalized = normalizeImportApplyOptions(options);
@@ -1351,15 +1359,16 @@ export function getImportApi() {
         console.info('[pptx-import]', diagnostics.status, diagnostics.summary, diagnostics);
       }
       await importJob.tick(0.96, slideCount + 1, gen);
-      slidesState().setViewportSize(nextViewportSize);
-      slidesState().setTheme({
-        themeColors: json.themeColors
-      });
       await applyImportedSlides(slides, apply.apply, {
+        width: nextViewportSize,
+        theme: { themeColors: json.themeColors },
         aspectRatio,
         turningMode: apply.turningMode,
         defaultTurningMode: apply.defaultTurningMode,
       });
+      if (importExtras?.packageId && apply.apply === 'replace' && !failedSlides.length) {
+        certifySourcePackageDocument(importExtras.packageId, slidesState());
+      }
       await importJob.tick(1, slideCount + 1, gen);
       if (failedSlides.length) {
         message.warning(`${getLL().editor.import.partial()} (${failedSlides.length})`);

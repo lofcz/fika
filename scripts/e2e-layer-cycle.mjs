@@ -134,6 +134,8 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(devUrl, { waitUntil: 'networkidle' })
   await waitForHooks(page)
+  await page.locator('.viewport-wrapper').first().waitFor({ state: 'visible' })
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
 
   await page.evaluate((elements) => { window.__FIKA_E2E_ELEMENTS__ = elements }, [
     rectShape('big-card', 60, 60, 700, 420, '#5b7f4b'),

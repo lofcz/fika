@@ -163,6 +163,8 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   await page.goto(devUrl, { waitUntil: 'networkidle' })
   await waitForHooks(page)
+  await page.locator('.viewport-wrapper').first().waitFor({ state: 'visible' })
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
   await seed(page)
 
   // 1. Plain click on the big card (point clear of foreground elements).

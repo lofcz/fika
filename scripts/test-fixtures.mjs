@@ -41,7 +41,10 @@ export const unitScripts = [
 ]
 
 export const e2eScripts = [
+  'scripts/e2e-clipboard-errors.mjs',
   'scripts/e2e-presentation-export.mjs',
+  'scripts/e2e-import-append.mjs',
+  'scripts/e2e-imported-pptx-export.mjs',
   'scripts/e2e-myna-performance.mjs',
   'scripts/e2e-myna-editing-isolation.mjs',
   'scripts/e2e-myna-school-showcase.mjs',
@@ -112,6 +115,9 @@ export const e2eScripts = [
 ]
 
 export const rstestFiles = [
+  'tests/pptx-source-package.test.ts',
+  'tests/slides-empty-deck.test.ts',
+  'tests/paste-elements.test.ts',
   'tests/mynaQrCode.test.ts',
   'tests/mynaTemplateLibrary.test.ts',
   'tests/mynaExportPages.test.ts',

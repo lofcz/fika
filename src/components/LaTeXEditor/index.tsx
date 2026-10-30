@@ -3,6 +3,7 @@ import styles from './index.module.scss'
 const cx = bindStyles(styles)
 import { useRef, useCallback, useState, useEffect, type CSSProperties } from 'react'
 
+import { FORMULA_LIST } from '@/configs/latex'
 import message from '@/utils/message'
 import { dockMathVirtualKeyboard, ensureMathliveReady, measureLatexElement } from '@/utils/math'
 
@@ -271,6 +272,23 @@ export default function LaTeXEditor({
           </button>
         ) : null}
       </div>
+
+      <label className={cx('presets')}>
+        <span>{LL.configs.latex.presetLabel()}</span>
+        <select
+          value=""
+          disabled={!fieldReady}
+          onChange={event => {
+            const preset = FORMULA_LIST.find(item => item.key === event.target.value)
+            if (preset) insertSnippet(preset.latex)
+          }}
+        >
+          <option value="" disabled>{LL.configs.latex.presetLabel()}</option>
+          {FORMULA_LIST.map(item => (
+            <option key={item.key} value={item.key}>{LL.configs.latex.formulas[item.key]()}</option>
+          ))}
+        </select>
+      </label>
 
       <div className={cx('tips-block')}>
         <div className={cx('tips-label')}>{LL.components.latexEditor.tipsLabel()}</div>

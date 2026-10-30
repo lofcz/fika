@@ -37,7 +37,7 @@ export const readClipboard = (): Promise<string> => {
       navigator.clipboard.readText().then(text => {
         if (!text) reject(LL.common.clipboard.emptyOrNoText());
         return resolve(text);
-      });
+      }).catch(() => reject(LL.common.clipboard.unsupportedOrDenied()));
     } else reject(LL.common.clipboard.unsupportedOrDenied());
   });
 };

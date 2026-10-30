@@ -333,7 +333,21 @@ const pl_configs: NamespaceConfigsTranslation = {
     trapezoidReverse: 'Odwrócony trapez',
   },
   latex: {
+    presetLabel: 'Wstaw gotowy wzór',
     formulas: {
+      quadraticFormula: 'Wzór na pierwiastki równania kwadratowego (a ≠ 0)',
+      differenceOfSquares: 'Różnica kwadratów',
+      perfectSquare: 'Kwadrat sumy',
+      trigPythagorean: 'Jedynka trygonometryczna',
+      arithmeticSum: 'Suma ciągu arytmetycznego',
+      geometricSum: 'Suma ciągu geometrycznego (q ≠ 1)',
+      integrationByParts: 'Całkowanie przez części',
+      newtonSecondLaw: 'Druga zasada dynamiki Newtona',
+      kineticEnergy: 'Energia kinetyczna',
+      ohmLaw: 'Prawo Ohma',
+      idealGas: 'Równanie stanu gazu doskonałego',
+      massEnergy: 'Równoważność masy i energii',
+
       gauss: 'Twierdzenie Gaussa',
       fourier: 'Szereg Fouriera',
       taylor: 'Rozwinięcie Taylora',

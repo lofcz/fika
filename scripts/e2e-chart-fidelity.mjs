@@ -202,58 +202,53 @@ async function readFidelity(page) {
     }
     if (!live || !thumbCanvas || !chart || !store) return empty
 
-    const settle = (ctx, source, sw, sh) => {
+    // Compare identical sampling paths: native chart pixels -> thumbnail-sized
+    // slide -> chart crop. Resizing only the live SVG through a fixed 90px
+    // intermediate changes thin lines and bar edges before comparison.
+    const slideW = store.viewportSize
+    const slideH = store.viewportSize * store.viewportRatio
+    const cropChart = (source) => {
+      const crop = document.createElement('canvas')
+      crop.width = SIZE
+      crop.height = SIZE
+      const ctx = crop.getContext('2d', { willReadFrequently: true })
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, SIZE, SIZE)
-      const mid = document.createElement('canvas')
-      mid.width = 90
-      mid.height = 90
-      mid.getContext('2d').drawImage(source, 0, 0, sw, sh, 0, 0, 90, 90)
-      ctx.imageSmoothingEnabled = true
-      ctx.drawImage(mid, 0, 0, SIZE, SIZE)
+      ctx.drawImage(source,
+        chart.left / slideW * source.width, chart.top / slideH * source.height,
+        chart.width / slideW * source.width, chart.height / slideH * source.height,
+        0, 0, SIZE, SIZE)
+      return ctx.getImageData(0, 0, SIZE, SIZE).data
     }
-
-    const rasterizeSvg = async (svg) => {
-      const xml = new XMLSerializer().serializeToString(svg)
-      const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
-      const img = new Image()
+    const xml = new XMLSerializer().serializeToString(live)
+    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
+    const img = new Image()
+    try {
       await new Promise((resolve, reject) => {
         img.onload = resolve
         img.onerror = reject
         img.src = url
       })
+    } finally {
       URL.revokeObjectURL(url)
-      const c = document.createElement('canvas')
-      c.width = SIZE
-      c.height = SIZE
-      const ctx = c.getContext('2d', { willReadFrequently: true })
-      ctx.imageSmoothingEnabled = true
-      settle(ctx, img, svg.viewBox?.baseVal?.width || img.width || chart.width, svg.viewBox?.baseVal?.height || img.height || chart.height)
-      return ctx.getImageData(0, 0, SIZE, SIZE).data
     }
-
-    const liveData = await rasterizeSvg(live)
-
-    const slideW = store.viewportSize
-    const slideH = store.viewportSize * store.viewportRatio
-    const thumbRaster = document.createElement('canvas')
-    thumbRaster.width = SIZE
-    thumbRaster.height = SIZE
-    const thumbCtx = thumbRaster.getContext('2d', { willReadFrequently: true })
-    thumbCtx.fillStyle = '#ffffff'
-    thumbCtx.fillRect(0, 0, SIZE, SIZE)
-    thumbCtx.drawImage(
-      thumbCanvas,
-      chart.left / slideW * thumbCanvas.width,
-      chart.top / slideH * thumbCanvas.height,
-      chart.width / slideW * thumbCanvas.width,
-      chart.height / slideH * thumbCanvas.height,
-      0,
-      0,
-      SIZE,
-      SIZE,
-    )
-    const thumbData = thumbCtx.getImageData(0, 0, SIZE, SIZE).data
+    const native = document.createElement('canvas')
+    native.width = Math.ceil(chart.width)
+    native.height = Math.ceil(chart.height)
+    native.getContext('2d').drawImage(img, 0, 0, native.width, native.height)
+    const liveSlide = document.createElement('canvas')
+    liveSlide.width = thumbCanvas.width
+    liveSlide.height = thumbCanvas.height
+    const liveCtx = liveSlide.getContext('2d')
+    liveCtx.imageSmoothingEnabled = true
+    liveCtx.imageSmoothingQuality = 'high'
+    liveCtx.fillStyle = '#ffffff'
+    liveCtx.fillRect(0, 0, liveSlide.width, liveSlide.height)
+    liveCtx.drawImage(native,
+      chart.left / slideW * liveSlide.width, chart.top / slideH * liveSlide.height,
+      chart.width / slideW * liveSlide.width, chart.height / slideH * liveSlide.height)
+    const liveData = cropChart(liveSlide)
+    const thumbData = cropChart(thumbCanvas)
 
     const liveX = new Array(SIZE).fill(0)
     const thumbX = new Array(SIZE).fill(0)

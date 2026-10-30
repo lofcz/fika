@@ -317,7 +317,7 @@ export const useSlidesStore = create<SlidesStore>()(
       const current = get()
       const addIndex = Math.max(0, Math.min(options?.index ?? current.slideIndex + 1, current.slides.length))
       const slides = insertSlidesPreservingIdentity(current.slides, addIndex, incoming)
-      const slideIndex = options?.select === false
+      const slideIndex = options?.select === false && current.slides.length > 0
         ? (addIndex <= current.slideIndex ? current.slideIndex + incoming.length : current.slideIndex)
         : addIndex
       set((state) => {

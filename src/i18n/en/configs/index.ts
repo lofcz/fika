@@ -333,7 +333,21 @@ const en_configs: BaseTranslation = {
     trapezoidReverse: 'Inverted trapezoid',
   },
   latex: {
+    presetLabel: 'Insert a formula preset',
     formulas: {
+      quadraticFormula: 'Quadratic formula (a ≠ 0)',
+      differenceOfSquares: 'Difference of squares',
+      perfectSquare: 'Square of a sum',
+      trigPythagorean: 'Pythagorean trigonometric identity',
+      arithmeticSum: 'Arithmetic series sum',
+      geometricSum: 'Geometric series sum (q ≠ 1)',
+      integrationByParts: 'Integration by parts',
+      newtonSecondLaw: 'Newton’s second law',
+      kineticEnergy: 'Kinetic energy',
+      ohmLaw: 'Ohm’s law',
+      idealGas: 'Ideal gas law',
+      massEnergy: 'Mass–energy equivalence',
+
       gauss: 'Gauss theorem',
       fourier: 'Fourier series',
       taylor: 'Taylor expansion',

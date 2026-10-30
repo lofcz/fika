@@ -1,5 +1,5 @@
 import { getLL } from '@/i18n/getLL';
-export type FormulaKey = 'gauss' | 'fourier' | 'taylor' | 'definiteIntegral' | 'trigIdentity1' | 'trigIdentity2' | 'binomialExpansion' | 'euler' | 'bernoulli' | 'totalDifferential' | 'nonHomogeneous' | 'cauchyMeanValue' | 'lagrangeMeanValue' | 'derivative' | 'trigIntegral' | 'quadricSurface' | 'secondOrderDifferential' | 'directionalDerivative';
+export type FormulaKey = 'quadraticFormula' | 'differenceOfSquares' | 'perfectSquare' | 'trigPythagorean' | 'arithmeticSum' | 'geometricSum' | 'integrationByParts' | 'newtonSecondLaw' | 'kineticEnergy' | 'ohmLaw' | 'idealGas' | 'massEnergy' | 'gauss' | 'fourier' | 'taylor' | 'definiteIntegral' | 'trigIdentity1' | 'trigIdentity2' | 'binomialExpansion' | 'euler' | 'bernoulli' | 'totalDifferential' | 'nonHomogeneous' | 'cauchyMeanValue' | 'lagrangeMeanValue' | 'derivative' | 'trigIntegral' | 'quadricSurface' | 'secondOrderDifferential' | 'directionalDerivative';
 export type SymbolCategoryKey = 'operators' | 'group' | 'verbatim' | 'greek';
 
 /** Locale-free formula structure. Resolve labels via getFormulaList() or i18n. */
@@ -7,6 +7,42 @@ export const FORMULA_LIST: {
   key: FormulaKey;
   latex: string;
 }[] = [{
+  key: 'quadraticFormula',
+  latex: 'x=\\frac{-b\\pm\\sqrt{b^{2}-4ac}}{2a}'
+}, {
+  key: 'differenceOfSquares',
+  latex: 'a^{2}-b^{2}=(a+b)(a-b)'
+}, {
+  key: 'perfectSquare',
+  latex: '(a+b)^{2}=a^{2}+2ab+b^{2}'
+}, {
+  key: 'trigPythagorean',
+  latex: '\\sin^{2}x+\\cos^{2}x=1'
+}, {
+  key: 'arithmeticSum',
+  latex: 'S_n=\\frac{n(a_1+a_n)}{2}'
+}, {
+  key: 'geometricSum',
+  latex: 'S_n=\\frac{a_1(1-q^{n})}{1-q}'
+}, {
+  key: 'integrationByParts',
+  latex: '\\int u\\,\\mathrm{d}v=uv-\\int v\\,\\mathrm{d}u'
+}, {
+  key: 'newtonSecondLaw',
+  latex: '\\vec{F}=m\\vec{a}'
+}, {
+  key: 'kineticEnergy',
+  latex: 'E_{\\mathrm{k}}=\\frac{1}{2}mv^{2}'
+}, {
+  key: 'ohmLaw',
+  latex: 'U=IR'
+}, {
+  key: 'idealGas',
+  latex: 'pV=nRT'
+}, {
+  key: 'massEnergy',
+  latex: 'E=mc^{2}'
+}, {
   key: 'gauss',
   latex: `\\int\\int\\int _ { \\Omega } \\left( \\frac { \\partial {P} } { \\partial {x} } + \\frac { \\partial {Q} } { \\partial {y} } + \\frac { \\partial {R} }{ \\partial {z} } \\right) \\mathrm { d } V = \\oint _ { \\partial \\Omega } ( P \\cos \\alpha + Q \\cos \\beta + R \\cos \\gamma ) \\mathrm{ d} S`
 }, {

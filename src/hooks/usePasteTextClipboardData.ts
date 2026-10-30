@@ -45,7 +45,8 @@ export default () => {
 
     const clipboardData = pasteCustomClipboardString(text)
 
-    if (typeof clipboardData === 'object') {
+    if (typeof clipboardData !== 'string') {
+      if (!clipboardData || !Array.isArray(clipboardData.data) || !clipboardData.data.length) return
       const { type, data } = clipboardData
 
       if (type === 'elements' && !onlySlide) addElementsFromData(data)

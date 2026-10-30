@@ -1978,7 +1978,59 @@ export type NamespaceConfigsTranslation = {
 		trapezoidReverse: string
 	}
 	latex: {
+		/**
+		 * I​n​s​e​r​t​ ​a​ ​f​o​r​m​u​l​a​ ​p​r​e​s​e​t
+		 */
+		presetLabel: string
 		formulas: {
+			/**
+			 * Q​u​a​d​r​a​t​i​c​ ​f​o​r​m​u​l​a​ ​(​a​ ​≠​ ​0​)
+			 */
+			quadraticFormula: string
+			/**
+			 * D​i​f​f​e​r​e​n​c​e​ ​o​f​ ​s​q​u​a​r​e​s
+			 */
+			differenceOfSquares: string
+			/**
+			 * S​q​u​a​r​e​ ​o​f​ ​a​ ​s​u​m
+			 */
+			perfectSquare: string
+			/**
+			 * P​y​t​h​a​g​o​r​e​a​n​ ​t​r​i​g​o​n​o​m​e​t​r​i​c​ ​i​d​e​n​t​i​t​y
+			 */
+			trigPythagorean: string
+			/**
+			 * A​r​i​t​h​m​e​t​i​c​ ​s​e​r​i​e​s​ ​s​u​m
+			 */
+			arithmeticSum: string
+			/**
+			 * G​e​o​m​e​t​r​i​c​ ​s​e​r​i​e​s​ ​s​u​m​ ​(​q​ ​≠​ ​1​)
+			 */
+			geometricSum: string
+			/**
+			 * I​n​t​e​g​r​a​t​i​o​n​ ​b​y​ ​p​a​r​t​s
+			 */
+			integrationByParts: string
+			/**
+			 * N​e​w​t​o​n​’​s​ ​s​e​c​o​n​d​ ​l​a​w
+			 */
+			newtonSecondLaw: string
+			/**
+			 * K​i​n​e​t​i​c​ ​e​n​e​r​g​y
+			 */
+			kineticEnergy: string
+			/**
+			 * O​h​m​’​s​ ​l​a​w
+			 */
+			ohmLaw: string
+			/**
+			 * I​d​e​a​l​ ​g​a​s​ ​l​a​w
+			 */
+			idealGas: string
+			/**
+			 * M​a​s​s​–​e​n​e​r​g​y​ ​e​q​u​i​v​a​l​e​n​c​e
+			 */
+			massEnergy: string
 			/**
 			 * G​a​u​s​s​ ​t​h​e​o​r​e​m
 			 */
@@ -8001,7 +8053,59 @@ export type TranslationFunctions = {
 			trapezoidReverse: () => LocalizedString
 		}
 		latex: {
+			/**
+			 * Insert a formula preset
+			 */
+			presetLabel: () => LocalizedString
 			formulas: {
+				/**
+				 * Quadratic formula (a ≠ 0)
+				 */
+				quadraticFormula: () => LocalizedString
+				/**
+				 * Difference of squares
+				 */
+				differenceOfSquares: () => LocalizedString
+				/**
+				 * Square of a sum
+				 */
+				perfectSquare: () => LocalizedString
+				/**
+				 * Pythagorean trigonometric identity
+				 */
+				trigPythagorean: () => LocalizedString
+				/**
+				 * Arithmetic series sum
+				 */
+				arithmeticSum: () => LocalizedString
+				/**
+				 * Geometric series sum (q ≠ 1)
+				 */
+				geometricSum: () => LocalizedString
+				/**
+				 * Integration by parts
+				 */
+				integrationByParts: () => LocalizedString
+				/**
+				 * Newton’s second law
+				 */
+				newtonSecondLaw: () => LocalizedString
+				/**
+				 * Kinetic energy
+				 */
+				kineticEnergy: () => LocalizedString
+				/**
+				 * Ohm’s law
+				 */
+				ohmLaw: () => LocalizedString
+				/**
+				 * Ideal gas law
+				 */
+				idealGas: () => LocalizedString
+				/**
+				 * Mass–energy equivalence
+				 */
+				massEnergy: () => LocalizedString
 				/**
 				 * Gauss theorem
 				 */

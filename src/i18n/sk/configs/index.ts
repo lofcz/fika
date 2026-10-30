@@ -333,7 +333,21 @@ const sk_configs: NamespaceConfigsTranslation = {
     trapezoidReverse: 'Obrátený lichobežník',
   },
   latex: {
+    presetLabel: 'Vložiť prednastavený vzorec',
     formulas: {
+      quadraticFormula: 'Korene kvadratickej rovnice (a ≠ 0)',
+      differenceOfSquares: 'Rozdiel štvorcov',
+      perfectSquare: 'Druhá mocnina súčtu',
+      trigPythagorean: 'Základná goniometrická identita',
+      arithmeticSum: 'Súčet aritmetickej postupnosti',
+      geometricSum: 'Súčet geometrickej postupnosti (q ≠ 1)',
+      integrationByParts: 'Integrácia per partes',
+      newtonSecondLaw: 'Druhý Newtonov zákon',
+      kineticEnergy: 'Kinetická energia',
+      ohmLaw: 'Ohmov zákon',
+      idealGas: 'Stavová rovnica ideálneho plynu',
+      massEnergy: 'Ekvivalencia hmotnosti a energie',
+
       gauss: 'Gaussova veta',
       fourier: 'Fourierova rada',
       taylor: 'Taylorov rozvoj',
