@@ -72,7 +72,13 @@ async function dragHold(page, fromIndex, toIndex) {
       const canvas = node.querySelector('canvas[data-canvas-painted]')
       if (!canvas) return { w: 0, h: 0, ink: 0, card: node.getBoundingClientRect().width }
       const r = canvas.getBoundingClientRect()
-      return { w: Math.round(r.width), h: Math.round(r.height), ink: 1, dark: 1, cssW: Math.round(r.width), cssH: Math.round(r.height) }
+      const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
+      let ink = 0, dark = 0
+      for (let p = 0; p < pixels.length; p += 4) {
+        if (pixels[p + 3] > 128 && Math.min(pixels[p], pixels[p + 1], pixels[p + 2]) < 230) ink++
+        if (pixels[p + 3] > 128 && Math.max(pixels[p], pixels[p + 1], pixels[p + 2]) < 120) dark++
+      }
+      return { w: canvas.width, h: canvas.height, ink, dark, cssW: Math.round(r.width), cssH: Math.round(r.height) }
     })
     : { w: 0, h: 0, ink: 0 }
   const sourceHidden = await page.locator('[data-sortable-id]').nth(fromIndex).evaluate(el => getComputedStyle(el).opacity === '0')
@@ -169,7 +175,12 @@ async function run(page) {
     return hosts.slice(0, 2).map(host => {
       const canvas = host.querySelector('canvas[data-canvas-painted]')
       const r = canvas?.getBoundingClientRect()
-      return { w: Math.round(r?.width || 0), h: Math.round(r?.height || 0), ink: canvas ? 1 : 0 }
+      let ink = 0
+      if (canvas) {
+        const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
+        for (let p = 0; p < pixels.length; p += 4) if (pixels[p + 3] > 128 && Math.min(pixels[p], pixels[p + 1], pixels[p + 2]) < 230) ink++
+      }
+      return { w: Math.round(r?.width || 0), h: Math.round(r?.height || 0), ink }
     })
   })
   rec(6, 'Filled thumbs render their canvas projection', filledInk.every(c => c.w > 10 && c.h > 10 && c.ink > 0), filledInk)
