@@ -61,6 +61,7 @@ export const e2eScripts = [
   'scripts/e2e-gradient-slider-selection.mjs',
   'scripts/e2e-filter-slider-selection.mjs',
   'scripts/e2e-background-slider-navigation.mjs',
+  'scripts/e2e-background-image-load.mjs',
   'scripts/e2e-number-input-finite.mjs',
   'scripts/e2e-number-input-unchanged.mjs',
   'scripts/e2e-number-input-step-bounds.mjs',

@@ -36,6 +36,7 @@ import { Icon } from '@/components/Icon'
 import { applyLiveBackgroundGradient } from '@/utils/liveElementPaint'
 
 const DEFAULT_BACKGROUND: SlideBackground = { type: 'solid', color: '#fff' }
+const backgroundImageRequests = new Map<string, symbol>()
 
 const selectCurrentSlideBackground = (state: { slides: { background?: SlideBackground }[]; slideIndex: number }) => (
   state.slides[state.slideIndex]?.background
@@ -255,8 +256,22 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
 
   const uploadBackgroundImage = (files: FileList) => {
     const imageFile = files[0]
-    if (!imageFile) return
-    getImageDataURL(imageFile).then(dataURL => updateImageBackground({ src: dataURL }))
+    const targetId = selectCurrentSlide(useSlidesStore.getState())?.id
+    if (!imageFile || !targetId) return
+    const request = Symbol()
+    backgroundImageRequests.set(targetId, request)
+    getImageDataURL(imageFile).then(dataURL => {
+      if (backgroundImageRequests.get(targetId) !== request) return
+      const store = useSlidesStore.getState()
+      const background = store.slides.find(slide => slide.id === targetId)?.background
+      if (background?.type !== 'image' || !background.image) return
+      store.updateSlide({
+        background: { ...background, image: { ...background.image, src: dataURL } },
+      }, targetId)
+      addHistorySnapshot()
+    }).finally(() => {
+      if (backgroundImageRequests.get(targetId) === request) backgroundImageRequests.delete(targetId)
+    })
   }
 
   const applyBackgroundAllSlide = () => {
