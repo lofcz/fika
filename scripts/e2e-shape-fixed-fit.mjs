@@ -1,7 +1,7 @@
 /**
  * Fixed-height (locked) text must render 1:1 between the editor canvas and the
  * rail thumbnail. The rail uses the same Pretext fitting math before its
- * final-DPR Canvas text paint. Covers shrink, a move drag, and mixed-size runs.
+ * final-DPR Canvas text paint. Covers shrink and a move drag.
  *
  *   node scripts/e2e-shape-fixed-fit.mjs
  */
@@ -67,7 +67,7 @@ try {
     devUrl = await waitForDev(90000)
     if (!devUrl) throw new Error('fika dev server did not start')
   }
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 4 })
   await page.goto(devUrl, { waitUntil: 'networkidle' })
   await page.getByText('Add slide').waitFor({ timeout: 90000 })
   await page.evaluate(() => {
@@ -93,105 +93,131 @@ try {
     return element?.id
   }, NEEDLE)
   if (!elId) throw new Error('fixed-fit deck title not found')
+  // Preserve the imported title's runs and geometry, but avoid measuring body
+  // text underneath it after dragging.
+  await page.evaluate(id => {
+    const store = window.__FIKA_SLIDES__.getState()
+    store.updateSlide({ elements: store.slides[2].elements.filter(el => el.id === id) })
+  }, elId)
+  await sleep(600)
 
-  /**
-   * Text geometry of one element's rendering, in slide coordinates.
-   * `where`: 'editor' (canvas element) or 'thumb' (rail canvas thumbnail).
-   */
-  const textGeometry = (where) => page.evaluate(({ id, where, needle }) => {
-    const slides = window.__FIKA_SLIDES__.getState()
-    const slide = slides.slides[slides.slideIndex]
-    const el = slide.elements.find(e => e.id === id)
-    if (!el) return { ok: false, reason: 'no-element' }
+  const editorFit = () => page.evaluate(id => {
+    const node = document.getElementById(`editable-element-${id}`)?.querySelector('.ProseMirror, .ProseMirror-static')
+    if (!node) return { ok: false, reason: 'no-editor-text' }
+    const fit = node.closest('[data-text-fit-host]') ?? node.querySelector('[data-text-fit-host]')
+    return { ok: true, fitVar: fit ? parseFloat(getComputedStyle(fit).getPropertyValue('--text-fit-scale')) || 1 : 1 }
+  }, elId)
 
-    let node = null
-    let host = null
-    if (where === 'editor') {
-      node = document.getElementById(`editable-element-${id}`)?.querySelector('.ProseMirror, .ProseMirror-static') ?? null
-    }
-    else {
-      host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(n => n.getAttribute('data-thumbnail-slide') === slide.id) ?? null
-      node = host?.querySelector(`#screen-element-${id} .ProseMirror, #screen-element-${id} .ProseMirror-static`) ?? null
-    }
-    if (!node) return { ok: false, reason: 'no-text-node' }
-    // Slide-box-relative measurement: invariant under the canvas zoom/transform
-    // AND the thumb's viewport scale, so both sides land in authored slide px.
-    const slideBox = where === 'editor'
-      ? ([...document.querySelectorAll('[class*=viewport-wrapper]')].toSorted((a, b) => {
-        const ar = a.getBoundingClientRect()
-        const br = b.getBoundingClientRect()
-        return (br.width * br.height) - (ar.width * ar.height)
-      })[0]?.getBoundingClientRect())
-      : host.getBoundingClientRect()
-    if (!slideBox) return { ok: false, reason: 'no-slide-box' }
-    const toSlideX = (x) => (x - slideBox.left) / slideBox.width * slides.viewportSize
-    const toSlideY = (y) => (y - slideBox.top) / slideBox.height * (slides.viewportSize * slides.viewportRatio)
-    const scale = 1
-    const scopeRect = slideBox
-
-    // first text line rect in slide coords
-    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
-    let first = null
-    const tops = new Set()
-    let n
-    while ((n = walker.nextNode())) {
-      const r = document.createRange()
-      r.selectNodeContents(n)
-      for (const rect of r.getClientRects()) {
-        if (rect.height > 1 && rect.width > 1) {
-          tops.add(Math.round(toSlideY(rect.top)))
-          if (!first || rect.left < first.left) {
-            first = { left: rect.left, top: rect.top, bottom: rect.bottom, height: rect.height }
+  // Compare glyph pixels on both surfaces; DOM line boxes include font leading
+  // and cannot be compared to ink bounds. High DPR keeps 3 slide-px meaningful.
+  const inkGeometry = async (where) => {
+    const screenshot = where === 'editor' ? (await page.screenshot()).toString('base64') : null
+    return page.evaluate(async ({ id, where, screenshot }) => {
+      const state = window.__FIKA_SLIDES__.getState()
+      const slide = state.slides[state.slideIndex]
+      const el = slide.elements.find(value => value.id === id)
+      let canvas, sx, sy, originX = 0, originY = 0
+      if (where === 'editor') {
+        const image = new Image()
+        image.src = `data:image/png;base64,${screenshot}`
+        await image.decode()
+        canvas = document.createElement('canvas'); canvas.width = image.width; canvas.height = image.height
+        canvas.getContext('2d').drawImage(image, 0, 0)
+        const box = [...document.querySelectorAll('.viewport-wrapper')]
+          .map(node => node.getBoundingClientRect()).sort((a, b) => b.width * b.height - a.width * a.height)[0]
+        const dpr = image.width / innerWidth
+        sx = box.width * dpr / state.viewportSize
+        sy = box.height * dpr / (state.viewportSize * state.viewportRatio)
+        originX = box.x * dpr; originY = box.y * dpr
+      }
+      else {
+        const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(node => node.dataset.thumbnailSlide === slide.id)
+        canvas = host?.querySelector('canvas[data-canvas-painted]')
+        if (!canvas) return { ok: false, reason: 'no-painted-thumbnail' }
+        sx = canvas.width / state.viewportSize
+        sy = canvas.height / (state.viewportSize * state.viewportRatio)
+      }
+      const x = Math.floor(originX + el.left * sx), y = Math.floor(originY + el.top * sy)
+      const width = Math.ceil(el.width * sx), height = Math.ceil(el.height * sy)
+      const pixels = canvas.getContext('2d').getImageData(x, y, width, height).data
+      const colors = new Map()
+      for (let p = 0; p < pixels.length; p += 4) {
+        const key = (pixels[p] >> 4) * 256 + (pixels[p + 1] >> 4) * 16 + (pixels[p + 2] >> 4)
+        colors.set(key, (colors.get(key) || 0) + 1)
+      }
+      const background = [...colors].sort((a, b) => b[1] - a[1])[0][0]
+      const bg = [(background >> 8) * 16 + 8, ((background >> 4) & 15) * 16 + 8, (background & 15) * 16 + 8]
+      const rows = []
+      let left = width, right = -1
+      for (let row = 0; row < height; row++) {
+        let ink = 0
+        for (let col = 0; col < width; col++) {
+          const p = (row * width + col) * 4
+          if (pixels[p + 3] > 128 && bg.some((value, c) => Math.abs(pixels[p + c] - value) > 70)) {
+            ink++; left = Math.min(left, col); right = Math.max(right, col)
           }
         }
+        if (ink) rows.push(row)
       }
-      r.detach()
-    }
-    if (!first) return { ok: false, reason: 'no-text-rects' }
-    return {
-      ok: true,
-      lines: tops.size,
-      firstLeftSlide: toSlideX(first.left),
-      firstTopSlide: toSlideY(first.top),
-      lineBoxHSlide: first.height / slideBox.height * (slides.viewportSize * slides.viewportRatio),
-      fitVar: (() => {
-        const fit = node.closest('[data-text-fit-host]') ?? node.querySelector('[data-text-fit-host]')
-        return fit ? parseFloat(getComputedStyle(fit).getPropertyValue('--text-fit-scale')) || 1 : 1
-      })(),
-    }
-  }, { id: elId, where, needle: NEEDLE })
-
+      if (!rows.length) return { ok: false, reason: 'no-text-ink' }
+      let lines = 1
+      for (let i = 1; i < rows.length; i++) if (rows[i] - rows[i - 1] > Math.max(2, 3 * sy)) lines++
+      return { ok: true, lines, left: (x + left - originX) / sx, top: (y + rows[0] - originY) / sy,
+        width: (right - left + 1) / sx, height: (rows.at(-1) - rows[0] + 1) / sy }
+    }, { id: elId, where, screenshot })
+  }
   const parity = async (label) => {
-    const ed = await textGeometry('editor')
-    const th = await textGeometry('thumb')
-    rec(
-      `${label}: wrap parity`,
-      ed.ok && th.ok && th.lines === ed.lines,
-      { editor: ed, thumb: th },
-    )
+    // Selection outlines are editor UI, not slide ink.
+    await page.evaluate(() => window.__FIKA_MAIN__.getState().setActiveElementIdList([]))
+    await sleep(350)
+    const ed = await inkGeometry('editor')
+    const th = await inkGeometry('thumb')
+    rec(`${label}: wrap parity`, ed.ok && th.ok && th.lines === ed.lines, { editor: ed, thumb: th })
     if (ed.ok && th.ok) {
-      rec(
-        `${label}: first-ink left matches`,
-        Math.abs(th.firstLeftSlide - ed.firstLeftSlide) <= MAX_POS_DELTA,
-        { thumb: +th.firstLeftSlide.toFixed(1), editor: +ed.firstLeftSlide.toFixed(1) },
-      )
-      rec(
-        `${label}: first-ink top matches`,
-        Math.abs(th.firstTopSlide - ed.firstTopSlide) <= MAX_POS_DELTA,
-        { thumb: +th.firstTopSlide.toFixed(1), editor: +ed.firstTopSlide.toFixed(1) },
-      )
-      rec(
-        `${label}: text fit scale matches`,
-        Math.abs(th.fitVar - ed.fitVar) <= 0.02,
-        { thumb: th.fitVar, editor: ed.fitVar },
-      )
+      rec(`${label}: first-ink left matches`, Math.abs(th.left - ed.left) <= MAX_POS_DELTA, { editor: ed.left, thumb: th.left })
+      rec(`${label}: first-ink top matches`, Math.abs(th.top - ed.top) <= MAX_POS_DELTA, { editor: ed.top, thumb: th.top })
+      rec(`${label}: fitted glyph size matches`, Math.abs(th.width / ed.width - 1) <= MAX_SIZE_RATIO && Math.abs(th.height / ed.height - 1) <= MAX_SIZE_RATIO, { editor: ed, thumb: th })
     }
-    return ed
+    return editorFit()
   }
 
   // ---- baseline: native fit ----
   let ed = await parity('baseline')
   rec('baseline: no shrink needed yet', ed.ok && ed.fitVar === 1, ed)
+  // Negative controls prove the pixel checks reject blank, shifted, and
+  // incorrectly scaled text instead of merely reading the model's geometry.
+  const originalInk = await inkGeometry('thumb')
+  const alterThumbnail = (mode) => page.evaluate(({ id, mode }) => {
+    const state = window.__FIKA_SLIDES__.getState(), slide = state.slides[state.slideIndex]
+    const host = [...document.querySelectorAll('[data-thumbnail-slide]')].find(node => node.dataset.thumbnailSlide === slide.id)
+    const canvas = host.querySelector('canvas[data-canvas-painted]'), ctx = canvas.getContext('2d')
+    if (!canvas.testOriginal) {
+      canvas.testOriginal = document.createElement('canvas')
+      canvas.testOriginal.width = canvas.width; canvas.testOriginal.height = canvas.height
+      canvas.testOriginal.getContext('2d').drawImage(canvas, 0, 0)
+    }
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    if (mode === 'blank') { ctx.restore(); return }
+    if (mode === 'shift') ctx.translate(12 * canvas.width / state.viewportSize, 0)
+    if (mode === 'scale') {
+      const el = slide.elements.find(value => value.id === id)
+      const x = el.left * canvas.width / state.viewportSize, y = el.top * canvas.height / (state.viewportSize * state.viewportRatio)
+      ctx.translate(x, y); ctx.scale(.8, .8); ctx.translate(-x, -y)
+    }
+    ctx.drawImage(canvas.testOriginal, 0, 0); ctx.restore()
+    if (mode === 'restore') delete canvas.testOriginal
+  }, { id: elId, mode })
+  await alterThumbnail('shift')
+  const shifted = await inkGeometry('thumb')
+  rec('pixel measurement detects shifted glyphs', originalInk.ok && shifted.ok && Math.abs(shifted.left - originalInk.left) > MAX_POS_DELTA, { originalInk, shifted })
+  await alterThumbnail('scale')
+  const scaled = await inkGeometry('thumb')
+  rec('pixel measurement detects wrong glyph size', originalInk.ok && scaled.ok && Math.abs(scaled.width / originalInk.width - 1) > MAX_SIZE_RATIO, { originalInk, scaled })
+  await alterThumbnail('blank')
+  rec('pixel measurement rejects blank thumbnails', !(await inkGeometry('thumb')).ok)
+  await alterThumbnail('restore')
+
 
   // ---- force fixed + grow font until the editor shrinks ----
   await page.evaluate((id) => {
@@ -207,7 +233,7 @@ try {
     await sleep(500)
   }
   for (let i = 0; i < 8; i++) {
-    ed = await textGeometry('editor')
+    ed = await editorFit()
     if (ed.fitVar < 1) break
     const plus = page.locator('[class*=font-size-control] [class*=format-chip]').last()
     await plus.click({ timeout: 8000 })
@@ -233,7 +259,7 @@ try {
   const my = op.y + op.height * 0.3
   await page.mouse.move(mx, my)
   await page.mouse.down()
-  await page.mouse.move(mx + 120, my + 90, { steps: 10 })
+  await page.mouse.move(mx - 50, my + 90, { steps: 10 })
   await sleep(80)
   await page.mouse.up()
   await sleep(700)
@@ -244,7 +270,7 @@ try {
   }, elId)
   rec(
     'drag moved the box without resizing it',
-    Math.abs(after.w - before.w) < 1 && Math.abs(after.h - before.h) < 1 && after.left > before.left + 50,
+    Math.abs(after.w - before.w) < 1 && Math.abs(after.h - before.h) < 1 && after.left < before.left - 50,
     { before, after },
   )
   await page.evaluate(() => {
