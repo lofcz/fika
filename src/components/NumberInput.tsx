@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './NumberInput.module.scss'
 const cx = bindStyles(styles)
-import { type CSSProperties, type ReactNode, useCallback, useRef, memo, useState, useEffect } from 'react'
+import { type CSSProperties, type ReactNode, useCallback, memo, useState, useEffect } from 'react'
 
 export type INumberInputProps = {
   value: number
@@ -49,25 +49,22 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
 
   const [number, setNumber] = useState<string | number>(value)
   const [focused, setFocused] = useState(false)
-  const skipNumberEmit = useRef(true)
 
   useEffect(() => {
     if (value !== number) setNumber(value)
   }, [value])
 
-  useEffect(() => {
-    if (skipNumberEmit.current) {
-      skipNumberEmit.current = false
+  // Prop synchronization must not emit a stale value back to the parent.
+  // Only user actions may commit a number.
+  const updateNumber = (input: string | number) => {
+    const next = +input
+    if (isNaN(next) || next > max || next < min) {
+      setNumber(input)
       return
     }
-    const next = +number
-    if (isNaN(next)) return
-    if (next > max) return
-    if (next < min) return
-    if (next !== number) setNumber(next)
-    if (next === value) return
-    onUpdateValue?.(next)
-  }, [number])
+    setNumber(next)
+    if (next !== value) onUpdateValue?.(next)
+  }
 
   const checkAndEmitValue = useCallback(() => {
     let next = +number
@@ -108,7 +105,7 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
           value={number}
           placeholder={placeholder}
           onChange={(event) => {
-            setNumber(event.target.value)
+            updateNumber(event.target.value)
             onInput?.(event.nativeEvent)
             onChange?.(event.nativeEvent)
           }}
@@ -119,10 +116,10 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
           }}
         />
         <div className={cx('handlers')}>
-          <span className={cx('handler')} onClick={() => setNumber((number as number) + step)}>
+          <span className={cx('handler')} onClick={() => updateNumber(+number + step)}>
             <svg fill="currentColor" width="1em" height="1em" viewBox="64 64 896 896"><path d="M890.5 755.3L537.9 269.2c-12.8-17.6-39-17.6-51.7 0L133.5 755.3A8 8 0 00140 768h75c5.1 0 9.9-2.5 12.9-6.6L512 369.8l284.1 391.6c3 4.1 7.8 6.6 12.9 6.6h75c6.5 0 10.3-7.4 6.5-12.7z" /></svg>
           </span>
-          <span className={cx('handler')} onClick={() => setNumber((number as number) - step)}>
+          <span className={cx('handler')} onClick={() => updateNumber(+number - step)}>
             <svg fill="currentColor" width="1em" height="1em" viewBox="64 64 896 896"><path d="M884 256h-75c-5.1 0-9.9 2.5-12.9 6.6L512 654.2 227.9 262.6c-3-4.1-7.8-6.6-12.9-6.6h-75c-6.5 0-10.3 7.4-6.5-12.7l352.6 486.1c12.8 17.6 39 17.6 51.7 0l352.6-486.1c3.9-5.3.1-12.7-6.4-12.7z" /></svg>
           </span>
         </div>
