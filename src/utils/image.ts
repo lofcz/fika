@@ -20,8 +20,8 @@ export const getImageSize = (src: string): Promise<ImageSize> => {
       img.remove();
     };
     img.onload = () => {
-      const imgWidth = img.clientWidth;
-      const imgHeight = img.clientHeight;
+      const imgWidth = img.naturalWidth;
+      const imgHeight = img.naturalHeight;
       cleanup();
       resolve({
         width: imgWidth,
