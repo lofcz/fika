@@ -6,10 +6,12 @@ const addHistorySnapshot = debounce(function() {
 }, 300, { trailing: true })
 
 const redo = throttle(function() {
+  addHistorySnapshot.flush()
   useSnapshotStore.getState().reDo()
 }, 100, { leading: true, trailing: false })
 
 const undo = throttle(function() {
+  addHistorySnapshot.flush()
   useSnapshotStore.getState().unDo()
 }, 100, { leading: true, trailing: false })
 
