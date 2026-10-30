@@ -146,20 +146,19 @@ export default () => {
       actionsRef.current.createSlide()
     }
 
-    const tabActiveElement = () => {
+    const tabActiveElement = (backward: boolean) => {
       const currentSlide = selectCurrentSlide(useSlidesStore.getState())
-      const { handleElementId, setActiveElementIdList } = useMainStore.getState()
-      if (!currentSlide?.elements.length) return
-      if (!handleElementId) {
-        const firstElement = currentSlide.elements[0]
-        setActiveElementIdList([firstElement.id])
+      const { handleElementId, hiddenElementIdList, setActiveElementIdList } = useMainStore.getState()
+      const selectable = currentSlide?.elements.filter(el => !el.lock && !hiddenElementIdList.includes(el.id)) ?? []
+      if (!selectable.length) {
+        setActiveElementIdList([])
         return
       }
-      const currentIndex = currentSlide.elements.findIndex(el => el.id === handleElementId)
-      const nextIndex = currentIndex >= currentSlide.elements.length - 1 ? 0 : currentIndex + 1
-      const nextElementId = currentSlide.elements[nextIndex].id
-
-      setActiveElementIdList([nextElementId])
+      const currentIndex = selectable.findIndex(el => el.id === handleElementId)
+      const nextIndex = currentIndex < 0
+        ? backward ? selectable.length - 1 : 0
+        : (currentIndex + (backward ? -1 : 1) + selectable.length) % selectable.length
+      setActiveElementIdList([selectable[nextIndex].id])
     }
 
     const clearAllModifiers = () => {
@@ -349,7 +348,7 @@ export default () => {
       if (key === KEYS.TAB) {
         if (mainStore.disableHotkeys) return
         e.preventDefault()
-        tabActiveElement()
+        tabActiveElement(shiftKey)
       }
       if (mainStore.editorAreaFocus && !shiftKey && !ctrlOrMetaKeyActive && !mainStore.disableHotkeys) {
         if (key === KEYS.T) {
