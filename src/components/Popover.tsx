@@ -93,6 +93,9 @@ const Popover = memo((vrProps: IPopoverProps) => {
         : undefined,
       onShow(next) {
         setTriggerOpen(true)
+        // The controlled state must follow visibility immediately. Waiting for
+        // the entry animation loses close requests from fast menu selections.
+        if (!valueRef.current) onUpdateValueRef.current?.(true)
         const already = contentVisibleRef.current && portalBoxRef.current
         if (!already) {
           next.popper.style.visibility = 'hidden'
@@ -102,18 +105,15 @@ const Popover = memo((vrProps: IPopoverProps) => {
       onHide() {
         if (!instanceRef.current) return
         setTriggerOpen(false)
+        if (valueRef.current) onUpdateValueRef.current?.(false)
       },
       onShown() {
-        if (!valueRef.current) {
-          onUpdateValueRef.current?.(true)
-          onShowRef.current?.()
-        }
+        onShowRef.current?.()
       },
       onHidden() {
-        if (valueRef.current) {
-          onUpdateValueRef.current?.(false)
-          onHideRef.current?.()
-        }
+        // A parent-driven close must not dismiss a different popover that
+        // the parent opened while this one's exit animation was running.
+        if (valueRef.current) onHideRef.current?.()
       },
     })
     instanceRef.current = inst
