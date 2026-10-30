@@ -33,15 +33,31 @@ try {
   }
   await page.locator('.myna-download').waitFor({ state: 'detached' })
   await page.evaluate(() => {
-    const create = window.createImageBitmap.bind(window)
-    window.createImageBitmap = async (...args) => { await new Promise(resolve => setTimeout(resolve, 250)); return create(...args) }
+    // This fixture has no bitmap assets. Gate the encoder itself so fast
+    // machines cannot finish the export before the Cancel button is clicked.
+    const encode = OffscreenCanvas.prototype.convertToBlob
+    let release
+    const pending = new Promise(resolve => { release = resolve })
+    window.testExportEncoding = false
+    window.releaseTestExport = () => {
+      OffscreenCanvas.prototype.convertToBlob = encode
+      release()
+    }
+    OffscreenCanvas.prototype.convertToBlob = async function (...args) {
+      window.testExportEncoding = true
+      await pending
+      return encode.apply(this, args)
+    }
   })
   let cancelledDownloads = 0
   page.on('download', () => cancelledDownloads++)
   await page.getByRole('button', { name: 'Download', exact: true }).first().click()
   await page.getByRole('combobox', { name: 'Pages', exact: true }).selectOption('all')
   await page.getByRole('button', { name: 'Download', exact: true }).last().click()
+  await page.waitForFunction(() => window.testExportEncoding)
   await page.getByRole('button', { name: 'Cancel export', exact: true }).click()
+  assert.equal(await page.getByRole('button', { name: 'Cancel export', exact: true }).isDisabled(), true, 'Cancellation is acknowledged while encoding is pending')
+  await page.evaluate(() => window.releaseTestExport())
   await page.getByRole('button', { name: 'Cancel export', exact: true }).waitFor({ state: 'detached' })
   assert.equal(cancelledDownloads, 0)
   assert.equal(await page.locator('.myna-download').getByRole('button', { name: 'Download', exact: true }).isEnabled(), true)
