@@ -18,7 +18,7 @@ import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/uti
 import emitter, { EmitterEvents, type TableCommand } from '@/utils/emitter';
 import message from '@/utils/message';
 import { getCellStyle, getTextStyle, formatText } from './utils';
-import { applyExcelPaste, deleteTableGridLine, insertColIntoGrid, insertRowIntoGrid, locateTableCell, replaceTableCellText, type TableCellDraft } from './cellEdit';
+import { applyExcelPaste, deleteTableGridLine, insertColIntoGrid, insertRowIntoGrid, locateTableCell, replaceTableCellText, tableSelectionBounds, type TableCellDraft } from './cellEdit';
 import { areTableCellViewEqual, isTableCellHtmlEcho, numArrEqual, outlineEqual, tableGridStructureEqual, tableGridTextEqual, themeEqual } from './gridCompare';
 import useHideCells from './useHideCells';
 import useSubThemeColor from './useSubThemeColor';
@@ -306,10 +306,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
     const [endX, endY] = endCell;
     if (startX === endX && startY === endY) return [`${startX}_${startY}`];
     const next: string[] = [];
-    const minX = Math.min(startX, endX);
-    const minY = Math.min(startY, endY);
-    const maxX = Math.max(startX, endX);
-    const maxY = Math.max(startY, endY);
+    const { top: minX, left: minY, bottom: maxX, right: maxY } = tableSelectionBounds(tableCells, startCell, endCell);
     for (let i = 0; i < tableCells.length; i++) {
       const rowCells = tableCells[i];
       for (let j = 0; j < rowCells.length; j++) {
@@ -405,13 +402,14 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const mergeCells = () => {
-    const [startX, startY] = startCell;
-    const [endX, endY] = endCell;
-    const minX = Math.min(startX, endX);
-    const minY = Math.min(startY, endY);
-    const maxX = Math.max(startX, endX);
-    const maxY = Math.max(startY, endY);
     const _tableCells = cloneCommittedGrid();
+    const { top: minX, left: minY, bottom: maxX, right: maxY } = tableSelectionBounds(_tableCells, startCell, endCell);
+    for (let row = minX; row <= maxX; row++) {
+      for (let col = minY; col <= maxY; col++) {
+        _tableCells[row][col].rowspan = 1;
+        _tableCells[row][col].colspan = 1;
+      }
+    }
     _tableCells[minX][minY].rowspan = maxX - minX + 1;
     _tableCells[minX][minY].colspan = maxY - minY + 1;
     setTableCells(_tableCells);

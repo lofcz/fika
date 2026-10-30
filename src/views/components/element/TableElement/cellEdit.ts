@@ -122,3 +122,29 @@ export const deleteTableGridLine = (grid: TableCell[][], index: number, axis: 'r
   else for (const row of next) row.splice(index, 1)
   return next
 }
+
+export const tableSelectionBounds = (grid: TableCell[][], start: number[], end: number[]) => {
+  let top = Math.min(start[0], end[0])
+  let left = Math.min(start[1], end[1])
+  let bottom = Math.max(start[0], end[0])
+  let right = Math.max(start[1], end[1])
+  // Expanding to include one merge can touch another merge. Continue until
+  // every intersected region is entirely inside the selection.
+  let expanded = true
+  while (expanded) {
+    expanded = false
+    grid.forEach((row, r) => row.forEach((cell, c) => {
+      const cellBottom = r + cell.rowspan - 1
+      const cellRight = c + cell.colspan - 1
+      if (r > bottom || cellBottom < top || c > right || cellRight < left) return
+      if (r < top || c < left || cellBottom > bottom || cellRight > right) {
+        top = Math.min(top, r)
+        left = Math.min(left, c)
+        bottom = Math.max(bottom, cellBottom)
+        right = Math.max(right, cellRight)
+        expanded = true
+      }
+    }))
+  }
+  return { top, left, bottom, right }
+}

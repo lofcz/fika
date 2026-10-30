@@ -35,6 +35,7 @@ const {
   insertColIntoGrid,
   insertRowIntoGrid,
   deleteTableGridLine,
+  tableSelectionBounds,
   growTable,
 } = await import(pathToFileURL(join(root, 'src/views/components/element/TableElement/cellEdit.ts')).href)
 const { classifyElementListSync } = await import(pathToFileURL(join(root, 'src/views/Editor/Canvas/elementListSync.ts')).href)
@@ -183,6 +184,23 @@ assert(grid[1][1].text === 'Bar' && grid.length === 2, 'excel paste does not mut
 const withCol = insertColIntoGrid(grid, 1, () => cell('col', ''))
 assert(withCol[0].length === 3 && withCol[0][1].id === 'col' && withCol[0][2].id === 'b', 'insertColIntoGrid inserts without shifting in place')
 assert(grid[0].length === 2 && grid[0][1].id === 'b', 'insertColIntoGrid does not mutate source rows')
+const selectionGrid = Array.from({ length: 4 }, (_, r) => Array.from({ length: 4 }, (_, c) => cell(`${r}-${c}`, '')))
+selectionGrid[0][0].rowspan = 3
+selectionGrid[1][1].colspan = 3
+selectionGrid[2][2].rowspan = 2
+// Expanding upward reaches the horizontal merge, whose extra columns then
+// reach the lower vertical merge. The original merges do not overlap.
+for (const [start, end] of [[[2, 0], [2, 1]], [[2, 1], [2, 0]]]) {
+  const bounds = tableSelectionBounds(selectionGrid, start, end)
+  assert(bounds.top === 0 && bounds.left === 0 && bounds.bottom === 3 && bounds.right === 3, 'selection expands transitively across merged regions in either direction')
+}
+
+const repeatedExpansionGrid = Array.from({ length: 3 }, (_, r) => Array.from({ length: 3 }, (_, c) => cell(`repeat-${r}-${c}`, '')))
+repeatedExpansionGrid[0][2].rowspan = 2
+repeatedExpansionGrid[2][0].colspan = 3
+const repeatedBounds = tableSelectionBounds(repeatedExpansionGrid, [1, 0], [2, 0])
+assert(repeatedBounds.top === 0 && repeatedBounds.right === 2, 'selection revisits earlier merges reached by a later expansion')
+
 const deletionGrid = [
   [cell('anchor', 'Keep', { rowspan: 2, colspan: 2, style: { backcolor: '#123456' } }), cell('hidden-a', ''), cell('right-a', '')],
   [cell('hidden-b', ''), cell('hidden-c', ''), cell('right-b', '')],
