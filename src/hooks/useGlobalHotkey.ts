@@ -137,7 +137,8 @@ export default () => {
     }
 
     const order = (command: ElementOrderCommands) => {
-      const handleElement = selectHandleElement(useMainStore.getState())
+      const main = useMainStore.getState()
+      const handleElement = selectHandleElement(main) || selectCurrentSlide(useSlidesStore.getState())?.elements.find(element => main.activeElementIdList.includes(element.id))
       if (!handleElement) return
       actionsRef.current.orderElement(handleElement, command)
     }

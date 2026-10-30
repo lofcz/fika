@@ -80,7 +80,7 @@ export function orderElementList(elementList: PPTElement[], seedIds: string[], c
   } = unitIndexRange(elementList, unitIds);
   if (first < 0) return null;
   if (command === 'top') {
-    if (last === elementList.length - 1) return null;
+    if (first === elementList.length - unitIds.length) return null;
     const {
       rest,
       unit
@@ -88,7 +88,7 @@ export function orderElementList(elementList: PPTElement[], seedIds: string[], c
     return [...rest, ...unit];
   }
   if (command === 'bottom') {
-    if (first === 0) return null;
+    if (last === unitIds.length - 1) return null;
     const {
       rest,
       unit

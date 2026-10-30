@@ -68,6 +68,11 @@ assert(ids(multiBack) === 'b,d,a,c', 'multi-select send to back keeps relative o
 const alreadyFront = orderElementList(multi, ['d'], TOP)
 assert(alreadyFront === null, 'already at front is a no-op')
 
+const separatedFront = orderElementList(multi, ['a', 'd'], TOP)
+assert(separatedFront && ids(separatedFront) === 'b,c,a,d', 'front boundary member does not prevent moving the rest of the selection')
+const separatedBack = orderElementList(multi, ['a', 'd'], BOTTOM)
+assert(separatedBack && ids(separatedBack) === 'a,d,b,c', 'back boundary member does not prevent moving the rest of the selection')
+
 if (failures.length) {
   console.error('elementOrder checks failed:\n' + failures.map(f => ` - ${f}`).join('\n'))
   process.exit(1)
