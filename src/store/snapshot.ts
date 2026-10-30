@@ -10,6 +10,15 @@ enablePatches()
 const SNAPSHOT_LIMIT = 20
 
 let cursorSlides: Slide[] | null = null
+let snapshotQueue: Promise<void> = Promise.resolve()
+
+// IndexedDB calls yield between reads and writes. Keep the cursor and database
+// in the same order, even when another save or undo arrives during a write.
+function queueSnapshot(operation: () => Promise<void>): Promise<void> {
+  const pending = snapshotQueue.then(operation)
+  snapshotQueue = pending.catch(() => {})
+  return pending
+}
 
 function diffSlides(prev: Slide[], next: Slide[]): [Patch[], Patch[]] {
   const [, patches, inversePatches] = produceWithPatches(prev, draft => {
@@ -81,121 +90,131 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
     set(state => state.snapshotLength === length ? state : { snapshotLength: length })
   },
 
-  async initSnapshotDatabase() {
+  initSnapshotDatabase() {
     const slidesStore = useSlidesStore.getState()
-    cursorSlides = slidesStore.slides
-    await db.snapshots.clear()
-    await db.snapshots.add({
-      index: slidesStore.slideIndex,
-      title: slidesStore.title,
-      theme: structuredClone(slidesStore.theme),
-      viewportSize: slidesStore.viewportSize,
-      viewportRatio: slidesStore.viewportRatio,
-      templates: structuredClone(slidesStore.templates),
-      slides: structuredClone(slidesStore.slides),
+    return queueSnapshot(async () => {
+      cursorSlides = slidesStore.slides
+      await db.snapshots.clear()
+      await db.snapshots.add({
+        index: slidesStore.slideIndex,
+        title: slidesStore.title,
+        theme: structuredClone(slidesStore.theme),
+        viewportSize: slidesStore.viewportSize,
+        viewportRatio: slidesStore.viewportRatio,
+        templates: structuredClone(slidesStore.templates),
+        slides: structuredClone(slidesStore.slides),
+      })
+      set(state => (
+        state.snapshotCursor === 0 && state.snapshotLength === 1
+          ? state
+          : { snapshotCursor: 0, snapshotLength: 1 }
+      ))
     })
-    set(state => (
-      state.snapshotCursor === 0 && state.snapshotLength === 1
-        ? state
-        : { snapshotCursor: 0, snapshotLength: 1 }
-    ))
   },
 
-  async addSnapshot() {
+  addSnapshot() {
     const slidesStore = useSlidesStore.getState()
-    const nextSlides = slidesStore.slides
-    const slideIndex = slidesStore.slideIndex
-    const cursor = get().snapshotCursor
-    const allKeys = await db.snapshots.orderBy('id').primaryKeys() as number[]
+    return queueSnapshot(async () => {
+      const nextSlides = slidesStore.slides
+      const slideIndex = slidesStore.slideIndex
+      const cursor = get().snapshotCursor
+      const allKeys = await db.snapshots.orderBy('id').primaryKeys() as number[]
 
-    const redoKeys = cursor >= 0 && cursor < allKeys.length - 1
-      ? allKeys.slice(cursor + 1)
-      : []
-    const keptOldKeys = cursor >= 0 ? allKeys.slice(0, cursor + 1) : []
+      const redoKeys = cursor >= 0 && cursor < allKeys.length - 1
+        ? allKeys.slice(cursor + 1)
+        : []
+      const keptOldKeys = cursor >= 0 ? allKeys.slice(0, cursor + 1) : []
 
-    const title = slidesStore.title
-    const theme = structuredClone(slidesStore.theme)
-    const viewportSize = slidesStore.viewportSize
-    const viewportRatio = slidesStore.viewportRatio
-    const templates = structuredClone(slidesStore.templates)
-    let entry: Omit<Snapshot, 'id'>
-    if (!cursorSlides || keptOldKeys.length === 0) {
-      entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, templates, slides: structuredClone(nextSlides) }
-    }
-    else {
-      const [patches, inversePatches] = diffSlides(cursorSlides, nextSlides)
-      entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, templates, patches, inversePatches }
-    }
-
-    await db.transaction('rw', db.snapshots, async () => {
-      if (redoKeys.length) await db.snapshots.bulkDelete(redoKeys)
-
-      if (keptOldKeys.length >= 1) {
-        await db.snapshots.update(keptOldKeys[keptOldKeys.length - 1], { index: slideIndex })
+      const title = slidesStore.title
+      const theme = structuredClone(slidesStore.theme)
+      const viewportSize = slidesStore.viewportSize
+      const viewportRatio = slidesStore.viewportRatio
+      const templates = structuredClone(slidesStore.templates)
+      let entry: Omit<Snapshot, 'id'>
+      if (!cursorSlides || keptOldKeys.length === 0) {
+        entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, templates, slides: structuredClone(nextSlides) }
+      }
+      else {
+        const [patches, inversePatches] = diffSlides(cursorSlides, nextSlides)
+        entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, templates, patches, inversePatches }
       }
 
-      await db.snapshots.add(entry)
+      await db.transaction('rw', db.snapshots, async () => {
+        if (redoKeys.length) await db.snapshots.bulkDelete(redoKeys)
 
-      if (keptOldKeys.length + 1 > SNAPSHOT_LIMIT) {
-        const oldestKey = keptOldKeys[0]
-        const nextKey = keptOldKeys[1]
-        const oldest = await db.snapshots.get(oldestKey)
-        const next = await db.snapshots.get(nextKey)
-        if (oldest?.slides && next) {
-          const promoted = next.patches?.length
-            ? applyPatches(oldest.slides, next.patches)
-            : oldest.slides
-          delete next.patches
-          delete next.inversePatches
-          next.slides = structuredClone(promoted)
-          await db.snapshots.put(next)
+        if (keptOldKeys.length >= 1) {
+          await db.snapshots.update(keptOldKeys[keptOldKeys.length - 1], { index: slideIndex })
         }
-        await db.snapshots.delete(oldestKey)
-      }
+
+        await db.snapshots.add(entry)
+
+        if (keptOldKeys.length + 1 > SNAPSHOT_LIMIT) {
+          const oldestKey = keptOldKeys[0]
+          const nextKey = keptOldKeys[1]
+          const oldest = await db.snapshots.get(oldestKey)
+          const next = await db.snapshots.get(nextKey)
+          if (oldest?.slides && next) {
+            const promoted = next.patches?.length
+              ? applyPatches(oldest.slides, next.patches)
+              : oldest.slides
+            delete next.patches
+            delete next.inversePatches
+            next.slides = structuredClone(promoted)
+            await db.snapshots.put(next)
+          }
+          await db.snapshots.delete(oldestKey)
+        }
+      })
+
+      cursorSlides = nextSlides
+      const snapshotLength = Math.min(keptOldKeys.length + 1, SNAPSHOT_LIMIT)
+      const snapshotCursor = snapshotLength - 1
+      set(state => (
+        state.snapshotCursor === snapshotCursor && state.snapshotLength === snapshotLength
+          ? state
+          : { snapshotCursor, snapshotLength }
+      ))
     })
-
-    cursorSlides = nextSlides
-    const snapshotLength = Math.min(keptOldKeys.length + 1, SNAPSHOT_LIMIT)
-    const snapshotCursor = snapshotLength - 1
-    set(state => (
-      state.snapshotCursor === snapshotCursor && state.snapshotLength === snapshotLength
-        ? state
-        : { snapshotCursor, snapshotLength }
-    ))
   },
 
-  async unDo() {
-    if (get().snapshotCursor <= 0) return
+  unDo() {
+    return queueSnapshot(async () => {
+      if (get().snapshotCursor <= 0) return
 
-    const snapshotCursor = get().snapshotCursor - 1
-    const snapshots: Snapshot[] = await db.snapshots.orderBy('id').toArray()
-    const leaving = snapshots[get().snapshotCursor]
-    const arriving = snapshots[snapshotCursor]
-    if (!arriving) return
+      const snapshotCursor = get().snapshotCursor - 1
+      const snapshots: Snapshot[] = await db.snapshots.orderBy('id').toArray()
+      const leaving = snapshots[get().snapshotCursor]
+      const arriving = snapshots[snapshotCursor]
+      if (!arriving) return
 
-    const base = cursorSlides ?? materializeSlides(snapshots, get().snapshotCursor)
-    const slides = leaving?.inversePatches
-      ? applyPatches(base, leaving.inversePatches)
-      : materializeSlides(snapshots, snapshotCursor)
+      const base = cursorSlides ?? materializeSlides(snapshots, get().snapshotCursor)
+      const slides = leaving?.inversePatches
+        ? applyPatches(base, leaving.inversePatches)
+        : materializeSlides(snapshots, snapshotCursor)
 
-    restoreSlides(slides, arriving.index, arriving)
-    get().setSnapshotCursor(snapshotCursor)
+      restoreSlides(slides, arriving.index, arriving)
+      get().setSnapshotCursor(snapshotCursor)
+    })
   },
 
-  async reDo() {
-    if (get().snapshotCursor >= get().snapshotLength - 1) return
+  reDo() {
+    return queueSnapshot(async () => {
+      if (get().snapshotCursor >= get().snapshotLength - 1) return
 
-    const snapshotCursor = get().snapshotCursor + 1
-    const snapshots: Snapshot[] = await db.snapshots.orderBy('id').toArray()
-    const arriving = snapshots[snapshotCursor]
-    if (!arriving) return
+      const snapshotCursor = get().snapshotCursor + 1
+      const snapshots: Snapshot[] = await db.snapshots.orderBy('id').toArray()
+      const arriving = snapshots[snapshotCursor]
+      if (!arriving) return
 
-    const base = cursorSlides ?? materializeSlides(snapshots, get().snapshotCursor)
-    const slides = arriving.patches
-      ? applyPatches(base, arriving.patches)
-      : materializeSlides(snapshots, snapshotCursor)
+      const base = cursorSlides ?? materializeSlides(snapshots, get().snapshotCursor)
+      const slides = arriving.patches
+        ? applyPatches(base, arriving.patches)
+        : materializeSlides(snapshots, snapshotCursor)
 
-    restoreSlides(slides, arriving.index, arriving)
-    get().setSnapshotCursor(snapshotCursor)
+      restoreSlides(slides, arriving.index, arriving)
+      get().setSnapshotCursor(snapshotCursor)
+    })
   },
+
+
 }))
