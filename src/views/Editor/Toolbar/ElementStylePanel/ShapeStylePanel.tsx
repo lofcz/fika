@@ -3,7 +3,7 @@ import styles from './ShapeStylePanel.module.scss'
 const cx = bindStyles(styles)
 import { memo, useCallback, useMemo, useState, useEffect } from 'react'
 import { useI18nContext } from '@/i18n/useI18nContext'
-import { useMainStore, useSlidesStore } from '@/store'
+import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 import { findHandleElement, getHandleElement, useHandleElementId, useHandleElementSelect, useHandleElementShallow } from '../common/handleElement'
 import type { GradientType, PPTShapeElement, Gradient } from '@/types/slides'
 import { type ShapePoolItem, SHAPE_LIST, SHAPE_PATH_FORMULAS } from '@/configs/shapes'
@@ -28,6 +28,8 @@ import GradientBar from '@/components/GradientBar'
 import FileInput from '@/components/FileInput'
 import { Icon } from '@/components/Icon'
 import { applyLiveGradient } from '@/utils/liveElementPaint'
+
+const patternImageRequests = new Map<string, symbol>()
 
 const ShapeStylePanel = memo(function ShapeStylePanel() {
   const { LL } = useI18nContext()
@@ -155,10 +157,21 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
 
   const uploadPattern = (files: FileList) => {
     const imageFile = files[0]
-    if (!imageFile) return
+    const slideId = selectCurrentSlide(useSlidesStore.getState())?.id
+    const elementId = handleElementId
+    if (!imageFile || !slideId || !elementId) return
+    const key = JSON.stringify([slideId, elementId])
+    const request = Symbol()
+    patternImageRequests.set(key, request)
     getImageDataURL(imageFile).then(dataURL => {
-      setPattern(dataURL)
-      commit({ pattern: dataURL })
+      if (patternImageRequests.get(key) !== request) return
+      const store = useSlidesStore.getState()
+      const element = store.slides.find(slide => slide.id === slideId)?.elements.find(el => el.id === elementId)
+      if (element?.type !== 'shape' || element.pattern === undefined) return
+      store.updateElement({ id: elementId, slideId, props: { pattern: dataURL } })
+      addHistorySnapshot()
+    }).finally(() => {
+      if (patternImageRequests.get(key) === request) patternImageRequests.delete(key)
     })
   }
 
