@@ -1,4 +1,3 @@
-import Clipboard from 'clipboard';
 import { getLL } from '@/i18n/getLL';
 import { decrypt } from '@/utils/crypto';
 import { getFikaPortalTarget } from '@/utils/portal';
@@ -7,26 +6,32 @@ import { getFikaPortalTarget } from '@/utils/portal';
  * Copy text to the clipboard.
  * @param text Text to copy
  */
-export const copyText = (text: string) => {
+export const copyText = (text: string): Promise<void> => {
   return new Promise((resolve, reject) => {
-    const portalTarget = getFikaPortalTarget();
-    const fakeElement = document.createElement('button');
-    const clipboard = new Clipboard(fakeElement, {
-      text: () => text,
-      action: () => 'copy',
-      container: portalTarget
-    });
-    clipboard.on('success', e => {
-      clipboard.destroy();
-      resolve(e);
-    });
-    clipboard.on('error', e => {
-      clipboard.destroy();
-      reject(e);
-    });
-    portalTarget.appendChild(fakeElement);
-    fakeElement.click();
-    portalTarget.removeChild(fakeElement);
+    const previousFocus = document.activeElement;
+    const selection = window.getSelection();
+    const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i).cloneRange()) : [];
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.readOnly = true;
+    textarea.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    try {
+      getFikaPortalTarget().appendChild(textarea);
+      textarea.select();
+      // Clipboard helpers may report selected text as success even when the
+      // browser rejects the write. Cut must observe the actual command result.
+      if (document.execCommand('copy')) resolve();
+      else reject(getLL().common.clipboard.unsupportedOrDenied());
+    } catch {
+      reject(getLL().common.clipboard.unsupportedOrDenied());
+    } finally {
+      textarea.remove();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
+      if (selection) {
+        selection.removeAllRanges();
+        for (const range of ranges) selection.addRange(range);
+      }
+    }
   });
 };
 

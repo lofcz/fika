@@ -68,15 +68,20 @@ export default () => {
     }
   }
 
-  const copySlide = () => {
+  const copySlide = async () => {
     const text = encrypt(JSON.stringify({
       type: 'slides',
       data: getSelectedSlides(),
     }))
 
-    copyText(text).then(() => {
+    try {
+      await copyText(text)
       useMainStore.getState().setThumbnailsFocus(true)
-    })
+      return true
+    } catch {
+      message.warning(getLL().common.clipboard.unsupportedOrDenied())
+      return false
+    }
   }
 
   const pasteSlide = () => {
@@ -121,10 +126,9 @@ export default () => {
     addHistorySnapshot()
   }
 
-  const cutSlide = () => {
+  const cutSlide = async () => {
     const targetSlidesId = [...getSelectedSlidesId()]
-    copySlide()
-    deleteSlide(targetSlidesId)
+    if (await copySlide()) deleteSlide(targetSlidesId)
   }
 
   const selectAllSlide = () => {

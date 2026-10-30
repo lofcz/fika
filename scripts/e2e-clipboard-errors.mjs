@@ -10,7 +10,7 @@ try {
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', e => errors.push(e.message))
-  await page.goto(`${url}?locale=en`)
+  await page.goto(`${url}?locale=en`, { waitUntil: 'domcontentloaded' })
   const canvas = page.locator('.viewport-wrapper').first()
   await canvas.waitFor({ state: 'visible' })
   await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
