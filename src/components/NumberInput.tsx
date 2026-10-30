@@ -61,19 +61,19 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
     if (disabled) return
     setNumber(input)
     const next = +input
-    if (isNaN(next) || next > max || next < min) return
+    if (!Number.isFinite(next) || next > max || next < min) return
     if (next !== value) onUpdateValue?.(next)
   }
 
   const checkAndEmitValue = useCallback(() => {
     if (disabled) return
     let next = +number
-    if (isNaN(next)) next = min
-    else if (next > max) next = max
+    if (!Number.isFinite(next)) next = Number.isFinite(value) ? value : Number.isFinite(min) ? min : 0
+    if (next > max) next = max
     else if (next < min) next = min
     setNumber(next)
     onUpdateValue?.(next)
-  }, [number, min, max, onUpdateValue, disabled])
+  }, [number, value, min, max, onUpdateValue, disabled])
 
   const handleEnter = (e: Event) => {
     checkAndEmitValue()
