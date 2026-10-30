@@ -5,6 +5,7 @@ import { internMediaSrc } from '@/utils/mediaIntern'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import message from '@/utils/message'
 import { getLL } from '@/i18n/getLL'
+import { isElementSelectable } from '@/utils/selection'
 
 const replacementRequests = new Map<string, symbol>()
 
@@ -14,8 +15,10 @@ export default () => {
   const replaceImage = async (files: FileList) => {
     const imageFile = files[0]
     const imageElement = selectHandleElement(useMainStore.getState())
-    const slideId = selectCurrentSlide(useSlidesStore.getState())?.id
-    if (!imageFile || imageElement?.type !== 'image' || !slideId) return
+    const slide = selectCurrentSlide(useSlidesStore.getState())
+    if (!imageFile || imageElement?.type !== 'image' || !slide
+      || !isElementSelectable(imageElement, slide.elements, useMainStore.getState().hiddenElementIdList)) return
+    const slideId = slide.id
     const imageElementId = imageElement.id
     const key = JSON.stringify([slideId, imageElementId])
     const request = Symbol()
@@ -29,8 +32,10 @@ export default () => {
       const { width, height } = await getImageSize(dataURL)
       if (replacementRequests.get(key) !== request) return
       const store = useSlidesStore.getState()
-      const current = store.slides.find(slide => slide.id === slideId)?.elements.find(el => el.id === imageElementId)
-      if (current?.type !== 'image') return
+      const currentSlide = store.slides.find(slide => slide.id === slideId)
+      const current = currentSlide?.elements.find(el => el.id === imageElementId)
+      if (current?.type !== 'image' || !currentSlide
+        || !isElementSelectable(current, currentSlide.elements, useMainStore.getState().hiddenElementIdList)) return
       const h = current.height
       const w = width * (h / height)
       const props: Partial<PPTImageElement> = {
