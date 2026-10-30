@@ -37,11 +37,11 @@ const CASES = [
   [21, 'Present mode hides editor operate chrome'],
   [22, 'Escape exits presentation mode'],
   [23, 'After exit, Dusk title is still light in the editor'],
-  [24, 'Clearing Dusk restores the default light theme'],
-  [25, 'Default edit title is dark ink'],
-  [26, 'Default present title is dark ink'],
-  [27, 'Default present title polarity matches the editor'],
-  [28, 'Default present title text still matches'],
+  [24, 'Reapplying Dusk keeps it; restoring the light document clears its selection'],
+  [25, 'Restored light document edit title is dark ink'],
+  [26, 'Restored light document present title is dark ink'],
+  [27, 'Restored light document present title polarity matches the editor'],
+  [28, 'Restored light document present title text still matches'],
   [29, 'Escape exits the default-theme presentation'],
   [30, 'Applying Ink selects the Ink theme card'],
   [31, 'Ink edit title is light ink'],
@@ -261,6 +261,10 @@ try {
   rec(4, 'Deselect shows the Design tab', await page.locator('[data-toolbar-tab=slideDesign]').filter({ visible: true }).count() > 0)
   rec(5, 'Design panel lists preset themes', await page.locator('[data-theme-id]').count() >= 6)
 
+  const lightDocument = await page.evaluate(() => {
+    const s = window.__FIKA_SLIDES__.getState()
+    return { slides: s.slides, theme: s.theme }
+  })
   await applyTheme(page, 'dusk')
   const duskSelected = await page.locator('[data-theme-id=dusk]').getAttribute('class')
   rec(6, 'Applying Dusk selects the Dusk theme card', /selected/.test(duskSelected || ''), { duskSelected })
@@ -310,18 +314,27 @@ try {
   await openDesign(page)
   await page.locator('[data-theme-id=dusk]').click()
   await sleep(400)
+  const duskReapplied = await page.locator('[data-theme-id=dusk]').getAttribute('class')
+  // Reapplying a preset is idempotent. Restore the original light document
+  // to continue checking dark text in both editor and presentation renderers.
+  await page.evaluate(document => {
+    const s = window.__FIKA_SLIDES__.getState()
+    s.setTheme(document.theme)
+    s.setSlides(document.slides)
+  }, lightDocument)
+  await sleep(400)
   const duskCleared = await page.locator('[data-theme-id=dusk]').getAttribute('class')
-  rec(24, 'Clearing Dusk restores the default light theme', !/selected/.test(duskCleared || ''), { duskCleared })
+  rec(24, 'Reapplying Dusk keeps it; restoring the light document clears its selection', /selected/.test(duskReapplied || '') && !/selected/.test(duskCleared || ''), { duskReapplied, duskCleared })
   const paperEdit = await snapEdit(page)
-  rec(25, 'Default edit title is dark ink', isDark(paperEdit.title), paperEdit.title?.ink)
+  rec(25, 'Restored light document edit title is dark ink', isDark(paperEdit.title), paperEdit.title?.ink)
   await enterPresent(page)
   const paperScreen = await snapScreen(page)
-  rec(26, 'Default present title is dark ink', isDark(paperScreen.title), paperScreen.title?.ink)
-  rec(27, 'Default present title polarity matches the editor', polarityMatch(paperEdit.title, paperScreen.title), {
+  rec(26, 'Restored light document present title is dark ink', isDark(paperScreen.title), paperScreen.title?.ink)
+  rec(27, 'Restored light document present title polarity matches the editor', polarityMatch(paperEdit.title, paperScreen.title), {
     edit: paperEdit.title?.ink,
     screen: paperScreen.title?.ink,
   })
-  rec(28, 'Default present title text still matches', /Jak se mas/.test(paperScreen.title?.text || ''), paperScreen.title)
+  rec(28, 'Restored light document present title text still matches', /Jak se mas/.test(paperScreen.title?.text || ''), paperScreen.title)
   await exitPresent(page)
   rec(29, 'Escape exits the default-theme presentation', await page.locator('[data-fika-screen]').count() === 0)
 

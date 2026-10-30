@@ -124,13 +124,15 @@ async function runPreviewSync(page) {
     }
     const thumbInk = (i = 0) => {
       const host = document.querySelectorAll('[data-thumbnail-slide]')[i]
-      const slide = host && host.querySelector('.screen-slide')
-      if (!slide) return { ink: 0, pending: true }
-      const text = (slide.textContent || '').replace(/\s+/g, ' ').trim()
-      const nodes = slide.querySelectorAll('path, img, canvas, table td').length
-      // Character-count proxy calibrated to the old pixel-ink thresholds
-      // (a sampled-pixel count scaled ~5x the text length at thumb size).
-      return { ink: text.length * 5 + nodes * 20, pending: false, textLen: text.length }
+      const canvas = host?.querySelector('canvas[data-canvas-painted]')
+      if (!canvas) return { ink: 0, pending: true }
+      // Count visible ink against this fixture's white slide background.
+      const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
+      let ink = 0
+      for (let p = 0; p < pixels.length; p += 4) {
+        if (pixels[p + 3] > 128 && Math.min(pixels[p], pixels[p + 1], pixels[p + 2]) < 200) ink++
+      }
+      return { ink, pending: false }
     }
     const waitPaint = async (i = 0) => {
       const t0 = Date.now()
