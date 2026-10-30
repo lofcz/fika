@@ -12,12 +12,13 @@ const ViewportBackground = memo(({ showGrid = true }: { showGrid?: boolean }) =>
   const gridLineSize = useMainStore(s => s.gridLineSize)
   const altKeyState = useKeyboardStore(s => s.altKeyState)
   const background = useSlidesStore(s => selectCurrentSlide(s)?.background)
+  const slideId = useSlidesStore(s => selectCurrentSlide(s)?.id)
   const { backgroundStyle } = useSlideBackgroundStyle(background)
   const previewGrid = altKeyState && !gridLineSize
   const effectiveSize = resolveGridSize(gridLineSize, altKeyState) || gridLineSize
 
   return (
-    <div className={cx('viewport-background')} data-live-background style={backgroundStyle}>
+    <div key={slideId} className={cx('viewport-background')} data-live-background style={backgroundStyle}>
       {showGrid && effectiveSize ? <GridLines size={effectiveSize} ephemeral={previewGrid} /> : null}
     </div>
   )

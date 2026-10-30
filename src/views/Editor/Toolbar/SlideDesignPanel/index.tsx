@@ -110,6 +110,7 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
 
   const background = useSlidesStore(selectCurrentSlideBackground) || DEFAULT_BACKGROUND
   const slideIndex = useSlidesStore(s => s.slideIndex)
+  const slideId = useSlidesStore(s => selectCurrentSlide(s)?.id)
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const theme = useSlidesStore(s => s.theme)
   const themes = useDesignThemes(s => s.themes)
@@ -374,6 +375,7 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
                 <div className={cx('field')}>
                   <span className={cx('field-label')}>{LL.editor.slideDesign.gradientAngle()}</span>
                   <Slider
+                    key={slideId}
                     min={0}
                     max={360}
                     step={15}
