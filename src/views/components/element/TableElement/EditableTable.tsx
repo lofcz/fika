@@ -18,7 +18,7 @@ import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/uti
 import emitter, { EmitterEvents, type TableCommand } from '@/utils/emitter';
 import message from '@/utils/message';
 import { getCellStyle, getTextStyle, formatText } from './utils';
-import { applyExcelPaste, insertColIntoGrid, locateTableCell, replaceTableCellText, type TableCellDraft } from './cellEdit';
+import { applyExcelPaste, insertColIntoGrid, insertRowIntoGrid, locateTableCell, replaceTableCellText, type TableCellDraft } from './cellEdit';
 import { areTableCellViewEqual, isTableCellHtmlEcho, numArrEqual, outlineEqual, tableGridStructureEqual, tableGridTextEqual, themeEqual } from './gridCompare';
 import useHideCells from './useHideCells';
 import useSubThemeColor from './useSubThemeColor';
@@ -423,13 +423,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const insertRow = (rowIndex: number) => {
-    const _tableCells = cloneCommittedGrid();
-    const rowCells: TableCell[] = [];
-    for (let i = 0; i < _tableCells[0].length; i++) {
-      rowCells.push(createEmptyCell());
-    }
-    _tableCells.splice(rowIndex, 0, rowCells);
-    setTableCells(_tableCells);
+    setTableCells(insertRowIntoGrid(takeCommittedGrid(), rowIndex, createEmptyCell));
   };
 
   const insertCol = (colIndex: number) => {

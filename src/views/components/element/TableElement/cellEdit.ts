@@ -75,9 +75,21 @@ export const applyExcelPaste = (
   })
 }
 
+// Extend only merges that cross the insertion boundary. A merge beginning
+// at that boundary moves with its original cells without changing its span.
+export const insertRowIntoGrid = (grid: TableCell[][], rowIndex: number, createCell: () => TableCell): TableCell[][] => {
+  const next = grid.map((row, i) => row.map(cell =>
+    i < rowIndex && i + cell.rowspan > rowIndex ? { ...cell, rowspan: cell.rowspan + 1 } : cell,
+  ))
+  next.splice(rowIndex, 0, Array.from({ length: grid[0]?.length ?? 0 }, createCell))
+  return next
+}
+
 export const insertColIntoGrid = (grid: TableCell[][], colIndex: number, createCell: () => TableCell): TableCell[][] => {
   return grid.map(row => {
-    const next = row.slice()
+    const next = row.map((cell, j) =>
+      j < colIndex && j + cell.colspan > colIndex ? { ...cell, colspan: cell.colspan + 1 } : cell,
+    )
     next.splice(colIndex, 0, createCell())
     return next
   })

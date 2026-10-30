@@ -33,6 +33,7 @@ const {
   replaceTableCellText,
   applyExcelPaste,
   insertColIntoGrid,
+  insertRowIntoGrid,
   growTable,
 } = await import(pathToFileURL(join(root, 'src/views/components/element/TableElement/cellEdit.ts')).href)
 const { classifyElementListSync } = await import(pathToFileURL(join(root, 'src/views/Editor/Canvas/elementListSync.ts')).href)
@@ -181,6 +182,18 @@ assert(grid[1][1].text === 'Bar' && grid.length === 2, 'excel paste does not mut
 const withCol = insertColIntoGrid(grid, 1, () => cell('col', ''))
 assert(withCol[0].length === 3 && withCol[0][1].id === 'col' && withCol[0][2].id === 'b', 'insertColIntoGrid inserts without shifting in place')
 assert(grid[0].length === 2 && grid[0][1].id === 'b', 'insertColIntoGrid does not mutate source rows')
+const mergedGrid = [
+  [cell('merge', 'Merged', { rowspan: 2, colspan: 2 }), cell('covered-a', '')],
+  [cell('covered-b', ''), cell('covered-c', '')],
+]
+for (const [insert, span] of [[insertRowIntoGrid, 'rowspan'], [insertColIntoGrid, 'colspan']]) {
+  const expanded = insert(mergedGrid, 1, () => cell('new', ''))
+  assert(expanded[0][0][span] === 3, 'insertion inside a merge expands its span')
+  assert(mergedGrid[0][0][span] === 2, 'insertion leaves the original merge unchanged for undo')
+  const appended = insert(mergedGrid, 2, () => cell('new', ''))
+  assert(appended[0][0][span] === 2, 'insertion after a merge preserves its span')
+}
+
 
 const textareaSrc = readFileSync(join(root, 'src/views/components/element/TableElement/CustomTextarea.tsx'), 'utf8')
 assert(textareaSrc.includes('onCommitValue'), 'CustomTextarea exposes an immediate commit callback')
