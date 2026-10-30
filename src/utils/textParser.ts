@@ -1,4 +1,11 @@
 import { decodeHtmlEntities, unescapeAgentNewlines } from './agentText';
+import { escapeText } from 'entities';
+
+/** Clipboard text is literal: only actual line endings become HTML breaks. */
+export const plainTextToParagraphs = (text: string) => text
+  .split(/\r\n|\r|\n/)
+  .map(line => `<div>${escapeText(line) || '<br>'}</div>`)
+  .join('');
 
 /**
  * Convert plain text to HTML string with paragraph information

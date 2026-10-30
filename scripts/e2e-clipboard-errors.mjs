@@ -39,6 +39,28 @@ try {
   await page.evaluate(() => navigator.clipboard.writeText('Clipboard still works'))
   await page.keyboard.press('Control+v')
   await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides[0].elements.some(el => el.type === 'text' && el.content.includes('Clipboard still works')))
+  await canvas.click({ position: { x: 700, y: 400 } })
+  const literal = '<b>literal</b> &amp; C:\u005c\u005cnew'
+  await page.evaluate(text => navigator.clipboard.writeText(text), literal)
+  await page.keyboard.press('Control+v')
+  await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides[0].elements.length === 2)
+  const pastedText = await page.evaluate(() => {
+    const el = window.__FIKA_SLIDES__.getState().slides[0].elements.at(-1)
+    return new DOMParser().parseFromString(el.content, 'text/html').body.textContent
+  })
+  assert.equal(pastedText, literal, 'Plain clipboard text preserves markup, entities, and backslashes')
+  await canvas.click({ position: { x: 700, y: 400 } })
+  await canvas.evaluate((element, text) => {
+    const dataTransfer = new DataTransfer()
+    dataTransfer.setData('text/plain', text)
+    element.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }))
+  }, literal)
+  await page.waitForFunction(() => window.__FIKA_SLIDES__.getState().slides[0].elements.length === 3)
+  const droppedText = await page.evaluate(() => {
+    const el = window.__FIKA_SLIDES__.getState().slides[0].elements.at(-1)
+    return new DOMParser().parseFromString(el.content, 'text/html').body.textContent
+  })
+  assert.equal(droppedText, literal, 'Dropped plain text preserves literal content')
   await page.waitForFunction(() => !!window.__FIKA_AGENTIC__)
   const result = await page.evaluate(async () => {
     window.__FIKA_SLIDES__.getState().setSlides([])
@@ -49,7 +71,7 @@ try {
   assert.equal(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slideIndex), 0, 'First insertion into an empty deck remains visible')
   assert.deepEqual(errors, [])
   console.log('PASS empty/malformed clipboard paste and clipboard permission feedback')
-  console.log('PASS normal paste after a denied read and first insertion into an empty deck')
+  console.log('PASS literal pasted/dropped text, normal paste after a denied read, and first insertion into an empty deck')
 } finally {
   await browser.close()
   child?.kill()

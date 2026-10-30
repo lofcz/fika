@@ -119,6 +119,7 @@ export const rstestFiles = [
   'tests/pptx-source-package.test.ts',
   'tests/slides-empty-deck.test.ts',
   'tests/paste-elements.test.ts',
+  'tests/clipboard-text.test.ts',
   'tests/mynaQrCode.test.ts',
   'tests/mynaTemplateLibrary.test.ts',
   'tests/mynaExportPages.test.ts',

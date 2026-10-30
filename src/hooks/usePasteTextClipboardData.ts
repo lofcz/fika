@@ -1,6 +1,6 @@
 import { useKeyboardStore } from '@/store'
 import { pasteCustomClipboardString } from '@/utils/clipboard'
-import { parseText2Paragraphs } from '@/utils/textParser'
+import { plainTextToParagraphs } from '@/utils/textParser'
 import { getImageDataURL, isSVGString, svg2File } from '@/utils/image'
 import { isValidURL } from '@/utils/common'
 import useCreateElement from '@/hooks/useCreateElement'
@@ -55,7 +55,7 @@ export default () => {
 
     else if (!onlyElements && !onlySlide) {
       if (useKeyboardStore.getState().shiftKeyState) {
-        const string = parseText2Paragraphs(clipboardData)
+        const string = plainTextToParagraphs(clipboardData)
         createTextElementFromClipboard(string)
       }
       else {
@@ -70,7 +70,7 @@ export default () => {
           getImageDataURL(file).then(dataURL => createImageElement(dataURL))
         }
         else {
-          const string = parseText2Paragraphs(clipboardData)
+          const string = plainTextToParagraphs(clipboardData)
           createTextElementFromClipboard(string)
         }
       }

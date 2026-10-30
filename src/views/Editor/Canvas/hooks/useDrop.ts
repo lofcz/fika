@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMainStore } from '@/store'
 import { imageSourceFromTransfer } from '@/utils/imageTransfer'
-import { parseText2Paragraphs } from '@/utils/textParser'
+import { plainTextToParagraphs } from '@/utils/textParser'
 import useCreateElement from '@/hooks/useCreateElement'
 import usePasteDataTransfer from '@/hooks/usePasteDataTransfer'
 
@@ -33,7 +33,7 @@ export default (elementRef: { current: HTMLElement | null }, onFrameDrop?: (even
       if (dataTransferFirstItem && dataTransferFirstItem.kind === 'string' && dataTransferFirstItem.type === 'text/plain') {
         dataTransferFirstItem.getAsString(text => {
           if (useMainStore.getState().disableHotkeys) return
-          const string = parseText2Paragraphs(text)
+          const string = plainTextToParagraphs(text)
           createTextElementRef.current({
             left: 0,
             top: 0,
