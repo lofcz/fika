@@ -1,5 +1,5 @@
 import type { PPTElement } from '@/types/slides';
-import { frameAncestors } from './nestedFrames';
+import { frameAncestors } from '@/utils/nestedFrames';
 
 export const removeAllRanges = () => {
   const selection = window.getSelection();

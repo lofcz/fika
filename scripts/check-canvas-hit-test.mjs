@@ -228,6 +228,15 @@ const marqueeHit = elementIdsIntersectingSelection(
 assert(marqueeHit.includes('a') && !marqueeHit.includes('far'), 'marquee search hits only overlapping elements')
 const marqueeMiss = elementIdsIntersectingSelection([box], { left: 0, top: 0, width: 10, height: 10 }, 2)
 assert(marqueeMiss.length === 0, 'marquee search misses a distant box')
+const frame = { ...box, id: 'frame', type: 'shape', frame: { clipContent: true }, lock: true }
+const framedChild = { ...box, id: 'framed-child', parentFrameId: 'frame', groupId: 'shared-group' }
+const outsideSibling = { ...box, id: 'outside-sibling', left: 800, groupId: 'shared-group' }
+for (const [parent, hidden] of [[frame, []], [{ ...frame, lock: false }, new Set(['frame'])]]) {
+  const groupHit = elementIdsIntersectingSelection([parent, framedChild, outsideSibling], { left: 800, top: 50, width: 50, height: 50 }, 1, hidden)
+  assert(groupHit.join() === 'outside-sibling', 'group expansion cannot reintroduce a child of a restricted frame')
+  const allHit = elementIdsIntersectingSelection([parent, framedChild, outsideSibling], { left: 0, top: 0, width: 1200, height: 300 }, 1, hidden)
+  assert(allHit.join() === 'outside-sibling', 'marquee excludes inherited frame restrictions for array and Set visibility inputs')
+}
 const clip = hitRectClipPath(underText, [overVideo])
 assert(typeof clip === 'string' && clip.startsWith('path(evenodd,'), 'selected media punches a hole in lower hit rects')
 assert(clip.includes('M80 40'), 'hole starts at the video origin in local coordinates')

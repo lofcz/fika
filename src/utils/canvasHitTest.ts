@@ -1,3 +1,4 @@
+import { isElementSelectable } from '@/utils/selection'
 import { frameClipPolygon } from '@/utils/nestedFrames'
 import type { PPTElement } from '@/types/slides';
 import { getElementRange } from '@/utils/element';
@@ -694,7 +695,8 @@ export function elementIdsIntersectingSelection(elements: PPTElement[], box: {
   width: number;
   height: number;
 }, canvasScale: number, hiddenIds: Iterable<string> = []): string[] {
-  const hidden = hiddenIds instanceof Set ? hiddenIds : new Set(hiddenIds);
+  const hidden = Array.from(hiddenIds);
+  const selectableIds = new Set(elements.filter(element => isElementSelectable(element, elements, hidden)).map(element => element.id));
   const hitIds = new Set<string>();
   const hitGroups = new Set<string>();
   if (!(box.width > 0) || !(box.height > 0)) return [];
@@ -702,7 +704,7 @@ export function elementIdsIntersectingSelection(elements: PPTElement[], box: {
   const elementById = new Map<string, PPTElement>();
   for (let i = 0; i < elements.length; i++) {
     const element = elements[i];
-    if (hidden.has(element.id) || element.lock) continue;
+    if (!selectableIds.has(element.id)) continue;
     const rect = elementVisualHitRect(element, canvasScale, i + 1);
     rects.push(rect);
     elementById.set(element.id, element);
@@ -719,7 +721,7 @@ export function elementIdsIntersectingSelection(elements: PPTElement[], box: {
   if (hitGroups.size) {
     for (const element of elements) {
       if (!element.groupId || !hitGroups.has(element.groupId)) continue;
-      if (hidden.has(element.id) || element.lock) continue;
+      if (!selectableIds.has(element.id)) continue;
       hitIds.add(element.id);
     }
   }

@@ -115,6 +115,7 @@ export const e2eScripts = [
   'scripts/e2e-group-resize-minimum.mjs',
   'scripts/e2e-keyboard-selection.mjs',
   'scripts/e2e-frame-keyboard.mjs',
+  'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-table-resize-floor.mjs',
   'scripts/e2e-resize-shapes.mjs',
   'scripts/e2e-shape-fixed-fit.mjs',
