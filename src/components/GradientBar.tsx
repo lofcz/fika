@@ -54,12 +54,7 @@ const GradientBar = memo((props: IGradientBarProps) => {
   })();
   const removePoint = useCallback((index: number) => {
     if (props.value.length <= 2) return;
-    let targetIndex = 0;
-    if (index === props.index) {
-      targetIndex = index - 1 < 0 ? 0 : index - 1;
-    } else if (props.index === props.value.length - 1) {
-      targetIndex = props.value.length - 2;
-    }
+    const targetIndex = Math.max(0, props.index - (index <= props.index ? 1 : 0));
     const values = props.value.filter((item, _index) => _index !== index);
     onUpdateIndexRef.current?.(targetIndex);
     onUpdateValueRef.current?.(values);
