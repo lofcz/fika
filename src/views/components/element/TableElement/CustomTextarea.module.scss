@@ -1,5 +1,6 @@
 .custom-textarea {
   border: 0;
+  white-space: pre-wrap;
   outline: 0;
   -webkit-user-modify: read-write-plaintext-only;
 }

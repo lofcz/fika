@@ -121,6 +121,7 @@ export const rstestFiles = [
   'tests/slides-empty-deck.test.ts',
   'tests/paste-elements.test.ts',
   'tests/clipboard-text.test.ts',
+  'tests/spreadsheet-clipboard.test.ts',
   'tests/mynaQrCode.test.ts',
   'tests/mynaTemplateLibrary.test.ts',
   'tests/mynaExportPages.test.ts',

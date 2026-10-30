@@ -58,15 +58,32 @@ export const pasteCustomClipboardString = (text: string) => {
 };
 
 export const pasteExcelClipboardString = (text: string): string[][] | null => {
-  const lines: string[] = text.split(/\r\n|\n|\r/);
-  if (lines[lines.length - 1] === '') lines.pop();
-  let colCount = -1;
+  // Spreadsheet clipboard TSV quotes cells containing tabs, newlines, or
+  // quotes. Splitting on separators first destroys those cell boundaries.
+  const source = text.replace(/\r\n?/g, '\n');
   const data: string[][] = [];
-  for (const index in lines) {
-    data[index] = lines[index].split('\t');
-    if (data[index].length === 1) return null;
-    if (colCount === -1) colCount = data[index].length;else if (colCount !== data[index].length) return null;
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    if (quoted) {
+      if (char !== '"') cell += char;
+      else if (source[i + 1] === '"') { cell += '"'; i++; }
+      else if (i + 1 === source.length || source[i + 1] === '\t' || source[i + 1] === '\n') quoted = false;
+      else return null;
+    } else if (char === '"' && cell === '') quoted = true;
+    else if (char === '\t') { row.push(cell); cell = ''; }
+    else if (char === '\n') { row.push(cell); data.push(row); row = []; cell = ''; }
+    else cell += char;
   }
+  if (quoted) return null;
+  if (cell || row.length || (source.length && !source.endsWith('\n'))) {
+    row.push(cell);
+    data.push(row);
+  }
+  const colCount = data[0]?.length ?? 0;
+  if (colCount < 2 || data.some(cells => cells.length !== colCount)) return null;
   return data;
 };
 
@@ -76,18 +93,22 @@ export const pasteHTMLTableClipboardString = (text: string): string[][] | null =
   const table = doc.querySelector('table');
   const data: string[][] = [];
   if (!table) return null;
-  const rows = table.querySelectorAll('tr');
-  for (const row of rows) {
-    const rowData = [];
-    const cells = row.querySelectorAll('td, th');
-    for (const cell of cells) {
-      const text = cell.textContent ? cell.textContent.trim() : '';
-      const colspan = parseInt(cell.getAttribute('colspan') || '1', 10);
-      for (let i = 0; i < colspan; i++) {
-        rowData.push(text);
+  const rows = Array.from(table.rows);
+  for (const [rowIndex, row] of rows.entries()) {
+    data[rowIndex] ??= [];
+    let column = 0;
+    for (const cell of Array.from(row.cells)) {
+      while (data[rowIndex][column] !== undefined) column++;
+      const text = cell.textContent?.trim() || '';
+      const rowSpan = Math.min(cell.rowSpan || rows.length - rowIndex, rows.length - rowIndex);
+      for (let r = rowIndex; r < rowIndex + rowSpan; r++) {
+        data[r] ??= [];
+        for (let c = column; c < column + cell.colSpan; c++) data[r][c] = text;
       }
+      column += cell.colSpan;
     }
-    if (rowData.length) data.push(rowData);
   }
-  return data.length ? data : null;
+  const width = data.reduce((max, row) => Math.max(max, row.length), 0);
+  if (!width) return null;
+  return data.map(row => Array.from({ length: width }, (_, column) => row[column] ?? ''));
 };

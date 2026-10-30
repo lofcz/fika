@@ -184,9 +184,9 @@ assert(grid[0].length === 2 && grid[0][1].id === 'b', 'insertColIntoGrid does no
 
 const textareaSrc = readFileSync(join(root, 'src/views/components/element/TableElement/CustomTextarea.tsx'), 'utf8')
 assert(textareaSrc.includes('onCommitValue'), 'CustomTextarea exposes an immediate commit callback')
-assert(textareaSrc.includes("onCommitValueRef.current?.(el.innerHTML, 'blur')"), 'CustomTextarea blur is an authoritative cell commit')
-assert(textareaSrc.includes("onCommitValueRef.current?.(el.innerHTML, 'unmount')"), 'CustomTextarea unmount reports a non-authoritative commit')
-assert(textareaSrc.includes('editorHtmlLooksEmpty'), 'idle empty remount does not wipe live cell HTML')
+assert(textareaSrc.includes("onCommitValueRef.current?.(el.innerText, 'blur')"), 'CustomTextarea blur is an authoritative cell commit')
+assert(textareaSrc.includes("onCommitValueRef.current?.(el.innerText, 'unmount')"), 'CustomTextarea unmount reports a non-authoritative commit')
+assert(textareaSrc.includes('!next.trim() && el.innerText.trim()'), 'idle empty remount does not wipe live cell text')
 assert(textareaSrc.includes('return () =>'), 'CustomTextarea flushes via the React ref cleanup, not a cancelled debounce')
 
 assert(editableSrc.includes('replaceTableCellText'), 'EditableTable commits through an immutable cell replace')

@@ -69,7 +69,7 @@ export const applyExcelPaste = (
     const excelRow = excel[i - startRow]
     return row.map((cell, j) => {
       if (j < startCol || j >= lastCol) return cell
-      const text = (excelRow[j - startCol] ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const text = excelRow[j - startCol] ?? ''
       return cell.text === text ? cell : { ...cell, text }
     })
   })
