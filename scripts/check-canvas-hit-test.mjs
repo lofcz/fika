@@ -303,6 +303,12 @@ const idlePlan = collectVisualHitPlan({
 assert(idlePlan.occluderRects.length === 0, 'nothing is an occluder before selection')
 assert(idlePlan.hitRects.map(r => r.id).join() === 'card,body,title', 'every box is hittable before selection')
 
+for (const hidden of [[], ['frame']]) {
+  const plan = collectVisualHitPlan({ elementList: [frame, framedChild], canvasScale: 1, hiddenElementIdList: hidden, activeElementIdList: ['framed-child'], editingElementId: 'framed-child', clipingImageElementId: '' })
+  assert([...plan.hitRects, ...plan.occluderRects, ...plan.contentRects].every(rect => rect.id !== 'framed-child'), 'restricted descendants contribute no pointer targets or occlusion holes')
+  assert(plan.hitRects.some(rect => rect.id === 'frame') === !hidden.length, 'locked frames stay available for unlocking while hidden frames have no target')
+}
+
 const canvasHitSrc = readFileSync(join(root, 'src/utils/canvasHitTest.ts'), 'utf8')
 const hitFnStart = canvasHitSrc.indexOf('export function hitTestVisualRects')
 const hitFnEnd = canvasHitSrc.indexOf('export const TEXT_EDITABLE_TYPES')

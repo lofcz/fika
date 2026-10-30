@@ -28,6 +28,7 @@ export default (
     const mainStore = useMainStore.getState()
     const keyboardStore = useKeyboardStore.getState()
     const list = elementListRef.current
+    if (!isElementSelectable(element, list, mainStore.hiddenElementIdList)) return
     const activeIds = mainStore.activeElementIdList
     const eventMods = eventModifierKeys(e)
     const ctrlKeyState = keyboardStore.ctrlKeyState || eventMods.ctrl

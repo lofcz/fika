@@ -1,5 +1,5 @@
 import { isElementSelectable } from '@/utils/selection'
-import { frameClipPolygon, intersectFramePolygons } from '@/utils/nestedFrames'
+import { frameAncestors, frameClipPolygon, intersectFramePolygons } from '@/utils/nestedFrames'
 import type { PPTElement } from '@/types/slides';
 import { getElementRange } from '@/utils/element';
 import { queryFika } from '@/utils/portal';
@@ -573,7 +573,7 @@ export function collectVisualHitPlan(input: VisualHitPlanInput): VisualHitPlan {
   const contentRects: VisualHitRect[] = [];
   for (let i = 0; i < input.elementList.length; i++) {
     const element = input.elementList[i];
-    if (hidden.has(element.id)) continue;
+    if (hidden.has(element.id) || frameAncestors(element, input.elementList).some(parent => parent.lock || hidden.has(parent.id))) continue;
     const rect = elementVisualHitRect(element, input.canvasScale, i + 1);
     const clip = frameClipPolygon(element, input.elementList)
     if (clip) rect.frameClip = clip.map(p => ({ x: p.x * input.canvasScale, y: p.y * input.canvasScale }))
