@@ -1,0 +1,42 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } })
+  const errors = []
+  const failures = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5173/'}?locale=en`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
+  for (const angle of [-180,-45,-10.04,-10,0,10,10.04,45,180]) for (const direction of [-1,1]) {
+    await page.evaluate(angle => {
+      const s = window.__FIKA_SLIDES__.getState()
+      s.setSlides([{ id: 'align-group', elements: ['left', 'right'].map((id, i) => ({ id, groupId: 'pair', type: 'shape', left: 100 + i * 300, top: 100, width: 400.04, height: 100.04, rotate: angle, viewBox: [200,100], path: 'M0 0H200V100H0Z', fill: '#ff0000', fixedRatio: false })) }])
+      s.updateSlideIndex(0)
+    },angle)
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await page.evaluate(() => {
+      window.__FIKA_MAIN__.setState({ activeElementIdList: ['left', 'right'], handleElementId: 'left', activeGroupElementId: 'left', editorAreaFocus: true })
+      window.__FIKA_MAIN__.getState().setToolbarState('elPosition')
+    })
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await page.evaluate(member => {
+      window.__FIKA_MAIN__.getState().setActiveGroupElementId(member ? 'left' : '')
+      window.__FIKA_MAIN__.getState().setToolbarState(member ? 'elPosition' : 'multiPosition')
+    }, true)
+    await page.waitForTimeout(300)
+    const panel=page.locator('[data-align="left"]').filter({visible:true}).first().locator('xpath=ancestor::section[1]/..')
+    const button=panel.getByRole('button',{name:direction===1?/\+45°/:/−45°/})
+    await button.click()
+    const actual=await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[0].rotate)
+    const raw=angle+direction*45
+    const expected=raw>180?raw-360:raw< -180?raw+360:raw
+    console.log({angle,direction,actual,expected})
+    const sibling=await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[1])
+    assert.equal(sibling.rotate,angle,'Rotating one group member preserves its sibling')
+    if(actual!==expected) failures.push({angle,direction,actual,expected})
+
+  }
+  assert.deepEqual(errors,[])
+  assert.deepEqual(failures,[],'Each rotation step must turn exactly 45 degrees, including across the boundary')
+} finally {await browser.close()}

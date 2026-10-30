@@ -7,6 +7,7 @@ import { getHandleElement, useHandleElementId, useHandleElementShallow } from '.
 import type { PPTElement } from '@/types/slides'
 import { ElementAlignCommands, ElementOrderCommands } from '@/types/edit'
 import { MIN_SIZE } from '@/configs/element'
+import { normalizeAngle } from '@/utils/element'
 import { textElementLocksSize } from '@/utils/placeholderLayout'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import useOrderElement from '@/hooks/useOrderElement'
@@ -133,11 +134,9 @@ const ElementPositionPanel = memo(function ElementPositionPanel() {
   }
 
   const updateRotate45 = (command: '+' | '-') => {
-    let next = Math.floor(rotate / 45) * 45
-    if (command === '+') next = next + 45
-    else if (command === '-') next = next - 45
-    if (next < -180) next = -180
-    if (next > 180) next = 180
+    const live = getHandleElement()
+    if (!live || !('rotate' in live)) return
+    const next = normalizeAngle(live.rotate + (command === '+' ? 45 : -45))
     commit({ rotate: next } as Partial<PPTElement>)
   }
 
