@@ -68,6 +68,8 @@ const Slider = memo((vrProps: ISliderProps) => {
   const endRef = useRef(end)
   const handlerRef = useRef<'start' | 'end'>('end')
   const draggingRef = useRef(false)
+  const removeDragListenersRef = useRef<() => void>(() => {})
+  const [dragRevision, setDragRevision] = useState(0)
   const onInputRef = useRef(vrProps.onInput)
   const onUpdateValueRef = useRef(vrProps.onUpdateValue)
   onInputRef.current = vrProps.onInput
@@ -77,7 +79,7 @@ const Slider = memo((vrProps: ISliderProps) => {
     onInputRef.current?.(next as never)
   }, LIVE_INPUT_MS), [])
 
-  useEffect(() => () => emitInput.cancel(), [emitInput])
+  useEffect(() => () => { emitInput.cancel(); removeDragListenersRef.current() }, [emitInput])
 
   const assignPercentage = (next: number) => {
     percentageRef.current = next
@@ -129,7 +131,7 @@ const Slider = memo((vrProps: ISliderProps) => {
       assignStart(clampPercentage((value[0] - min) / (max - min) * 100))
       assignEnd(clampPercentage((value[1] - min) / (max - min) * 100))
     }
-  }, [value, min, max])
+  }, [value, min, max, dragRevision])
 
   const getPercentage = (e: MouseEvent | TouchEvent) => {
     if (!sliderRef.current) return 0
@@ -169,32 +171,43 @@ const Slider = memo((vrProps: ISliderProps) => {
   const stopDragging = () => {
     draggingRef.current = false
     emitInput.flush()
+    removeDragListenersRef.current()
+  }
+
+  const cancelDragging = () => {
+    draggingRef.current = false
+    emitInput.cancel()
+    removeDragListenersRef.current()
+    setDragRevision(revision => revision + 1)
   }
 
   const updateRangeEnd = (e: MouseEvent | TouchEvent) => {
     updateRange(e)
     stopDragging()
     onUpdateValueRef.current?.(readRangeValue() as never)
-    document.removeEventListener('mousemove', updateRange)
-    document.removeEventListener('touchmove', updateRange)
-    document.removeEventListener('mouseup', updateRangeEnd)
-    document.removeEventListener('touchend', updateRangeEnd)
   }
 
   const updatePercentageEnd = (e: MouseEvent | TouchEvent) => {
     updatePercentage(e)
     stopDragging()
     onUpdateValueRef.current?.(getNewValue(percentageRef.current) as never)
-    document.removeEventListener('mousemove', updatePercentage)
-    document.removeEventListener('touchmove', updatePercentage)
-    document.removeEventListener('mouseup', updatePercentageEnd)
-    document.removeEventListener('touchend', updatePercentageEnd)
   }
 
   const handleMousedown = (e: React.MouseEvent | React.TouchEvent) => {
     if (disabled) return
     const native = e.nativeEvent
+    removeDragListenersRef.current()
     draggingRef.current = true
+    const move = range ? updateRange : updatePercentage
+    const end = range ? updateRangeEnd : updatePercentageEnd
+    removeDragListenersRef.current = () => {
+      document.removeEventListener('mousemove', move)
+      document.removeEventListener('touchmove', move)
+      document.removeEventListener('mouseup', end)
+      document.removeEventListener('touchend', end)
+      document.removeEventListener('touchcancel', cancelDragging)
+    }
+    document.addEventListener('touchcancel', cancelDragging)
 
     if (range) {
       const next = getPercentage(native)

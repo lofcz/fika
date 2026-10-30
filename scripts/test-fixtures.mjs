@@ -55,6 +55,7 @@ export const e2eScripts = [
   'scripts/e2e-position-rotation-step.mjs',
   'scripts/e2e-number-input-disabled.mjs',
   'scripts/e2e-slider-touch.mjs',
+  'scripts/e2e-slider-touch-cancel.mjs',
   'scripts/e2e-number-input-finite.mjs',
   'scripts/e2e-number-input-unchanged.mjs',
   'scripts/e2e-number-input-step-bounds.mjs',
