@@ -5,7 +5,7 @@ import { useMainStore, useSlidesStore } from '@/store'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { drainCommitQueue } from '@/utils/commitQueue'
-import { loadPhotoFrameImage } from './photoFrameUpload'
+import { beginPhotoFrameReplacement, loadPhotoFrameImage } from './photoFrameUpload'
 import type { PPTImageElement } from '@/types/slides'
 import { FRAME_LAYOUTS, FRAME_PLACEHOLDER, createPhotoFrames, frameCells, fillPhotoFrame, layoutPhotoFrames, type FrameLayout } from './photoFrames'
 import { photoFrameLabels } from './photoFrameLabels'
@@ -49,14 +49,16 @@ export default function MynaFramesPanel({ query = '', kind = 'all', compact = fa
   const fill = async (srcOrFile: string | File, target = current) => {
     if (!target || locked) return
     const pageId = page.id, oldSrc = target.src
+    const request = beginPhotoFrameReplacement(pageId, target.id)
     setBusy(true); setFailed(false)
     try {
       const { src, ...size } = await loadPhotoFrameImage(srcOrFile)
+      if (!request.isCurrent()) return
       const latest = useSlidesStore.getState().slides.find(s => s.id === pageId)?.elements.find(e => e.id === target.id)
       // An asynchronous upload must not undo deletion, replacement, or newer geometry edits.
       if (latest?.type === 'image' && latest.photoFrame && latest.src === oldSrc && !latest.lock) commit([fillPhotoFrame(latest, src, size.width, size.height)], pageId)
-    } catch { setFailed(true) }
-    finally { setBusy(false) }
+    } catch { if (request.isCurrent()) setFailed(true) }
+    finally { request.finish(); setBusy(false) }
   }
   const assets = [...new Set(slides.flatMap(s => s.elements.filter((e): e is PPTImageElement => e.type === 'image' && !e.photoFrame?.empty).map(e => e.src)))].filter(src => src !== FRAME_PLACEHOLDER)
   const layouts = FRAME_LAYOUTS.filter(layout => (kind === 'all' || (kind === 'frames' ? frameCells(layout).length === 1 : frameCells(layout).length > 1)) && t[layout].toLocaleLowerCase().includes(query.toLocaleLowerCase().trim()))

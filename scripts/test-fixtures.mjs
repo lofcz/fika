@@ -120,6 +120,7 @@ export const e2eScripts = [
   'scripts/e2e-frame-layer-cycle.mjs',
   'scripts/e2e-photo-frame-lock-drop.mjs',
   'scripts/e2e-photo-frame-drop-order.mjs',
+  'scripts/e2e-photo-frame-mixed-load.mjs',
   'scripts/e2e-photo-frame-picker-lock.mjs',
   'scripts/e2e-frame-marquee-clipping.mjs',
   'scripts/e2e-rotated-marquee.mjs',
