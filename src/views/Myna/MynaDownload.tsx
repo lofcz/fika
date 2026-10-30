@@ -1,5 +1,5 @@
 import { useI18nContext } from '@/i18n/useI18nContext'
-import { useRef, useState } from 'react'
+import { useRef, useState, useLayoutEffect } from 'react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import Modal from '@/components/Modal'
@@ -35,6 +35,12 @@ export default function MynaDownload({ onClose }: { onClose: () => void }) {
   const [scale, setScale] = useState(1)
   const [quality, setQuality] = useState(.92)
   const [busy, setBusy] = useState(false)
+  const svgNoticeRef = useRef<HTMLParagraphElement>(null)
+  useLayoutEffect(() => {
+    // Disabling the download button drops keyboard focus onto the page body.
+    // Keep focus in the retained result dialog so Escape and Tab still work.
+    if (svgNotice && !busy) svgNoticeRef.current?.focus({ preventScroll: true })
+  }, [svgNotice, busy])
   const [progress, setProgress] = useState<{ current: number; total: number } | 'zip' | null>(null)
   const [error, setError] = useState<'failed' | 'imageFailed' | 'imageTimeout' | null>(null)
   const width = useSlidesStore(s => s.viewportSize)
@@ -124,7 +130,7 @@ export default function MynaDownload({ onClose }: { onClose: () => void }) {
     {(format === 'png' || format === 'webp' || format === 'svg') && <label><span><input type="checkbox" disabled={busy} checked={transparent} onChange={e => setTransparent(e.target.checked)} /> {t.transparent()}</span></label>}
     {format !== 'png' && format !== 'svg' && <label>{t.quality({ percent: Math.round(quality * 100) })}<input disabled={busy} type="range" min={.1} max={1} step={.01} value={quality} onChange={e => setQuality(Number(e.target.value))} /></label>}
     {tooLarge && <p role="alert">{t.tooLarge()}</p>}
-    {svgNotice && <p role="status">{t.svgComplete()} {t.svgFallback()}</p>}
+    {svgNotice && <p ref={svgNoticeRef} tabIndex={-1} role="status">{t.svgComplete()} {t.svgFallback()}</p>}
     {error && <p role="alert">{t[error]()}</p>}
     <p role="status" aria-live="polite">{cancelling ? t.cancellingExport() : progress === 'zip' ? t.zipProgress() : progress ? t.rendering(progress) : ''}</p>
     <button className={cx('myna-primary')} disabled={busy || tooLarge || !!invalidRange || emptySelection} onClick={() => void download()}>{busy ? t.preparing() : t.download()}</button>

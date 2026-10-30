@@ -15,7 +15,10 @@ async function download(format = 'svg', scope = 'current') {
   await modal.getByRole('button', { name: 'Download', exact: true }).click()
   const file = await pending.catch(async error => { console.error('Export failure', format, scope, await modal.innerText(), await page.evaluate(() => window.__FIKA_MAIN__.getState().activeElementIdList)); throw error })
   const bytes = await readFile(await file.path())
-  if (await modal.count()) await page.keyboard.press('Escape')
+  if (await modal.count()) {
+    await page.waitForFunction(() => { const modal = document.querySelector('.myna-download'); return !modal || modal.contains(document.activeElement) })
+    await page.keyboard.press('Escape')
+  }
   await modal.waitFor({ state: 'detached' })
   return bytes
 }

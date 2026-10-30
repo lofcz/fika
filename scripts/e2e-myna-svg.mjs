@@ -22,6 +22,7 @@ async function downloadSvg(scope) {
 try {
   await page.goto(`${base}/?mode=myna&locale=en`, { waitUntil: 'networkidle' })
   await page.locator('[data-myna-workspace]').waitFor()
+  const viewport = await page.evaluate(() => { const s = window.__FIKA_SLIDES__.getState(); return { width: s.viewportSize, height: s.viewportSize * s.viewportRatio } })
   const first = await downloadSvg()
   assert.match(first.name, /\.svg$/)
   assert.match(first.text, /<text /)
@@ -30,10 +31,10 @@ try {
   const parsed = await page.evaluate(async svg => {
     const d = new DOMParser().parseFromString(svg, 'image/svg+xml')
     const image = new Image(); image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`; await image.decode()
-    const c = document.createElement('canvas'); c.width = c.height = 1080; const ctx = c.getContext('2d'); ctx.drawImage(image, 0, 0)
-    return { error: d.querySelector('parsererror')?.textContent, width: image.naturalWidth, text: d.querySelector('text')?.textContent, corner: [...ctx.getImageData(1, 1, 1, 1).data] }
+    const c = document.createElement('canvas'); c.width = image.naturalWidth; c.height = image.naturalHeight; const ctx = c.getContext('2d'); ctx.drawImage(image, 0, 0)
+    return { error: d.querySelector('parsererror')?.textContent, width: image.naturalWidth, height: image.naturalHeight, text: d.querySelector('text')?.textContent, corner: [...ctx.getImageData(1, 1, 1, 1).data] }
   }, first.text)
-  assert.equal(parsed.error, undefined); assert.equal(parsed.width, 1080); assert.ok(parsed.text); assert.equal(parsed.corner[3], 255)
+  assert.equal(parsed.error, undefined); assert.equal(parsed.width, viewport.width); assert.equal(parsed.height, viewport.height); assert.ok(parsed.text); assert.equal(parsed.corner[3], 255)
   await mkdir('output/myna', { recursive: true })
   const preview = await browser.newPage({viewport:{width:1080,height:1080}})
   await preview.goto(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(first.text)}`)
