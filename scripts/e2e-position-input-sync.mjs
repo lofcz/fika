@@ -57,13 +57,16 @@ try {
     await page.waitForFunction(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[0].left===125)
     await x.locator('xpath=..').locator('span').last().click()
     await page.waitForFunction(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[0].left===120)
-    for(const text of ['12.5','-12.5','.5','-.5']) {
+    for(const delay of [1,40]) for(const text of ['12.5','-12.5','.5','-.5']) {
       await x.fill('')
-      await x.pressSequentially(text,{delay:40})
+      await x.pressSequentially(text,{delay})
       assert.equal(await x.inputValue(),text,'Decimal and sign characters remain while typing')
       await x.press('Enter')
       assert.equal(await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[0].left),Number(text),'Decimal typing commits the intended coordinate')
     }
+    await x.focus()
+    await page.evaluate(()=>window.__FIKA_SLIDES__.getState().updateElement({id:'left',props:{left:321}}))
+    await page.waitForFunction(input=>input.value==='321',await x.elementHandle())
     console.log('PASS numeric input synchronization, decimal typing, bounds and step controls')
   }
   assert.deepEqual(errors,[])

@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './NumberInput.module.scss'
 const cx = bindStyles(styles)
-import { type CSSProperties, type ReactNode, useCallback, memo, useState, useEffect } from 'react'
+import { type CSSProperties, type ReactNode, useCallback, useRef, memo, useState, useEffect } from 'react'
 
 export type INumberInputProps = {
   value: number
@@ -49,11 +49,24 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
 
   const [number, setNumber] = useState<string | number>(value)
   const [focused, setFocused] = useState(false)
+  const pendingValues = useRef<number[]>([])
 
   useEffect(() => {
-    // A parent echo of the same numeric value must preserve drafts like "12.".
+    // A delayed acknowledgement must not replace a newer typing draft.
+    const acknowledged = pendingValues.current.lastIndexOf(value)
+    if (acknowledged >= 0) {
+      pendingValues.current.splice(0, acknowledged + 1)
+      return
+    }
+    pendingValues.current = []
     if (value !== +number) setNumber(value)
   }, [value])
+
+  const emitValue = useCallback((next: number) => {
+    if (next === value) return
+    pendingValues.current.push(next)
+    onUpdateValue?.(next)
+  }, [value, onUpdateValue])
 
   // Prop synchronization must not emit a stale value back to the parent.
   // Only user actions may commit a number.
@@ -62,7 +75,7 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
     setNumber(input)
     const next = +input
     if (!Number.isFinite(next) || next > max || next < min) return
-    if (next !== value) onUpdateValue?.(next)
+    emitValue(next)
   }
 
   const checkAndEmitValue = useCallback(() => {
@@ -72,8 +85,8 @@ const NumberInput = memo((vrProps: INumberInputProps) => {
     if (next > max) next = max
     else if (next < min) next = min
     setNumber(next)
-    if (next !== value) onUpdateValue?.(next)
-  }, [number, value, min, max, onUpdateValue, disabled])
+    emitValue(next)
+  }, [number, value, min, max, emitValue, disabled])
 
   const handleEnter = (e: Event) => {
     checkAndEmitValue()
