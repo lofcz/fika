@@ -25,6 +25,8 @@ const GradientBar = memo((props: IGradientBarProps) => {
   const barRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
   const removeDragListenersRef = useRef<() => void>(() => {});
+  const valueRef = useRef(props.value);
+  valueRef.current = props.value;
   const onInputRef = useRef(props.onInput);
   const onUpdateValueRef = useRef(props.onUpdateValue);
   const onUpdateIndexRef = useRef(props.onUpdateIndex);
@@ -67,7 +69,7 @@ const GradientBar = memo((props: IGradientBarProps) => {
     let isMouseDown = true;
     let current = points;
     draggingRef.current = true;
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
       if (!isMouseDown) return;
       if (!barRef.current) return;
       let pos = Math.round((e.clientX - barRef.current.getBoundingClientRect().left) / barRef.current.clientWidth * 100);
@@ -99,13 +101,22 @@ const GradientBar = memo((props: IGradientBarProps) => {
       onUpdateIndexRef.current?.(targetIndex);
       onUpdateValueRef.current?.(_points);
     };
+    const onCancel = () => {
+      draggingRef.current = false;
+      emitInput.cancel();
+      removeDragListenersRef.current();
+      setPoints(valueRef.current);
+      onInputRef.current?.(valueRef.current);
+    };
     removeDragListenersRef.current = () => {
       isMouseDown = false;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onEnd);
+      document.removeEventListener('pointercancel', onCancel);
     };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onEnd);
+    document.addEventListener('pointercancel', onCancel);
   }, [points, emitInput]);
   const addPoint = useCallback((e: ReactMouseEvent) => {
     if (props.value.length >= 6) return;
@@ -130,9 +141,9 @@ const GradientBar = memo((props: IGradientBarProps) => {
         addPoint($event);
       }} />{points.map((item, i) => <div className={cx('point', {
         'active': index === i
-      })} key={item.pos + '-' + i} style={{
+      })} key={i} style={{
         backgroundColor: item.color,
         left: `calc(${item.pos}% - 5px)`
-      }} onMouseDown={(event) => { if (event.button !== 0) return; movePoint(i) }} onContextMenu={(event) => { event.preventDefault(); removePoint(i) }} />)}</div></>;
+      }} onPointerDown={(event) => { if (event.button !== 0) return; movePoint(i) }} onContextMenu={(event) => { event.preventDefault(); removePoint(i) }} />)}</div></>;
 });
 export default GradientBar;

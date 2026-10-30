@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage({ viewport: { width: 1500, height: 1000 }, hasTouch: true })
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5173/'}?locale=en`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
+  const cdp = await page.context().newCDPSession(page)
+  const failures = []
+  for (const target of ['shape', 'background']) {
+    await page.evaluate(target => {
+      const gradient = i => ({ type: 'linear', rotate: i * 45, colors: [{ pos: 0, color: i ? '#00ff00' : '#ff0000' }, { pos: 100, color: '#0000ff' }] })
+      const slides = window.__FIKA_SLIDES__.getState()
+      slides.setSlides([0, 1].map(i => ({ id: `stops-${i}`, background: { type: 'gradient', gradient: gradient(i) }, elements: [0, 1].map(j => ({
+        id: `shape-${i}-${j}`, type: 'shape', left: 100 + j * 300, top: 100, width: 200, height: 100, rotate: 0,
+        viewBox: [200, 100], path: 'M0 0H200V100H0Z', fill: '#ffffff', fixedRatio: false, gradient: gradient(j),
+      })) })))
+      slides.updateSlideIndex(0)
+      const main = window.__FIKA_MAIN__.getState()
+      main.setActiveElementIdList(target === 'shape' ? ['shape-0-0'] : [])
+      main.setEditorareaFocus(true)
+    }, target)
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await page.evaluate(target => window.__FIKA_MAIN__.getState().setToolbarState(target === 'shape' ? 'elStyle' : 'slideDesign'), target)
+    const bar = page.locator('[class*="gradient-bar"]:visible')
+    await bar.scrollIntoViewIfNeeded()
+    const box = await bar.boundingBox()
+    assert.ok(box)
+    const point = await bar.locator('[class*="point"]').first().boundingBox()
+    assert.ok(point)
+    const touch = x => ({ x, y: point.y + point.height / 2, id: 1, radiusX: 2, radiusY: 2, force: 1 })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(point.x + point.width / 2)] })
+    for (let step = 1; step <= 10; step++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [touch(box.x + box.width * .4 * step / 10)] })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    const after = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides)
+    const touched = target === 'shape' ? after[0].elements[0].gradient.colors : after[0].background.gradient.colors
+    console.log(target, { touched })
+    try { assert.equal(touched[0].pos, 40, `${target}: touch moves the color stop`) }
+    catch (error) { failures.push(error.message) }
+    const currentPoint = await bar.locator('[class*="point"]').first().boundingBox()
+    const savedPaint = await page.evaluate(target => target === 'shape'
+      ? document.getElementById('editable-gradient-shape-0-0').innerHTML
+      : document.querySelector('[data-live-background]').style.backgroundImage, target)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touch(currentPoint.x + currentPoint.width / 2)] })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [touch(box.x + box.width * .7)] })
+    await page.waitForTimeout(80)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] })
+    await page.waitForTimeout(80)
+    const canceled = await page.evaluate(target => ({
+      paint: target === 'shape' ? document.getElementById('editable-gradient-shape-0-0').innerHTML : document.querySelector('[data-live-background]').style.backgroundImage,
+      colors: target === 'shape' ? window.__FIKA_SLIDES__.getState().slides[0].elements[0].gradient.colors : window.__FIKA_SLIDES__.getState().slides[0].background.gradient.colors,
+    }), target)
+    assert.deepEqual(canceled.colors, touched, 'Canceling the next touch leaves saved stops unchanged')
+    assert.equal(canceled.paint, savedPaint, 'Canceling restores the painted gradient')
+    const nextPoint = await bar.locator('[class*="point"]').first().boundingBox()
+    await page.mouse.move(nextPoint.x + nextPoint.width / 2, nextPoint.y + nextPoint.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width * .6, nextPoint.y + nextPoint.height / 2, { steps: 4 })
+    await page.mouse.up()
+    const colors = await page.evaluate(target => {
+      const slides = window.__FIKA_SLIDES__.getState().slides
+      return target === 'shape' ? slides[0].elements[0].gradient.colors : slides[0].background.gradient.colors
+    }, target)
+    assert.ok(Math.abs(colors[0].pos - 60) <= 1, 'A fresh drag still updates the selected gradient')
+  }
+  assert.deepEqual(failures, [])
+  assert.deepEqual(errors, [])
+} finally { await browser.close() }
