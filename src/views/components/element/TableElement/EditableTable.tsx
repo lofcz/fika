@@ -18,7 +18,7 @@ import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/uti
 import emitter, { EmitterEvents, type TableCommand } from '@/utils/emitter';
 import message from '@/utils/message';
 import { getCellStyle, getTextStyle, formatText } from './utils';
-import { applyExcelPaste, insertColIntoGrid, insertRowIntoGrid, locateTableCell, replaceTableCellText, type TableCellDraft } from './cellEdit';
+import { applyExcelPaste, deleteTableGridLine, insertColIntoGrid, insertRowIntoGrid, locateTableCell, replaceTableCellText, type TableCellDraft } from './cellEdit';
 import { areTableCellViewEqual, isTableCellHtmlEcho, numArrEqual, outlineEqual, tableGridStructureEqual, tableGridTextEqual, themeEqual } from './gridCompare';
 import useHideCells from './useHideCells';
 import useSubThemeColor from './useSubThemeColor';
@@ -379,42 +379,11 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const deleteRow = (rowIndex: number) => {
-    const _tableCells = cloneCommittedGrid();
-    const targetCells = tableCells[rowIndex];
-    const hideCellsPos = [];
-    for (let i = 0; i < targetCells.length; i++) {
-      if (isHideCell(rowIndex, i)) hideCellsPos.push(i);
-    }
-    for (const pos of hideCellsPos) {
-      for (let i = rowIndex; i >= 0; i--) {
-        if (!isHideCell(i, pos)) {
-          _tableCells[i][pos].rowspan = _tableCells[i][pos].rowspan - 1;
-          break;
-        }
-      }
-    }
-    _tableCells.splice(rowIndex, 1);
-    setTableCells(_tableCells);
+    setTableCells(deleteTableGridLine(takeCommittedGrid(), rowIndex, 'row'));
   };
 
   const deleteCol = (colIndex: number) => {
-    const _tableCells = cloneCommittedGrid();
-    const hideCellsPos = [];
-    for (let i = 0; i < tableCells.length; i++) {
-      if (isHideCell(i, colIndex)) hideCellsPos.push(i);
-    }
-    for (const pos of hideCellsPos) {
-      for (let i = colIndex; i >= 0; i--) {
-        if (!isHideCell(pos, i)) {
-          _tableCells[pos][i].colspan = _tableCells[pos][i].colspan - 1;
-          break;
-        }
-      }
-    }
-    setTableCells(_tableCells.map(item => {
-      item.splice(colIndex, 1);
-      return item;
-    }));
+    setTableCells(deleteTableGridLine(takeCommittedGrid(), colIndex, 'col'));
     const nextCols = [...colSizeListRef.current];
     nextCols.splice(colIndex, 1);
     setColSizeList(nextCols);

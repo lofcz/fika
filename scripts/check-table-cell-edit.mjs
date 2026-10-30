@@ -34,6 +34,7 @@ const {
   applyExcelPaste,
   insertColIntoGrid,
   insertRowIntoGrid,
+  deleteTableGridLine,
   growTable,
 } = await import(pathToFileURL(join(root, 'src/views/components/element/TableElement/cellEdit.ts')).href)
 const { classifyElementListSync } = await import(pathToFileURL(join(root, 'src/views/Editor/Canvas/elementListSync.ts')).href)
@@ -182,6 +183,21 @@ assert(grid[1][1].text === 'Bar' && grid.length === 2, 'excel paste does not mut
 const withCol = insertColIntoGrid(grid, 1, () => cell('col', ''))
 assert(withCol[0].length === 3 && withCol[0][1].id === 'col' && withCol[0][2].id === 'b', 'insertColIntoGrid inserts without shifting in place')
 assert(grid[0].length === 2 && grid[0][1].id === 'b', 'insertColIntoGrid does not mutate source rows')
+const deletionGrid = [
+  [cell('anchor', 'Keep', { rowspan: 2, colspan: 2, style: { backcolor: '#123456' } }), cell('hidden-a', ''), cell('right-a', '')],
+  [cell('hidden-b', ''), cell('hidden-c', ''), cell('right-b', '')],
+  [cell('bottom-a', ''), cell('bottom-b', ''), cell('bottom-c', '')],
+]
+const originalDeletionGrid = JSON.stringify(deletionGrid)
+for (const axis of ['row', 'col']) {
+  for (const index of [0, 1, 2]) {
+    const next = deleteTableGridLine(deletionGrid, index, axis)
+    assert(next[0][0].id === 'anchor' && next[0][0].text === 'Keep', 'surviving merges preserve their anchor identity and text')
+    assert(next[0][0][axis === 'row' ? 'rowspan' : 'colspan'] === (index < 2 ? 1 : 2), 'deletion shrinks only intersected merges')
+    assert(JSON.stringify(deletionGrid) === originalDeletionGrid, 'deletion preserves source data for undo')
+  }
+}
+
 const mergedGrid = [
   [cell('merge', 'Merged', { rowspan: 2, colspan: 2 }), cell('covered-a', '')],
   [cell('covered-b', ''), cell('covered-c', '')],

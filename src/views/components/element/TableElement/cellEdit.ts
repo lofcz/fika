@@ -94,3 +94,31 @@ export const insertColIntoGrid = (grid: TableCell[][], colIndex: number, createC
     return next
   })
 }
+
+export const deleteTableGridLine = (grid: TableCell[][], index: number, axis: 'row' | 'col'): TableCell[][] => {
+  const length = axis === 'row' ? grid.length : grid[0]?.length ?? 0
+  if (length <= 1 || index < 0 || index >= length) return grid
+  const next = grid.map(row => row.slice())
+  const covered = new Set<string>()
+  for (let r = 0; r < grid.length; r++) {
+    for (let c = 0; c < grid[r].length; c++) {
+      if (covered.has(`${r}_${c}`)) continue
+      const cell = grid[r][c]
+      for (let y = r; y < r + cell.rowspan; y++) {
+        for (let x = c; x < c + cell.colspan; x++) covered.add(`${y}_${x}`)
+      }
+      const start = axis === 'row' ? r : c
+      const span = axis === 'row' ? cell.rowspan : cell.colspan
+      if (start > index || start + span <= index || span === 1) continue
+      const reduced = axis === 'row' ? { ...cell, rowspan: span - 1 } : { ...cell, colspan: span - 1 }
+      // If the anchor is deleted, carry its content and styling into the
+      // surviving portion before removing the requested grid line.
+      const targetRow = r + (axis === 'row' && start === index ? 1 : 0)
+      const targetCol = c + (axis === 'col' && start === index ? 1 : 0)
+      next[targetRow][targetCol] = reduced
+    }
+  }
+  if (axis === 'row') next.splice(index, 1)
+  else for (const row of next) row.splice(index, 1)
+  return next
+}
