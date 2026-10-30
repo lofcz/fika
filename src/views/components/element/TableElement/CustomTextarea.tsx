@@ -74,7 +74,7 @@ const CustomTextarea = memo((props: ICustomTextareaProps) => {
             const excelData = pasteExcelClipboardString(text);
             if (excelData) {
               onInsertExcelDataRef.current?.(excelData);
-              if (textareaRef.current) textareaRef.current.innerHTML = excelData[0][0];
+              if (textareaRef.current) textareaRef.current.textContent = excelData[0][0];
               return;
             }
             document.execCommand('insertText', false, text);
@@ -85,7 +85,7 @@ const CustomTextarea = memo((props: ICustomTextareaProps) => {
             const htmlData = pasteHTMLTableClipboardString(html);
             if (htmlData) {
               onInsertExcelDataRef.current?.(htmlData);
-              if (textareaRef.current) textareaRef.current.innerHTML = htmlData[0][0];
+              if (textareaRef.current) textareaRef.current.textContent = htmlData[0][0];
             }
           });
         }

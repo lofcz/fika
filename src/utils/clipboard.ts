@@ -53,7 +53,7 @@ export const pasteCustomClipboardString = (text: string) => {
 };
 
 export const pasteExcelClipboardString = (text: string): string[][] | null => {
-  const lines: string[] = text.split('\r\n');
+  const lines: string[] = text.split(/\r\n|\n|\r/);
   if (lines[lines.length - 1] === '') lines.pop();
   let colCount = -1;
   const data: string[][] = [];
@@ -70,7 +70,7 @@ export const pasteHTMLTableClipboardString = (text: string): string[][] | null =
   const doc = parser.parseFromString(text, 'text/html');
   const table = doc.querySelector('table');
   const data: string[][] = [];
-  if (!table) return data;
+  if (!table) return null;
   const rows = table.querySelectorAll('tr');
   for (const row of rows) {
     const rowData = [];
@@ -82,7 +82,7 @@ export const pasteHTMLTableClipboardString = (text: string): string[][] | null =
         rowData.push(text);
       }
     }
-    data.push(rowData);
+    if (rowData.length) data.push(rowData);
   }
-  return data;
+  return data.length ? data : null;
 };
