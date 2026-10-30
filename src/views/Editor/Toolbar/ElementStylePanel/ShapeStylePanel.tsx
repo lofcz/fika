@@ -64,6 +64,8 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
   const [fillType, setFillType] = useState('fill')
   const [currentGradientIndex, setCurrentGradientIndex] = useState(0)
   const [lastSolidFill, setLastSolidFill] = useState('#fff')
+  const selectedGradientIndex = gradient.colors[currentGradientIndex] ? currentGradientIndex : 0
+  const selectedGradientColor = gradient.colors[selectedGradientIndex]?.color || fill || '#fff'
 
   const fillTypeOptions = useMemo(() => [
     { label: LL.editor.slideDesign.noFill(), value: 'none' },
@@ -152,7 +154,7 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
     addHistorySnapshot()
   }
   const updateGradientColors = (color: string) => {
-    const colors = gradient.colors.map((item, index) => index === currentGradientIndex ? { ...item, color } : item)
+    const colors = gradient.colors.map((item, index) => index === selectedGradientIndex ? { ...item, color } : item)
     updateGradient({ colors })
   }
 
@@ -276,12 +278,12 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
                     trigger="click"
                     content={(
                       <ColorPicker
-                        modelValue={gradient.colors[currentGradientIndex].color}
+                        modelValue={selectedGradientColor}
                         onUpdateModelValue={value => updateGradientColors(value)}
                       />
                     )}
                   >
-                    <ColorButton color={gradient.colors[currentGradientIndex].color} />
+                    <ColorButton color={selectedGradientColor} />
                   </Popover>
                 </div>
                 {gradient.type === 'linear' ? (

@@ -63,6 +63,7 @@ export const e2eScripts = [
   'scripts/e2e-gradient-stops-selection.mjs',
   'scripts/e2e-gradient-stops-touch.mjs',
   'scripts/e2e-gradient-stop-removal.mjs',
+  'scripts/e2e-gradient-stops-external-update.mjs',
   'scripts/e2e-filter-slider-selection.mjs',
   'scripts/e2e-background-slider-navigation.mjs',
   'scripts/e2e-background-image-load.mjs',
