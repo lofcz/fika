@@ -87,6 +87,30 @@ export const pasteExcelClipboardString = (text: string): string[][] | null => {
   return data;
 };
 
+// Parsed clipboard HTML is detached, so innerText cannot supply rendered breaks.
+// Preserve explicit breaks and boundaries between common block containers.
+const cellBlockTags = new Set(['DIV', 'P', 'LI', 'UL', 'OL', 'PRE', 'BLOCKQUOTE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+const htmlCellText = (cell: HTMLElement): string => {
+  let text = '';
+  const visit = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent ?? '';
+      return;
+    }
+    if (!(node instanceof Element)) return;
+    if (node.tagName === 'BR') {
+      text += '\n';
+      return;
+    }
+    const block = cellBlockTags.has(node.tagName);
+    if (block && text && !text.endsWith('\n')) text += '\n';
+    for (const child of Array.from(node.childNodes)) visit(child);
+    if (block && text && !text.endsWith('\n')) text += '\n';
+  };
+  for (const child of Array.from(cell.childNodes)) visit(child);
+  return text.trim();
+};
+
 export const pasteHTMLTableClipboardString = (text: string): string[][] | null => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(text, 'text/html');
@@ -99,7 +123,7 @@ export const pasteHTMLTableClipboardString = (text: string): string[][] | null =
     let column = 0;
     for (const cell of Array.from(row.cells)) {
       while (data[rowIndex][column] !== undefined) column++;
-      const text = cell.textContent?.trim() || '';
+      const text = htmlCellText(cell);
       const rowSpan = Math.min(cell.rowSpan || rows.length - rowIndex, rows.length - rowIndex);
       for (let r = rowIndex; r < rowIndex + rowSpan; r++) {
         data[r] ??= [];

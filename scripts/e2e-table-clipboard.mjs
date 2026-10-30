@@ -8,7 +8,7 @@ try {
   const page = await browser.newPage({ permissions: ['clipboard-read', 'clipboard-write'], viewport: { width: 1400, height: 1000 } })
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
-  await page.goto(`${url}?locale=en`)
+  await page.goto(`${url}?locale=en`, { waitUntil: 'domcontentloaded' })
   await page.locator('.viewport-wrapper').first().waitFor({ state: 'visible' })
   await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
   for (const [text, expected] of [
@@ -83,6 +83,16 @@ try {
   await page.waitForTimeout(300)
   await page.locator('.viewport-wrapper').first().click({ position: { x: 10, y: 10 } })
   assert.deepEqual(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data.map(row => row.map(c => c.text))), [['Merged', 'Top'], ['Merged', 'Bottom']], 'Vertical merged cells preserve the columns below them')
+  await page.mouse.dblclick(tablePoint.x, tablePoint.y)
+  await page.locator('#editable-element-clipboard-table .custom-textarea').first().focus()
+  await page.evaluate(() => navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob(['<table><tr><td>First<br>second &amp; third</td><td><div>Top</div><div>Bottom</div></td></tr></table>'], { type: 'text/html' }) })]))
+  await page.keyboard.press('Control+v')
+  await page.waitForTimeout(300)
+  await page.locator('.viewport-wrapper').first().click({ position: { x: 10, y: 10 } })
+  assert.deepEqual(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data[0].map(c => c.text)), ['First\nsecond & third', 'Top\nBottom'], 'HTML spreadsheet cells preserve explicit and block line breaks')
+  assert.equal(await page.locator('#editable-element-clipboard-table [data-cell-index="0_0"] .cell-text').innerText(), 'First\nsecond & third', 'Pasted HTML line breaks remain visible after editing')
+  assert.deepEqual(errors, [], 'HTML paste produces no browser errors')
+  console.log('PASS HTML spreadsheet cell line breaks')
   console.log('PASS spreadsheet clipboard rows, literal editing, quoted cells, empty/ragged HTML, and vertical merges')
 } finally {
   await browser.close()
