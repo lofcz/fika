@@ -21,7 +21,13 @@ export type IChartDataEditorProps = {
   }) => void;
   onClose?: () => void;
 };
-const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const columnLabel = (index: number) => {
+  let label = '';
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
+    label = String.fromCharCode(65 + (n - 1) % 26) + label;
+  }
+  return label;
+};
 const CELL_WIDTH = 100;
 const CELL_HEIGHT = 32;
 const ChartDataEditor = memo((props: IChartDataEditorProps) => {
@@ -35,6 +41,8 @@ const ChartDataEditor = memo((props: IChartDataEditorProps) => {
   const chartList: ChartType[] = ['bar', 'column', 'line', 'area', 'scatter', 'pie', 'ring', 'radar'];
   const [chartTypeSelectVisible, setChartTypeSelectVisible] = useState(false);
   const [selectedRange, setSelectedRange] = useState([0, 0]);
+  const rowCount = Math.max(31, props.data.labels.length + 1, selectedRange[1]);
+  const colCount = Math.max(7, props.data.series.length + 1, selectedRange[0]);
   const [tempRangeSize, setTempRangeSize] = useState({
     width: 0,
     height: 0
@@ -186,8 +194,8 @@ const ChartDataEditor = memo((props: IChartDataEditorProps) => {
   }, [selectedRange, LL?.components?.chartDataEditor, chartType, props.onSave]);
 
   const clear = () => {
-    for (let rowIndex = 1; rowIndex < 31; rowIndex++) {
-      for (let colIndex = 1; colIndex < 7; colIndex++) {
+    for (let rowIndex = 1; rowIndex < rowCount; rowIndex++) {
+      for (let colIndex = 1; colIndex < colCount; colIndex++) {
         const inputRef = queryFika<HTMLInputElement>(`#cell-${rowIndex}-${colIndex}`);
         if (!inputRef) continue;
         inputRef.value = '';
@@ -274,10 +282,10 @@ const ChartDataEditor = memo((props: IChartDataEditorProps) => {
       });
     };
   }, [selectedRange]);
-  return <><div className={cx("chart-data-editor")}><div className={cx("editor-content")}><div className={cx("handler")}><div className={cx("col-header")}>{Array.from({ length: 7 }, (_, i) => i + 1).map(colIndex => <div className={cx("col-header-item")} key={colIndex}><div className={cx("col-key")}>{alphabet[colIndex - 1]}</div></div>)}</div><div className={cx("row-header")}>{Array.from({ length: 31 }, (_, i) => i + 1).map(rowIndex => <div className={cx("row-header-item")} key={rowIndex}><div className={cx("row-key")}>{rowIndex}</div></div>)}</div><div className={cx("all-header")}><svg className={cx("triangle")} width='8' height='8' viewBox='0 0 8 8' xmlns='http://www.w3.org/2000/svg'><path d='M8,0 L8,8 L0,8 L8,0' fill='#ccc' /></svg></div></div><div className={cx("range-box")}><div className={cx("temp-range")} style={{
+  return <><div className={cx("chart-data-editor")}><div className={cx("editor-content")}><div className={cx("handler")}><div className={cx("col-header")}>{Array.from({ length: colCount }, (_, i) => i + 1).map(colIndex => <div className={cx("col-header-item")} key={colIndex}><div className={cx("col-key")}>{columnLabel(colIndex - 1)}</div></div>)}</div><div className={cx("row-header")}>{Array.from({ length: rowCount }, (_, i) => i + 1).map(rowIndex => <div className={cx("row-header-item")} key={rowIndex}><div className={cx("row-key")}>{rowIndex}</div></div>)}</div><div className={cx("all-header")}><svg className={cx("triangle")} width='8' height='8' viewBox='0 0 8 8' xmlns='http://www.w3.org/2000/svg'><path d='M8,0 L8,8 L0,8 L8,0' fill='#ccc' /></svg></div></div><div className={cx("range-box")}><div className={cx("temp-range")} style={{
             width: tempRangeSize.width + 'px',
             height: tempRangeSize.height + 'px'
-          }} />{rangeLines.map(line => <div className={cx(['range-line', line.type])} key={line.type} style={line.style} />)}<div className={cx("resizable")} style={(resizablePointStyle)} onMouseDown={(event) => { event.stopPropagation(); changeSelectRange(event) }} /></div><table><tbody>{Array.from({ length: 31 }, (_, i) => i + 1).map(rowIndex => <tr key={rowIndex}>{Array.from({ length: 7 }, (_, i) => i + 1).map(colIndex => <td key={colIndex} className={cx({
+          }} />{rangeLines.map(line => <div className={cx(['range-line', line.type])} key={line.type} style={line.style} />)}<div className={cx("resizable")} style={(resizablePointStyle)} onMouseDown={(event) => { event.stopPropagation(); changeSelectRange(event) }} /></div><table><tbody>{Array.from({ length: rowCount }, (_, i) => i + 1).map(rowIndex => <tr key={rowIndex}>{Array.from({ length: colCount }, (_, i) => i + 1).map(colIndex => <td key={colIndex} className={cx({
                 'head': colIndex === 1 && rowIndex <= selectedRange[1] || rowIndex === 1 && colIndex <= selectedRange[0]
               })}>{!(rowIndex === 1 && colIndex === 1) ? <input className={cx(['item', {
                   'selected': rowIndex <= selectedRange[1] && colIndex <= selectedRange[0]

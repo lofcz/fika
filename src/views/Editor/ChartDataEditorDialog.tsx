@@ -1,4 +1,4 @@
-import { useCallback, memo, useState, useEffect, useRef } from 'react'
+import { useCallback, memo, useState, useEffect } from 'react'
 
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 import type { ChartData, ChartType, PPTChartElement, PPTElement } from '@/types/slides'
@@ -15,6 +15,7 @@ const ChartDataEditorDialog = memo(() => {
   const handleElementId = useMainStore(s => s.handleElementId)
   const [visible, setVisible] = useState(false)
   const [editingElementId, setEditingElementId] = useState('')
+  const [sessionId, setSessionId] = useState(0)
   const { addHistorySnapshot } = useHistorySnapshot()
   const { element: editingChartElement, present } = useHeldSlideElement(editingElementId, visible, isChartElement)
 
@@ -28,6 +29,7 @@ const ChartDataEditorDialog = memo(() => {
     const element = selectCurrentSlide(useSlidesStore.getState()).elements.find(item => item.id === handleElementId)
     if (!element || element.type !== 'chart') return
     setEditingElementId(element.id)
+    setSessionId(id => id + 1)
     setVisible(true)
   }, [handleElementId])
 
@@ -51,14 +53,11 @@ const ChartDataEditorDialog = memo(() => {
     }
   }, [openDataEditor])
 
-  const sessionIdRef = useRef(editingElementId)
-  if (visible && editingElementId) sessionIdRef.current = editingElementId
-
   return (
     <Modal visible={visible} onUpdateVisible={setVisible} width={640}>
       {editingChartElement ? (
         <ChartDataEditor
-          key={sessionIdRef.current}
+          key={sessionId}
           type={editingChartElement.chartType}
           data={editingChartElement.data}
           onClose={close}

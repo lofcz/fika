@@ -41,6 +41,7 @@ export const unitScripts = [
 ]
 
 export const e2eScripts = [
+  'scripts/e2e-chart-large-data.mjs',
   'scripts/e2e-quick-undo.mjs',
   'scripts/e2e-history-queue.mjs',
   'scripts/e2e-group-clipboard.mjs',
