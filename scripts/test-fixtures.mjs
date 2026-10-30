@@ -59,6 +59,7 @@ export const e2eScripts = [
   'scripts/e2e-slider-selection-change.mjs',
   'scripts/e2e-style-sliders-selection.mjs',
   'scripts/e2e-gradient-slider-selection.mjs',
+  'scripts/e2e-gradient-touch-cancel.mjs',
   'scripts/e2e-filter-slider-selection.mjs',
   'scripts/e2e-background-slider-navigation.mjs',
   'scripts/e2e-background-image-load.mjs',

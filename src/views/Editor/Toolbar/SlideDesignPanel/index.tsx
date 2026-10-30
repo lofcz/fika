@@ -397,6 +397,10 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
                     value={background.gradient.rotate || 0}
                     data-style-slider="background-gradient-angle"
                     onInput={value => paintGradientBackground({ rotate: value })}
+                    onCancel={() => {
+                      const current = readBackground()
+                      if (current.gradient) applyLiveBackgroundGradient(current.gradient)
+                    }}
                     onUpdateValue={value => updateGradientBackground({ rotate: value })}
                   />
                 </div>

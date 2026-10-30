@@ -294,6 +294,10 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
                       value={gradient.rotate}
                       data-style-slider="gradient-angle"
                       onInput={value => paintGradient({ rotate: value })}
+                      onCancel={() => {
+                        const element = findHandleElement(handleElementId)
+                        if (element?.type === 'shape' && element.gradient) applyLiveGradient(handleElementId, element.gradient)
+                      }}
                       onUpdateValue={value => updateGradient({ rotate: value })}
                     />
                   </div>

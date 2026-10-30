@@ -9,6 +9,7 @@ import { throttle } from '@/utils/debounce'
 const LIVE_INPUT_MS = 32
 
 type SliderBaseProps = {
+  onCancel?: () => void
   disabled?: boolean
   min?: number
   max?: number
@@ -72,8 +73,10 @@ const Slider = memo((vrProps: ISliderProps) => {
   const [dragRevision, setDragRevision] = useState(0)
   const onInputRef = useRef(vrProps.onInput)
   const onUpdateValueRef = useRef(vrProps.onUpdateValue)
+  const onCancelRef = useRef(vrProps.onCancel)
   onInputRef.current = vrProps.onInput
   onUpdateValueRef.current = vrProps.onUpdateValue
+  onCancelRef.current = vrProps.onCancel
 
   const emitInput = useMemo(() => throttle((next: number | [number, number]) => {
     onInputRef.current?.(next as never)
@@ -178,6 +181,7 @@ const Slider = memo((vrProps: ISliderProps) => {
     draggingRef.current = false
     emitInput.cancel()
     removeDragListenersRef.current()
+    onCancelRef.current?.()
     setDragRevision(revision => revision + 1)
   }
 
