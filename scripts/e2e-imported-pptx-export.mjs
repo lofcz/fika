@@ -36,7 +36,10 @@ try {
     // Start listening before clicking, and observe both promises so a failed
     // click cannot leave an unhandled download timeout behind.
     const [file] = await Promise.all([
-      page.waitForEvent('download', { timeout: 120_000 }),
+      page.waitForEvent('download', { timeout: 120_000 }).catch(async error => {
+        console.error('Export diagnostics:', JSON.stringify({ browserErrors, visibleText: await page.locator('body').innerText() }))
+        throw error
+      }),
       button.click(),
     ])
     assert.equal(await file.failure(), null, 'PPTX download completes successfully')
