@@ -140,6 +140,7 @@ const ElementFilter = memo(() => {
               <div className={cx('filter-item')} key={filter.key}>
                 <div className={cx('name')}>{filter.label}</div>
                 <Slider
+                  key={handleElementId}
                   className={cx('filter-slider')}
                   max={filter.max}
                   min={0}
