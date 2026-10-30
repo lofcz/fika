@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './ChartDataEditor.module.scss'
 const cx = bindStyles(styles)
-import { useRef, useCallback, memo, useState, useEffect, type ClipboardEvent as ReactClipboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useRef, useCallback, memo, useState, useEffect, useLayoutEffect, type ClipboardEvent as ReactClipboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 
 import type { ChartData, ChartType } from '@/types/slides';
 import { KEYS } from '@/configs/hotkey';
@@ -41,8 +41,20 @@ const ChartDataEditor = memo((props: IChartDataEditorProps) => {
   const chartList: ChartType[] = ['bar', 'column', 'line', 'area', 'scatter', 'pie', 'ring', 'radar'];
   const [chartTypeSelectVisible, setChartTypeSelectVisible] = useState(false);
   const [selectedRange, setSelectedRange] = useState([0, 0]);
-  const rowCount = Math.max(31, props.data.labels.length + 1, selectedRange[1]);
-  const colCount = Math.max(7, props.data.series.length + 1, selectedRange[0]);
+  const [pasteGridSize, setPasteGridSize] = useState([0, 0]);
+  const [pendingPaste, setPendingPaste] = useState<{ data: string[][]; rowIndex: number; colIndex: number } | null>(null);
+  const rowCount = Math.max(31, props.data.labels.length + 1, selectedRange[1], pasteGridSize[1]);
+  const colCount = Math.max(7, props.data.series.length + 1, selectedRange[0], pasteGridSize[0]);
+  useLayoutEffect(() => {
+    if (!pendingPaste) return;
+    const { data, rowIndex, colIndex } = pendingPaste;
+    for (const [r, row] of data.entries()) {
+      for (const [c, value] of row.entries()) {
+        const input = queryFika<HTMLInputElement>(`#cell-${rowIndex + r}-${colIndex + c}`);
+        if (input) input.value = value;
+      }
+    }
+  }, [pendingPaste]);
   const [tempRangeSize, setTempRangeSize] = useState({
     width: 0,
     height: 0
@@ -205,13 +217,10 @@ const ChartDataEditor = memo((props: IChartDataEditorProps) => {
   const fillTableData = (data: string[][], rowIndex: number, colIndex: number) => {
     const maxRow = rowIndex + data.length;
     const maxCol = colIndex + data[0].length;
-    for (let i = rowIndex; i < maxRow; i++) {
-      for (let j = colIndex; j < maxCol; j++) {
-        const inputRef = queryFika<HTMLInputElement>(`#cell-${i}-${j}`);
-        if (!inputRef) continue;
-        inputRef.value = data[i - rowIndex][j - colIndex];
-      }
-    }
+    // Mount the full destination grid before writing to its uncontrolled inputs.
+    setPasteGridSize(size => [Math.max(size[0], maxCol), Math.max(size[1], maxRow)]);
+    setSelectedRange(range => [Math.max(range[0], maxCol), Math.max(range[1], maxRow)]);
+    setPendingPaste({ data, rowIndex, colIndex });
   };
 
   const handlePaste = (e: ReactClipboardEvent<HTMLInputElement>, rowIndex: number, colIndex: number) => {
