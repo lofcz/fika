@@ -1,3 +1,5 @@
+import { frameAncestors, frameClipPolygon } from '@/utils/nestedFrames'
+import { isElementSelectable } from '@/utils/selection'
 import type { PPTElement } from '@/types/slides'
 import { elementVisualHitRect, pointInVisualHitRect } from '@/utils/canvasHitTest'
 
@@ -30,18 +32,21 @@ export function layerStackAtPoint(
   y: number,
 ): LayerStackEntry[] {
   const hidden = hiddenElementIdList instanceof Set ? hiddenElementIdList : new Set(hiddenElementIdList)
+  const hiddenList = [...hidden]
   const entries: LayerStackEntry[] = []
   const seenGroups = new Set<string>()
   for (let i = elementList.length - 1; i >= 0; i--) {
     const element = elementList[i]
-    if (hidden.has(element.id)) continue
+    if (hidden.has(element.id) || frameAncestors(element, elementList).some(parent => hidden.has(parent.id))) continue
     const rect = elementVisualHitRect(element, canvasScale, i + 1)
+    const clip = frameClipPolygon(element, elementList)
+    if (clip) rect.frameClip = clip.map(point => ({ x: point.x * canvasScale, y: point.y * canvasScale }))
     if (!pointInVisualHitRect(x, y, rect)) continue
     if (element.groupId) {
       if (seenGroups.has(element.groupId)) continue
       seenGroups.add(element.groupId)
       const members = elementList.filter(el => el.groupId === element.groupId)
-      const selectable = members.filter(el => !el.lock && !hidden.has(el.id))
+      const selectable = members.filter(el => isElementSelectable(el, elementList, hiddenList))
       entries.push({
         element,
         memberIds: selectable.map(el => el.id),
@@ -51,10 +56,11 @@ export function layerStackAtPoint(
       })
       continue
     }
+    const selectable = isElementSelectable(element, elementList, hiddenList)
     entries.push({
       element,
-      memberIds: element.lock ? [] : [element.id],
-      locked: !!element.lock,
+      memberIds: selectable ? [element.id] : [],
+      locked: !selectable,
     })
   }
   return entries

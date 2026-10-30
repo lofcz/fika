@@ -309,6 +309,16 @@ for (const hidden of [[], ['frame']]) {
   assert(plan.hitRects.some(rect => rect.id === 'frame') === !hidden.length, 'locked frames stay available for unlocking while hidden frames have no target')
 }
 
+const { layerStackAtPoint } = await import(pathToFileURL(join(root, 'src/utils/layerStack.ts')).href)
+const lockedStack = layerStackAtPoint([frame, { ...framedChild, groupId: undefined }], 1, [], 150, 75)
+assert(lockedStack.length === 2 && lockedStack.every(entry => entry.locked && !entry.memberIds.length), 'layer cycling marks inherited locks non-selectable')
+assert(layerStackAtPoint([frame, framedChild], 1, ['frame'], 150, 75).length === 0, 'layer cycling omits hidden frame descendants')
+const groupStack = layerStackAtPoint([frame, framedChild, outsideSibling], 1, [], 850, 75)
+assert(groupStack[0].memberIds.join() === 'outside-sibling', 'layer group expansion excludes restricted descendants')
+assert(!layerStackAtPoint([rotatedFrame, oversizedChild], 2, [], -30, -30).some(entry => entry.element.id === oversizedChild.id), 'layer cycling respects rotated clipping at zoom')
+assert(layerStackAtPoint([rotatedFrame, oversizedChild], 2, [], 100, 100).some(entry => entry.element.id === oversizedChild.id), 'layer cycling retains visible clipped children')
+assert(!layerStackAtPoint([outerClip, innerClip, nestedChild], 1, [], 85, 85).some(entry => entry.element.id === nestedChild.id), 'layer cycling intersects nested frame clips')
+
 const canvasHitSrc = readFileSync(join(root, 'src/utils/canvasHitTest.ts'), 'utf8')
 const hitFnStart = canvasHitSrc.indexOf('export function hitTestVisualRects')
 const hitFnEnd = canvasHitSrc.indexOf('export const TEXT_EDITABLE_TYPES')
