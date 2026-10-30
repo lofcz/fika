@@ -119,6 +119,7 @@ export const e2eScripts = [
   'scripts/e2e-frame-pointer.mjs',
   'scripts/e2e-frame-layer-cycle.mjs',
   'scripts/e2e-photo-frame-lock-drop.mjs',
+  'scripts/e2e-photo-frame-drop-order.mjs',
   'scripts/e2e-frame-marquee-clipping.mjs',
   'scripts/e2e-rotated-marquee.mjs',
   'scripts/e2e-table-resize-floor.mjs',

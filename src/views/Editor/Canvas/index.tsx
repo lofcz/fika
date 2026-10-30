@@ -262,6 +262,8 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
   useMynaPageOrigin(!!mynaView, rebaseViewport, viewportStyles, canvasRef)
 
   const { addHistorySnapshot } = useHistorySnapshot()
+  // Only the latest drop on each frame may commit its asynchronous result.
+  const photoFrameDrops = useRef(new Map<string, symbol>())
   useDrop(canvasRef, event => {
     const file = event.dataTransfer?.files[0]
     if (!file || !viewportRef.current || readOnly) return false
@@ -273,7 +275,11 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
     if (target?.type !== 'image' || !target.photoFrame) return false
     event.preventDefault(); event.stopPropagation()
     if (entry.locked || !isElementSelectable(target, page.elements, useMainStore.getState().hiddenElementIdList)) return true
+    const dropKey = JSON.stringify([page.id, target.id])
+    const request = Symbol()
+    photoFrameDrops.current.set(dropKey, request)
     void loadPhotoFrameImage(file).then(({ src, width, height }) => {
+      if (photoFrameDrops.current.get(dropKey) !== request) return
       const store = useSlidesStore.getState()
       const latestPage = store.slides.find(slide => slide.id === page.id)
       const latest = latestPage?.elements.find(element => element.id === target.id)
@@ -283,7 +289,11 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
       drainCommitQueue()
       store.updateElement({ id: latest.id, slideId: page.id, props: fillPhotoFrame(latest, src, width, height) })
       addHistorySnapshot()
-    }).catch(() => message.error((photoFrameLabels[getFikaLocale()] || photoFrameLabels.en).error))
+    }).catch(() => {
+      if (photoFrameDrops.current.get(dropKey) === request) message.error((photoFrameLabels[getFikaLocale()] || photoFrameLabels.en).error)
+    }).finally(() => {
+      if (photoFrameDrops.current.get(dropKey) === request) photoFrameDrops.current.delete(dropKey)
+    })
     return true
   })
 
