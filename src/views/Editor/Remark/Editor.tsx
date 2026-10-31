@@ -25,6 +25,7 @@ export type IEditorProps = {
 
 const Editor = memo((props: IEditorProps) => {
   const { LL } = useI18nContext()
+  const readOnly = useMainStore(s => s.readOnly)
   const editorViewRef = useRef<EditorView | undefined>(undefined)
   const initTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const initAttemptsRef = useRef(0)
@@ -50,7 +51,7 @@ const Editor = memo((props: IEditorProps) => {
   }, 300, { trailing: true }), [])
 
   const handleFocus = useCallback(() => {
-    useMainStore.getState().setDisableHotkeysState(true)
+    useMainStore.getState().setDisableHotkeysState(!useMainStore.getState().readOnly)
   }, [])
 
   const handleBlur = useCallback(() => {
@@ -69,6 +70,7 @@ const Editor = memo((props: IEditorProps) => {
   }, [])
 
   const handleMouseup = useCallback(() => {
+    if (useMainStore.getState().readOnly) return
     const selection = window.getSelection()
     const editorView = editorViewRef.current
     if (
@@ -103,6 +105,7 @@ const Editor = memo((props: IEditorProps) => {
   }, [])
 
   const execCommand = useCallback((command: string, value?: string) => {
+    if (useMainStore.getState().readOnly) return
     const editorView = editorViewRef.current
     if (!editorView) return
 
@@ -164,9 +167,14 @@ const Editor = memo((props: IEditorProps) => {
 
     try {
       editorViewRef.current = initProsemirrorEditor(editorViewEl, valueRef.current, {
+        editable: () => !useMainStore.getState().readOnly,
         dispatchTransaction: transaction => {
           const view = editorViewRef.current
           if (!view || view.isDestroyed) return
+          if (transaction.docChanged && !transaction.getMeta('fikaSyncValue') && useMainStore.getState().readOnly) {
+            view.updateState(view.state)
+            return
+          }
           view.updateState(view.state.apply(transaction))
           if (transaction.docChanged && !transaction.getMeta('fikaSyncValue')) handleInput()
         },
@@ -199,6 +207,18 @@ const Editor = memo((props: IEditorProps) => {
       throw error
     }
   }, [handleFocus, handleBlur, handleMouseup, hideMenuInstance, handleInput, LL])
+
+  useEffect(() => {
+    const view = editorViewRef.current
+    if (!view || view.isDestroyed) return
+    if (readOnly) {
+      // Persist edits accepted before the mode changed, then stop editing.
+      handleInput.flush()
+      hideMenuInstance()
+      if (view.hasFocus()) handleBlur()
+    }
+    view.setProps({ editable: () => !useMainStore.getState().readOnly })
+  }, [readOnly, handleInput, hideMenuInstance, handleBlur])
 
   // Both effects defer to a microtask, so they can fire after unmount
   // (e.g. leaving presentation mode tears the panel down in the same tick).
