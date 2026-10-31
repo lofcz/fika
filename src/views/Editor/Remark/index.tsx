@@ -28,12 +28,13 @@ function remarkPropsEqual(prev: IRemarkProps, next: IRemarkProps) {
 
 const Remark = memo((props: IRemarkProps) => {
   const { LL } = useI18nContext()
+  const slideId = useSlidesStore(s => s.slides[s.slideIndex]?.id)
   const remark = useSlidesStore(s => s.slides[s.slideIndex]?.remark || '')
   const codePanelOpen = !!props.codePanelOpen
 
   const handleInput = useCallback((content: string) => {
-    useSlidesStore.getState().updateSlide({ remark: content })
-  }, [])
+    if (slideId) useSlidesStore.getState().updateSlide({ remark: content }, slideId)
+  }, [slideId])
 
   const resize = useCallback((e: React.MouseEvent) => {
     let isMouseDown = true
@@ -69,6 +70,7 @@ const Remark = memo((props: IRemarkProps) => {
       <div className={cx('remark-body')}>
         <div className={cx('remark-editor')}>
           <Editor
+            key={slideId}
             value={remark}
             onUpdate={handleInput}
           />

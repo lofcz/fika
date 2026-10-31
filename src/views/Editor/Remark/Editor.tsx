@@ -54,8 +54,9 @@ const Editor = memo((props: IEditorProps) => {
   }, [])
 
   const handleBlur = useCallback(() => {
+    handleInput.flush()
     useMainStore.getState().setDisableHotkeysState(false)
-  }, [])
+  }, [handleInput])
 
   const updateTextContent = useCallback(() => {
     const editorView = editorViewRef.current
@@ -206,6 +207,9 @@ const Editor = memo((props: IEditorProps) => {
     return () => {
       mountedRef.current = false
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
+      handleInput.flush()
+      handleInput.cancel()
+      if (editorViewRef.current?.hasFocus()) handleBlur()
       editorViewRef.current?.destroy()
       editorViewRef.current = undefined
       menuInstanceRef.current?.destroy()

@@ -205,6 +205,7 @@ export const e2eScripts = [
   'scripts/e2e-panel-window-resize.mjs',
   'scripts/e2e-notes-history.mjs',
   'scripts/e2e-notes-readonly.mjs',
+  'scripts/e2e-remark-slide-switch.mjs',
   'scripts/e2e-frame-keyboard.mjs',
   'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-frame-pointer.mjs',
