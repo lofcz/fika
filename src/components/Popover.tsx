@@ -44,6 +44,7 @@ const Popover = memo((vrProps: IPopoverProps) => {
   const [portalBox, setPortalBox] = useState<Element | null>(null)
   const triggerRef = useRef<HTMLDivElement | null>(null)
   const instanceRef = useRef<Instance | undefined>(undefined)
+  const dismissedByEscapeRef = useRef(false)
   const contentVisibleRef = useRef(false)
   const portalBoxRef = useRef<Element | null>(null)
   contentVisibleRef.current = contentVisible
@@ -160,6 +161,21 @@ const Popover = memo((vrProps: IPopoverProps) => {
       style={vrProps.style}
       ref={triggerRef}
       onPointerEnter={prefetch}
+      onKeyDown={event => {
+        if (event.key !== 'Escape' || !instanceRef.current?.state.isVisible) return
+        event.preventDefault()
+        event.stopPropagation()
+        dismissedByEscapeRef.current = true
+        instanceRef.current.hide()
+      }}
+      onKeyUp={event => {
+        // The content remains mounted during dismissal. Do not let the same
+        // Escape release also dismiss a containing dialog.
+        if (event.key === 'Escape' && dismissedByEscapeRef.current) {
+          dismissedByEscapeRef.current = false
+          event.stopPropagation()
+        }
+      }}
     >
       {contentVisible && portalBox
         ? createPortal(
