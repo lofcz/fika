@@ -3,7 +3,7 @@ import styles from './MultiStylePanel.module.scss'
 const cx = bindStyles(styles)
 import { memo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useMainStore, useSlidesStore, selectActiveElementList } from '@/store'
+import { useMainStore, useSlidesStore, selectActiveElementList, selectCurrentSlide } from '@/store'
 import type { LineStyleType, PPTElement, PPTElementOutline } from '@/types/slides'
 import { applyTableCellStyles } from '@/utils/tableCellStyle'
 import emitter, { EmitterEvents } from '@/utils/emitter'
@@ -26,6 +26,9 @@ const MultiStylePanel = memo(function MultiStylePanel() {
   const { LL } = useI18nContext()
   const fonts = useFonts()
   const richTextAttrs = useMainStore(useShallow(s => s.richTextAttrs))
+  const selectionIds = useMainStore(s => JSON.stringify(s.activeElementIdList))
+  const slideId = useSlidesStore(s => selectCurrentSlide(s)?.id)
+  const selectionKey = JSON.stringify([slideId, selectionIds])
   const { addHistorySnapshot } = useHistorySnapshot()
 
   const [lineStyleOptions] = useState<LineStyleType[]>(['solid', 'dashed', 'dotted'])
@@ -123,6 +126,7 @@ const MultiStylePanel = memo(function MultiStylePanel() {
         <div className="field">
           <span className="field-label">{LL.editor.multiStyle.borderWidth()}</span>
           <Slider
+            key={selectionKey}
             min={0}
             max={Math.max(OUTLINE_WIDTH_MAX, outline.width || 0)}
             step={1}
@@ -134,6 +138,7 @@ const MultiStylePanel = memo(function MultiStylePanel() {
         <div className="field">
           <span className="field-label">{LL.editor.multiStyle.borderRadius()}</span>
           <Slider
+            key={selectionKey}
             min={0}
             max={OUTLINE_RADIUS_MAX}
             step={1}
