@@ -1,3 +1,4 @@
+import { isDefaultInk } from '@/utils/textContrast';
 import { marks } from 'prosemirror-schema-basic';
 import type { MarkSpec } from 'prosemirror-model';
 const subscript: MarkSpec = {
@@ -54,11 +55,15 @@ const underline: MarkSpec = {
 };
 const forecolor: MarkSpec = {
   attrs: {
-    color: {}
+    color: {},
+    explicit: { default: false }
   },
   inline: true,
   group: 'inline',
   parseDOM: [{
+    tag: 'span[data-color-explicit="true"]',
+    getAttrs: node => ({ color: (node as HTMLElement).style.color, explicit: true })
+  }, {
     style: 'color',
     getAttrs: color => color ? {
       color
@@ -66,12 +71,14 @@ const forecolor: MarkSpec = {
   }],
   toDOM: mark => {
     const {
-      color
+      color, explicit
     } = mark.attrs;
     let style = '';
     if (color) style += `color: ${color};`;
     return ['span', {
-      style
+      style,
+      'data-default-ink': !explicit && color && isDefaultInk(color) ? '' : undefined,
+      'data-color-explicit': explicit ? 'true' : undefined
     }, 0];
   }
 };

@@ -137,6 +137,8 @@ export const e2eScripts = [
   'scripts/e2e-myna-header.mjs',
   'scripts/e2e-guidelines.mjs',
   'scripts/e2e-autoheight-styles.mjs',
+  'scripts/e2e-text-fit-preview-consistency.mjs',
+  'scripts/e2e-text-contrast-selection.mjs',
   'scripts/e2e-autoheight-stuck.mjs',
   'scripts/e2e-placeholder-slot.mjs',
   'scripts/e2e-hit-retarget-guard.mjs',

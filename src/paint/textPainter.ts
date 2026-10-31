@@ -1,7 +1,6 @@
 import {
   materializeRichInlineLineRange,
   prepareRichInline,
-  walkRichInlineLineRanges,
 } from '@chenglou/pretext/rich-inline'
 
 import type { TextAlign, TextAlignVertical } from '@/types/slides'
@@ -14,7 +13,7 @@ import {
   DEFAULT_TEXT_FONT_SIZE,
   LIST_MARKER_GAP_EM,
   applyMeasuredMathBoxes,
-  editorWrapWidth,
+  walkEditorTextLines,
   extractFitBlocksFromHtml,
   lineBoxHeight,
   richInlineFromRun,
@@ -197,8 +196,7 @@ const prepareLines = (
     const firstLine = lines.length
     const lineWidth = Math.max(1, width - listInset(block, blockEm(items, scale)))
     const spaceRun = items.find(run => !run.mathLatex) || items[0]
-    const wrapWidth = editorWrapWidth(lineWidth, fontOf(spaceRun, family, scale))
-    walkRichInlineLineRanges(prepared, wrapWidth, range => {
+    walkEditorTextLines(prepared, lineWidth, fontOf(spaceRun, family, scale), range => {
       const line = materializeRichInlineLineRange(prepared, range)
       const lineRuns: TextFitRun[] = []
       for (const fragment of line.fragments) {

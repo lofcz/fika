@@ -2,7 +2,7 @@ import { bindStyles } from '@/utils/cssm'
 import { createPortal } from 'react-dom'
 import styles from './ProsemirrorEditor.module.scss'
 const cx = bindStyles(styles)
-import { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, memo, useState, useEffect, useLayoutEffect, type HTMLAttributes, type MutableRefObject, type MouseEvent as ReactMouseEvent } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, memo, useState, useEffect, useLayoutEffect, type CSSProperties, type HTMLAttributes, type MutableRefObject, type MouseEvent as ReactMouseEvent } from 'react';
 
 import { debounce } from '@/utils/debounce';
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store';
@@ -38,6 +38,7 @@ type HostFallthrough = Omit<HTMLAttributes<HTMLDivElement>, 'className' | 'onFoc
 export type IProsemirrorEditorProps = {
   elementId: string;
   defaultColor: string;
+  paintDefaultInk?: string;
   defaultFontName: string;
   defaultFontSize?: string;
   defaultAlign?: TextAlign;
@@ -81,6 +82,7 @@ type EditorCallbackRefs = {
 type IProsemirrorEditorViewProps = {
   elementId: string;
   defaultColor: string;
+  paintDefaultInk?: string;
   defaultFontName: string;
   defaultFontSize?: string;
   defaultAlign?: TextAlign;
@@ -107,6 +109,7 @@ function hostAttrsEqual(prev: HostFallthrough, next: HostFallthrough) {
 function editorViewPropsEqual(prev: IProsemirrorEditorViewProps, next: IProsemirrorEditorViewProps) {
   return prev.elementId === next.elementId &&
     prev.defaultColor === next.defaultColor &&
+    prev.paintDefaultInk === next.paintDefaultInk &&
     prev.defaultFontName === next.defaultFontName &&
     prev.defaultFontSize === next.defaultFontSize &&
     prev.defaultAlign === next.defaultAlign &&
@@ -127,6 +130,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
   const {
     elementId,
     defaultColor,
+    paintDefaultInk,
     defaultFontName,
     defaultFontSize,
     defaultAlign,
@@ -191,13 +195,10 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     callbacksRef.current.onEmptyChange?.(editorView.current.state.doc.textContent.trim().length === 0);
   }, [callbacksRef]);
 
-  const docChangeRaf = useRef(0);
   const emitDocChange = useCallback(() => {
-    if (docChangeRaf.current || typeof requestAnimationFrame === 'undefined') return;
-    docChangeRaf.current = requestAnimationFrame(() => {
-      docChangeRaf.current = 0;
-      if (editorView.current) callbacksRef.current.onDocChange?.(editorView.current.dom.innerHTML);
-    });
+    // Fit and auto-height updates must finish in the transaction's frame.
+    // Deferring this notification exposes the unfitted document for a paint.
+    if (editorView.current) callbacksRef.current.onDocChange?.(editorView.current.dom.innerHTML);
   }, [callbacksRef]);
 
   const handleInput = useMemo(() => debounce(function (isHanldeHistory = false) {
@@ -450,7 +451,8 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
           }
         } else {
           applyMark(editorView.current.state.schema.marks.forecolor.create({
-            color: item.value
+            color: item.value,
+            explicit: true
           }));
           if (!isEmptyEditorDoc(editorView.current)) setListStyle(editorView.current, {
             key: 'color',
@@ -798,7 +800,6 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     emitEmptyStateRef.current();
     const unreg = registerCommitFlusher(persistLiveEditor);
     return () => {
-      if (docChangeRaf.current) cancelAnimationFrame(docChangeRaf.current);
       const current = editorView.current;
       persistLiveEditor();
       unreg();
@@ -824,7 +825,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       emitter.off(EmitterEvents.APPLY_INLINE_MATH, applyInlineMath);
     };
   }, [execCommand, syncAttrsToStore, applyInlineMath]);
-  return <><div {...hostAttrs} className={cx('prosemirror-editor', className, {
+  return <><div {...hostAttrs} data-paint-default-ink={paintDefaultInk ? '' : undefined} style={{ ...hostAttrs?.style, '--text-default-ink': paintDefaultInk } as CSSProperties} className={cx('prosemirror-editor', className, {
       'format-painter': textFormatPainter
     })} ref={editorViewRef} onMouseDown={handleHostMouseDown} />{linkTooltip && linkTooltipPortal ? createPortal(<div className={cx("hyperlink-hover-tooltip")} role='tooltip' style={{
         left: linkTooltip.left + 'px',
@@ -837,6 +838,7 @@ const ProsemirrorEditor = forwardRef<ProsemirrorEditorHandle, IProsemirrorEditor
   const {
     elementId,
     defaultColor,
+    paintDefaultInk,
     defaultFontName,
     defaultFontSize,
     defaultAlign,
@@ -867,6 +869,6 @@ const ProsemirrorEditor = forwardRef<ProsemirrorEditorHandle, IProsemirrorEditor
     onDocChange,
     onPlaceholderStyle
   };
-  return <ProsemirrorEditorView ref={expose} elementId={elementId} defaultColor={defaultColor} defaultFontName={defaultFontName} defaultFontSize={defaultFontSize} defaultAlign={defaultAlign} value={value} editable={editable ?? false} autoFocus={autoFocus ?? false} wrapEmptyAs={wrapEmptyAs} placeholderFillStyles={placeholderFillStyles} className={className} hostAttrs={hostAttrs} callbacksRef={callbacksRef} />;
+  return <ProsemirrorEditorView ref={expose} elementId={elementId} defaultColor={defaultColor} paintDefaultInk={paintDefaultInk} defaultFontName={defaultFontName} defaultFontSize={defaultFontSize} defaultAlign={defaultAlign} value={value} editable={editable ?? false} autoFocus={autoFocus ?? false} wrapEmptyAs={wrapEmptyAs} placeholderFillStyles={placeholderFillStyles} className={className} hostAttrs={hostAttrs} callbacksRef={callbacksRef} />;
 });
 export default ProsemirrorEditor;

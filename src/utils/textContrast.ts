@@ -738,7 +738,7 @@ export const resolveLiveTextPaint = (
   preferred: string | undefined,
   html: string,
   options: LiveTextPaintOptions = {},
-): { ink: string; html: string } => {
+): { ink: string; html: string; defaultInk?: string } => {
   const el = options.element;
   if (el && ownBackgroundPaint(el)?.kind === 'unknown') {
     return { ink: preferred || options.themeFontColor || '#333', html };
@@ -751,6 +751,7 @@ export const resolveLiveTextPaint = (
   return {
     ink,
     html: rewriteDefaultInksInHtml(html, ink),
+    defaultInk: ink,
   };
 };
 
@@ -861,11 +862,14 @@ export const collectHtmlTextColors = (html: string): string[] => {
 
 /** Rewrite `color:` declarations via `replace` (return null to keep as-is). */
 export const rewriteHtmlTextColors = (html: string, replace: (color: string) => string | null): string => {
-  return html.replace(COLOR_DECL_RE, (full, prefix: string, value: string) => {
-    const c = tinycolor(value.trim());
-    if (!c.isValid()) return full;
-    const next = replace(c.toHexString());
-    return next ? `${prefix}color: ${next}` : full;
+  return html.replace(/<[^>]+>/g, tag => {
+    if (/\bdata-color-explicit\s*=\s*["']true["']/i.test(tag)) return tag;
+    return tag.replace(COLOR_DECL_RE, (full, prefix: string, value: string) => {
+      const c = tinycolor(value.trim());
+      if (!c.isValid()) return full;
+      const next = replace(c.toHexString());
+      return next ? `${prefix}color: ${next}` : full;
+    });
   });
 };
 interface TextTarget {

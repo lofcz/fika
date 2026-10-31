@@ -11,7 +11,8 @@
  * callers wrap usage so a non-DOM context falls back gracefully.
  */
 import { layout as pretextLayout, prepare as pretextPrepare } from '@chenglou/pretext';
-import { prepareRichInline, walkRichInlineLineRanges } from '@chenglou/pretext/rich-inline';
+import { prepareRichInline, layoutNextRichInlineLineRange, type PreparedRichInline, type RichInlineCursor, type RichInlineLineRange } from '@chenglou/pretext/rich-inline';
+import { normalizeFittedFontSizes } from './richTextFontSize';
 import { cssLengthParts, cssLengthToPx } from './cssLength';
 import { estimateInlineMathBox, isPlausibleInlineMathBox, MATH_CLASS } from './inlineMathBox';
 
@@ -306,6 +307,24 @@ export const editorWrapWidth = (width: number, font: string): number => (
   breakSpacesWrapWidth(width, measureSpaceWidth(font))
 )
 
+/** Match break-spaces without reserving a nonexistent space after the final line. */
+export function walkEditorTextLines(
+  prepared: PreparedRichInline,
+  width: number,
+  font: string,
+  onLine: (line: RichInlineLineRange) => void,
+) {
+  let cursor: RichInlineCursor | undefined
+  while (true) {
+    const full = layoutNextRichInlineLineRange(prepared, width, cursor)
+    if (!full) return
+    const final = !layoutNextRichInlineLineRange(prepared, width, full.end)
+    const line = final ? full : layoutNextRichInlineLineRange(prepared, editorWrapWidth(width, font), cursor)!
+    onLine(line)
+    cursor = line.end
+  }
+}
+
 export const richInlineFromRun = (
   run: TextFitRun,
   font: string,
@@ -358,12 +377,8 @@ const measureRunsHeight = (
   const spaceRun = runs.reduce((best, run) => (
     !run.mathLatex && run.size > (best?.size ?? 0) ? run : best
   ), runs.find(run => !run.mathLatex) || runs[0])
-  const wrapWidth = editorWrapWidth(
-    Math.max(1, width),
-    runFont(spaceRun, family, spaceRun.size * sizeScale),
-  )
   let height = 0
-  walkRichInlineLineRanges(prepared, wrapWidth, line => {
+  walkEditorTextLines(prepared, Math.max(1, width), runFont(spaceRun, family, spaceRun.size * sizeScale), line => {
     const lineRuns: TextFitRun[] = []
     for (const fragment of line.fragments) {
       const run = runs[fragment.itemIndex]
@@ -595,11 +610,7 @@ export function fitZoomScaleFromSession(
 }
 
 
-const FITTED_FONT_RE = /calc\(var\(--text-fit-scale,\s*1\)\s*\*\s*([0-9.]+)px\)/g
-/** Rendered spans may carry calc(var(--text-fit-scale,...)); measurement wants authored px. */
-const stripFitScale = (html: string) => (
-  html && html.includes('--text-fit-scale') ? html.replace(FITTED_FONT_RE, '$1px') : html
-)
+const stripFitScale = normalizeFittedFontSizes
 export const stripFitScaleForProbe = stripFitScale
 
 /**
@@ -619,7 +630,7 @@ const FIT_SCALE_MEMO_MAX = 400
 const blocksMemo = new Map<string, TextFitBlock[]>()
 const BLOCKS_MEMO_MAX = 80
 const extractBlocksCached = (html: string, fontFamily: string, defaultSize: number) => {
-  const key = `${html.length}\0${fontFamily}\0${defaultSize}\0${html.slice(0, 128)}\0${html.slice(-64)}`
+  const key = `${fontFamily}\0${defaultSize}\0${stripFitScale(html)}`
   let blocks = blocksMemo.get(key)
   if (!blocks) {
     blocks = extractFitBlocksFromHtml(stripFitScale(html), {
@@ -651,8 +662,11 @@ type FitScaleOptions = {
 const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
   const fontFamily = options.defaultFontFamily || DEFAULT_FIT_FONT_FAMILY
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
+  const { blocks } = extractBlocksCached(html, fontFamily, defaultSize)
+  // Color rewrites and rendered CSS spelling do not change text geometry.
+  const metrics = JSON.stringify(blocks, (key, value) => key === 'color' ? undefined : value)
   const key = fitSessionKey(
-    html,
+    metrics,
     fontFamily,
     options.lineHeight,
     options.letterSpacing || 0,
@@ -667,13 +681,22 @@ const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
  * height and found the searched scale overflowing. Remembered so the rail,
  * later applies, and export reuse the corrected value instead of re-overflow.
  */
-export function rememberFitScale(html: string, options: FitScaleOptions, scale: number) {
-  if (!html || scale >= 1) return
+const fitScaleListeners = new Set<(elementId: string) => void>()
+export function subscribeFitScaleChanges(listener: (elementId: string) => void) {
+  fitScaleListeners.add(listener)
+  return () => { fitScaleListeners.delete(listener) }
+}
+
+export function rememberFitScale(html: string, options: FitScaleOptions, scale: number, elementId?: string) {
+  if (!html) return
+  const key = fitScaleMemoKey(html, options)
+  if (fitScaleMemo.get(key) === scale) return
   if (fitScaleMemo.size >= FIT_SCALE_MEMO_MAX) {
     const oldest = fitScaleMemo.keys().next().value
     if (oldest !== undefined) fitScaleMemo.delete(oldest)
   }
-  fitScaleMemo.set(fitScaleMemoKey(html, options), scale)
+  fitScaleMemo.set(key, scale)
+  if (elementId) for (const listener of fitScaleListeners) listener(elementId)
 }
 
 /**

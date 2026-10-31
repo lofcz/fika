@@ -1,4 +1,7 @@
 @scope (#fika-shell, .fika-embed-root) {
+[data-paint-default-ink] .ProseMirror [data-default-ink] {
+  color: var(--text-default-ink, inherit) !important;
+}
 .ProseMirror, .ProseMirror-static {
   outline: 0;
   border: 0;

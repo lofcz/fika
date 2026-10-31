@@ -1,3 +1,4 @@
+import { subscribeFitScaleChanges } from '@/utils/textFit'
 import { recordRender } from '@/utils/renderMetrics'
 import { memo, useCallback, useEffect, useId, useRef } from 'react'
 
@@ -70,6 +71,10 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
     const timer = window.setTimeout(schedule, EDIT_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [slide, theme, viewportSize, viewportRatio, width, showPlaceholders, schedule])
+
+  useEffect(() => subscribeFitScaleChanges(elementId => {
+    if (latest.current.slide.elements.some(element => element.id === elementId)) schedule()
+  }), [schedule])
 
   useEffect(() => {
     const host = hostRef.current

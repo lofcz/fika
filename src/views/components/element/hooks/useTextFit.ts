@@ -4,6 +4,7 @@ import { authoredTextFitSize, elementLocksTextBox } from '@/utils/placeholderLay
 import { subscribeLiveBox } from '@/utils/liveElementSize'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { useMainStore } from '@/store'
+import { normalizeFittedFontSizes } from '@/utils/richTextFontSize'
 import {
   contentBoxOfHost,
   createFitMeasureSession,
@@ -61,10 +62,9 @@ function readLive(live: LiveContentInput): string | null | undefined {
  * Auto-fit a locked text box (fixed height or placeholder/title slot) so
  * its content never overflows.
  *
- * Resize is a pretext hot path: `prepare()` once per content/font, then only
- * `layout(prepared, width, lineHeight)` when the box size changes. No DOM
- * layout reads, no binary search. CSS `zoom` is written on the host so Canvas
- * / siblings do not re-render.
+ * Pretext supplies a cached estimate during resize. Settled geometry is
+ * refined against browser layout before paint, and the verified font scale
+ * is shared with the thumbnail painter. Authored font sizes stay unchanged.
  */
 export default (
   elementInfo: FitSource,
@@ -87,10 +87,11 @@ export default (
   hostElRef.current = hostEl
   const observeResize = options?.observeResize !== false
   const scheduleRef = useRef<() => void>(() => {})
+  const applyScaleRef = useRef<() => void>(() => {})
 
   const measuredContent = () => {
     const live = readLive(liveContentRef.current)
-    return live !== null && live !== undefined ? live : fitContentOf(elementInfoRef.current)
+    return normalizeFittedFontSizes(live !== null && live !== undefined ? live : fitContentOf(elementInfoRef.current))
   }
 
   const authoredSize = () => fitAuthoredSizeOf(elementInfoRef.current)
@@ -171,7 +172,7 @@ export default (
       && lastInnerRef.current.height === height
       && sessionRef.current?.key === session?.key
     ) {
-      // React `style={textFitPaintStyle}` can wipe a DOM zoom written last frame.
+      // Restore the fit variables if React reapplied the host style.
       commitScale(fitScaleRef.current)
       return
     }
@@ -212,26 +213,24 @@ export default (
           }
         }
         else {
-          let candidate = estimate
-          let settled: number | null = null
-          for (let i = 0; i < 4; i++) {
-            commitScale(candidate)
-            const rendered = content.scrollHeight
-            if (rendered <= height + 1) {
-              // keep the LARGEST scale VERIFIED to fit — the estimate itself
-              // is not trusted until the DOM confirms it
-              if (settled == null || candidate > settled) settled = candidate
-              const target = candidate * (height / Math.max(1, rendered))
-              if (candidate >= 1 || target - candidate < 0.015) break
-              candidate = Math.min(1, target * 0.995)
-            }
-            else {
-              candidate = Math.max(0.01, candidate * (height / Math.max(1, rendered)) * 0.995)
+          // Search a bounded interval: proportional retries can alternate
+          // across a wrapping threshold and settle at a different size on
+          // every keystroke, even when the text only gets longer.
+          let low = 0.01
+          let high = 1
+          commitScale(high)
+          if (content.scrollHeight <= height) low = high
+          else {
+            for (let i = 0; i < 10 && high - low > 0.001; i++) {
+              const candidate = (low + high) / 2
+              commitScale(candidate)
+              if (content.scrollHeight <= height) low = candidate
+              else high = candidate
             }
           }
-          if (settled == null) settled = candidate
+          const settled = low
           commitScale(settled)
-          rememberFitScale(measuredContent(), params, settled)
+          rememberFitScale(measuredContent(), params, settled, el.id)
         }
         if (content.scrollHeight > height + 1 && box) {
           // Paragraph gaps are fixed px and do not scale with the font — in a
@@ -245,6 +244,8 @@ export default (
       }
     }
   }
+
+  applyScaleRef.current = applyScale
 
   const schedule = () => {
     if (typeof requestAnimationFrame === 'undefined') {
@@ -263,7 +264,7 @@ export default (
     const passed = liveContentRef.current
     if (isLiveRef(passed)) passed.current = html
     lastInnerRef.current = { width: 0, height: 0 }
-    scheduleRef.current()
+    applyScaleRef.current()
   }, [])
 
   const resync = useCallback(() => {

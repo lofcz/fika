@@ -31,7 +31,7 @@ describe('default text ink contrast', () => {
       for (const [surface, ink] of [['#F6EBD4', '#000000'], ['#0b1220', '#ffffff']]) {
         expect(resolveLiveTextPaint(color, `<p style="color: ${color}">Default</p>`, {
           background: { type: 'solid', color: surface },
-        })).toEqual({ ink, html: `<p style="color: ${ink}">Default</p>` })
+        })).toEqual({ ink, defaultInk: ink, html: `<p style="color: ${ink}">Default</p>` })
       }
     }
   })
@@ -44,7 +44,7 @@ describe('default text ink contrast', () => {
         for (const fill of [undefined, '#ffffff', '#0b1220']) {
           expect(resolveLiveTextPaint(color, html, {
             background: { type: 'solid', color: surface }, fill,
-          })).toEqual({ ink: color, html })
+          })).toEqual({ ink: color, defaultInk: color, html })
         }
       }
     }
@@ -61,9 +61,18 @@ describe('default text ink contrast', () => {
         background: { type: 'solid', color: surface },
       })).toEqual({
         ink,
+        defaultInk: ink,
         html: html.replace('color:#333333', `color: ${ink}`).replace('color:#9aa3ad', `color: ${ink}`),
       })
     }
+  })
+
+  it('preserves explicitly selected neutral colors while automatic ink follows the surface', () => {
+    const html = '<p><span style="color:#000000">Auto</span><span data-color-explicit="true" style="color:#000000">Black</span><span data-color-explicit="true" style="color:#ffffff">White</span></p>'
+    const painted = resolveLiveTextPaint('#000000', html, { background: { type: 'solid', color: '#111111' } })
+    expect(painted.html).toContain('style="color: #ffffff">Auto')
+    expect(painted.html).toContain('data-color-explicit="true" style="color:#000000">Black')
+    expect(painted.html).toContain('data-color-explicit="true" style="color:#ffffff">White')
   })
 
   it('uses the underlying chip for default labels while preserving brand labels', () => {
