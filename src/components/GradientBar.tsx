@@ -44,10 +44,15 @@ const GradientBar = memo((props: IGradientBarProps) => {
   }, [emitInput]);
 
   useEffect(() => {
-    if (draggingRef.current) return;
+    if (draggingRef.current) {
+      draggingRef.current = false;
+      emitInput.cancel();
+      removeDragListenersRef.current();
+      onInputRef.current?.(props.value);
+    }
     setPoints(props.value);
     if (props.index > props.value.length - 1) onUpdateIndexRef.current?.(0);
-  }, [props.value, props.index]);
+  }, [props.value, props.index, emitInput]);
   const gradientStyle = (() => {
     const list = points.map(item => `${item.color} ${item.pos}%`);
     return `linear-gradient(to right, ${list.join(',')})`;

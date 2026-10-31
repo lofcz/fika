@@ -65,6 +65,7 @@ export const e2eScripts = [
   'scripts/e2e-gradient-stops-selection.mjs',
   'scripts/e2e-gradient-empty-stops.mjs',
   'scripts/e2e-gradient-coincident-stops.mjs',
+  'scripts/e2e-gradient-stops-undo.mjs',
   'scripts/e2e-gradient-stops-touch.mjs',
   'scripts/e2e-gradient-stop-removal.mjs',
   'scripts/e2e-gradient-stops-external-update.mjs',
