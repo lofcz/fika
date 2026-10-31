@@ -1,4 +1,5 @@
 import { useMainStore, useSlidesStore } from '@/store'
+import type { EditorView } from 'prosemirror-view'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import type { PPTElement, ShapeText } from '@/types/slides'
 import { repairFilledPlaceholderHtml } from '@/utils/placeholderPaint'
@@ -16,6 +17,13 @@ export const storeHtmlForElement = (elementId: string): string => {
   if (found.el.type === 'text') return found.el.content || ''
   if (found.el.type === 'shape') return found.el.text?.content || ''
   return ''
+}
+
+const editorSources = new WeakMap<EditorView, string>()
+
+/** Remember which store content this view has actually synchronized. */
+export function rememberEditorSource(view: EditorView, elementId: string) {
+  editorSources.set(view, storeHtmlForElement(elementId))
 }
 
 /** Activity remounts must not rebuild an empty view over store-owned text. */
@@ -43,6 +51,11 @@ export function commitLiveEditorToStore(elementId: string, options?: { history?:
   if (!found) return
   const { slideId, el } = found
   const isAuthoritative = view.hasFocus() || useMainStore.getState().editingElementId === elementId
+  const source = editorSources.get(view)
+  const storeHtml = el.type === 'text' ? el.content : el.type === 'shape' ? el.text?.content || '' : ''
+  // Undo and external updates can replace the store before React updates or
+  // unmounts this view. An idle view must not overwrite that newer content.
+  if (!isAuthoritative && source !== undefined && source !== storeHtml) return
   const history = options?.history !== false
   if (el.type === 'text') {
     const next = el.placeholder ? repairFilledPlaceholderHtml(el, html) : html
@@ -52,6 +65,7 @@ export function commitLiveEditorToStore(elementId: string, options?: { history?:
       isAuthoritative,
     })) return
     useSlidesStore.getState().updateElement({ id: elementId, slideId, props: { content: next } })
+    rememberEditorSource(view, elementId)
     // oxlint-disable-next-line react/rules-of-hooks -- zustand snapshot helper, not a React hook
     if (history) useHistorySnapshot().addHistorySnapshot()
     return
@@ -61,6 +75,7 @@ export function commitLiveEditorToStore(elementId: string, options?: { history?:
     if (!el.text) return
     if (!isAuthoritative) return
     useSlidesStore.getState().removeElementProps({ id: elementId, propName: 'text' })
+    rememberEditorSource(view, elementId)
     // oxlint-disable-next-line react/rules-of-hooks -- zustand snapshot helper, not a React hook
     if (history) useHistorySnapshot().addHistorySnapshot()
     return
@@ -78,6 +93,7 @@ export function commitLiveEditorToStore(elementId: string, options?: { history?:
     content: html,
   }
   useSlidesStore.getState().updateElement({ id: elementId, slideId, props: { text } })
+  rememberEditorSource(view, elementId)
   // oxlint-disable-next-line react/rules-of-hooks -- zustand snapshot helper, not a React hook
   if (history) useHistorySnapshot().addHistorySnapshot()
 }

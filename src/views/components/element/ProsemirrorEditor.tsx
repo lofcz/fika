@@ -13,7 +13,7 @@ import { TextSelection } from 'prosemirror-state';
 import { toggleMark, wrapIn, lift } from 'prosemirror-commands';
 import { initProsemirrorEditor, createDocument, normalizeFittedFontSizes } from '@/utils/prosemirror';
 import { clearPendingCaret, consumePendingCaret, registerEditorView, unregisterEditorView } from '@/utils/prosemirror/caret';
-import { commitLiveEditorToStore, resolveEditorMountHtml, richTextHtmlLooksEmpty } from '@/utils/prosemirror/commitEditor';
+import { commitLiveEditorToStore, rememberEditorSource, resolveEditorMountHtml, richTextHtmlLooksEmpty } from '@/utils/prosemirror/commitEditor';
 import { registerCommitFlusher } from '@/utils/commitQueue';
 import { isActiveOfParentNodeType, findNodesWithSameMark, getMarkAttrs, getTextAttrs, autoSelectAll, addMark, markActive, getFontsize, rememberTextSelection, forgetTextSelection, restoreTextSelection, resolveRememberedRange, richTextHtmlEqual } from '@/utils/prosemirror/utils';
 import emitter, { EmitterEvents, type RichTextAction, type RichTextCommand, type ApplyInlineMathPayload } from '@/utils/emitter';
@@ -306,7 +306,10 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       return;
     }
     if (!editorView.current) return;
-    if (richTextHtmlEqual(editorView.current.dom.innerHTML, value)) return;
+    if (richTextHtmlEqual(editorView.current.dom.innerHTML, value)) {
+      rememberEditorSource(editorView.current, elementIdRef.current);
+      return;
+    }
     if (editorView.current.hasFocus()) return;
     if (isEmptyEditorDoc(editorView.current) && richTextHtmlLooksEmpty(value)) {
       if (wrapEmptyAsRef.current === 'bullet') wrapEmptyInBulletList(editorView.current);
@@ -327,6 +330,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     const incomingDoc = createDocument(value);
     // HTML spelling, style order and DOM caret aids can differ while the
     // authored document is identical. Compare the parsed ProseMirror trees.
+    rememberEditorSource(editorView.current, elementIdRef.current);
     if (doc.eq(incomingDoc)) return;
     let next = tr.replaceRangeWith(0, doc.content.size, incomingDoc);
     const size = next.doc.content.size;
@@ -790,6 +794,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     editorView.current = view;
     (view.dom as HTMLElement & { __pmView?: EditorView }).__pmView = view;
     registerEditorView(elementIdRef.current, view);
+    rememberEditorSource(view, elementIdRef.current);
     setLinkTooltipPortal(resolveFikaPortalTarget(mountEl));
     if (wrapEmptyAsRef.current === 'bullet' && view.state.doc.textContent.trim().length === 0) {
       wrapEmptyInBulletList(view);

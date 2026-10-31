@@ -189,6 +189,7 @@ export const e2eScripts = [
   'scripts/e2e-search-authoring.mjs',
   'scripts/e2e-search-repeated-replacement.mjs',
   'scripts/e2e-search-replace-all-direct.mjs',
+  'scripts/e2e-search-undo-results.mjs',
   'scripts/e2e-frame-keyboard.mjs',
   'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-frame-pointer.mjs',

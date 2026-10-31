@@ -1,5 +1,5 @@
 
-import { useState, useEffect, createElement } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMainStore, useSlidesStore, selectHandleElement, selectCurrentSlide } from '@/store';
 import type { PPTTableElement } from '@/types/slides';
 import message from '@/utils/message';
@@ -40,6 +40,7 @@ export default () => {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchIndex, setSearchIndex] = useState(-1);
   const [modifiers, setModifiers] = useState<Modifiers>('g');
+  const searchActiveRef = useRef(false);
   const searchRegex = (keyword: string) => new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), modifiers);
   const collectSearchResults = () => {
     const textList: SearchResult[] = [];
@@ -87,6 +88,7 @@ export default () => {
     return textList;
   };
   const search = () => {
+    searchActiveRef.current = true;
     const textList = collectSearchResults();
     if (textList.length) {
       setSearchResults(textList);
@@ -277,6 +279,7 @@ export default () => {
   };
   const replaceAll = () => {
     if (!searchWord) return;
+    searchActiveRef.current = true;
     const results = collectSearchResults();
     const originalSlides = useSlidesStore.getState().slides;
     for (let i = 0; i < results.length; i++) {
@@ -338,20 +341,29 @@ export default () => {
     setSearchIndex(-1);
   };
   const reset = () => {
+    searchActiveRef.current = false;
     setSearchIndex(-1);
     setSearchResults([]);
     if (!searchWord) clearMarks();
   };
   useEffect(() => { reset() }, [searchWord]);
   useEffect(() => {
+    if (!searchActiveRef.current || !searchWord) return;
+    const results = collectSearchResults();
+    if (JSON.stringify(results) === JSON.stringify(searchResults)) return;
+    setSearchResults(results);
+    setSearchIndex(index => results.length ? Math.max(0, Math.min(index, results.length - 1)) : -1);
+  }, [slides]);
+  useEffect(() => {
     const timer = setTimeout(() => {
       highlightCurrentSlide();
     }, 0);
     return () => clearTimeout(timer);
-  }, [slideIndex, searchResults, searchIndex]);
+  }, [slideIndex, searchResults, searchIndex, slides]);
   useEffect(() => { turnTarget(); }, [searchResults, searchIndex]);
   useEffect(() => {
     if (handleElement) {
+      searchActiveRef.current = false;
       setSearchIndex(-1);
       setSearchResults([]);
       clearMarks();
