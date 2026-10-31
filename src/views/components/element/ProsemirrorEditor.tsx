@@ -13,7 +13,7 @@ import { TextSelection } from 'prosemirror-state';
 import { toggleMark, wrapIn, lift } from 'prosemirror-commands';
 import { initProsemirrorEditor, createDocument, normalizeFittedFontSizes } from '@/utils/prosemirror';
 import { clearPendingCaret, consumePendingCaret, registerEditorView, unregisterEditorView } from '@/utils/prosemirror/caret';
-import { commitLiveEditorToStore, rememberEditorSource, resolveEditorMountHtml, richTextHtmlLooksEmpty } from '@/utils/prosemirror/commitEditor';
+import { commitLiveEditorToStore, rememberEditorSource, resolveEditorMountHtml, richTextHtmlLooksEmpty, storeHtmlForElement } from '@/utils/prosemirror/commitEditor';
 import { registerCommitFlusher } from '@/utils/commitQueue';
 import { isActiveOfParentNodeType, findNodesWithSameMark, getMarkAttrs, getTextAttrs, autoSelectAll, addMark, markActive, getFontsize, rememberTextSelection, forgetTextSelection, restoreTextSelection, resolveRememberedRange, richTextHtmlEqual } from '@/utils/prosemirror/utils';
 import emitter, { EmitterEvents, type RichTextAction, type RichTextCommand, type ApplyInlineMathPayload } from '@/utils/emitter';
@@ -315,7 +315,10 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       if (wrapEmptyAsRef.current === 'bullet') wrapEmptyInBulletList(editorView.current);
       return;
     }
-    if (!isEmptyEditorDoc(editorView.current) && richTextHtmlLooksEmpty(value)) return;
+    // Preserve an unsaved draft during a transient empty prop, but accept an
+    // explicit clear in the document (replacement, Undo, or an external edit).
+    if (!isEmptyEditorDoc(editorView.current) && richTextHtmlLooksEmpty(value)
+      && !richTextHtmlLooksEmpty(storeHtmlForElement(elementIdRef.current))) return;
     if (!editorView.current.state.selection.empty) return;
     const storedMarks = editorView.current.state.storedMarks;
     const keepStored = isEmptyEditorDoc(editorView.current) && !!storedMarks?.length;
