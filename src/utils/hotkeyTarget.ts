@@ -11,3 +11,10 @@ export const isTypingTarget = (target: EventTarget | null): boolean => {
   const tag = el.tagName
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 }
+
+/** Controls own navigation and activation keys, even while the canvas retains selection. */
+export const isInteractiveControlTarget = (target: EventTarget | null): boolean => {
+  if (!target || typeof target !== 'object') return false
+  const el = target as { closest?: (selector: string) => unknown }
+  return typeof el.closest === 'function' && !!el.closest('button, a[href], [role="button"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="menuitem"], [role="tab"]')
+}

@@ -3,7 +3,7 @@ import { useMainStore, useSlidesStore, useKeyboardStore, selectHandleElement, se
 import { ElementOrderCommands } from '@/types/edit'
 import { KEYS } from '@/configs/hotkey'
 import { isElementSelectable } from '@/utils/selection'
-import { isTypingTarget } from '@/utils/hotkeyTarget'
+import { isTypingTarget, isInteractiveControlTarget } from '@/utils/hotkeyTarget'
 import { isAppOwnedEvent } from '@/utils/portal'
 
 import useSlideHandler from './useSlideHandler'
@@ -233,7 +233,15 @@ export default () => {
         return
       }
 
-      if (isTypingTarget(e.target)) return
+      if (isTypingTarget(e.target) || (!ctrlOrMetaKeyActive && isInteractiveControlTarget(e.target))) return
+
+      if (ctrlOrMetaKeyActive && (key === KEYS.Z || key === KEYS.Y)) {
+        if (mainStore.disableHotkeys || mainStore.readOnly) return
+        e.preventDefault()
+        if (key === KEYS.Z) stableActionsRef.current.undo()
+        else stableActionsRef.current.redo()
+        return
+      }
 
       if (!mainStore.disableHotkeys && key === KEYS.SPACE) keyboardStore.setSpaceKeyState(true)
 
@@ -266,16 +274,6 @@ export default () => {
         if (mainStore.disableHotkeys) return
         e.preventDefault()
         quickCopy()
-      }
-      if (ctrlOrMetaKeyActive && key === KEYS.Z) {
-        if (mainStore.disableHotkeys) return
-        e.preventDefault()
-        stableActionsRef.current.undo()
-      }
-      if (ctrlOrMetaKeyActive && key === KEYS.Y) {
-        if (mainStore.disableHotkeys) return
-        e.preventDefault()
-        stableActionsRef.current.redo()
       }
       if (ctrlOrMetaKeyActive && key === KEYS.A) {
         if (mainStore.disableHotkeys) return
