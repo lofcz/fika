@@ -7,6 +7,7 @@ import { memo, useCallback, type CSSProperties } from 'react'
 import { useSlidesStore } from '@/store'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import Editor from './Editor'
+import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
 export type IRemarkProps = {
   height: number
@@ -28,13 +29,16 @@ function remarkPropsEqual(prev: IRemarkProps, next: IRemarkProps) {
 
 const Remark = memo((props: IRemarkProps) => {
   const { LL } = useI18nContext()
+  const { addHistorySnapshot } = useHistorySnapshot()
   const slideId = useSlidesStore(s => s.slides[s.slideIndex]?.id)
   const remark = useSlidesStore(s => s.slides[s.slideIndex]?.remark || '')
   const codePanelOpen = !!props.codePanelOpen
 
   const handleInput = useCallback((content: string) => {
-    if (slideId) useSlidesStore.getState().updateSlide({ remark: content }, slideId)
-  }, [slideId])
+    if (!slideId) return
+    useSlidesStore.getState().updateSlide({ remark: content }, slideId)
+    addHistorySnapshot()
+  }, [slideId, addHistorySnapshot])
 
   const resize = useCallback((e: React.MouseEvent) => {
     let isMouseDown = true

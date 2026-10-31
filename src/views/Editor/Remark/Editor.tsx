@@ -64,7 +64,8 @@ const Editor = memo((props: IEditorProps) => {
     const { doc, tr } = editorView.state
     const incoming = createDocument(valueRef.current)
     if (doc.eq(incoming)) return
-    editorView.dispatch(tr.replaceRangeWith(0, doc.content.size, incoming))
+    editorView.dispatch(tr.replaceRangeWith(0, doc.content.size, incoming)
+      .setMeta('fikaSyncValue', true).setMeta('addToHistory', false))
   }, [])
 
   const handleMouseup = useCallback(() => {
@@ -146,9 +147,8 @@ const Editor = memo((props: IEditorProps) => {
     }
 
     editorView.focus()
-    handleInput()
     setAttr(getTextAttrs(editorView))
-  }, [handleInput])
+  }, [])
 
   const initEditor = useCallback(() => {
     if (editorViewRef.current) return
@@ -164,6 +164,12 @@ const Editor = memo((props: IEditorProps) => {
 
     try {
       editorViewRef.current = initProsemirrorEditor(editorViewEl, valueRef.current, {
+        dispatchTransaction: transaction => {
+          const view = editorViewRef.current
+          if (!view || view.isDestroyed) return
+          view.updateState(view.state.apply(transaction))
+          if (transaction.docChanged && !transaction.getMeta('fikaSyncValue')) handleInput()
+        },
         handleDOMEvents: {
           focus: handleFocus,
           blur: handleBlur,
@@ -173,7 +179,6 @@ const Editor = memo((props: IEditorProps) => {
             hideMenuInstance()
           },
           keydown: hideMenuInstance,
-          input: handleInput,
         },
       }, {
         placeholder: LL.editor.remark.clickToEnterSpeakerNotes(),
