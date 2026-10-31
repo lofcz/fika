@@ -83,7 +83,14 @@ const Slider = memo((vrProps: ISliderProps) => {
     onInputRef.current?.(next as never)
   }, LIVE_INPUT_MS), [])
 
-  useEffect(() => () => { emitInput.cancel(); removeDragListenersRef.current() }, [emitInput])
+  useEffect(() => () => {
+    emitInput.cancel()
+    removeDragListenersRef.current()
+    if (draggingRef.current) {
+      draggingRef.current = false
+      onCancelRef.current?.()
+    }
+  }, [emitInput])
 
   const assignPercentage = (next: number) => {
     percentageRef.current = next

@@ -19,6 +19,7 @@ try {
     const slider=page.locator('.field').filter({has:page.getByText(label,{exact:true})}).locator('div').first()
     await slider.scrollIntoViewIfNeeded()
     const r=await slider.boundingBox()
+    const original=await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[0])
     const before=await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[1])
     await page.mouse.move(r.x+r.width*.9,r.y+r.height/2)
     await page.mouse.down()
@@ -28,6 +29,8 @@ try {
     await page.mouse.up()
     await page.waitForTimeout(100)
     const after=await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[1])
+    try { assert.deepEqual(await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[0]),original,`${label}: original object restores after selection changes`) }
+    catch(error) {failures.push(error.message)}
     console.log(label,{before:{outline:before.outline,shadow:before.shadow},after:{outline:after.outline,shadow:after.shadow}})
     try { assert.deepEqual(after,before,`${label}: abandoned drag cannot affect the newly selected object`) }
     catch(error) {failures.push(error.message)}

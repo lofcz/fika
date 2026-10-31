@@ -1,18 +1,19 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './ElementOutline.module.scss'
 const cx = bindStyles(styles)
-import { memo, useRef, useState } from 'react'
+import { memo, useState } from 'react'
 
 import { useSlidesStore } from '@/store'
 import { getHandleElement, useHandleElementId, useHandleElementSelect, useHandleElementShallow } from './handleElement'
 import type { LineStyleType, PPTElementOutline } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import SVGLine from './SVGLine'
+import useOutlineDrag from './useOutlineDrag'
 import PanelSection from './PanelSection'
 import ColorSwatches from '@/components/ColorSwatches'
 import SelectCustom from '@/components/SelectCustom'
 import Slider from '@/components/Slider'
-import { captureOutlineRestore, outlineElementPatch, outlineRadiusToPercent, percentToOutlineRadius, resolveOutlineRadiusPx } from '@/utils/elementOutline'
+import { outlineElementPatch, outlineRadiusToPercent, percentToOutlineRadius, resolveOutlineRadiusPx } from '@/utils/elementOutline'
 import { useI18nContext } from '@/i18n/useI18nContext'
 
 export const OUTLINE_WIDTH_MAX = 20
@@ -39,6 +40,8 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
     borderRadius: `${Math.min(8, resolveOutlineRadiusPx(outline.radius, 24, 24) || 2)}px`,
   }
 
+  const outlineDrag = useOutlineDrag()
+
   const paintOutline = (outlineProps: Partial<PPTElementOutline>) => {
     const el = getHandleElement()
     if (!el) return
@@ -47,27 +50,16 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
       id: el.id,
       props: outlineElementPatch(el, nextOutline, 'radius' in outlineProps),
     })
+    outlineDrag.track()
   }
 
-  // Radius previews can also rewrite a shape's path; retain the authored geometry.
-  const dragRestore = useRef<(() => void) | null>(null)
   const startOutlineDrag = () => {
     const el = getHandleElement()
-    if (!el || !('outline' in el)) return
-    const { props, absent } = captureOutlineRestore(el)
-    dragRestore.current = () => {
-      if (getHandleElement()?.id !== el.id) return
-      const store = useSlidesStore.getState()
-      store.updateElement({ id: el.id, props })
-      if (absent.length) store.removeElementProps({ id: el.id, propName: absent })
-    }
-  }
-  const cancelOutlineDrag = () => {
-    dragRestore.current?.()
-    dragRestore.current = null
+    if (el) outlineDrag.begin([el])
   }
 
   const updateOutline = (outlineProps: Partial<PPTElementOutline>) => {
+    outlineDrag.finish()
     paintOutline(outlineProps)
     addHistorySnapshot()
   }
@@ -127,7 +119,7 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
               step={1}
               value={outline.width || 0}
               onStart={startOutlineDrag}
-              onCancel={cancelOutlineDrag}
+              onCancel={outlineDrag.cancel}
               onInput={value => paintOutline({ width: value })}
               onUpdateValue={value => updateOutline({ width: value })}
             />
@@ -142,7 +134,7 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
               tooltipSuffix="%"
               value={outlineRadiusToPercent(outline.radius, box.width, box.height)}
               onStart={startOutlineDrag}
-              onCancel={cancelOutlineDrag}
+              onCancel={outlineDrag.cancel}
               onInput={value => paintOutline({ radius: percentToOutlineRadius(value) })}
               onUpdateValue={value => updateOutline({ radius: percentToOutlineRadius(value) })}
             />

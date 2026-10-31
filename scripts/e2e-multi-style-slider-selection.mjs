@@ -26,6 +26,7 @@ try {
     const slider = page.locator('.field').filter({ has: page.getByText(label, { exact: true }) }).locator('div').first()
     await slider.scrollIntoViewIfNeeded()
     const r = await slider.boundingBox()
+    const originals = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements.slice(0, 2))
     const before = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[2])
     await page.mouse.move(r.x + r.width * .9, r.y + r.height / 2)
     await page.mouse.down()
@@ -39,6 +40,7 @@ try {
     await page.mouse.up()
     await page.waitForTimeout(150)
     const after = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[2])
+    assert.deepEqual(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements.slice(0, 2)), originals, 'Abandoned previews restore the original selection')
     console.log(label, { before: before.outline, after: after.outline })
     try { assert.deepEqual(after, before, `${label}: abandoned drag must not change a newly selected element`) }
     catch (error) { failures.push(error.message) }
