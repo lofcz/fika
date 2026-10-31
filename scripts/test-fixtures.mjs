@@ -71,6 +71,7 @@ export const e2eScripts = [
   'scripts/e2e-video-poster-load.mjs',
   'scripts/e2e-video-poster-lock.mjs',
   'scripts/e2e-video-poster-generation.mjs',
+  'scripts/e2e-video-generation-lock.mjs',
   'scripts/e2e-video-poster-reset-pending.mjs',
   'scripts/e2e-image-replacement-load.mjs',
   'scripts/e2e-image-replacement-invalid.mjs',

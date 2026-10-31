@@ -69,16 +69,20 @@ const VideoStylePanel = memo(() => {
 
   const generatePoster = async () => {
     const el = getHandleElement() as PPTVideoElement | null
-    const slideId = selectCurrentSlide(useSlidesStore.getState())?.id
-    if (el?.type !== 'video' || !el.src || !slideId || synthesizing) return
+    const slide = selectCurrentSlide(useSlidesStore.getState())
+    if (el?.type !== 'video' || !el.src || !slide || synthesizing
+      || !isElementSelectable(el, slide.elements, useMainStore.getState().hiddenElementIdList)) return
+    const slideId = slide.id
     const key = JSON.stringify([slideId, el.id])
     const request = Symbol()
     posterRequests.set(key, request)
     const commitPoster = (poster: string) => {
       if (posterRequests.get(key) !== request) return
       const store = useSlidesStore.getState()
-      const current = store.slides.find(slide => slide.id === slideId)?.elements.find(item => item.id === el.id)
-      if (current?.type !== 'video' || current.src !== el.src) return
+      const currentSlide = store.slides.find(slide => slide.id === slideId)
+      const current = currentSlide?.elements.find(item => item.id === el.id)
+      if (!currentSlide || current?.type !== 'video' || current.src !== el.src
+        || !isElementSelectable(current, currentSlide.elements, useMainStore.getState().hiddenElementIdList)) return
       store.updateElement({ id: el.id, slideId, props: { poster } })
       addHistorySnapshot()
     }
