@@ -319,7 +319,6 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     // explicit clear in the document (replacement, Undo, or an external edit).
     if (!isEmptyEditorDoc(editorView.current) && richTextHtmlLooksEmpty(value)
       && !richTextHtmlLooksEmpty(storeHtmlForElement(elementIdRef.current))) return;
-    if (!editorView.current.state.selection.empty) return;
     const storedMarks = editorView.current.state.storedMarks;
     const keepStored = isEmptyEditorDoc(editorView.current) && !!storedMarks?.length;
     const range = resolveRememberedRange(editorView.current) ?? {
@@ -341,7 +340,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     const nextTo = Math.max(0, Math.min(range.to, size));
     if (nextTo > nextFrom) {
       try {
-        next = next.setSelection(TextSelection.create(next.doc, nextFrom, nextTo));
+        next = next.setSelection(TextSelection.between(next.doc.resolve(nextFrom), next.doc.resolve(nextTo)));
       } catch {}
     }
     // The incoming value may contain display-only contrast colors. Updating

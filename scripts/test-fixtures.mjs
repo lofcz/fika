@@ -192,6 +192,7 @@ export const e2eScripts = [
   'scripts/e2e-search-undo-results.mjs',
   'scripts/e2e-search-edit-guards.mjs',
   'scripts/e2e-search-empty-replacement.mjs',
+  'scripts/e2e-search-selected-text.mjs',
   'scripts/e2e-frame-keyboard.mjs',
   'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-frame-pointer.mjs',
