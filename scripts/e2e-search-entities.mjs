@@ -13,7 +13,7 @@ try {
     store.setSlides([{ id: 'entity-search', elements: [
       { id: 'text', type: 'text', left: 100, top: 50, width: 600, height: 100, rotate: 0, defaultFontName: 'Arial', defaultColor: '#000000', content },
       { id: 'shape', type: 'shape', left: 100, top: 180, width: 500, height: 100, rotate: 0, fixedRatio: false, viewBox: [500, 100], path: 'M0 0 H500 V100 H0 Z', fill: '#ffffff', text: { content, defaultFontName: 'Arial', defaultColor: '#000000', align: 'top' } },
-      { id: 'table', type: 'table', left: 100, top: 320, width: 400, height: 100, rotate: 0, colWidths: [1], cellMinHeight: 80, outline: { width: 1, color: '#000000', style: 'solid' }, data: [[{ id: 'cell', rowspan: 1, colspan: 1, text: content }]] },
+      { id: 'table', type: 'table', left: 100, top: 320, width: 400, height: 100, rotate: 0, colWidths: [1], cellMinHeight: 80, outline: { width: 1, color: '#000000', style: 'solid' }, data: [[{ id: 'cell', rowspan: 1, colspan: 1, text: 'R&D ©' }]] },
     ] }])
     store.updateSlideIndex(0)
     window.__FIKA_MAIN__.getState().setSearchPanelState(true)
@@ -34,8 +34,9 @@ try {
   await page.getByPlaceholder('Enter replacement text').fill('Copyright')
   await page.getByRole('button', { name: 'Replace all', exact: true }).click()
   const contents = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements.map(el => {
+    if (el.type === 'table') return el.data[0][0].text
     const node = document.createElement('div')
-    node.innerHTML = el.type === 'text' ? el.content : el.type === 'shape' ? el.text.content : el.data[0][0].text
+    node.innerHTML = el.type === 'text' ? el.content : el.text.content
     return node.textContent
   }))
   assert.deepEqual(contents, ['R&D Copyright', 'R&D Copyright', 'R&D Copyright'])

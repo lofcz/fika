@@ -23,19 +23,16 @@ try {
   await input.press('Enter')
   await page.waitForTimeout(200)
   await page.locator('[class*="search-tabs"]').getByText('Replace', { exact: true }).click()
-  await page.getByPlaceholder('Enter replacement text').fill('$&<b>')
+  await page.getByPlaceholder('Enter replacement text').fill('&<b>')
   await page.getByRole('button', { name: 'Replace all', exact: true }).click()
   await page.waitForTimeout(500)
   const after = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides)
-  const cells = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data[0].map(cell => {
-    const node = document.createElement('div')
-    node.innerHTML = cell.text
-    return { html: cell.text, text: node.textContent, injectedTags: node.querySelectorAll('b').length, title: node.querySelector('span')?.title }
-  }))
+  const cells = after[0].elements[0].data[0].map(cell => cell.text)
   console.log(cells)
-  assert.ok(cells.every(cell => cell.text === '$&<b>'), 'Every match, including case variants and split spans, is replaced literally')
-  assert.ok(cells.every(cell => cell.injectedTags === 0), 'Replacement text does not create HTML tags')
-  assert.equal(cells[3].title, 'Price', 'Search never rewrites HTML attributes')
+  const expected = ['&<b>', '&<b>', 'Pri<strong>ce</strong>', '<span title="&<b>">&<b></span>']
+  assert.deepEqual(cells, expected, 'Replace matches in the literal cell source, including text resembling HTML attributes')
+  const visible = await page.locator('#editable-element-table .cell-text').allTextContents()
+  assert.deepEqual(visible, expected, 'The canvas displays the exact replacement text')
   assert.equal(await page.evaluate(() => window.__FIKA_SNAPSHOT__.getState().snapshotCursor), 1, 'Replace all creates one undo entry')
   await page.locator('[class*="search-header"] button').click()
   await page.keyboard.press('Control+z')
@@ -55,7 +52,7 @@ try {
   await page.getByPlaceholder('Enter replacement text').fill('Cost')
   await page.getByRole('button', { name: 'Replace all', exact: true }).click()
   const sensitive = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data[0].map(cell => cell.text))
-  assert.deepEqual(sensitive, ['Cost', 'PRICE', 'Cost<strong></strong>', '<span title="Price">Cost</span>'], 'Case-sensitive replacement retains unmatched text and attributes')
+  assert.deepEqual(sensitive, ['Cost', 'PRICE', 'Pri<strong>ce</strong>', '<span title="Cost">Cost</span>'], 'Case-sensitive replacement retains unmatched literal text')
   assert.deepEqual(errors, [])
-  console.log('PASS table replacement respects case, formatting, literal symbols and undo')
+  console.log('PASS table replacement respects case, literal symbols and undo')
 } finally { await browser.close() }

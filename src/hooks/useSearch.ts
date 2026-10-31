@@ -73,7 +73,7 @@ export default () => {
             for (let j = 0; j < row.length; j++) {
               const cell = row[j];
               if (!cell.text) continue;
-              const text = getSearchHtmlText(cell.text);
+              const text = cell.text;
               const rets = [...text.matchAll(matchRegex)];
               textList.push(...rets.map<SearchTableResult>(match => ({
                 offset: match.index,
@@ -213,7 +213,7 @@ export default () => {
     } else if (element.type === 'table' && target.elType === 'table') {
       const data = element.data.map((row, rowIndex) => row.map((cell, columnIndex) => (
         rowIndex === target.cellIndex[0] && columnIndex === target.cellIndex[1]
-          ? { ...cell, text: replaceHtmlMatches(cell.text, localIndex) }
+          ? { ...cell, text: replacePlainTextMatches(cell.text, localIndex) }
           : cell
       )));
       updateElement({ id: element.id, slideId: target.slideId, props: { data } });
@@ -228,6 +228,14 @@ export default () => {
     const precedingMatches = results.filter(result => sameTarget(result, target) && result.offset < insertedEnd).length;
     const nextIndex = targetStart + precedingMatches;
     setSearchIndex(results.length ? (nextIndex < results.length ? nextIndex : 0) : -1);
+  };
+  const replacePlainTextMatches = (text: string, selectedIndex?: number) => {
+    const matches = getMatchList(text, searchWord);
+    const selected = selectedIndex === undefined ? matches : matches.slice(selectedIndex, selectedIndex + 1);
+    for (const match of selected.reverse()) {
+      text = text.slice(0, match.index) + replaceWord + text.slice(match.index + match[0].length);
+    }
+    return text;
   };
   const replaceHtmlMatches = (html: string, selectedIndex?: number) => {
     const element = document.createElement('div');
@@ -269,7 +277,7 @@ export default () => {
             if (!cell.text) return cell;
             return {
               ...cell,
-              text: replaceHtmlMatches(cell.text)
+              text: replacePlainTextMatches(cell.text)
             };
           });
         });
