@@ -15,7 +15,7 @@ import Switch from '@/components/Switch'
 import Divider from '@/components/Divider'
 import { useI18nContext } from '@/i18n/useI18nContext'
 
-const posterUploadRequests = new Map<string, symbol>()
+const posterRequests = new Map<string, symbol>()
 
 const VideoStylePanel = memo(() => {
   const { LL } = useI18nContext()
@@ -41,16 +41,16 @@ const VideoStylePanel = memo(() => {
     const elementId = element.id
     const key = JSON.stringify([slideId, elementId])
     const request = Symbol()
-    posterUploadRequests.set(key, request)
+    posterRequests.set(key, request)
     getImageDataURL(imageFile).then(dataURL => {
-      if (posterUploadRequests.get(key) !== request) return
+      if (posterRequests.get(key) !== request) return
       const store = useSlidesStore.getState()
       const current = store.slides.find(slide => slide.id === slideId)?.elements.find(el => el.id === elementId)
       if (current?.type !== 'video') return
       store.updateElement({ id: elementId, slideId, props: { poster: dataURL } })
       addHistorySnapshot()
     }).finally(() => {
-      if (posterUploadRequests.get(key) === request) posterUploadRequests.delete(key)
+      if (posterRequests.get(key) === request) posterRequests.delete(key)
     })
   }
 
@@ -58,13 +58,25 @@ const VideoStylePanel = memo(() => {
     const element = getHandleElement()
     const slideId = selectCurrentSlide(useSlidesStore.getState())?.id
     if (element?.type !== 'video' || !slideId) return
-    posterUploadRequests.delete(JSON.stringify([slideId, element.id]))
+    posterRequests.delete(JSON.stringify([slideId, element.id]))
     updateVideo({ poster: '' })
   }
 
   const generatePoster = async () => {
     const el = getHandleElement() as PPTVideoElement | null
-    if (!el?.src || synthesizing) return
+    const slideId = selectCurrentSlide(useSlidesStore.getState())?.id
+    if (el?.type !== 'video' || !el.src || !slideId || synthesizing) return
+    const key = JSON.stringify([slideId, el.id])
+    const request = Symbol()
+    posterRequests.set(key, request)
+    const commitPoster = (poster: string) => {
+      if (posterRequests.get(key) !== request) return
+      const store = useSlidesStore.getState()
+      const current = store.slides.find(slide => slide.id === slideId)?.elements.find(item => item.id === el.id)
+      if (current?.type !== 'video' || current.src !== el.src) return
+      store.updateElement({ id: el.id, slideId, props: { poster } })
+      addHistorySnapshot()
+    }
     setSynthesizing(true)
     try {
       const { captureVideoPoster, synthesizeVideoPoster } = await import('@/utils/mediaPoster')
@@ -75,13 +87,14 @@ const VideoStylePanel = memo(() => {
       ) as HTMLVideoElement | null
       const fromPlayer = captureVideoPoster(video, { acceptBlank: true })
       if (fromPlayer) {
-        updateVideo({ poster: fromPlayer })
+        commitPoster(fromPlayer)
         return
       }
       const poster = await synthesizeVideoPoster(el.src)
-      updateVideo({ poster: poster || '' })
+      commitPoster(poster || '')
     }
     finally {
+      if (posterRequests.get(key) === request) posterRequests.delete(key)
       setSynthesizing(false)
     }
   }
