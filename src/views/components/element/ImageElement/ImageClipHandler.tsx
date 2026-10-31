@@ -169,6 +169,7 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
   }, [])
 
   const moveClipRange = (e: MouseEvent) => {
+    if (e.button !== 0) return
     clearDragRef.current()
     isSettingClipRangeRef.current = true
     let isMouseDown = true
@@ -209,6 +210,7 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
   }
 
   const scaleClipRange = (e: MouseEvent, type: OperateResizeHandlers) => {
+    if (e.button !== 0) return
     clearDragRef.current()
     isSettingClipRangeRef.current = true
     let isMouseDown = true
