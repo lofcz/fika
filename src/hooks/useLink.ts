@@ -1,5 +1,6 @@
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store';
 import { isElementSelectable } from '@/utils/selection';
+import { isSafeHyperlinkHref } from '@/utils/hyperlinkFollow';
 import type { PPTElement, PPTElementLink } from '@/types/slides';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 import message from '@/utils/message';
@@ -18,8 +19,7 @@ export default () => {
   } = useHistorySnapshot();
   const setLink = (handleElement: PPTElement, link: PPTElementLink) => {
     if (!canEditElementLink(handleElement)) return false;
-    const linkRegExp = /^(https?):\/\/[\w\-]+(\.[\w\-]+)+([\w\-.,@?^=%&:\/~+#]*[\w\-@?^=%&\/~+#])?$/;
-    if (link.type === 'web' && !linkRegExp.test(link.target)) {
+    if (link.type === 'web' && !isSafeHyperlinkHref(link.target)) {
       message.error(getLL().canvas.link.invalidWebUrl());
       return false;
     }

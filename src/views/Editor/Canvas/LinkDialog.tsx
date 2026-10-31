@@ -75,7 +75,6 @@ const LinkDialog = memo((props: ILinkDialogProps) => {
     if (target && canEditElementLink(target)) {
       const success = setLink(target, link)
       if (success) onCloseRef.current?.()
-      else setAddress('')
     }
   }, [type, address, slideId, handleElement, setLink])
 
