@@ -38,6 +38,7 @@ const Modal = memo((vrProps: IModalProps) => {
   const { phase, onAnimationEnd, shown, entering } = useOverlayPhase(visible)
   const held = useHoldAfterOpen(shown)
   useReportOverlayTrigger(phase === 'enter' || phase === 'open')
+  const composingEscapeRef = useRef(false)
   const visibleRef = useRef(visible)
   visibleRef.current = visible
 
@@ -80,6 +81,9 @@ const Modal = memo((vrProps: IModalProps) => {
 
   const onEsc = useCallback((event: React.KeyboardEvent) => {
     if (event.key !== 'Escape') return
+    const composing = event.nativeEvent.isComposing || composingEscapeRef.current
+    composingEscapeRef.current = false
+    if (composing) return
     if (visibleRef.current && closeOnEsc) close()
   }, [closeOnEsc, close])
 
@@ -97,6 +101,9 @@ const Modal = memo((vrProps: IModalProps) => {
         ...(shown ? {} : { display: 'none' }),
       }}
       tabIndex={-1}
+      onKeyDownCapture={event => {
+        if (event.key === 'Escape' && !event.repeat) composingEscapeRef.current = event.nativeEvent.isComposing
+      }}
       onKeyUp={onEsc}
     >
       <div className={cx('mask', maskAnimClass)} onClick={onClickMask} />
