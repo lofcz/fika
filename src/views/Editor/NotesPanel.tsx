@@ -19,7 +19,9 @@ const EMPTY_NOTES: Note[] = []
 const NotesPanel = memo(() => {
   const { LL, locale } = useI18nContext()
   const { addHistorySnapshot } = useHistorySnapshot()
+  const readOnly = useMainStore(s => s.readOnly)
   const updateNotes = useCallback((notes: Note[]) => {
+    if (useMainStore.getState().readOnly) return
     useSlidesStore.getState().updateSlide({ notes })
     addHistorySnapshot()
   }, [addHistorySnapshot])
@@ -52,6 +54,7 @@ const NotesPanel = memo(() => {
   }, [])
 
   const createNote = useCallback(() => {
+    if (useMainStore.getState().readOnly) return
     if (!content) {
       if (textAreaRef.current) textAreaRef.current.focus()
       return
@@ -75,6 +78,7 @@ const NotesPanel = memo(() => {
   }, [notes, updateNotes])
 
   const createNoteReply = useCallback(() => {
+    if (useMainStore.getState().readOnly) return
     if (!replyContent) return
     const currentNote = notes.find(note => note.id === replyNoteId)
     if (!currentNote) return
@@ -160,8 +164,8 @@ const NotesPanel = memo(() => {
                   </div>
                 </div>
                 <div className={cx('btns')}>
-                  <div className={cx('btn', 'reply')} onClick={() => setReplyNoteId(note.id)}>{LL.editor.notesPanel.reply()}</div>
-                  <div className={cx('btn', 'delete')} onClick={event => { event.stopPropagation(); deleteNote(note.id) }}>{LL.common.delete()}</div>
+                  <button type="button" disabled={readOnly} className={cx('btn', 'reply')} onClick={() => setReplyNoteId(note.id)}>{LL.editor.notesPanel.reply()}</button>
+                  <button type="button" disabled={readOnly} className={cx('btn', 'delete')} onClick={event => { event.stopPropagation(); deleteNote(note.id) }}>{LL.common.delete()}</button>
                 </div>
               </div>
               <div className={cx('content')}>{note.content}</div>
@@ -178,7 +182,7 @@ const NotesPanel = memo(() => {
                           </div>
                         </div>
                         <div className={cx('btns')}>
-                          <div className={cx('btn', 'delete')} onClick={event => { event.stopPropagation(); deleteReply(note.id, reply.id) }}>{LL.common.delete()}</div>
+                          <button type="button" disabled={readOnly} className={cx('btn', 'delete')} onClick={event => { event.stopPropagation(); deleteReply(note.id, reply.id) }}>{LL.common.delete()}</button>
                         </div>
                       </div>
                       <div className={cx('content')}>{reply.content}</div>
@@ -189,6 +193,7 @@ const NotesPanel = memo(() => {
               {replyNoteId === note.id ? (
                 <div className={cx('note-reply')}>
                   <TextArea
+                    disabled={readOnly}
                     padding={6}
                     value={replyContent}
                     onUpdateValue={value => setReplyContent(value)}
@@ -198,7 +203,7 @@ const NotesPanel = memo(() => {
                   />
                   <div className={cx('reply-btns')}>
                     <Button className={cx('btn')} size="small" onClick={() => setReplyNoteId('')}>{LL.common.cancel()}</Button>
-                    <Button className={cx('btn')} size="small" type="primary" onClick={() => createNoteReply()}>{LL.editor.notesPanel.reply()}</Button>
+                    <Button className={cx('btn')} size="small" type="primary" disabled={readOnly} onClick={() => createNoteReply()}>{LL.editor.notesPanel.reply()}</Button>
                   </div>
                 </div>
               ) : null}
@@ -208,6 +213,7 @@ const NotesPanel = memo(() => {
         </div>
         <div className={cx('send')}>
           <TextArea
+            disabled={readOnly}
             ref={textAreaRef}
             value={content}
             onUpdateValue={value => setContent(value)}
@@ -224,6 +230,7 @@ const NotesPanel = memo(() => {
             {notes.length ? (
               <button
                 type="button"
+                disabled={readOnly}
                 className={cx('clear-btn')}
                 data-tooltip={LL.editor.notesPanel.clearPageNotes()}
                 onClick={() => clear()}
@@ -231,7 +238,7 @@ const NotesPanel = memo(() => {
                 <Icon icon="trash-2" />
               </button>
             ) : null}
-            <Button type="primary" onClick={() => createNote()}>
+            <Button type="primary" disabled={readOnly} onClick={() => createNote()}>
               <Icon icon="plus" /> {LL.editor.notesPanel.addNote()}
             </Button>
           </div>

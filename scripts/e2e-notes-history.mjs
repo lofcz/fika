@@ -26,7 +26,7 @@ try {
     } else if (action === 'reply') {
       await panel.locator('[class*="note-header"]').getByText('Reply', { exact: true }).click()
       await panel.getByPlaceholder('Enter reply').fill('Added reply')
-      await panel.getByRole('button', { name: 'Reply', exact: true }).click()
+      await panel.locator('[class*="reply-btns"]').getByRole('button', { name: 'Reply', exact: true }).click()
     } else if (action === 'delete') {
       await panel.locator('[class*="note-header"]').getByText('Delete', { exact: true }).click()
     } else if (action === 'delete reply') {
