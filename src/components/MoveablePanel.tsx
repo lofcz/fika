@@ -143,7 +143,7 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
   }, [moveable])
 
   const startResize = useCallback((e: React.MouseEvent) => {
-    if (!resizeable) return
+    if (!resizeable || e.button !== 0) return
     let isMouseDown = true
     const startPageX = e.pageX
     const startPageY = e.pageY
