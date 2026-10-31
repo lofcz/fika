@@ -27,12 +27,23 @@ const NotesPanel = memo(() => {
   }, [addHistorySnapshot])
   const formatNoteTime = useCallback((time: number) => formatLocaleDateTime(time, locale), [locale])
   const slideIndex = useSlidesStore(s => s.slideIndex)
+  const slideId = useSlidesStore(s => s.slides[s.slideIndex]?.id)
   const notes = useSlidesStore(s => s.slides[s.slideIndex]?.notes || EMPTY_NOTES)
   const handleElementId = useMainStore(s => s.handleElementId)
   const [content, setContent] = useState('')
-  const [replyContent, setReplyContent] = useState('')
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
   const [activeNoteId, setActiveNoteId] = useState('')
   const [replyNoteId, setReplyNoteId] = useState('')
+  const replyDraftKey = JSON.stringify([slideId, replyNoteId])
+  const replyContent = replyDrafts[replyDraftKey] || ''
+  const setReplyContent = useCallback((value: string) => {
+    setReplyDrafts(drafts => {
+      const next = { ...drafts }
+      if (value) next[replyDraftKey] = value
+      else delete next[replyDraftKey]
+      return next
+    })
+  }, [replyDraftKey])
   const textAreaRef = useRef<{ focus: () => void } | null>(null)
   const notesRef = useRef<HTMLDivElement | null>(null)
   const panelTitle = LL.editor.notesPanel.slideNotesTitle({
@@ -97,7 +108,7 @@ const NotesPanel = memo(() => {
     setReplyContent('')
     setReplyNoteId('')
     Promise.resolve().then(scrollToBottom)
-  }, [replyContent, notes, replyNoteId, LL, scrollToBottom, updateNotes])
+  }, [replyContent, notes, replyNoteId, LL, scrollToBottom, updateNotes, setReplyContent])
 
   const deleteReply = useCallback((noteId: string, replyId: string) => {
     const currentNote = notes.find(note => note.id === noteId)
