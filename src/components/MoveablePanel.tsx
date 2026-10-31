@@ -53,6 +53,19 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
   const xywhRef = useRef({ x, y, w, h })
   xywhRef.current = { x, y, w, h }
 
+  const dragCleanupRef = useRef<(() => void) | null>(null)
+  const listenForDrag = useCallback((onMove: (event: MouseEvent) => void) => {
+    dragCleanupRef.current?.()
+    const stop = () => {
+      if (document.onmousemove === onMove) document.onmousemove = null
+      if (document.onmouseup === stop) document.onmouseup = null
+      if (dragCleanupRef.current === stop) dragCleanupRef.current = null
+    }
+    document.onmousemove = onMove
+    document.onmouseup = stop
+    dragCleanupRef.current = stop
+  }, [])
+
   const realHeight = () => {
     if (!xywhRef.current.h) {
       return moveablePanelRef.current?.clientHeight || 0
@@ -100,7 +113,10 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
     setW(width)
     setH(height)
     setZIndex(initGlobalZIndex())
-    return () => { onPanelClose() }
+    return () => {
+      dragCleanupRef.current?.()
+      onPanelClose()
+    }
   }, [])
 
   const bringToFrontPanel = useCallback((e: React.MouseEvent) => {
@@ -115,15 +131,13 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
     const target = e.target as HTMLElement | null
     if (target?.closest('input, textarea, button, select, a, [contenteditable="true"]')) return
     setZIndex(bringToFront())
-    let isMouseDown = true
     const windowWidth = document.body.clientWidth
     const clientHeight = document.body.clientHeight
     const startPageX = e.pageX
     const startPageY = e.pageY
     const originLeft = xywhRef.current.x
     const originTop = xywhRef.current.y
-    document.onmousemove = ev => {
-      if (!isMouseDown) return
+    listenForDrag(ev => {
       const moveX = ev.pageX - startPageX
       const moveY = ev.pageY - startPageY
       let nextLeft = originLeft + moveX
@@ -134,23 +148,16 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
       if (nextTop + realHeight() > clientHeight) nextTop = clientHeight - realHeight()
       setX(nextLeft)
       setY(nextTop)
-    }
-    document.onmouseup = () => {
-      isMouseDown = false
-      document.onmousemove = null
-      document.onmouseup = null
-    }
-  }, [moveable])
+    })
+  }, [moveable, listenForDrag])
 
   const startResize = useCallback((e: React.MouseEvent) => {
     if (!resizeable || e.button !== 0) return
-    let isMouseDown = true
     const startPageX = e.pageX
     const startPageY = e.pageY
     const originWidth = xywhRef.current.w
     const originHeight = xywhRef.current.h
-    document.onmousemove = ev => {
-      if (!isMouseDown) return
+    listenForDrag(ev => {
       const moveX = ev.pageX - startPageX
       const moveY = ev.pageY - startPageY
       let nextWidth = originWidth + moveX
@@ -161,13 +168,8 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
       if (nextHeight > maxHeight) nextHeight = maxHeight
       setW(nextWidth)
       setH(nextHeight)
-    }
-    document.onmouseup = () => {
-      isMouseDown = false
-      document.onmousemove = null
-      document.onmouseup = null
-    }
-  }, [resizeable, minWidth, minHeight, maxWidth, maxHeight])
+    })
+  }, [resizeable, minWidth, minHeight, maxWidth, maxHeight, listenForDrag])
 
   return (
     <div
