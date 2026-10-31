@@ -209,6 +209,7 @@ export const e2eScripts = [
   'scripts/e2e-remark-caret.mjs',
   'scripts/e2e-remark-history.mjs',
   'scripts/e2e-remark-readonly.mjs',
+  'scripts/e2e-remark-resize-buttons.mjs',
   'scripts/e2e-frame-keyboard.mjs',
   'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-frame-pointer.mjs',

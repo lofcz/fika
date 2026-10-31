@@ -41,6 +41,7 @@ const Remark = memo((props: IRemarkProps) => {
   }, [slideId, addHistorySnapshot])
 
   const resize = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return
     let isMouseDown = true
     const startPageY = e.pageY
     const originHeight = props.height
@@ -58,7 +59,8 @@ const Remark = memo((props: IRemarkProps) => {
       props.onUpdateHeight?.(newHeight)
     }
 
-    document.onmouseup = () => {
+    document.onmouseup = event => {
+      if (event.button !== 0) return
       isMouseDown = false
       document.onmousemove = null
       document.onmouseup = null
