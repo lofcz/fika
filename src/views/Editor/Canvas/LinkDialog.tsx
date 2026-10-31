@@ -5,7 +5,7 @@ import { useRef, useCallback, memo, useState, useEffect } from 'react'
 
 import { useMainStore, useSlidesStore, selectHandleElement, selectCurrentSlide } from '@/store'
 import type { ElementLinkType, PPTElementLink } from '@/types/slides'
-import useLink from '@/hooks/useLink'
+import useLink, { canEditElementLink } from '@/hooks/useLink'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
 import Tabs from '@/components/Tabs'
 import Input from '@/components/Input'
@@ -20,6 +20,7 @@ export type ILinkDialogProps = {
 const LinkDialog = memo((props: ILinkDialogProps) => {
   const { LL } = useI18nContext()
   const handleElement = useMainStore(selectHandleElement)
+  const readOnly = useMainStore(s => s.readOnly)
   const slides = useSlidesStore(s => s.slides)
   const currentSlide = useSlidesStore(selectCurrentSlide)
   const [type, setType] = useState<ElementLinkType>('web')
@@ -71,7 +72,7 @@ const LinkDialog = memo((props: ILinkDialogProps) => {
       target: type === 'web' ? address : slideId,
     }
     const target = selectHandleElement(useMainStore.getState()) ?? handleElement
-    if (target) {
+    if (target && canEditElementLink(target)) {
       const success = setLink(target, link)
       if (success) onCloseRef.current?.()
       else setAddress('')
@@ -102,7 +103,7 @@ const LinkDialog = memo((props: ILinkDialogProps) => {
       ) : null}
       <div className={cx('btns')}>
         <Button onClick={() => onCloseRef.current?.()} style={{ marginRight: '10px' }}>{LL.common.cancel()}</Button>
-        <Button type="primary" onClick={save}>{LL.common.confirm()}</Button>
+        <Button type="primary" disabled={readOnly || !handleElement || !canEditElementLink(handleElement)} onClick={save}>{LL.common.confirm()}</Button>
       </div>
     </div>
   )

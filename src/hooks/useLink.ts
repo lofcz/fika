@@ -1,8 +1,15 @@
-import { useSlidesStore } from '@/store';
+import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store';
+import { isElementSelectable } from '@/utils/selection';
 import type { PPTElement, PPTElementLink } from '@/types/slides';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
+export const canEditElementLink = (element: PPTElement) => {
+  if (useMainStore.getState().readOnly) return false;
+  const slide = selectCurrentSlide(useSlidesStore.getState());
+  const current = slide?.elements.find(item => item.id === element.id);
+  return !!current && isElementSelectable(current, slide.elements, []);
+};
 export default () => {
   const updateElement = useSlidesStore(s => s.updateElement);
   const removeElementProps = useSlidesStore(s => s.removeElementProps);
@@ -10,6 +17,7 @@ export default () => {
     addHistorySnapshot
   } = useHistorySnapshot();
   const setLink = (handleElement: PPTElement, link: PPTElementLink) => {
+    if (!canEditElementLink(handleElement)) return false;
     const linkRegExp = /^(https?):\/\/[\w\-]+(\.[\w\-]+)+([\w\-.,@?^=%&:\/~+#]*[\w\-@?^=%&\/~+#])?$/;
     if (link.type === 'web' && !linkRegExp.test(link.target)) {
       message.error(getLL().canvas.link.invalidWebUrl());
