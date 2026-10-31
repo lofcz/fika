@@ -9,11 +9,13 @@ import { htmlToText } from '@/utils/common';
 import useHistorySnapshot from './useHistorySnapshot';
 interface SearchTextResult {
   elType: 'text' | 'shape';
+  offset: number;
   slideId: string;
   elId: string;
 }
 interface SearchTableResult {
   elType: 'table';
+  offset: number;
   slideId: string;
   elId: string;
   cellIndex: [number, number];
@@ -39,27 +41,29 @@ export default () => {
   const [searchIndex, setSearchIndex] = useState(-1);
   const [modifiers, setModifiers] = useState<Modifiers>('g');
   const searchRegex = (keyword: string) => new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), modifiers);
-  const search = () => {
+  const collectSearchResults = () => {
     const textList: SearchResult[] = [];
     const matchRegex = searchRegex(searchWord);
-    for (const slide of slides) {
+    for (const slide of useSlidesStore.getState().slides) {
       for (const el of slide.elements) {
         if (el.type === 'text') {
           const text = htmlToText(el.content);
-          const rets = text.match(matchRegex);
-          rets && textList.push(...new Array(rets.length).fill({
+          const rets = [...text.matchAll(matchRegex)];
+          textList.push(...rets.map(match => ({
+            offset: match.index,
             slideId: slide.id,
             elId: el.id,
             elType: el.type
-          }));
+          })));
         } else if (el.type === 'shape' && el.text && el.text.content) {
           const text = htmlToText(el.text.content);
-          const rets = text.match(matchRegex);
-          rets && textList.push(...new Array(rets.length).fill({
+          const rets = [...text.matchAll(matchRegex)];
+          textList.push(...rets.map(match => ({
+            offset: match.index,
             slideId: slide.id,
             elId: el.id,
             elType: el.type
-          }));
+          })));
         } else if (el.type === 'table') {
           for (let i = 0; i < el.data.length; i++) {
             const row = el.data[i];
@@ -67,18 +71,23 @@ export default () => {
               const cell = row[j];
               if (!cell.text) continue;
               const text = htmlToText(cell.text);
-              const rets = text.match(matchRegex);
-              rets && textList.push(...new Array(rets.length).fill({
+              const rets = [...text.matchAll(matchRegex)];
+              textList.push(...rets.map<SearchTableResult>(match => ({
+                offset: match.index,
                 slideId: slide.id,
                 elId: el.id,
                 elType: el.type,
                 cellIndex: [i, j]
-              }));
+              })));
             }
           }
         }
       }
     }
+    return textList;
+  };
+  const search = () => {
+    const textList = collectSearchResults();
     if (textList.length) {
       setSearchResults(textList);
       setSearchIndex(0);
@@ -234,13 +243,15 @@ export default () => {
       updateElement({ id: element.id, slideId: target.slideId, props: { data } });
     } else return;
     addHistorySnapshot();
-    const remaining = searchResults.filter((_, index) => index !== searchIndex);
-    setSearchResults(remaining);
-    if (remaining.length) {
-      if (searchIndex > remaining.length - 1) {
-        setSearchIndex(0);
-      }
-    } else setSearchIndex(-1);
+    const results = collectSearchResults();
+    setSearchResults(results);
+    // Skip matches introduced by the replacement before moving to the next
+    // occurrence. The result list must still describe the current document.
+    const targetStart = searchResults.findIndex(result => sameTarget(result, target));
+    const insertedEnd = target.offset + replaceWord.length;
+    const precedingMatches = results.filter(result => sameTarget(result, target) && result.offset < insertedEnd).length;
+    const nextIndex = targetStart + precedingMatches;
+    setSearchIndex(results.length ? (nextIndex < results.length ? nextIndex : 0) : -1);
   };
   const replaceHtmlMatches = (html: string, selectedIndex?: number) => {
     const element = document.createElement('div');
