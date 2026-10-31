@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } })
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5173/'}?locale=en`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
+  await page.evaluate(() => {
+    const store = window.__FIKA_SLIDES__.getState()
+    const data = [['Price', 'PRICE', 'Pri<strong>ce</strong>', '<span title="Price">Price</span>'].map((text, index) => ({ id: `cell-${index}`, rowspan: 1, colspan: 1, text }))]
+    store.setSlides([{ id: 'table-search', elements: [{ id: 'table', type: 'table', left: 100, top: 100, width: 700, height: 160, rotate: 0, colWidths: [.25, .25, .25, .25], cellMinHeight: 80, outline: { width: 1, color: '#000000', style: 'solid' }, data }] }])
+    store.updateSlideIndex(0)
+    window.__FIKA_MAIN__.getState().setSearchPanelState(true)
+  })
+  await page.waitForTimeout(400)
+  await page.evaluate(() => window.__FIKA_SNAPSHOT__.getState().initSnapshotDatabase())
+  const before = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides)
+  const input = page.getByPlaceholder('Enter text to find')
+  await input.fill('Price')
+  await page.locator('[data-tooltip="Ignore case"]:visible').click()
+  await input.press('Enter')
+  await page.waitForTimeout(200)
+  await page.locator('[class*="search-tabs"]').getByText('Replace', { exact: true }).click()
+  await page.getByPlaceholder('Enter replacement text').fill('$&<b>')
+  await page.getByRole('button', { name: 'Replace all', exact: true }).click()
+  await page.waitForTimeout(500)
+  const after = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides)
+  const cells = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data[0].map(cell => {
+    const node = document.createElement('div')
+    node.innerHTML = cell.text
+    return { html: cell.text, text: node.textContent, injectedTags: node.querySelectorAll('b').length, title: node.querySelector('span')?.title }
+  }))
+  console.log(cells)
+  assert.ok(cells.every(cell => cell.text === '$&<b>'), 'Every match, including case variants and split spans, is replaced literally')
+  assert.ok(cells.every(cell => cell.injectedTags === 0), 'Replacement text does not create HTML tags')
+  assert.equal(cells[3].title, 'Price', 'Search never rewrites HTML attributes')
+  assert.equal(await page.evaluate(() => window.__FIKA_SNAPSHOT__.getState().snapshotCursor), 1, 'Replace all creates one undo entry')
+  await page.locator('[class*="search-header"] button').click()
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(200)
+  assert.deepEqual(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides), before, 'Undo restores the exact original document')
+  await page.keyboard.press('Control+Shift+z')
+  await page.waitForTimeout(200)
+  assert.deepEqual(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides), after, 'Redo restores the replacement')
+  await page.evaluate(before => {
+    window.__FIKA_SLIDES__.getState().setSlides(before)
+    window.__FIKA_MAIN__.getState().setSearchPanelState(true)
+  }, before)
+  await input.fill('Price')
+  await input.press('Enter')
+  await page.waitForTimeout(200)
+  await page.locator('[class*="search-tabs"]').getByText('Replace', { exact: true }).click()
+  await page.getByPlaceholder('Enter replacement text').fill('Cost')
+  await page.getByRole('button', { name: 'Replace all', exact: true }).click()
+  const sensitive = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data[0].map(cell => cell.text))
+  assert.deepEqual(sensitive, ['Cost', 'PRICE', 'Cost<strong></strong>', '<span title="Price">Cost</span>'], 'Case-sensitive replacement retains unmatched text and attributes')
+  assert.deepEqual(errors, [])
+  console.log('PASS table replacement respects case, formatting, literal symbols and undo')
+} finally { await browser.close() }

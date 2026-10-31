@@ -33,7 +33,7 @@ export default () => {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchIndex, setSearchIndex] = useState(-1);
   const [modifiers, setModifiers] = useState<Modifiers>('g');
-  const searchRegex = (keyword: string, flags = modifiers) => new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+  const searchRegex = (keyword: string) => new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), modifiers);
   const search = () => {
     const textList: SearchResult[] = [];
     const matchRegex = searchRegex(searchWord);
@@ -310,6 +310,27 @@ export default () => {
       });
     } else setSearchIndex(-1);
   };
+  const replaceHtmlMatches = (html: string) => {
+    const element = document.createElement('div');
+    element.innerHTML = html;
+    const textNodes = getTextNodeList(element);
+    const textList = getTextInfoList(textNodes);
+    const content = textList.map(({ text }) => text).join('');
+    const matchList = getMatchList(content, searchWord);
+    if (!matchList.length) return html;
+    highlight(textNodes, textList, matchList, 0);
+    let lastMarkIndex = -1;
+    for (const mark of element.querySelectorAll('mark[data-index]')) {
+      const markIndex = +(mark as HTMLElement).dataset.index!;
+      const parentNode = mark.parentNode!;
+      if (markIndex === lastMarkIndex) parentNode.removeChild(mark);
+      else {
+        parentNode.replaceChild(document.createTextNode(replaceWord), mark);
+        lastMarkIndex = markIndex;
+      }
+    }
+    return element.innerHTML;
+  };
   const replaceAll = () => {
     if (!searchWord) return;
     if (searchIndex === -1) {
@@ -325,15 +346,13 @@ export default () => {
       if (!targetSlide) continue;
       const targetElement = targetSlide.elements.find(item => item.id === target.elId);
       if (!targetElement) continue;
-      const fakeElement = document.createElement('div');
-      if (targetElement.type === 'text') fakeElement.innerHTML = targetElement.content;else if (targetElement.type === 'shape') fakeElement.innerHTML = targetElement.text?.content || '';
       if (target.elType === 'table') {
         const data = (targetElement as PPTTableElement).data.map(row => {
           return row.map(cell => {
             if (!cell.text) return cell;
             return {
               ...cell,
-              text: cell.text.replace(searchRegex(searchWord, 'g'), replaceWord)
+              text: replaceHtmlMatches(cell.text)
             };
           });
         });
@@ -346,26 +365,9 @@ export default () => {
           props
         });
       } else {
-        const textNodes = getTextNodeList(fakeElement);
-        const textList = getTextInfoList(textNodes);
-        const content = textList.map(({
-          text
-        }) => text).join('');
-        const matchList = getMatchList(content, searchWord);
-        highlight(textNodes, textList, matchList, i);
-        const marks = fakeElement.querySelectorAll('mark[data-index]');
-        let lastMarkIndex = -1;
-        for (const mark of marks) {
-          const markIndex = +(mark as HTMLElement).dataset.index!;
-          const parentNode = mark.parentNode!;
-          if (markIndex === lastMarkIndex) parentNode.removeChild(mark);else {
-            parentNode.replaceChild(document.createTextNode(replaceWord), mark);
-            lastMarkIndex = markIndex;
-          }
-        }
-        if (target.elType === 'text') {
+        if (targetElement.type === 'text') {
           const props = {
-            content: fakeElement.innerHTML
+            content: replaceHtmlMatches(targetElement.content)
           };
           updateElement({
             id: target.elId,
@@ -378,7 +380,7 @@ export default () => {
             const props = {
               text: {
                 ...el.text,
-                content: fakeElement.innerHTML
+                content: replaceHtmlMatches(el.text.content)
               }
             };
             updateElement({
