@@ -89,7 +89,7 @@ const Input = forwardRef<InputHandle, IInputProps>(function Input(vrProps, expos
         onBlur={handleBlur}
         onChange={(event) => onChange?.(event.nativeEvent)}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') onEnter?.(event.nativeEvent)
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing) onEnter?.(event.nativeEvent)
           if (event.key === 'Backspace') onBackspace?.(event.nativeEvent)
         }}
       />
