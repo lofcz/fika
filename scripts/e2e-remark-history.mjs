@@ -8,7 +8,7 @@ try {
   await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5173/'}?locale=en`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
   const failures = []
-  for (const mode of ['document', 'focused']) {
+  for (const mode of ['document', 'focused', 'focused-y']) {
     await page.evaluate(mode => {
       const store = window.__FIKA_SLIDES__.getState()
       store.setSlides([{ id: `remark-${mode}`, elements: [], remark: '<p>Original</p>' }])
@@ -33,7 +33,7 @@ try {
     const undone = await read()
     console.log({ mode, undone })
     try { assert.deepEqual(undone, { saved: 'Original', visible: 'Original' }) } catch (error) { failures.push(`${mode} undo: ${error.message}`) }
-    await page.keyboard.press(mode === 'focused' ? 'Control+y' : 'Control+Shift+z')
+    await page.keyboard.press(mode === 'focused-y' ? 'Control+y' : 'Control+Shift+z')
     await page.waitForTimeout(700)
     const redone = await read()
     console.log({ mode, redone })
