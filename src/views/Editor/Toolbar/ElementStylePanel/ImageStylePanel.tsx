@@ -11,6 +11,7 @@ import type { PPTImageElement, SlideBackground } from '@/types/slides'
 import { CLIPPATHS } from '@/configs/imageClip'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useImageHandler from '@/hooks/useImageHandler'
+import { imageCropGeometry } from '@/utils/imageCrop'
 import ElementOutline from '../common/ElementOutline'
 import ElementShadow from '../common/ElementShadow'
 import ElementFlip from '../common/ElementFlip'
@@ -72,20 +73,6 @@ const ImageStylePanel = memo(() => {
     setClipPanelVisible(false)
   }
 
-  const getImageElementDataBeforeClip = () => {
-    const _handleElement = getHandleElement() as PPTImageElement
-    const imgWidth = _handleElement.width
-    const imgHeight = _handleElement.height
-    const imgLeft = _handleElement.left
-    const imgTop = _handleElement.top
-    const originClipRange: [[number, number], [number, number]] = _handleElement.clip ? _handleElement.clip.range : [[0, 0], [100, 100]]
-    const originWidth = imgWidth / ((originClipRange[1][0] - originClipRange[0][0]) / 100)
-    const originHeight = imgHeight / ((originClipRange[1][1] - originClipRange[0][1]) / 100)
-    const originLeft = imgLeft - originWidth * (originClipRange[0][0] / 100)
-    const originTop = imgTop - originHeight * (originClipRange[0][1] / 100)
-    return { originClipRange, originWidth, originHeight, originLeft, originTop }
-  }
-
   const updateImage = (props: Partial<PPTImageElement>) => {
     if (!getHandleElement()) return
     useSlidesStore.getState().updateElement({ id: handleElementId, props })
@@ -94,7 +81,8 @@ const ImageStylePanel = memo(() => {
 
   const presetImageClip = (shape: string, ratio = 0) => {
     const _handleElement = getHandleElement() as PPTImageElement
-    const { originClipRange, originWidth, originHeight, originLeft, originTop } = getImageElementDataBeforeClip()
+    const originClipRange: [[number, number], [number, number]] = _handleElement.clip?.range ?? [[0, 0], [100, 100]]
+    const { width: originWidth, height: originHeight } = imageCropGeometry(_handleElement, [[0, 0], [100, 100]])
 
     if (ratio) {
       const imageRatio = originHeight / originWidth
@@ -111,10 +99,7 @@ const ImageStylePanel = memo(() => {
       }
       updateImage({
         clip: { ..._handleElement.clip, shape, range },
-        left: originLeft + originWidth * (range[0][0] / 100),
-        top: originTop + originHeight * (range[0][1] / 100),
-        width: originWidth * (range[1][0] - range[0][0]) / 100,
-        height: originHeight * (range[1][1] - range[0][1]) / 100,
+        ...imageCropGeometry(_handleElement, range),
       })
     }
     else {
@@ -129,13 +114,7 @@ const ImageStylePanel = memo(() => {
   const resetImage = () => {
     const _handleElement = getHandleElement() as PPTImageElement
     if (_handleElement.clip) {
-      const { originWidth, originHeight, originLeft, originTop } = getImageElementDataBeforeClip()
-      updateImage({
-        left: originLeft,
-        top: originTop,
-        width: originWidth,
-        height: originHeight,
-      })
+      updateImage(imageCropGeometry(_handleElement, [[0, 0], [100, 100]]))
     }
     useSlidesStore.getState().removeElementProps({
       id: handleElementId,
