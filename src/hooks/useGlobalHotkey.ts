@@ -238,7 +238,7 @@ export default () => {
       if (ctrlOrMetaKeyActive && (key === KEYS.Z || key === KEYS.Y)) {
         if (mainStore.disableHotkeys || mainStore.readOnly) return
         e.preventDefault()
-        if (key === KEYS.Z) stableActionsRef.current.undo()
+        if (key === KEYS.Z && !shiftKey) stableActionsRef.current.undo()
         else stableActionsRef.current.redo()
         return
       }
