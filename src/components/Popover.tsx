@@ -5,10 +5,17 @@ import { type CSSProperties, type ReactNode, useRef, memo, useState, useEffect, 
 import { createPortal } from 'react-dom'
 
 import tippy, { type Instance, type Placement } from 'tippy.js'
-import { resolveFikaPortalTarget } from '@/utils/portal'
+import { isAppOwnedEvent, resolveFikaPortalTarget } from '@/utils/portal'
 import { markOverlayOpenChildren, markOverlaySurface, useReportOverlayTrigger } from '@/components/OverlayTrigger'
 import 'tippy.js/animations/scale.css'
 import './popover-tippy.scss'
+
+// Opening a nested picker must not let one Escape dismiss its parent too.
+const openPopovers: Instance[] = []
+const forgetPopover = (instance: Instance) => {
+  const index = openPopovers.indexOf(instance)
+  if (index !== -1) openPopovers.splice(index, 1)
+}
 
 export type IPopoverProps = {
   value?: boolean
@@ -44,7 +51,6 @@ const Popover = memo((vrProps: IPopoverProps) => {
   const [portalBox, setPortalBox] = useState<Element | null>(null)
   const triggerRef = useRef<HTMLDivElement | null>(null)
   const instanceRef = useRef<Instance | undefined>(undefined)
-  const dismissedByEscapeRef = useRef(false)
   const contentVisibleRef = useRef(false)
   const portalBoxRef = useRef<Element | null>(null)
   contentVisibleRef.current = contentVisible
@@ -71,6 +77,23 @@ const Popover = memo((vrProps: IPopoverProps) => {
     const triggerEl = triggerRef.current
     if (!triggerEl) return
 
+    const ownerDocument = triggerEl.ownerDocument
+    const onEscapeRelease = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      ownerDocument.removeEventListener('keyup', onEscapeRelease, true)
+    }
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.repeat) return
+      if (openPopovers.at(-1) !== inst || !isAppOwnedEvent(event)) return
+      event.preventDefault()
+      event.stopPropagation()
+      // Keep the release from also closing a containing dialog, even though
+      // the picker is already hidden by the time the key is released.
+      ownerDocument.addEventListener('keyup', onEscapeRelease, true)
+      inst.hide()
+    }
+
     const inst = tippy(triggerEl, {
       content: '',
       allowHTML: true,
@@ -93,6 +116,9 @@ const Popover = memo((vrProps: IPopoverProps) => {
           }
         : undefined,
       onShow(next) {
+        forgetPopover(next)
+        openPopovers.push(next)
+        ownerDocument.addEventListener('keydown', onEscape, true)
         setTriggerOpen(true)
         // The controlled state must follow visibility immediately. Waiting for
         // the entry animation loses close requests from fast menu selections.
@@ -104,6 +130,8 @@ const Popover = memo((vrProps: IPopoverProps) => {
         }
       },
       onHide() {
+        forgetPopover(inst)
+        ownerDocument.removeEventListener('keydown', onEscape, true)
         if (!instanceRef.current) return
         setTriggerOpen(false)
         if (valueRef.current) onUpdateValueRef.current?.(false)
@@ -124,6 +152,9 @@ const Popover = memo((vrProps: IPopoverProps) => {
       })
     }
     return () => {
+      forgetPopover(inst)
+      ownerDocument.removeEventListener('keydown', onEscape, true)
+      ownerDocument.removeEventListener('keyup', onEscapeRelease, true)
       instanceRef.current = undefined
       inst.destroy()
       setContentVisible(false)
@@ -161,21 +192,6 @@ const Popover = memo((vrProps: IPopoverProps) => {
       style={vrProps.style}
       ref={triggerRef}
       onPointerEnter={prefetch}
-      onKeyDown={event => {
-        if (event.key !== 'Escape' || !instanceRef.current?.state.isVisible) return
-        event.preventDefault()
-        event.stopPropagation()
-        dismissedByEscapeRef.current = true
-        instanceRef.current.hide()
-      }}
-      onKeyUp={event => {
-        // The content remains mounted during dismissal. Do not let the same
-        // Escape release also dismiss a containing dialog.
-        if (event.key === 'Escape' && dismissedByEscapeRef.current) {
-          dismissedByEscapeRef.current = false
-          event.stopPropagation()
-        }
-      }}
     >
       {contentVisible && portalBox
         ? createPortal(
