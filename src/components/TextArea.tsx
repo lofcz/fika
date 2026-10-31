@@ -63,7 +63,7 @@ const TextArea = forwardRef<TextAreaHandle, ITextAreaProps>(function TextArea(vr
       onFocus={(event) => onFocus?.(event.nativeEvent)}
       onBlur={(event) => onBlur?.(event.nativeEvent)}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') onEnter?.(event.nativeEvent)
+        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) onEnter?.(event.nativeEvent)
       }}
     />
   )
