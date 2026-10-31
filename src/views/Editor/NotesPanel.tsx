@@ -12,11 +12,17 @@ import { useI18nContext } from '@/i18n/useI18nContext'
 import MoveablePanel from '@/components/MoveablePanel'
 import TextArea from '@/components/TextArea'
 import Button from '@/components/Button'
+import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
 const EMPTY_NOTES: Note[] = []
 
 const NotesPanel = memo(() => {
   const { LL, locale } = useI18nContext()
+  const { addHistorySnapshot } = useHistorySnapshot()
+  const updateNotes = useCallback((notes: Note[]) => {
+    useSlidesStore.getState().updateSlide({ notes })
+    addHistorySnapshot()
+  }, [addHistorySnapshot])
   const formatNoteTime = useCallback((time: number) => formatLocaleDateTime(time, locale), [locale])
   const slideIndex = useSlidesStore(s => s.slideIndex)
   const notes = useSlidesStore(s => s.slides[s.slideIndex]?.notes || EMPTY_NOTES)
@@ -58,15 +64,15 @@ const NotesPanel = memo(() => {
     }
     if (handleElementId) newNote.elId = handleElementId
     const newNotes = [...notes, newNote]
-    useSlidesStore.getState().updateSlide({ notes: newNotes })
+    updateNotes(newNotes)
     setContent('')
     Promise.resolve().then(scrollToBottom)
-  }, [content, LL, handleElementId, notes, scrollToBottom])
+  }, [content, LL, handleElementId, notes, scrollToBottom, updateNotes])
 
   const deleteNote = useCallback((id: string) => {
     const newNotes = notes.filter(note => note.id !== id)
-    useSlidesStore.getState().updateSlide({ notes: newNotes })
-  }, [notes])
+    updateNotes(newNotes)
+  }, [notes, updateNotes])
 
   const createNoteReply = useCallback(() => {
     if (!replyContent) return
@@ -83,11 +89,11 @@ const NotesPanel = memo(() => {
       replies: newReplies,
     }
     const newNotes = notes.map(note => note.id === replyNoteId ? newNote : note)
-    useSlidesStore.getState().updateSlide({ notes: newNotes })
+    updateNotes(newNotes)
     setReplyContent('')
     setReplyNoteId('')
     Promise.resolve().then(scrollToBottom)
-  }, [replyContent, notes, replyNoteId, LL, scrollToBottom])
+  }, [replyContent, notes, replyNoteId, LL, scrollToBottom, updateNotes])
 
   const deleteReply = useCallback((noteId: string, replyId: string) => {
     const currentNote = notes.find(note => note.id === noteId)
@@ -98,8 +104,8 @@ const NotesPanel = memo(() => {
       replies: newReplies,
     }
     const newNotes = notes.map(note => note.id === noteId ? newNote : note)
-    useSlidesStore.getState().updateSlide({ notes: newNotes })
-  }, [notes])
+    updateNotes(newNotes)
+  }, [notes, updateNotes])
 
   const handleClickNote = useCallback((note: Note) => {
     setActiveNoteId(note.id)
@@ -115,8 +121,8 @@ const NotesPanel = memo(() => {
   }, [])
 
   const clear = useCallback(() => {
-    useSlidesStore.getState().updateSlide({ notes: [] })
-  }, [])
+    updateNotes([])
+  }, [updateNotes])
 
   const close = useCallback(() => {
     useMainStore.getState().setNotesPanelState(false)
