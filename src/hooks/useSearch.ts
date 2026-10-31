@@ -277,16 +277,13 @@ export default () => {
   };
   const replaceAll = () => {
     if (!searchWord) return;
-    if (searchIndex === -1) {
-      searchNext();
-      return;
-    }
+    const results = collectSearchResults();
     const originalSlides = useSlidesStore.getState().slides;
-    for (let i = 0; i < searchResults.length; i++) {
-      const lastTarget = searchResults[i - 1];
-      const target = searchResults[i];
+    for (let i = 0; i < results.length; i++) {
+      const lastTarget = results[i - 1];
+      const target = results[i];
       if (lastTarget && lastTarget.slideId === target.slideId && lastTarget.elId === target.elId) continue;
-      const targetSlide = slides.find(item => item.id === target.slideId);
+      const targetSlide = originalSlides.find(item => item.id === target.slideId);
       if (!targetSlide) continue;
       const targetElement = targetSlide.elements.find(item => item.id === target.elId);
       if (!targetElement) continue;
