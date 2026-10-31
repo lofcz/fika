@@ -1,3 +1,5 @@
+import message from '@/utils/message'
+import { getLL } from '@/i18n/getLL'
 import { useKeyboardStore } from '@/store'
 import { pasteCustomClipboardString } from '@/utils/clipboard'
 import { plainTextToParagraphs } from '@/utils/textParser'
@@ -67,7 +69,7 @@ export default () => {
         }
         else if (isSVGString(clipboardData)) {
           const file = svg2File(clipboardData)
-          getImageDataURL(file).then(dataURL => createImageElement(dataURL))
+          getImageDataURL(file).then(dataURL => createImageElement(dataURL)).catch(() => message.error(getLL().common.fileParseError()))
         }
         else {
           const string = plainTextToParagraphs(clipboardData)

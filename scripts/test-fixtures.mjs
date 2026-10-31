@@ -81,6 +81,7 @@ export const e2eScripts = [
   'scripts/e2e-video-poster-reset-pending.mjs',
   'scripts/e2e-image-replacement-load.mjs',
   'scripts/e2e-image-replacement-invalid.mjs',
+  'scripts/e2e-image-read-failure.mjs',
   'scripts/e2e-image-intrinsic-size.mjs',
   'scripts/e2e-image-zero-size.mjs',
   'scripts/e2e-image-replacement-lock.mjs',

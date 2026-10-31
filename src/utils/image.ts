@@ -45,12 +45,28 @@ export const getImageSize = (src: string): Promise<ImageSize> => {
  * @param file Image file
  */
 export const getImageDataURL = (file: File): Promise<string> => {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.addEventListener('load', () => {
+    const cleanup = () => {
+      reader.onload = null;
+      reader.onerror = null;
+      reader.onabort = null;
+    };
+    reader.onload = () => {
+      cleanup();
       resolve(reader.result as string);
-    });
-    reader.readAsDataURL(file);
+    };
+    reader.onerror = () => {
+      const error = reader.error || new Error('Unable to read image file');
+      cleanup();
+      reject(error);
+    };
+    reader.onabort = () => {
+      cleanup();
+      reject(new DOMException('Image file read was aborted', 'AbortError'));
+    };
+    try { reader.readAsDataURL(file); }
+    catch (error) { cleanup(); reject(error); }
   });
 };
 

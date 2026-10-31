@@ -59,6 +59,8 @@ const VideoStylePanel = memo(() => {
         || !isElementSelectable(current, currentSlide.elements, useMainStore.getState().hiddenElementIdList)) return
       store.updateElement({ id: elementId, slideId, props: { poster: dataURL } })
       addHistorySnapshot()
+    }).catch(() => {
+      if (posterRequests.get(key) === request) message.error(getLL().common.fileParseError())
     }).finally(() => {
       if (posterRequests.get(key) === request) posterRequests.delete(key)
     })

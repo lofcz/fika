@@ -1,3 +1,4 @@
+import message from '@/utils/message'
 import { bindStyles } from '@/utils/cssm'
 import styles from './ShapeStylePanel.module.scss'
 const cx = bindStyles(styles)
@@ -178,6 +179,8 @@ const ShapeStylePanel = memo(function ShapeStylePanel() {
         || !isElementSelectable(element, currentSlide.elements, useMainStore.getState().hiddenElementIdList)) return
       store.updateElement({ id: elementId, slideId, props: { pattern: dataURL } })
       addHistorySnapshot()
+    }).catch(() => {
+      if (patternImageRequests.get(key) === request) message.error(LL.common.fileParseError())
     }).finally(() => {
       if (patternImageRequests.get(key) === request) patternImageRequests.delete(key)
     })

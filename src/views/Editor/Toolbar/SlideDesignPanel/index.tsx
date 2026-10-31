@@ -1,3 +1,4 @@
+import message from '@/utils/message'
 import useResizeDeck from '@/hooks/useResizeDeck'
 import { useDesignThemes } from '@/configs/designThemes'
 import { bindStyles } from '@/utils/cssm'
@@ -269,6 +270,8 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
         background: { ...background, image: { ...background.image, src: dataURL } },
       }, targetId)
       addHistorySnapshot()
+    }).catch(() => {
+      if (backgroundImageRequests.get(targetId) === request) message.error(LL.common.fileParseError())
     }).finally(() => {
       if (backgroundImageRequests.get(targetId) === request) backgroundImageRequests.delete(targetId)
     })

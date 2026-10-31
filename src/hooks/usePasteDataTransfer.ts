@@ -1,3 +1,5 @@
+import message from '@/utils/message'
+import { getLL } from '@/i18n/getLL'
 import { MIME_MAP } from '@/configs/mime'
 import { getImageDataURL } from '@/utils/image'
 import { registerMediaBlob } from '@/utils/mediaIntern'
@@ -19,7 +21,7 @@ export default () => {
         if (item.type.indexOf('image') !== -1) {
           const imageFile = item.getAsFile()
           if (imageFile) {
-            getImageDataURL(imageFile).then(dataURL => createImageElement(dataURL))
+            getImageDataURL(imageFile).then(dataURL => createImageElement(dataURL)).catch(() => message.error(getLL().common.fileParseError()))
             isFile = true
           }
         }
