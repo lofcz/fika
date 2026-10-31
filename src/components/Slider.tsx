@@ -209,7 +209,7 @@ const Slider = memo((vrProps: ISliderProps) => {
   }
 
   const handleMousedown = (e: React.MouseEvent | React.TouchEvent) => {
-    if (disabled) return
+    if (disabled || ('button' in e && e.button !== 0)) return
     const native = e.nativeEvent
     removeDragListenersRef.current()
     vrProps.onStart?.()

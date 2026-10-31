@@ -58,6 +58,7 @@ export const e2eScripts = [
   'scripts/e2e-slider-touch-cancel.mjs',
   'scripts/e2e-slider-selection-change.mjs',
   'scripts/e2e-style-sliders-selection.mjs',
+  'scripts/e2e-style-slider-mouse-buttons.mjs',
   'scripts/e2e-border-slider-undo.mjs',
   'scripts/e2e-style-sliders-touch-cancel.mjs',
   'scripts/e2e-multi-style-slider-selection.mjs',
