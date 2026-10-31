@@ -3,7 +3,7 @@ import { useState, useEffect, createElement } from 'react'
 import { useMainStore, useSlidesStore, selectHandleElement, selectCurrentSlide } from '@/store';
 import type { PPTTableElement } from '@/types/slides';
 import message from '@/utils/message';
-import { queryFika, queryFikaAll } from '@/utils/portal';
+import { queryFika } from '@/utils/portal';
 import { getLL } from '@/i18n/getLL';
 import { htmlToText } from '@/utils/common';
 import useHistorySnapshot from './useHistorySnapshot';
@@ -20,6 +20,10 @@ interface SearchTableResult {
 }
 type SearchResult = SearchTextResult | SearchTableResult;
 type Modifiers = 'g' | 'gi';
+const sameTarget = (a: SearchResult, b: SearchResult) => (
+  a.slideId === b.slideId && a.elId === b.elId
+  && (a.elType !== 'table' || (b.elType === 'table' && a.cellIndex[0] === b.cellIndex[0] && a.cellIndex[1] === b.cellIndex[1]))
+);
 export default () => {
   const { addHistorySnapshot } = useHistorySnapshot();
   const handleElement = useMainStore(selectHandleElement);
@@ -78,7 +82,6 @@ export default () => {
     if (textList.length) {
       setSearchResults(textList);
       setSearchIndex(0);
-      highlightCurrentSlide();
     } else {
       message.warning(getLL().editor.search.noMatchesFound());
       clearMarks();
@@ -90,7 +93,7 @@ export default () => {
     while (nodeList.length) {
       const node = nodeList.shift()!;
       if (node.nodeType === node.TEXT_NODE) {
-        (node as Text).wholeText && textNodes.push(node as Text);
+        (node as Text).data && textNodes.push(node as Text);
       } else {
         nodeList.unshift(...node.childNodes);
       }
@@ -101,10 +104,10 @@ export default () => {
     let length = 0;
     const textList = textNodes.map(node => {
       const startIdx = length,
-        endIdx = length + node.wholeText.length;
+        endIdx = length + node.data.length;
       length = endIdx;
       return {
-        text: node.wholeText,
+        text: node.data,
         startIdx,
         endIdx
       };
@@ -140,7 +143,7 @@ export default () => {
         const nodeMatchStartIdx = Math.max(0, matchStart - startIdx);
         const nodeMatchLength = Math.min(endIdx, matchEnd) - startIdx - nodeMatchStartIdx;
         if (nodeMatchStartIdx > 0) textNode = textNode.splitText(nodeMatchStartIdx);
-        if (nodeMatchLength < textNode.wholeText.length) textNode.splitText(nodeMatchLength);
+        if (nodeMatchLength < textNode.data.length) textNode.splitText(nodeMatchLength);
         const mark = document.createElement('mark');
         mark.dataset.index = index + i + '';
         mark.innerText = text.substring(nodeMatchStartIdx, nodeMatchStartIdx + nodeMatchLength);
@@ -148,64 +151,46 @@ export default () => {
       }
     }
   };
-  const highlightTableText = (nodes: NodeListOf<Element>, index: number) => {
-    for (const node of nodes) {
-      node.innerHTML = node.innerHTML.replace(searchRegex(searchWord), () => {
-        return `<mark data-index=${index++}>${searchWord}</mark>`;
-      });
-    }
-  };
   const clearMarks = () => {
-    const markNodes = queryFikaAll('.editable-element mark');
-    for (const mark of markNodes) {
-      setTimeout(() => {
-        const parentNode = mark.parentNode!;
-        const text = mark.textContent!;
-        parentNode.replaceChild(document.createTextNode(text), mark);
-      }, 0);
-    }
+    CSS.highlights.delete('fika-search-results');
+    CSS.highlights.delete('fika-search-active');
   };
   const highlightCurrentSlide = () => {
-    clearMarks();
-    setTimeout(() => {
-      for (let i = 0; i < searchResults.length; i++) {
-        const lastTarget = searchResults[i - 1];
-        const target = searchResults[i];
-        if (target.slideId !== currentSlide.id) continue;
-        if (lastTarget && lastTarget.elId === target.elId) continue;
-        const node = queryFika(`#editable-element-${target.elId}`);
-        if (node) {
-          if (target.elType === 'table') {
-            const cells = node.querySelectorAll('.cell-text');
-            highlightTableText(cells, i);
-          } else {
-            const textNodes = getTextNodeList(node);
-            const textList = getTextInfoList(textNodes);
-            const content = textList.map(({
-              text
-            }) => text).join('');
-            const matchList = getMatchList(content, searchWord);
-            highlight(textNodes, textList, matchList, i);
-          }
-        }
-      }
-    }, 0);
-  };
-  const setActiveMark = () => {
-    const markNodes = queryFikaAll('mark[data-index]');
-    for (const node of markNodes) {
-      setTimeout(() => {
-        const index = (node as HTMLElement).dataset.index;
-        if (index !== undefined && +index === searchIndex) {
-          node.classList.add('active');
-        } else node.classList.remove('active');
-      }, 0);
+    const results = new Highlight();
+    const active = new Highlight();
+    active.priority = 1;
+    for (let i = 0; i < searchResults.length; i++) {
+      const target = searchResults[i];
+      const previous = searchResults[i - 1];
+      if (target.slideId !== currentSlide.id) continue;
+      if (previous && sameTarget(previous, target)) continue;
+      const root = queryFika(`#editable-element-${target.elId}`);
+      const node = target.elType === 'table'
+        ? root?.querySelector(`[data-cell-index="${target.cellIndex[0]}_${target.cellIndex[1]}"] .cell-text`)
+        : root?.querySelector('.ProseMirror');
+      if (!node) continue;
+      const nodes = getTextNodeList(node);
+      const textList = getTextInfoList(nodes);
+      const matches = getMatchList(textList.map(item => item.text).join(''), searchWord);
+      matches.forEach((match, matchIndex) => {
+        const end = match.index + match[0].length;
+        const startNode = textList.findIndex(item => item.startIdx <= match.index && item.endIdx > match.index);
+        const endNode = textList.findIndex(item => item.startIdx < end && item.endIdx >= end);
+        if (startNode === -1 || endNode === -1) return;
+        const range = document.createRange();
+        range.setStart(nodes[startNode], match.index - textList[startNode].startIdx);
+        range.setEnd(nodes[endNode], end - textList[endNode].startIdx);
+        results.add(range);
+        if (i + matchIndex === searchIndex) active.add(range);
+      });
     }
+    CSS.highlights.set('fika-search-results', results);
+    CSS.highlights.set('fika-search-active', active);
   };
   const turnTarget = () => {
-    if (searchIndex === -1) return;
     const target = searchResults[searchIndex];
-    if (target.slideId === currentSlide.id) setTimeout(setActiveMark, 0);else {
+    if (!target) return;
+    if (target.slideId !== currentSlide.id) {
       const index = slides.findIndex(slide => slide.id === target.slideId);
       if (index !== -1) updateSlideIndex(index);
     }
@@ -214,13 +199,11 @@ export default () => {
     if (!searchWord) return message.warning(getLL().editor.search.enterSearchTerm());
     setActiveElementIdList([]);
     if (searchIndex === -1) search();else if (searchIndex < searchResults.length - 1) setSearchIndex(searchIndex + (1));else setSearchIndex(0);
-    turnTarget();
   };
   const searchPrev = () => {
     if (!searchWord) return message.warning(getLL().editor.search.enterSearchTerm());
     setActiveElementIdList([]);
     if (searchIndex === -1) search();else if (searchIndex > 0) setSearchIndex(searchIndex - (1));else setSearchIndex(searchResults.length - 1);
-    turnTarget();
   };
   const replace = () => {
     if (!searchWord) return;
@@ -237,6 +220,13 @@ export default () => {
     if (!targetElement) return;
     const fakeElement = document.createElement('div');
     fakeElement.innerHTML = targetElement.innerHTML;
+    const nodes = getTextNodeList(fakeElement);
+    const textList = getTextInfoList(nodes);
+    const matches = getMatchList(textList.map(item => item.text).join(''), searchWord);
+    const localIndex = searchResults.slice(0, searchIndex).filter(result => sameTarget(result, target)).length;
+    if (!matches[localIndex]) return;
+    highlight(nodes, textList, [matches[localIndex]], 0);
+    fakeElement.querySelectorAll('mark[data-index]').forEach(mark => mark.classList.add('active'));
     let replaced = false;
     const marks = fakeElement.querySelectorAll('mark[data-index]');
     for (const mark of marks) {
@@ -299,15 +289,13 @@ export default () => {
         });
       }
     }
-    searchResults.splice(searchIndex, 1);
-    if (searchResults.length) {
-      if (searchIndex > searchResults.length - 1) {
+    addHistorySnapshot();
+    const remaining = searchResults.filter((_, index) => index !== searchIndex);
+    setSearchResults(remaining);
+    if (remaining.length) {
+      if (searchIndex > remaining.length - 1) {
         setSearchIndex(0);
       }
-      Promise.resolve().then(() => {
-        highlightCurrentSlide();
-        turnTarget();
-      });
     } else setSearchIndex(-1);
   };
   const replaceHtmlMatches = (html: string) => {
@@ -403,11 +391,12 @@ export default () => {
   };
   useEffect(() => { reset() }, [searchWord]);
   useEffect(() => {
-    Promise.resolve().then(() => {
+    const timer = setTimeout(() => {
       highlightCurrentSlide();
-      setTimeout(setActiveMark, 0);
-    });
-  }, [slideIndex]);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [slideIndex, searchResults, searchIndex]);
+  useEffect(() => { turnTarget(); }, [searchResults, searchIndex]);
   useEffect(() => {
     if (handleElement) {
       setSearchIndex(-1);

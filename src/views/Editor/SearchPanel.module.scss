@@ -69,3 +69,12 @@
     color: $ink;
   }
 }
+
+:global(::highlight(fika-search-results)) {
+  background-color: #ffeb3b;
+  color: #111111;
+}
+:global(::highlight(fika-search-active)) {
+  background-color: #ff9632;
+  color: #111111;
+}
