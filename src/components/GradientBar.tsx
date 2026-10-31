@@ -121,7 +121,7 @@ const GradientBar = memo((props: IGradientBarProps) => {
     for (let i = 0; i < props.value.length; i++) {
       if (pos > props.value[i].pos) targetIndex = i + 1;
     }
-    const color = props.value[targetIndex - 1] ? props.value[targetIndex - 1].color : props.value[targetIndex].color;
+    const color = props.value[targetIndex - 1]?.color ?? props.value[targetIndex]?.color ?? '#fff';
     const values = [...props.value];
     values.splice(targetIndex, 0, {
       pos,
