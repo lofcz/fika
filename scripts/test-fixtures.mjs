@@ -184,6 +184,7 @@ export const e2eScripts = [
   'scripts/e2e-search-shapes.mjs',
   'scripts/e2e-search-tables.mjs',
   'scripts/e2e-search-entities.mjs',
+  'scripts/e2e-search-text-boundaries.mjs',
   'scripts/e2e-search-navigation.mjs',
   'scripts/e2e-search-single.mjs',
   'scripts/e2e-search-authoring.mjs',

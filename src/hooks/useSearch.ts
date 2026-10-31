@@ -5,7 +5,7 @@ import type { PPTTableElement } from '@/types/slides';
 import message from '@/utils/message';
 import { queryFika } from '@/utils/portal';
 import { getLL } from '@/i18n/getLL';
-import { htmlToText } from '@/utils/common';
+import { getSearchText, getSearchHtmlText } from '@/utils/searchText';
 import { isElementSelectable } from '@/utils/selection';
 import useHistorySnapshot from './useHistorySnapshot';
 interface SearchTextResult {
@@ -50,7 +50,7 @@ export default () => {
     for (const slide of useSlidesStore.getState().slides) {
       for (const el of slide.elements) {
         if (el.type === 'text') {
-          const text = htmlToText(el.content);
+          const text = getSearchHtmlText(el.content);
           const rets = [...text.matchAll(matchRegex)];
           textList.push(...rets.map(match => ({
             offset: match.index,
@@ -59,7 +59,7 @@ export default () => {
             elType: el.type
           })));
         } else if (el.type === 'shape' && el.text && el.text.content) {
-          const text = htmlToText(el.text.content);
+          const text = getSearchHtmlText(el.text.content);
           const rets = [...text.matchAll(matchRegex)];
           textList.push(...rets.map(match => ({
             offset: match.index,
@@ -73,7 +73,7 @@ export default () => {
             for (let j = 0; j < row.length; j++) {
               const cell = row[j];
               if (!cell.text) continue;
-              const text = htmlToText(cell.text);
+              const text = getSearchHtmlText(cell.text);
               const rets = [...text.matchAll(matchRegex)];
               textList.push(...rets.map<SearchTableResult>(match => ({
                 offset: match.index,
@@ -100,34 +100,7 @@ export default () => {
       clearMarks();
     }
   };
-  const getTextNodeList = (dom: Node): Text[] => {
-    const nodeList = [...dom.childNodes];
-    const textNodes = [];
-    while (nodeList.length) {
-      const node = nodeList.shift()!;
-      if (node.nodeType === node.TEXT_NODE) {
-        (node as Text).data && textNodes.push(node as Text);
-      } else {
-        nodeList.unshift(...node.childNodes);
-      }
-    }
-    return textNodes;
-  };
-  const getTextInfoList = (textNodes: Text[]) => {
-    let length = 0;
-    const textList = textNodes.map(node => {
-      const startIdx = length,
-        endIdx = length + node.data.length;
-      length = endIdx;
-      return {
-        text: node.data,
-        startIdx,
-        endIdx
-      };
-    });
-    return textList;
-  };
-  type TextInfoList = ReturnType<typeof getTextInfoList>;
+  type TextInfoList = ReturnType<typeof getSearchText>['textList'];
   const getMatchList = (content: string, keyword: string) => {
     if (!keyword) return [];
     const reg = searchRegex(keyword);
@@ -182,9 +155,8 @@ export default () => {
         ? root?.querySelector(`[data-cell-index="${target.cellIndex[0]}_${target.cellIndex[1]}"] .cell-text`)
         : root?.querySelector('.ProseMirror');
       if (!node) continue;
-      const nodes = getTextNodeList(node);
-      const textList = getTextInfoList(nodes);
-      const matches = getMatchList(textList.map(item => item.text).join(''), searchWord);
+      const { textNodes: nodes, textList, content } = getSearchText(node);
+      const matches = getMatchList(content, searchWord);
       matches.forEach((match, matchIndex) => {
         const end = match.index + match[0].length;
         const startNode = textList.findIndex(item => item.startIdx <= match.index && item.endIdx > match.index);
@@ -260,9 +232,7 @@ export default () => {
   const replaceHtmlMatches = (html: string, selectedIndex?: number) => {
     const element = document.createElement('div');
     element.innerHTML = html;
-    const textNodes = getTextNodeList(element);
-    const textList = getTextInfoList(textNodes);
-    const content = textList.map(({ text }) => text).join('');
+    const { textNodes, textList, content } = getSearchText(element);
     const matches = getMatchList(content, searchWord);
     const selectedMatches = selectedIndex === undefined ? matches : matches.slice(selectedIndex, selectedIndex + 1);
     const matchList = selectedMatches.filter(match => match[0] !== replaceWord);
