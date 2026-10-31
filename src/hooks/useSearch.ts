@@ -5,6 +5,7 @@ import type { PPTTableElement } from '@/types/slides';
 import message from '@/utils/message';
 import { queryFika, queryFikaAll } from '@/utils/portal';
 import { getLL } from '@/i18n/getLL';
+import { htmlToText } from '@/utils/common';
 import useHistorySnapshot from './useHistorySnapshot';
 interface SearchTextResult {
   elType: 'text' | 'shape';
@@ -37,11 +38,10 @@ export default () => {
   const search = () => {
     const textList: SearchResult[] = [];
     const matchRegex = searchRegex(searchWord);
-    const textRegex = /(<([^>]+)>)/g;
     for (const slide of slides) {
       for (const el of slide.elements) {
         if (el.type === 'text') {
-          const text = el.content.replace(textRegex, '');
+          const text = htmlToText(el.content);
           const rets = text.match(matchRegex);
           rets && textList.push(...new Array(rets.length).fill({
             slideId: slide.id,
@@ -49,7 +49,7 @@ export default () => {
             elType: el.type
           }));
         } else if (el.type === 'shape' && el.text && el.text.content) {
-          const text = el.text.content.replace(textRegex, '');
+          const text = htmlToText(el.text.content);
           const rets = text.match(matchRegex);
           rets && textList.push(...new Array(rets.length).fill({
             slideId: slide.id,
@@ -62,7 +62,7 @@ export default () => {
             for (let j = 0; j < row.length; j++) {
               const cell = row[j];
               if (!cell.text) continue;
-              const text = cell.text.replace(textRegex, '');
+              const text = htmlToText(cell.text);
               const rets = text.match(matchRegex);
               rets && textList.push(...new Array(rets.length).fill({
                 slideId: slide.id,

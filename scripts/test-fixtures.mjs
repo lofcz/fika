@@ -183,6 +183,7 @@ export const e2eScripts = [
   'scripts/e2e-search-replace-history.mjs',
   'scripts/e2e-search-shapes.mjs',
   'scripts/e2e-search-tables.mjs',
+  'scripts/e2e-search-entities.mjs',
   'scripts/e2e-frame-keyboard.mjs',
   'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-frame-pointer.mjs',
