@@ -35,6 +35,19 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
     left: '0',
   })
   const isSettingClipRangeRef = useRef(false)
+  const clearDragRef = useRef<() => void>(() => {})
+  const onClipRef = useRef(props.onClip)
+  onClipRef.current = props.onClip
+  const registerDragCleanup = (stop: () => void) => {
+    const move = document.onmousemove
+    const end = document.onmouseup
+    clearDragRef.current = () => {
+      stop()
+      if (document.onmousemove === move) document.onmousemove = null
+      if (document.onmouseup === end) document.onmouseup = null
+      clearDragRef.current = () => {}
+    }
+  }
   const currentRangeRef = useRef<ImageClipDataRange | null>(null)
   const [topImgWrapperPosition, setTopImgWrapperPosition] = useState({
     top: 0,
@@ -137,16 +150,26 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
   useEffect(() => {
     initClipPosition()
     const keyboardListener = (e: KeyboardEvent) => {
+      if (e.key.toUpperCase() === KEYS.ESC) {
+        e.preventDefault()
+        clearDragRef.current()
+        onClipRef.current?.(null)
+        return
+      }
       if (e.key.toUpperCase() === KEYS.ENTER) {
         e.preventDefault()
         handleClipRef.current()
       }
     }
     document.addEventListener('keydown', keyboardListener)
-    return () => document.removeEventListener('keydown', keyboardListener)
+    return () => {
+      document.removeEventListener('keydown', keyboardListener)
+      clearDragRef.current()
+    }
   }, [])
 
   const moveClipRange = (e: MouseEvent) => {
+    clearDragRef.current()
     isSettingClipRangeRef.current = true
     let isMouseDown = true
     const viewport = findSlideViewport(e.target)
@@ -178,15 +201,15 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
     }
 
     document.onmouseup = () => {
-      isMouseDown = false
-      document.onmousemove = null
-      document.onmouseup = null
+      clearDragRef.current()
       updateRange()
       setTimeout(() => { isSettingClipRangeRef.current = false }, 0)
     }
+    registerDragCleanup(() => { isMouseDown = false })
   }
 
   const scaleClipRange = (e: MouseEvent, type: OperateResizeHandlers) => {
+    clearDragRef.current()
     isSettingClipRangeRef.current = true
     let isMouseDown = true
     const minWidth = 50 / width * 100
@@ -305,12 +328,11 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
     }
 
     document.onmouseup = () => {
-      isMouseDown = false
-      document.onmousemove = null
-      document.onmouseup = null
+      clearDragRef.current()
       updateRange()
       setTimeout(() => { isSettingClipRangeRef.current = false }, 0)
     }
+    registerDragCleanup(() => { isMouseDown = false })
   }
 
   const rotateClassName = (() => {

@@ -62,6 +62,7 @@ export const e2eScripts = [
   'scripts/e2e-image-reset-flips.mjs',
   'scripts/e2e-image-reset-crop-position.mjs',
   'scripts/e2e-image-crop-entry.mjs',
+  'scripts/e2e-image-crop-cancel.mjs',
   'scripts/e2e-border-slider-undo.mjs',
   'scripts/e2e-style-sliders-touch-cancel.mjs',
   'scripts/e2e-multi-style-slider-selection.mjs',
