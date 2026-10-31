@@ -7,6 +7,14 @@ try {
   page.on('pageerror', error => errors.push(error.message))
   await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5173/'}?locale=en`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
+  await page.evaluate(() => {
+    const add = document.addEventListener.bind(document)
+    const remove = document.removeEventListener.bind(document)
+    const listeners = new Map(['pointermove', 'pointerup', 'pointercancel'].map(type => [type, new Set()]))
+    document.addEventListener = (type, handler, options) => { listeners.get(type)?.add(handler); add(type, handler, options) }
+    document.removeEventListener = (type, handler, options) => { listeners.get(type)?.delete(handler); remove(type, handler, options) }
+    window.cropListenerCount = () => [...listeners.values()].reduce((count, handlers) => count + handlers.size, 0)
+  })
   const failures = []
   for (const mode of ['idle', 'moved', 'dragging', 'resizing']) {
     await page.evaluate(() => {
@@ -38,8 +46,7 @@ try {
     try { assert.equal(clipping, '', `${mode}: Escape exits crop mode`) }
     catch (error) { failures.push(error.message) }
     if (!clipping) {
-      assert.equal(await page.evaluate(() => document.onmousemove), null, 'Cancel removes active drag listeners')
-      assert.equal(await page.evaluate(() => document.onmouseup), null, 'Cancel removes active drag listeners')
+      assert.equal(await page.evaluate(() => window.cropListenerCount()), 0, 'Cancel removes active pointer listeners before release')
     }
     if (mode === 'dragging' || mode === 'resizing') {
       await page.mouse.move(box.x + box.width / 2 - 20, box.y + box.height / 2 + 10)

@@ -37,16 +37,6 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
   const clearDragRef = useRef<() => void>(() => {})
   const onClipRef = useRef(props.onClip)
   onClipRef.current = props.onClip
-  const registerDragCleanup = (stop: () => void) => {
-    const move = document.onmousemove
-    const end = document.onmouseup
-    clearDragRef.current = () => {
-      stop()
-      if (document.onmousemove === move) document.onmousemove = null
-      if (document.onmouseup === end) document.onmouseup = null
-      clearDragRef.current = () => {}
-    }
-  }
   const currentRangeRef = useRef<ImageClipDataRange | null>(null)
   const [topImgWrapperPosition, setTopImgWrapperPosition] = useState({
     top: 0,
@@ -123,6 +113,38 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
     currentRangeRef.current = unchanged ? null : next
   }, [imgPosition.width, imgPosition.height, props.clipData])
 
+  const listenForDrag = (
+    start: PointerEvent,
+    onMove: (event: PointerEvent) => void,
+    original: typeof topImgWrapperPosition,
+  ) => {
+    const move = (event: PointerEvent) => {
+      if (event.pointerId === start.pointerId) onMove(event)
+    }
+    const end = (event: PointerEvent) => {
+      if (event.pointerId !== start.pointerId) return
+      clearDragRef.current()
+      updateRange()
+      setTimeout(() => { isSettingClipRangeRef.current = false }, 0)
+    }
+    const cancel = (event: PointerEvent) => {
+      if (event.pointerId !== start.pointerId) return
+      clearDragRef.current()
+      topImgWrapperPositionRef.current = original
+      setTopImgWrapperPosition(original)
+      isSettingClipRangeRef.current = false
+    }
+    document.addEventListener('pointermove', move)
+    document.addEventListener('pointerup', end)
+    document.addEventListener('pointercancel', cancel)
+    clearDragRef.current = () => {
+      document.removeEventListener('pointermove', move)
+      document.removeEventListener('pointerup', end)
+      document.removeEventListener('pointercancel', cancel)
+      clearDragRef.current = () => {}
+    }
+  }
+
   const handleClip = useCallback(() => {
     if (isSettingClipRangeRef.current) return
     if (!currentRangeRef.current) {
@@ -170,18 +192,17 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
     }
   }, [])
 
-  const moveClipRange = (e: MouseEvent) => {
-    if (e.button !== 0) return
+  const moveClipRange = (e: PointerEvent) => {
+    if (e.button !== 0 || !e.isPrimary) return
+    e.preventDefault()
     clearDragRef.current()
     isSettingClipRangeRef.current = true
-    let isMouseDown = true
     const viewport = findSlideViewport(e.target)
     const startPointer = getPointerClient(e)
     const bottomPosition = imgPosition
     const originPositopn = { ...topImgWrapperPositionRef.current }
 
-    document.onmousemove = ev => {
-      if (!isMouseDown) return
+    const onMove = (ev: PointerEvent) => {
       const { x: _moveX, y: _moveY } = pointerDeltaToCanvas(startPointer, ev, viewport, canvasScale)
       const _moveL = Math.sqrt(_moveX * _moveX + _moveY * _moveY)
       const _moveLRotate = Math.atan2(_moveY, _moveX)
@@ -203,19 +224,14 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
       setTopImgWrapperPosition(next)
     }
 
-    document.onmouseup = () => {
-      clearDragRef.current()
-      updateRange()
-      setTimeout(() => { isSettingClipRangeRef.current = false }, 0)
-    }
-    registerDragCleanup(() => { isMouseDown = false })
+    listenForDrag(e, onMove, originPositopn)
   }
 
-  const scaleClipRange = (e: MouseEvent, type: OperateResizeHandlers) => {
-    if (e.button !== 0) return
+  const scaleClipRange = (e: PointerEvent, type: OperateResizeHandlers) => {
+    if (e.button !== 0 || !e.isPrimary) return
+    e.preventDefault()
     clearDragRef.current()
     isSettingClipRangeRef.current = true
-    let isMouseDown = true
     const minWidth = Math.min(50, width) / width * 100
     const minHeight = Math.min(50, height) / height * 100
     const viewport = findSlideViewport(e.target)
@@ -226,8 +242,7 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
     const rightCorner = type === OperateResizeHandlers.RIGHT_TOP || type === OperateResizeHandlers.RIGHT_BOTTOM
     const topCorner = type === OperateResizeHandlers.LEFT_TOP || type === OperateResizeHandlers.RIGHT_TOP
 
-    document.onmousemove = ev => {
-      if (!isMouseDown) return
+    const onMove = (ev: PointerEvent) => {
       const { x: _moveX, y: _moveY } = pointerDeltaToCanvas(startPointer, ev, viewport, canvasScale)
       const _moveL = Math.sqrt(_moveX * _moveX + _moveY * _moveY)
       const _moveLRotate = Math.atan2(_moveY, _moveX)
@@ -341,12 +356,7 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
       setTopImgWrapperPosition(next)
     }
 
-    document.onmouseup = () => {
-      clearDragRef.current()
-      updateRange()
-      setTimeout(() => { isSettingClipRangeRef.current = false }, 0)
-    }
-    registerDragCleanup(() => { isMouseDown = false })
+    listenForDrag(e, onMove, originPositopn)
   }
 
   const rotateClassName = (() => {
@@ -390,13 +400,13 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
       <div
         className={cx('operate')}
         style={topImgWrapperPositionStyle}
-        onMouseDown={event => { event.stopPropagation(); moveClipRange(event.nativeEvent) }}
+        onPointerDown={event => { event.stopPropagation(); moveClipRange(event.nativeEvent) }}
       >
         {cornerPoint.map(point => (
           <div
             className={cx('clip-point', point, rotateClassName)}
             key={point}
-            onMouseDown={event => { event.stopPropagation(); scaleClipRange(event.nativeEvent, point) }}
+            onPointerDown={event => { event.stopPropagation(); scaleClipRange(event.nativeEvent, point) }}
           >
             <svg width="16" height="16" fill="#fff" stroke="#333">
               <path strokeWidth="0.3" shapeRendering="crispEdges" d="M 16 0 L 0 0 L 0 16 L 4 16 L 4 4 L 16 4 L 16 0 Z" />
@@ -407,7 +417,7 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
           <div
             className={cx('clip-point', point, rotateClassName)}
             key={point}
-            onMouseDown={event => { event.stopPropagation(); scaleClipRange(event.nativeEvent, point) }}
+            onPointerDown={event => { event.stopPropagation(); scaleClipRange(event.nativeEvent, point) }}
           >
             <svg width="16" height="16" fill="#fff" stroke="#333">
               <path strokeWidth="0.3" shapeRendering="crispEdges" d="M 16 0 L 0 0 L 0 4 L 16 4 Z" />
