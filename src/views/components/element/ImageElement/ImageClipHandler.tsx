@@ -28,7 +28,6 @@ export type IImageClipHandlerProps = {
 const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
   const { src, clipPath, width, height, rotate, flipH, flipV } = props
   const canvasScale = useMainStore(s => s.canvasScale)
-  const ctrlOrShiftKeyActive = useKeyboardStore(selectCtrlOrShiftKeyActive)
 
   const [clipWrapperPositionStyle, setClipWrapperPositionStyle] = useState({
     top: '0',
@@ -237,7 +236,7 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
       let targetWidth = originPositopn.width
       let targetHeight = originPositopn.height
 
-      if (ctrlOrShiftKeyActive && (leftCorner || rightCorner)) {
+      if (selectCtrlOrShiftKeyActive(useKeyboardStore.getState()) && (leftCorner || rightCorner)) {
         const minScale = Math.max(minWidth / originPositopn.width, minHeight / originPositopn.height)
         const availableWidth = leftCorner ? originPositopn.left + originPositopn.width : bottomPosition.width - originPositopn.left
         const availableHeight = topCorner ? originPositopn.top + originPositopn.height : bottomPosition.height - originPositopn.top
