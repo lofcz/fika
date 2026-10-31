@@ -56,7 +56,8 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
   const dragCleanupRef = useRef<(() => void) | null>(null)
   const listenForDrag = useCallback((onMove: (event: MouseEvent) => void) => {
     dragCleanupRef.current?.()
-    const stop = () => {
+    const stop = (event?: MouseEvent) => {
+      if (event && event.button !== 0) return
       if (document.onmousemove === onMove) document.onmousemove = null
       if (document.onmouseup === stop) document.onmouseup = null
       if (dragCleanupRef.current === stop) dragCleanupRef.current = null
