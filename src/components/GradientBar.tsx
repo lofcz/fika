@@ -86,13 +86,8 @@ const GradientBar = memo((props: IGradientBarProps) => {
       emitInput.flush();
       removeDragListenersRef.current();
       const point = current[index];
-      const _points = [...current];
-      _points.splice(index, 1);
-      let targetIndex = 0;
-      for (let i = 0; i < _points.length; i++) {
-        if (point.pos > _points[i].pos) targetIndex = i + 1;
-      }
-      _points.splice(targetIndex, 0, point);
+      const _points = sortStops(current);
+      const targetIndex = _points.indexOf(point);
       onUpdateIndexRef.current?.(targetIndex);
       onUpdateValueRef.current?.(_points);
     };
