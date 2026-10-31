@@ -140,12 +140,8 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
     listenForDrag(ev => {
       const moveX = ev.pageX - startPageX
       const moveY = ev.pageY - startPageY
-      let nextLeft = originLeft + moveX
-      let nextTop = originTop + moveY
-      if (nextLeft < 0) nextLeft = 0
-      if (nextTop < 0) nextTop = 0
-      if (nextLeft + xywhRef.current.w > windowWidth) nextLeft = windowWidth - xywhRef.current.w
-      if (nextTop + realHeight() > clientHeight) nextTop = clientHeight - realHeight()
+      const nextLeft = Math.max(0, Math.min(originLeft + moveX, windowWidth - xywhRef.current.w))
+      const nextTop = Math.max(0, Math.min(originTop + moveY, clientHeight - realHeight()))
       setX(nextLeft)
       setY(nextTop)
     })
