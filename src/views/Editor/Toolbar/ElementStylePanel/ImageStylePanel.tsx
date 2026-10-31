@@ -139,7 +139,7 @@ const ImageStylePanel = memo(() => {
     }
     useSlidesStore.getState().removeElementProps({
       id: handleElementId,
-      propName: ['clip', 'outline', 'flip', 'shadow', 'filters', 'colorMask', 'radius'],
+      propName: ['clip', 'outline', 'flipH', 'flipV', 'shadow', 'filters', 'colorMask', 'radius'],
     })
     addHistorySnapshot()
   }
