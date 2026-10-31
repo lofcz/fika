@@ -1,11 +1,11 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './ElementOutline.module.scss'
 const cx = bindStyles(styles)
-import { memo, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 
 import { useSlidesStore } from '@/store'
 import { getHandleElement, useHandleElementId, useHandleElementSelect, useHandleElementShallow } from './handleElement'
-import type { LineStyleType, PPTElementOutline } from '@/types/slides'
+import type { LineStyleType, PPTElementOutline, PPTShapeElement } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import SVGLine from './SVGLine'
 import PanelSection from './PanelSection'
@@ -47,6 +47,28 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
       id: el.id,
       props: outlineElementPatch(el, nextOutline, 'radius' in outlineProps),
     })
+  }
+
+  // Radius previews can also rewrite a shape's path; retain the authored geometry.
+  const dragRestore = useRef<(() => void) | null>(null)
+  const startOutlineDrag = () => {
+    const el = getHandleElement()
+    if (!el || !('outline' in el)) return
+    const props: Partial<PPTShapeElement> = { outline: el.outline }
+    if (el.type === 'shape') {
+      Object.assign(props, { path: el.path, pathFormula: el.pathFormula, keypoints: el.keypoints, viewBox: el.viewBox })
+    }
+    dragRestore.current = () => {
+      if (getHandleElement()?.id !== el.id) return
+      const store = useSlidesStore.getState()
+      store.updateElement({ id: el.id, props })
+      const absent = Object.keys(props).filter(key => !(key in el))
+      if (absent.length) store.removeElementProps({ id: el.id, propName: absent })
+    }
+  }
+  const cancelOutlineDrag = () => {
+    dragRestore.current?.()
+    dragRestore.current = null
   }
 
   const updateOutline = (outlineProps: Partial<PPTElementOutline>) => {
@@ -108,6 +130,8 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
               max={Math.max(OUTLINE_WIDTH_MAX, outline.width || 0)}
               step={1}
               value={outline.width || 0}
+              onStart={startOutlineDrag}
+              onCancel={cancelOutlineDrag}
               onInput={value => paintOutline({ width: value })}
               onUpdateValue={value => updateOutline({ width: value })}
             />
@@ -121,6 +145,8 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
               step={1}
               tooltipSuffix="%"
               value={outlineRadiusToPercent(outline.radius, box.width, box.height)}
+              onStart={startOutlineDrag}
+              onCancel={cancelOutlineDrag}
               onInput={value => paintOutline({ radius: percentToOutlineRadius(value) })}
               onUpdateValue={value => updateOutline({ radius: percentToOutlineRadius(value) })}
             />

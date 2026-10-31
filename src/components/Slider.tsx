@@ -9,6 +9,7 @@ import { throttle } from '@/utils/debounce'
 const LIVE_INPUT_MS = 32
 
 type SliderBaseProps = {
+  onStart?: () => void
   onCancel?: () => void
   disabled?: boolean
   min?: number
@@ -204,6 +205,7 @@ const Slider = memo((vrProps: ISliderProps) => {
     if (disabled) return
     const native = e.nativeEvent
     removeDragListenersRef.current()
+    vrProps.onStart?.()
     draggingRef.current = true
     const move = range ? updateRange : updatePercentage
     const end = range ? updateRangeEnd : updatePercentageEnd
