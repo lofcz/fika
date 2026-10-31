@@ -28,6 +28,9 @@ const Z_INDEX_BASE = 900
 const Z_INDEX_MAX = 999
 const ACTIVE_PANELS_KEY = '__moveable_panel_active_count__'
 
+const clampPosition = (position: number, size: number, available: number) =>
+  Math.max(0, Math.min(position, available - size))
+
 const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
   const width = vrProps.width
   const height = vrProps.height
@@ -107,14 +110,19 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
   }
 
   useEffect(() => {
-    if (left >= 0) setX(left)
-    else setX(document.body.clientWidth + left - width)
-    if (top >= 0) setY(top)
-    else setY(document.body.clientHeight + top - (height || realHeight()))
+    const panelHeight = height || realHeight()
+    setX(clampPosition(left >= 0 ? left : window.innerWidth + left - width, width, window.innerWidth))
+    setY(clampPosition(top >= 0 ? top : window.innerHeight + top - panelHeight, panelHeight, window.innerHeight))
+    const keepInWindow = () => {
+      setX(current => clampPosition(current, xywhRef.current.w, window.innerWidth))
+      setY(current => clampPosition(current, realHeight(), window.innerHeight))
+    }
+    window.addEventListener('resize', keepInWindow)
     setW(width)
     setH(height)
     setZIndex(initGlobalZIndex())
     return () => {
+      window.removeEventListener('resize', keepInWindow)
       dragCleanupRef.current?.()
       onPanelClose()
     }
@@ -132,8 +140,6 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
     const target = e.target as HTMLElement | null
     if (target?.closest('input, textarea, button, select, a, [contenteditable="true"]')) return
     setZIndex(bringToFront())
-    const windowWidth = document.body.clientWidth
-    const clientHeight = document.body.clientHeight
     const startPageX = e.pageX
     const startPageY = e.pageY
     const originLeft = xywhRef.current.x
@@ -141,8 +147,8 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
     listenForDrag(ev => {
       const moveX = ev.pageX - startPageX
       const moveY = ev.pageY - startPageY
-      const nextLeft = Math.max(0, Math.min(originLeft + moveX, windowWidth - xywhRef.current.w))
-      const nextTop = Math.max(0, Math.min(originTop + moveY, clientHeight - realHeight()))
+      const nextLeft = clampPosition(originLeft + moveX, xywhRef.current.w, window.innerWidth)
+      const nextTop = clampPosition(originTop + moveY, realHeight(), window.innerHeight)
       setX(nextLeft)
       setY(nextTop)
     })

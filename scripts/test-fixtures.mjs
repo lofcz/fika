@@ -199,6 +199,7 @@ export const e2eScripts = [
   'scripts/e2e-panel-multiple-buttons.mjs',
   'scripts/e2e-panel-drag-cleanup.mjs',
   'scripts/e2e-panel-small-viewport.mjs',
+  'scripts/e2e-panel-window-resize.mjs',
   'scripts/e2e-frame-keyboard.mjs',
   'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-frame-pointer.mjs',
