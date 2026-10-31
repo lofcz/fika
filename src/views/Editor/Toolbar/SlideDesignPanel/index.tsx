@@ -394,7 +394,7 @@ function SlideDesignPanel({ className, style }: { className?: string; style?: CS
                 <div className={cx('field')}>
                   <span className={cx('field-label')}>{LL.editor.slideDesign.gradientAngle()}</span>
                   <Slider
-                    key={slideId}
+                    key={JSON.stringify([slideId, background.gradient.rotate || 0])}
                     min={0}
                     max={360}
                     step={15}
