@@ -797,7 +797,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
                 isActive={handleElementId === element.id}
                 isActiveGroupElement={activeGroupElementId === element.id}
                 isMultiSelect={activeElementIdList.length > 1}
-                isEditing={editingElementId === element.id}
+                isEditing={editingElementId === element.id || clipingImageElementId === element.id}
                 rotateElement={rotateElement}
                 scaleElement={scaleElement}
                 dragLineElement={dragLineElement}

@@ -343,7 +343,7 @@ export default () => {
         moveSlide(KEYS.PAGEDOWN)
       }
       if (key === KEYS.ENTER) {
-        if (mainStore.disableHotkeys) return
+        if (mainStore.disableHotkeys || mainStore.clipingImageElementId) return
         e.preventDefault()
         create()
       }

@@ -19,12 +19,14 @@ export type IImageClipHandlerProps = {
   top: number
   left: number
   rotate: number
+  flipH?: boolean
+  flipV?: boolean
   clipData?: ImageElementClip
   onClip?: (payload: ImageClipedEmitData | null) => void
 }
 
 const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
-  const { src, clipPath, width, height, rotate } = props
+  const { src, clipPath, width, height, rotate, flipH, flipV } = props
   const canvasScale = useMainStore(s => s.canvasScale)
   const ctrlOrShiftKeyActive = useKeyboardStore(selectCtrlOrShiftKeyActive)
 
@@ -100,23 +102,10 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
   const updateRange = useCallback(() => {
     const wrap = topImgWrapperPositionRef.current
     const { width: bottomWidth, height: bottomHeight } = imgPosition
-    const style = {
-      left: -wrap.left * (100 / wrap.width) + '%',
-      top: -wrap.top * (100 / wrap.height) + '%',
-      width: bottomWidth / wrap.width * 100 + '%',
-      height: bottomHeight / wrap.height * 100 + '%',
-    }
-    const retPosition = {
-      left: parseInt(style.left),
-      top: parseInt(style.top),
-      width: parseInt(style.width),
-      height: parseInt(style.height),
-    }
-    const widthScale = 100 / retPosition.width
-    const heightScale = 100 / retPosition.height
-    const start: [number, number] = [-retPosition.left * widthScale, -retPosition.top * heightScale]
-    const end: [number, number] = [widthScale * 100 + start[0], heightScale * 100 + start[1]]
-    currentRangeRef.current = [start, end]
+    currentRangeRef.current = [
+      [wrap.left / bottomWidth * 100, wrap.top / bottomHeight * 100],
+      [(wrap.left + wrap.width) / bottomWidth * 100, (wrap.top + wrap.height) / bottomHeight * 100],
+    ]
   }, [imgPosition.width, imgPosition.height])
 
   const handleClip = useCallback(() => {
@@ -148,7 +137,10 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
   useEffect(() => {
     initClipPosition()
     const keyboardListener = (e: KeyboardEvent) => {
-      if (e.key.toUpperCase() === KEYS.ENTER) handleClipRef.current()
+      if (e.key.toUpperCase() === KEYS.ENTER) {
+        e.preventDefault()
+        handleClipRef.current()
+      }
     }
     document.addEventListener('keydown', keyboardListener)
     return () => document.removeEventListener('keydown', keyboardListener)
@@ -168,8 +160,8 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
       const _moveL = Math.sqrt(_moveX * _moveX + _moveY * _moveY)
       const _moveLRotate = Math.atan2(_moveY, _moveX)
       const rot = _moveLRotate - rotate / 180 * Math.PI
-      const moveX = _moveL * Math.cos(rot) / width * 100
-      const moveY = _moveL * Math.sin(rot) / height * 100
+      const moveX = _moveL * Math.cos(rot) / width * 100 * (flipH ? -1 : 1)
+      const moveY = _moveL * Math.sin(rot) / height * 100 * (flipV ? -1 : 1)
       let targetLeft = originPositopn.left + moveX
       let targetTop = originPositopn.top + moveY
       if (targetLeft < 0) targetLeft = 0
@@ -211,8 +203,8 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
       const _moveL = Math.sqrt(_moveX * _moveX + _moveY * _moveY)
       const _moveLRotate = Math.atan2(_moveY, _moveX)
       const rot = _moveLRotate - rotate / 180 * Math.PI
-      let moveX = _moveL * Math.cos(rot) / width * 100
-      let moveY = _moveL * Math.sin(rot) / height * 100
+      let moveX = _moveL * Math.cos(rot) / width * 100 * (flipH ? -1 : 1)
+      let moveY = _moveL * Math.sin(rot) / height * 100 * (flipV ? -1 : 1)
       if (ctrlOrShiftKeyActive) {
         if (type === OperateResizeHandlers.RIGHT_BOTTOM || type === OperateResizeHandlers.LEFT_TOP) moveY = moveX / aspectRatio
         if (type === OperateResizeHandlers.LEFT_BOTTOM || type === OperateResizeHandlers.RIGHT_TOP) moveY = -moveX / aspectRatio

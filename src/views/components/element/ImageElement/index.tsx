@@ -12,6 +12,7 @@ import useElementShadow from '@/views/components/element/hooks/useElementShadow'
 import useElementFlip from '@/views/components/element/hooks/useElementFlip'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import useClipImage from './useClipImage'
+import { imageCropGeometry } from '@/utils/imageCrop'
 import useFilter from './useFilter'
 import ImageOutline from './ImageOutline/index'
 import ImageClipHandler from './ImageClipHandler'
@@ -46,34 +47,16 @@ const ImageElement = memo((props: IImageElementProps) => {
   const handleClip = useCallback((data: ImageClipedEmitData | null) => {
     setClipingImageElementId('')
     if (!data) return
-    const { range, position } = data
+    const { range } = data
     const originClip: ImageElementClip = props.elementInfo.clip || {
       shape: 'rect',
       range: [[0, 0], [100, 100]],
-    }
-    const left = props.elementInfo.left + position.left
-    const top = props.elementInfo.top + position.top
-    const width = props.elementInfo.width + position.width
-    const height = props.elementInfo.height + position.height
-    let centerOffsetX = 0
-    let centerOffsetY = 0
-    if (props.elementInfo.rotate) {
-      const centerX = left + width / 2 - (props.elementInfo.left + props.elementInfo.width / 2)
-      const centerY = -(top + height / 2 - (props.elementInfo.top + props.elementInfo.height / 2))
-      const radian = -props.elementInfo.rotate * Math.PI / 180
-      const rotatedCenterX = centerX * Math.cos(radian) - centerY * Math.sin(radian)
-      const rotatedCenterY = centerX * Math.sin(radian) + centerY * Math.cos(radian)
-      centerOffsetX = rotatedCenterX - centerX
-      centerOffsetY = -(rotatedCenterY - centerY)
     }
     updateElement({
       id: props.elementInfo.id,
       props: {
         clip: { ...originClip, range },
-        left: left + centerOffsetX,
-        top: top + centerOffsetY,
-        width,
-        height,
+        ...imageCropGeometry(props.elementInfo, range),
       },
     })
     addHistorySnapshot()
@@ -91,17 +74,21 @@ const ImageElement = memo((props: IImageElementProps) => {
     >
       <div className={cx('rotate-wrapper')} style={{ transform: `rotate(${elementInfo.rotate}deg)` }}>
         {isCliping ? (
-          <ImageClipHandler
-            src={elementInfo.src}
-            clipData={elementInfo.clip}
-            width={elementInfo.width}
-            height={elementInfo.height}
-            top={elementInfo.top}
-            left={elementInfo.left}
-            rotate={elementInfo.rotate}
-            clipPath={clipShape.style}
-            onClip={range => handleClip(range)}
-          />
+          <div style={{ width: '100%', height: '100%', transform: flipStyle }}>
+            <ImageClipHandler
+              src={elementInfo.src}
+              clipData={elementInfo.clip}
+              width={elementInfo.width}
+              height={elementInfo.height}
+              top={elementInfo.top}
+              left={elementInfo.left}
+              rotate={elementInfo.rotate}
+              flipH={elementInfo.flipH}
+              flipV={elementInfo.flipV}
+              clipPath={clipShape.style}
+              onClip={range => handleClip(range)}
+            />
+          </div>
         ) : (
           <div
             className={cx('element-content')}
