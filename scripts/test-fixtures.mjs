@@ -208,6 +208,7 @@ export const e2eScripts = [
   'scripts/e2e-notes-readonly.mjs',
   'scripts/e2e-notes-enter.mjs',
   'scripts/e2e-notes-reply-drafts.mjs',
+  'scripts/e2e-notes-target-drafts.mjs',
   'scripts/e2e-remark-slide-switch.mjs',
   'scripts/e2e-remark-caret.mjs',
   'scripts/e2e-remark-history.mjs',

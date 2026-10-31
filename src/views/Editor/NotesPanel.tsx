@@ -16,6 +16,19 @@ import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
 const EMPTY_NOTES: Note[] = []
 
+const useNoteDraft = (key: string) => {
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const setContent = useCallback((value: string) => {
+    setDrafts(current => {
+      const next = { ...current }
+      if (value) next[key] = value
+      else delete next[key]
+      return next
+    })
+  }, [key])
+  return [drafts[key] || '', setContent] as const
+}
+
 const NotesPanel = memo(() => {
   const { LL, locale } = useI18nContext()
   const { addHistorySnapshot } = useHistorySnapshot()
@@ -30,20 +43,10 @@ const NotesPanel = memo(() => {
   const slideId = useSlidesStore(s => s.slides[s.slideIndex]?.id)
   const notes = useSlidesStore(s => s.slides[s.slideIndex]?.notes || EMPTY_NOTES)
   const handleElementId = useMainStore(s => s.handleElementId)
-  const [content, setContent] = useState('')
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
+  const [content, setContent] = useNoteDraft(JSON.stringify([slideId, handleElementId]))
   const [activeNoteId, setActiveNoteId] = useState('')
   const [replyNoteId, setReplyNoteId] = useState('')
-  const replyDraftKey = JSON.stringify([slideId, replyNoteId])
-  const replyContent = replyDrafts[replyDraftKey] || ''
-  const setReplyContent = useCallback((value: string) => {
-    setReplyDrafts(drafts => {
-      const next = { ...drafts }
-      if (value) next[replyDraftKey] = value
-      else delete next[replyDraftKey]
-      return next
-    })
-  }, [replyDraftKey])
+  const [replyContent, setReplyContent] = useNoteDraft(JSON.stringify([slideId, replyNoteId]))
   const textAreaRef = useRef<{ focus: () => void } | null>(null)
   const notesRef = useRef<HTMLDivElement | null>(null)
   const panelTitle = LL.editor.notesPanel.slideNotesTitle({
@@ -81,7 +84,7 @@ const NotesPanel = memo(() => {
     updateNotes(newNotes)
     setContent('')
     Promise.resolve().then(scrollToBottom)
-  }, [content, LL, handleElementId, notes, scrollToBottom, updateNotes])
+  }, [content, LL, handleElementId, notes, scrollToBottom, updateNotes, setContent])
 
   const deleteNote = useCallback((id: string) => {
     const newNotes = notes.filter(note => note.id !== id)
