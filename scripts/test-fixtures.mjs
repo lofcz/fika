@@ -179,6 +179,7 @@ export const e2eScripts = [
   'scripts/e2e-history-redo-shortcuts.mjs',
   'scripts/e2e-creation-shortcut-modifiers.mjs',
   'scripts/e2e-select-escape.mjs',
+  'scripts/e2e-search-literal.mjs',
   'scripts/e2e-frame-keyboard.mjs',
   'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-frame-pointer.mjs',

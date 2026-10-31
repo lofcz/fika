@@ -31,9 +31,10 @@ export default () => {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchIndex, setSearchIndex] = useState(-1);
   const [modifiers, setModifiers] = useState<Modifiers>('g');
+  const searchRegex = (keyword: string, flags = modifiers) => new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
   const search = () => {
     const textList: SearchResult[] = [];
-    const matchRegex = new RegExp(searchWord, modifiers);
+    const matchRegex = searchRegex(searchWord);
     const textRegex = /(<([^>]+)>)/g;
     for (const slide of slides) {
       for (const el of slide.elements) {
@@ -110,7 +111,8 @@ export default () => {
   };
   type TextInfoList = ReturnType<typeof getTextInfoList>;
   const getMatchList = (content: string, keyword: string) => {
-    const reg = new RegExp(keyword, modifiers);
+    if (!keyword) return [];
+    const reg = searchRegex(keyword);
     const matchList = [];
     let match = reg.exec(content);
     while (match) {
@@ -146,7 +148,7 @@ export default () => {
   };
   const highlightTableText = (nodes: NodeListOf<Element>, index: number) => {
     for (const node of nodes) {
-      node.innerHTML = node.innerHTML.replace(new RegExp(searchWord, modifiers), () => {
+      node.innerHTML = node.innerHTML.replace(searchRegex(searchWord), () => {
         return `<mark data-index=${index++}>${searchWord}</mark>`;
       });
     }
@@ -328,7 +330,7 @@ export default () => {
             if (!cell.text) return cell;
             return {
               ...cell,
-              text: cell.text.replace(new RegExp(searchWord, 'g'), replaceWord)
+              text: cell.text.replace(searchRegex(searchWord, 'g'), replaceWord)
             };
           });
         });
