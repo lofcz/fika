@@ -327,10 +327,10 @@ const getElementListRangeByRotate = (elements: PPTElement[], rotate: number) => 
  * @param angle Angle in degrees
  */
 export const normalizeAngle = (angle: number) => {
-  let result = angle;
-  while (result > 180) result -= 360;
-  while (result < -180) result += 360;
-  return result;
+  let result = angle % 360;
+  if (result > 180) result -= 360;
+  if (result < -180) result += 360;
+  return result === 0 ? 0 : result;
 };
 
 /**

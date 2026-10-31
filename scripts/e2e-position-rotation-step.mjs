@@ -8,7 +8,7 @@ try {
   page.on('pageerror', error => errors.push(error.message))
   await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5173/'}?locale=en`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
-  for (const angle of [-180,-45,-10.04,-10,0,10,10.04,45,180]) for (const direction of [-1,1]) {
+  for (const angle of [-1e20,-1e12,-180,-45,-10.04,-10,0,10,10.04,45,180,1e12,1e20]) for (const direction of [-1,1]) {
     await page.evaluate(angle => {
       const s = window.__FIKA_SLIDES__.getState()
       s.setSlides([{ id: 'align-group', elements: ['left', 'right'].map((id, i) => ({ id, groupId: 'pair', type: 'shape', left: 100 + i * 300, top: 100, width: 400.04, height: 100.04, rotate: angle, viewBox: [200,100], path: 'M0 0H200V100H0Z', fill: '#ff0000', fixedRatio: false })) }])
@@ -29,7 +29,7 @@ try {
     const button=panel.getByRole('button',{name:direction===1?/\+45°/:/−45°/})
     await button.click()
     const actual=await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[0].rotate)
-    const raw=angle+direction*45
+    const raw=(angle+direction*45)%360
     const expected=raw>180?raw-360:raw< -180?raw+360:raw
     console.log({angle,direction,actual,expected})
     const sibling=await page.evaluate(()=>window.__FIKA_SLIDES__.getState().slides[0].elements[1])
