@@ -1,3 +1,4 @@
+import { cleanEditorHtml } from '@/utils/prosemirror/commitEditor';
 import { bindStyles } from '@/utils/cssm'
 import { createPortal } from 'react-dom'
 import styles from './ProsemirrorEditor.module.scss'
@@ -203,9 +204,10 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
 
   const handleInput = useMemo(() => debounce(function (isHanldeHistory = false) {
     if (!editorView.current) return;
-    if (valueRef.current.replace(/ style=\"\"/g, '') === editorView.current.dom.innerHTML.replace(/ style=\"\"/g, '')) return;
+    const html = normalizeFittedFontSizes(cleanEditorHtml(editorView.current.dom));
+    if (valueRef.current.replace(/ style=\"\"/g, '') === html.replace(/ style=\"\"/g, '')) return;
     callbacksRef.current.onUpdate?.({
-      value: normalizeFittedFontSizes(editorView.current.dom.innerHTML),
+      value: html,
       ignore: isHanldeHistory
     });
   }, 300, {

@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+const browser = await chromium.launch({ headless: true })
+try {
+  const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } })
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto(`${process.env.FIKA_TEST_URL || 'http://127.0.0.1:5173/'}?locale=en`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => window.__FIKA_SNAPSHOT__?.getState().snapshotCursor >= 0)
+  await page.evaluate(() => {
+    const store = window.__FIKA_SLIDES__.getState()
+    const src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="blue"/></svg>')
+    store.setSlides([{ id: 'modal-composition', elements: [{ id: 'image', type: 'image', left: 100, top: 100, width: 200, height: 100, rotate: 0, fixedRatio: true, src }] }, { id: 'destination', elements: [] }, { id: 'other', elements: [] }])
+    store.updateSlideIndex(0)
+  })
+  const image = await page.locator('#editable-element-image canvas').boundingBox()
+  await page.mouse.click(image.x + image.width / 2, image.y + image.height / 2, { button: 'right' })
+  await page.getByText('Set link', { exact: true }).click()
+  const dialog = page.locator('.link-dialog')
+  await dialog.waitFor()
+  await dialog.getByText('Slide page', { exact: true }).click()
+  await page.evaluate(() => {
+    const store = window.__FIKA_SLIDES__.getState()
+    store.setSlides(store.slides.filter(slide => slide.id !== 'destination'))
+  })
+  const before = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides)
+  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click({ timeout: 3000 })
+  await page.waitForTimeout(400)
+  const after = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides)
+  assert.deepEqual(after, before, 'A deleted destination cannot be saved as a slide link')
+  assert.equal(await dialog.isVisible(), true, 'Keep the dialog available to choose another destination')
+  await dialog.locator('.select-wrap').click()
+  await page.getByText('Slide 2', { exact: true }).last().click()
+  await dialog.getByRole('button', { name: 'Confirm', exact: true }).click({ timeout: 3000 })
+  await page.waitForTimeout(400)
+  assert.equal(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].link?.target), 'other')
+  assert.equal(await dialog.isVisible(), false)
+  assert.deepEqual(errors, [])
+  console.log('PASS deleted link destinations are rejected and can be replaced')
+} finally { await browser.close() }

@@ -722,6 +722,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
         tabIndex={-1}
         style={{ '--operate-line': operateLineColor, '--operate-line-halo': operateLineHalo, ...style } as CSSProperties}
         onMouseDownCapture={e => {
+          if (!e.currentTarget.contains(e.target as Node)) return
           // Navigation takes priority over page activation and editing, including
           // page chrome and view-only canvases. Stop React's child handlers too.
           if (e.button === 1) {
@@ -734,6 +735,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
           handleCanvasHitSelect(e)
         }}
         onMouseDown={e => {
+          if (!e.currentTarget.contains(e.target as Node)) return
           if (readOnly) {
             // View-only: the canvas still takes focus (wheel paging, zoom
             // shortcuts) and pans with Space, but never selects or edits.
@@ -744,8 +746,9 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
           }
           handleClickBlankArea(e.nativeEvent)
         }}
-        onDoubleClick={e => { if (!readOnly) handleDblClick(e.nativeEvent) }}
+        onDoubleClick={e => { if (e.currentTarget.contains(e.target as Node) && !readOnly) handleDblClick(e.nativeEvent) }}
         onContextMenu={e => {
+          if (!e.currentTarget.contains(e.target as Node)) return
           e.preventDefault()
           e.stopPropagation()
           if (!readOnly) openContextmenu(e, contextmenus)

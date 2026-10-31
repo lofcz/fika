@@ -92,6 +92,7 @@ const Popover = memo((vrProps: IPopoverProps) => {
       // the picker is already hidden by the time the key is released.
       ownerDocument.addEventListener('keyup', onEscapeRelease, true)
       inst.hide()
+      triggerEl.querySelector<HTMLElement>('button, [tabindex], input')?.focus()
     }
 
     const inst = tippy(triggerEl, {

@@ -202,6 +202,7 @@ export const e2eScripts = [
   'scripts/e2e-modal-composition.mjs',
   'scripts/e2e-link-edit-guards.mjs',
   'scripts/e2e-link-validation.mjs',
+  'scripts/e2e-link-deleted-slide.mjs',
   'scripts/e2e-panel-resize-buttons.mjs',
   'scripts/e2e-panel-multiple-buttons.mjs',
   'scripts/e2e-panel-drag-cleanup.mjs',

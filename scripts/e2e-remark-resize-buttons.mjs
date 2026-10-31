@@ -24,6 +24,7 @@ try {
     }
     await page.mouse.move(x, y - 60, { steps: 5 })
     await page.mouse.up({ button })
+    if (button === 'left') await page.waitForFunction(expected => document.querySelector('.remark')?.getBoundingClientRect().height === expected, before.height + 60)
     const after = await panel.boundingBox()
     console.log({ button, secondary, before: before.height, after: after.height })
     try { assert.equal(after.height, before.height + (button === 'left' ? 60 : 0)) } catch (error) { failures.push(error.message) }

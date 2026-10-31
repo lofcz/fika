@@ -9,6 +9,18 @@ import { editorHtmlLooksEmpty, shouldWriteEditorHtml } from './commitPolicy'
 
 export { editorHtmlLooksEmpty, shouldWriteEditorHtml } from './commitPolicy'
 
+/** Exclude transient node-selection decorations from persisted rich text. */
+export function cleanEditorHtml(dom: HTMLElement): string {
+  if (!dom.querySelector('.ProseMirror-selectednode')) return dom.innerHTML
+  const clone = dom.cloneNode(true) as HTMLElement
+  for (const node of clone.querySelectorAll('.ProseMirror-selectednode')) {
+    node.classList.remove('ProseMirror-selectednode')
+    if (!node.className) node.removeAttribute('class')
+    node.removeAttribute('draggable')
+  }
+  return clone.innerHTML
+}
+
 export const richTextHtmlLooksEmpty = editorHtmlLooksEmpty
 
 export const storeHtmlForElement = (elementId: string): string => {
@@ -46,7 +58,7 @@ export function commitLiveEditorToStore(elementId: string, options?: { history?:
   const view = getEditorView(elementId)
   if (!view) return
   const empty = view.state.doc.textContent.trim().length === 0 && richTextHtmlLooksEmpty(view.dom.innerHTML)
-  const html = empty ? '' : normalizeFittedFontSizes(view.dom.innerHTML)
+  const html = empty ? '' : normalizeFittedFontSizes(cleanEditorHtml(view.dom))
   const found = findElementInPresentation(elementId)
   if (!found) return
   const { slideId, el } = found

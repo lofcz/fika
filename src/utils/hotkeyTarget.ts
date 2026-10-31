@@ -15,6 +15,8 @@ export const isTypingTarget = (target: EventTarget | null): boolean => {
 /** Controls own navigation and activation keys, even while the canvas retains selection. */
 export const isInteractiveControlTarget = (target: EventTarget | null): boolean => {
   if (!target || typeof target !== 'object') return false
-  const el = target as { closest?: (selector: string) => unknown }
-  return typeof el.closest === 'function' && !!el.closest('button, a[href], [role="button"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="menuitem"], [role="tab"]')
+  const el = target as { closest?: (selector: string) => Element | null }
+  const control = el.closest?.('button, a[href], [role="button"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="menuitem"], [role="tab"]')
+  // Sortable slide rows carry dnd-kit's button role but own slide hotkeys.
+  return !!control && !(control.matches('[data-sortable-id]') && control.closest('.thumbnails'))
 }

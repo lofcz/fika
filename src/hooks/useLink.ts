@@ -23,7 +23,7 @@ export default () => {
       message.error(getLL().canvas.link.invalidWebUrl());
       return false;
     }
-    if (link.type === 'slide' && !link.target) {
+    if (link.type === 'slide' && !useSlidesStore.getState().slides.some(slide => slide.id === link.target)) {
       message.error(getLL().canvas.link.selectTargetFirst());
       return false;
     }
