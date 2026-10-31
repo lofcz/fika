@@ -23,6 +23,7 @@ const SearchPanel = memo(() => {
   } = useI18nContext();
   const mainStore = useMainStore();
   const {
+    canReplace,
     searchWord,
     setSearchWord,
     replaceWord,
@@ -76,9 +77,9 @@ const SearchPanel = memo(() => {
           setReplaceWord(value);
         }} placeholder={LL.editor.search.enterReplaceText()} onEnter={() => {
           replace();
-        }} /> : null}{type === 'replace' ? <div className={cx("footer")}><Button disabled={!searchWord} onClick={() => {
+        }} /> : null}{type === 'replace' ? <div className={cx("footer")}><Button disabled={!searchWord || !canReplace} onClick={() => {
             replace();
-          }}>{LL.editor.search.replace()}</Button><Button disabled={!searchWord} type='primary' onClick={() => {
+          }}>{LL.editor.search.replace()}</Button><Button disabled={!searchWord || mainStore.readOnly} type='primary' onClick={() => {
             replaceAll();
           }}>{LL.editor.search.replaceAll()}</Button></div> : null}</div></MoveablePanel></>;
 });

@@ -6,6 +6,7 @@ import message from '@/utils/message';
 import { queryFika } from '@/utils/portal';
 import { getLL } from '@/i18n/getLL';
 import { htmlToText } from '@/utils/common';
+import { isElementSelectable } from '@/utils/selection';
 import useHistorySnapshot from './useHistorySnapshot';
 interface SearchTextResult {
   elType: 'text' | 'shape';
@@ -29,6 +30,7 @@ const sameTarget = (a: SearchResult, b: SearchResult) => (
 export default () => {
   const { addHistorySnapshot } = useHistorySnapshot();
   const handleElement = useMainStore(selectHandleElement);
+  const readOnly = useMainStore(s => s.readOnly);
   const setActiveElementIdList = useMainStore(s => s.setActiveElementIdList);
   const slides = useSlidesStore(s => s.slides);
   const slideIndex = useSlidesStore(s => s.slideIndex);
@@ -217,7 +219,7 @@ export default () => {
     if (searchIndex === -1) search();else if (searchIndex > 0) setSearchIndex(searchIndex - (1));else setSearchIndex(searchResults.length - 1);
   };
   const replace = () => {
-    if (!searchWord) return;
+    if (!searchWord || useMainStore.getState().readOnly) return;
     if (searchIndex === -1) {
       searchNext();
       return;
@@ -226,7 +228,7 @@ export default () => {
     if (!target) return;
     const slide = useSlidesStore.getState().slides.find(item => item.id === target.slideId);
     const element = slide?.elements.find(item => item.id === target.elId);
-    if (!element) return;
+    if (!element || !slide || !isElementSelectable(element, slide.elements, [])) return;
     const localIndex = searchResults.slice(0, searchIndex).filter(result => sameTarget(result, target)).length;
     if (element.type === 'text') {
       updateElement({ id: element.id, slideId: target.slideId, props: {
@@ -278,7 +280,7 @@ export default () => {
     return element.innerHTML;
   };
   const replaceAll = () => {
-    if (!searchWord) return;
+    if (!searchWord || useMainStore.getState().readOnly) return;
     searchActiveRef.current = true;
     const results = collectSearchResults();
     const originalSlides = useSlidesStore.getState().slides;
@@ -289,7 +291,7 @@ export default () => {
       const targetSlide = originalSlides.find(item => item.id === target.slideId);
       if (!targetSlide) continue;
       const targetElement = targetSlide.elements.find(item => item.id === target.elId);
-      if (!targetElement) continue;
+      if (!targetElement || !isElementSelectable(targetElement, targetSlide.elements, [])) continue;
       if (target.elType === 'table') {
         const data = (targetElement as PPTTableElement).data.map(row => {
           return row.map(cell => {
@@ -374,7 +376,12 @@ export default () => {
     setModifiers(modifiers === 'g' ? 'gi' : 'g');
     reset();
   };
+  const target = searchResults[searchIndex];
+  const targetSlide = target ? slides.find(slide => slide.id === target.slideId) : undefined;
+  const targetElement = targetSlide?.elements.find(element => element.id === target?.elId);
+  const canReplace = !readOnly && (!targetElement || isElementSelectable(targetElement, targetSlide!.elements, []));
   return {
+    canReplace,
     searchWord,
     setSearchWord,
     replaceWord,
