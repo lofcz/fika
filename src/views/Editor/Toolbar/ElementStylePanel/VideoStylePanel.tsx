@@ -4,7 +4,7 @@ import styles from './VideoStylePanel.module.scss'
 const cx = bindStyles(styles)
 import { memo, useState } from 'react'
 
-import { useSlidesStore, selectCurrentSlide } from '@/store'
+import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 import { getHandleElement, useHandleElementShallow } from '../common/handleElement'
 import type { PPTVideoElement } from '@/types/slides'
 import { getImageDataURL } from '@/utils/image'
@@ -14,6 +14,7 @@ import Button from '@/components/Button'
 import Switch from '@/components/Switch'
 import Divider from '@/components/Divider'
 import { useI18nContext } from '@/i18n/useI18nContext'
+import { isElementSelectable } from '@/utils/selection'
 
 const posterRequests = new Map<string, symbol>()
 
@@ -36,8 +37,10 @@ const VideoStylePanel = memo(() => {
   const setVideoPoster = (files: FileList) => {
     const imageFile = files[0]
     const element = getHandleElement()
-    const slideId = selectCurrentSlide(useSlidesStore.getState())?.id
-    if (!imageFile || element?.type !== 'video' || !slideId) return
+    const slide = selectCurrentSlide(useSlidesStore.getState())
+    if (!imageFile || element?.type !== 'video' || !slide
+      || !isElementSelectable(element, slide.elements, useMainStore.getState().hiddenElementIdList)) return
+    const slideId = slide.id
     const elementId = element.id
     const key = JSON.stringify([slideId, elementId])
     const request = Symbol()
@@ -45,8 +48,10 @@ const VideoStylePanel = memo(() => {
     getImageDataURL(imageFile).then(dataURL => {
       if (posterRequests.get(key) !== request) return
       const store = useSlidesStore.getState()
-      const current = store.slides.find(slide => slide.id === slideId)?.elements.find(el => el.id === elementId)
-      if (current?.type !== 'video') return
+      const currentSlide = store.slides.find(slide => slide.id === slideId)
+      const current = currentSlide?.elements.find(el => el.id === elementId)
+      if (!currentSlide || current?.type !== 'video'
+        || !isElementSelectable(current, currentSlide.elements, useMainStore.getState().hiddenElementIdList)) return
       store.updateElement({ id: elementId, slideId, props: { poster: dataURL } })
       addHistorySnapshot()
     }).finally(() => {
