@@ -62,7 +62,9 @@ const Editor = memo((props: IEditorProps) => {
     const editorView = editorViewRef.current
     if (!editorView || editorView.isDestroyed) return
     const { doc, tr } = editorView.state
-    editorView.dispatch(tr.replaceRangeWith(0, doc.content.size, createDocument(valueRef.current)))
+    const incoming = createDocument(valueRef.current)
+    if (doc.eq(incoming)) return
+    editorView.dispatch(tr.replaceRangeWith(0, doc.content.size, incoming))
   }, [])
 
   const handleMouseup = useCallback(() => {
