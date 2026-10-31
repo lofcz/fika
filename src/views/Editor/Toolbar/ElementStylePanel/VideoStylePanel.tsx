@@ -15,6 +15,8 @@ import Switch from '@/components/Switch'
 import Divider from '@/components/Divider'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { isElementSelectable } from '@/utils/selection'
+import message from '@/utils/message'
+import { getLL } from '@/i18n/getLL'
 
 const posterRequests = new Map<string, symbol>()
 
@@ -100,7 +102,11 @@ const VideoStylePanel = memo(() => {
         return
       }
       const poster = await synthesizeVideoPoster(el.src)
-      commitPoster(poster || '')
+      if (poster) commitPoster(poster)
+      else if (posterRequests.get(key) === request) message.error(getLL().common.fileParseError())
+    }
+    catch {
+      if (posterRequests.get(key) === request) message.error(getLL().common.fileParseError())
     }
     finally {
       if (posterRequests.get(key) === request) posterRequests.delete(key)
