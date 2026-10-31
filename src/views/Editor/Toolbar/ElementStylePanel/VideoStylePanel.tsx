@@ -5,7 +5,7 @@ const cx = bindStyles(styles)
 import { memo, useState } from 'react'
 
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
-import { getHandleElement, useHandleElementShallow } from '../common/handleElement'
+import { getHandleElement, useHandleElementId, useHandleElementShallow } from '../common/handleElement'
 import type { PPTVideoElement } from '@/types/slides'
 import { getImageDataURL } from '@/utils/image'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
@@ -26,7 +26,10 @@ const VideoStylePanel = memo(() => {
     if (!el || el.type !== 'video') return null
     return { poster: el.poster, autoplay: el.autoplay }
   })
-  const [synthesizing, setSynthesizing] = useState(false)
+  const elementId = useHandleElementId()
+  const slideId = useSlidesStore(s => selectCurrentSlide(s)?.id)
+  const [generatingTargets, setGeneratingTargets] = useState<Set<string>>(() => new Set())
+  const synthesizing = generatingTargets.has(JSON.stringify([slideId, elementId]))
   const { addHistorySnapshot } = useHistorySnapshot()
 
   const updateVideo = (props: Partial<PPTVideoElement>) => {
@@ -88,7 +91,7 @@ const VideoStylePanel = memo(() => {
       store.updateElement({ id: el.id, slideId, props: { poster } })
       addHistorySnapshot()
     }
-    setSynthesizing(true)
+    setGeneratingTargets(targets => new Set(targets).add(key))
     try {
       const { captureVideoPoster, synthesizeVideoPoster } = await import('@/utils/mediaPoster')
       const { mediaPlayerHostId } = await import('@/utils/mediaLayout')
@@ -110,7 +113,11 @@ const VideoStylePanel = memo(() => {
     }
     finally {
       if (posterRequests.get(key) === request) posterRequests.delete(key)
-      setSynthesizing(false)
+      setGeneratingTargets(targets => {
+        const next = new Set(targets)
+        next.delete(key)
+        return next
+      })
     }
   }
 

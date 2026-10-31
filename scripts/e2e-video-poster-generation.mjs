@@ -69,6 +69,16 @@ try {
     await page.keyboard.press(mode === 'selection' ? 'Tab' : 'PageDown')
     if (mode === 'selection') assert.deepEqual(await page.evaluate(() => window.__FIKA_MAIN__.getState().activeElementIdList), ['video-0-1'])
     else assert.equal(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slideIndex), 1)
+    if (mode === 'selection') {
+      const ready = await page.getByRole('button', { name: 'Generate preview automatically', exact: true }).count()
+      console.log({ readyForOtherVideo: ready })
+      try { assert.equal(ready, 1, 'Selecting another video does not inherit the first video loading state') }
+      catch (error) { failures.push(error.message) }
+      await page.keyboard.press('Shift+Tab')
+      assert.deepEqual(await page.evaluate(() => window.__FIKA_MAIN__.getState().activeElementIdList), ['video-0-0'])
+      assert.equal(await page.getByRole('button', { name: 'Creating preview…', exact: true }).isDisabled(), true, 'Returning to the original video shows its pending job')
+      await page.keyboard.press('Tab')
+    }
     release()
     await page.waitForFunction(() => window.finishedPosterProbes > 0, undefined, { timeout: 20000 })
     const after = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides)
