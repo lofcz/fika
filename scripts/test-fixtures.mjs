@@ -67,6 +67,7 @@ export const e2eScripts = [
   'scripts/e2e-image-crop-small-bounds.mjs',
   'scripts/e2e-image-crop-ratio-bounds.mjs',
   'scripts/e2e-image-crop-live-modifier.mjs',
+  'scripts/e2e-image-crop-noop.mjs',
   'scripts/e2e-border-slider-undo.mjs',
   'scripts/e2e-style-sliders-touch-cancel.mjs',
   'scripts/e2e-multi-style-slider-selection.mjs',

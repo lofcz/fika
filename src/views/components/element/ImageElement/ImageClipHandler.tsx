@@ -114,11 +114,14 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
   const updateRange = useCallback(() => {
     const wrap = topImgWrapperPositionRef.current
     const { width: bottomWidth, height: bottomHeight } = imgPosition
-    currentRangeRef.current = [
+    const next: ImageClipDataRange = [
       [wrap.left / bottomWidth * 100, wrap.top / bottomHeight * 100],
       [(wrap.left + wrap.width) / bottomWidth * 100, (wrap.top + wrap.height) / bottomHeight * 100],
     ]
-  }, [imgPosition.width, imgPosition.height])
+    const original = props.clipData?.range ?? [[0, 0], [100, 100]]
+    const unchanged = next.every((point, i) => point.every((value, j) => Math.abs(value - original[i][j]) < 1e-9))
+    currentRangeRef.current = unchanged ? null : next
+  }, [imgPosition.width, imgPosition.height, props.clipData])
 
   const handleClip = useCallback(() => {
     if (isSettingClipRangeRef.current) return

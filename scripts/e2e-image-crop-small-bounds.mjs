@@ -32,10 +32,10 @@ try {
     await page.keyboard.press('Enter')
     await page.waitForFunction(() => !window.__FIKA_MAIN__.getState().clipingImageElementId)
     const after = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0])
-    console.log({ width, height, edge, after: { width: after.width, height: after.height, range: after.clip.range } })
+    console.log({ width, height, edge, after: { width: after.width, height: after.height, range: (after.clip?.range ?? [[0, 0], [100, 100]]) } })
     try {
       assert.ok(after.width <= width + 1e-6 && after.height <= height + 1e-6, 'An inward crop drag never enlarges the image')
-      for (const value of after.clip.range.flat()) assert.ok(value >= -1e-6 && value <= 100 + 1e-6, 'Crop stays within the source bitmap')
+      for (const value of (after.clip?.range ?? [[0, 0], [100, 100]]).flat()) assert.ok(value >= -1e-6 && value <= 100 + 1e-6, 'Crop stays within the source bitmap')
       if (width === 100 && height === 100) assert.ok(after.width < width, 'Larger images still crop inward')
     } catch (error) { failures.push(`${width}x${height}/${edge}: ${error.message}`) }
   }
