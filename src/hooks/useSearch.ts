@@ -6,6 +6,7 @@ import message from '@/utils/message';
 import { queryFika } from '@/utils/portal';
 import { getLL } from '@/i18n/getLL';
 import { getSearchText, getSearchHtmlText } from '@/utils/searchText';
+import { getHiddenTableCells } from '@/utils/tableHiddenCells';
 import { isElementSelectable } from '@/utils/selection';
 import useHistorySnapshot from './useHistorySnapshot';
 interface SearchTextResult {
@@ -68,11 +69,12 @@ export default () => {
             elType: el.type
           })));
         } else if (el.type === 'table') {
+          const hidden = new Set(getHiddenTableCells(el.data));
           for (let i = 0; i < el.data.length; i++) {
             const row = el.data[i];
             for (let j = 0; j < row.length; j++) {
               const cell = row[j];
-              if (!cell.text) continue;
+              if (!cell.text || hidden.has(`${i}_${j}`)) continue;
               const text = cell.text;
               const rets = [...text.matchAll(matchRegex)];
               textList.push(...rets.map<SearchTableResult>(match => ({
@@ -272,9 +274,11 @@ export default () => {
       const targetElement = targetSlide.elements.find(item => item.id === target.elId);
       if (!targetElement || !isElementSelectable(targetElement, targetSlide.elements, [])) continue;
       if (target.elType === 'table') {
-        const data = (targetElement as PPTTableElement).data.map(row => {
-          return row.map(cell => {
-            if (!cell.text) return cell;
+        const table = targetElement as PPTTableElement;
+        const hidden = new Set(getHiddenTableCells(table.data));
+        const data = table.data.map((row, rowIndex) => {
+          return row.map((cell, colIndex) => {
+            if (!cell.text || hidden.has(`${rowIndex}_${colIndex}`)) return cell;
             return {
               ...cell,
               text: replacePlainTextMatches(cell.text)
