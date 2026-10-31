@@ -212,83 +212,27 @@ export default () => {
       return;
     }
     const target = searchResults[searchIndex];
-    let targetElement = null;
-    if (target.elType === 'table') {
-      const [i, j] = target.cellIndex;
-      targetElement = queryFika(`#editable-element-${target.elId} .cell[data-cell-index="${i}_${j}"] .cell-text`);
-    } else targetElement = queryFika(`#editable-element-${target.elId} .ProseMirror`);
-    if (!targetElement) return;
-    const fakeElement = document.createElement('div');
-    fakeElement.innerHTML = targetElement.innerHTML;
-    const nodes = getTextNodeList(fakeElement);
-    const textList = getTextInfoList(nodes);
-    const matches = getMatchList(textList.map(item => item.text).join(''), searchWord);
+    if (!target) return;
+    const slide = useSlidesStore.getState().slides.find(item => item.id === target.slideId);
+    const element = slide?.elements.find(item => item.id === target.elId);
+    if (!element) return;
     const localIndex = searchResults.slice(0, searchIndex).filter(result => sameTarget(result, target)).length;
-    if (!matches[localIndex]) return;
-    highlight(nodes, textList, [matches[localIndex]], 0);
-    fakeElement.querySelectorAll('mark[data-index]').forEach(mark => mark.classList.add('active'));
-    let replaced = false;
-    const marks = fakeElement.querySelectorAll('mark[data-index]');
-    for (const mark of marks) {
-      const parentNode = mark.parentNode!;
-      if (mark.classList.contains('active')) {
-        if (replaced) parentNode.removeChild(mark);else {
-          parentNode.replaceChild(document.createTextNode(replaceWord), mark);
-          replaced = true;
-        }
-      } else {
-        const text = mark.textContent!;
-        parentNode.replaceChild(document.createTextNode(text), mark);
-      }
-    }
-    if (target.elType === 'text') {
-      const props = {
-        content: fakeElement.innerHTML
-      };
-      updateElement({
-        id: target.elId,
-        props
-      });
-    } else if (target.elType === 'shape') {
-      const el = currentSlide.elements.find(item => item.id === target.elId);
-      if (el && el.type === 'shape' && el.text) {
-        const props = {
-          text: {
-            ...el.text,
-            content: fakeElement.innerHTML
-          }
-        };
-        updateElement({
-          id: target.elId,
-          props
-        });
-      }
-    } else if (target.elType === 'table') {
-      const el = currentSlide.elements.find(item => item.id === target.elId);
-      if (el && el.type === 'table') {
-        const data = el.data.map((row, i) => {
-          if (i === target.cellIndex[0]) {
-            return row.map((cell, j) => {
-              if (j === target.cellIndex[1]) {
-                return {
-                  ...cell,
-                  text: fakeElement.innerHTML
-                };
-              }
-              return cell;
-            });
-          }
-          return row;
-        });
-        const props = {
-          data
-        };
-        updateElement({
-          id: target.elId,
-          props
-        });
-      }
-    }
+    if (element.type === 'text') {
+      updateElement({ id: element.id, slideId: target.slideId, props: {
+        content: replaceHtmlMatches(element.content, localIndex)
+      } });
+    } else if (element.type === 'shape' && element.text) {
+      updateElement({ id: element.id, slideId: target.slideId, props: {
+        text: { ...element.text, content: replaceHtmlMatches(element.text.content, localIndex) }
+      } });
+    } else if (element.type === 'table' && target.elType === 'table') {
+      const data = element.data.map((row, rowIndex) => row.map((cell, columnIndex) => (
+        rowIndex === target.cellIndex[0] && columnIndex === target.cellIndex[1]
+          ? { ...cell, text: replaceHtmlMatches(cell.text, localIndex) }
+          : cell
+      )));
+      updateElement({ id: element.id, slideId: target.slideId, props: { data } });
+    } else return;
     addHistorySnapshot();
     const remaining = searchResults.filter((_, index) => index !== searchIndex);
     setSearchResults(remaining);
@@ -298,13 +242,14 @@ export default () => {
       }
     } else setSearchIndex(-1);
   };
-  const replaceHtmlMatches = (html: string) => {
+  const replaceHtmlMatches = (html: string, selectedIndex?: number) => {
     const element = document.createElement('div');
     element.innerHTML = html;
     const textNodes = getTextNodeList(element);
     const textList = getTextInfoList(textNodes);
     const content = textList.map(({ text }) => text).join('');
-    const matchList = getMatchList(content, searchWord);
+    const matches = getMatchList(content, searchWord);
+    const matchList = selectedIndex === undefined ? matches : matches.slice(selectedIndex, selectedIndex + 1);
     if (!matchList.length) return html;
     highlight(textNodes, textList, matchList, 0);
     let lastMarkIndex = -1;

@@ -337,7 +337,10 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
         next = next.setSelection(TextSelection.create(next.doc, nextFrom, nextTo));
       } catch {}
     }
-    editorView.current.dispatch(next);
+    // The incoming value may contain display-only contrast colors. Updating
+    // the view must not commit that paint back as an authored edit.
+    handleInput.cancel();
+    editorView.current.dispatch(next.setMeta('fikaSyncValue', true).setMeta('addToHistory', false));
     if (keepStored && isEmptyEditorDoc(editorView.current) && storedMarks) {
       editorView.current.dispatch(editorView.current.state.tr.setStoredMarks(storedMarks));
     }
@@ -763,18 +766,21 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       dispatchTransaction(tr) {
         const current = editorView.current;
         if (!current) return;
+        const externalSync = tr.getMeta('fikaSyncValue') === true;
         const wasEmpty = current.state.doc.textContent.trim().length === 0;
         const newState = current.state.apply(tr);
         current.updateState(newState);
         rememberTextSelection(current);
-        if (wasEmpty && newState.doc.textContent.trim().length > 0) {
+        if (!externalSync && wasEmpty && newState.doc.textContent.trim().length > 0) {
           callbacksRef.current.onPlaceholderFill?.();
         }
         emitEmptyStateRef.current();
         if (tr.docChanged) {
           emitDocChangeRef.current();
-          commitLiveEditorToStore(elementIdRef.current, { history: false });
-          handleInputRef.current();
+          if (!externalSync) {
+            commitLiveEditorToStore(elementIdRef.current, { history: false });
+            handleInputRef.current();
+          }
         }
         if (!newState.selection.empty && !pointerSelecting.current) maybeRevealForTextRangeRef.current(current);
       }
