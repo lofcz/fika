@@ -134,7 +134,7 @@ export default () => {
           startIdx,
           endIdx
         } = textList[textIdx];
-        if (endIdx < matchStart) continue;
+        if (endIdx <= matchStart) continue;
         if (startIdx >= matchEnd) break;
         let textNode = textNodes[textIdx];
         const nodeMatchStartIdx = Math.max(0, matchStart - startIdx);
@@ -320,7 +320,7 @@ export default () => {
     for (let i = 0; i < searchResults.length; i++) {
       const lastTarget = searchResults[i - 1];
       const target = searchResults[i];
-      if (lastTarget && lastTarget.elId === target.elId) continue;
+      if (lastTarget && lastTarget.slideId === target.slideId && lastTarget.elId === target.elId) continue;
       const targetSlide = slides.find(item => item.id === target.slideId);
       if (!targetSlide) continue;
       const targetElement = targetSlide.elements.find(item => item.id === target.elId);
@@ -373,7 +373,7 @@ export default () => {
             props
           });
         } else if (target.elType === 'shape') {
-          const el = currentSlide.elements.find(item => item.id === target.elId);
+          const el = targetElement;
           if (el && el.type === 'shape' && el.text) {
             const props = {
               text: {
