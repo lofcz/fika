@@ -5,6 +5,7 @@ import type { PPTTableElement } from '@/types/slides';
 import message from '@/utils/message';
 import { queryFika, queryFikaAll } from '@/utils/portal';
 import { getLL } from '@/i18n/getLL';
+import useHistorySnapshot from './useHistorySnapshot';
 interface SearchTextResult {
   elType: 'text' | 'shape';
   slideId: string;
@@ -19,6 +20,7 @@ interface SearchTableResult {
 type SearchResult = SearchTextResult | SearchTableResult;
 type Modifiers = 'g' | 'gi';
 export default () => {
+  const { addHistorySnapshot } = useHistorySnapshot();
   const handleElement = useMainStore(selectHandleElement);
   const setActiveElementIdList = useMainStore(s => s.setActiveElementIdList);
   const slides = useSlidesStore(s => s.slides);
@@ -314,6 +316,7 @@ export default () => {
       searchNext();
       return;
     }
+    const originalSlides = useSlidesStore.getState().slides;
     for (let i = 0; i < searchResults.length; i++) {
       const lastTarget = searchResults[i - 1];
       const target = searchResults[i];
@@ -387,6 +390,7 @@ export default () => {
         }
       }
     }
+    if (useSlidesStore.getState().slides !== originalSlides) addHistorySnapshot();
     setSearchResults([]);
     setSearchIndex(-1);
   };
