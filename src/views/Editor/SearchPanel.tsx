@@ -57,14 +57,20 @@ const SearchPanel = memo(() => {
       searchInpRef.current!.focus();
     });
   }, [type]);
-  return <><MoveablePanel className={cx("search-panel")} width={330} height={0} left={-270} top={90}><div className={cx("search-header")}><Tabs className={cx("search-tabs")} tabs={tabs} value={type} onUpdateValue={(value: any) => {
+  return <><MoveablePanel onKeyDown={event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    close();
+  }} className={cx("search-panel")} width={330} height={0} left={-270} top={90}><div className={cx("search-header")}><Tabs className={cx("search-tabs")} tabs={tabs} value={type} onUpdateValue={(value: any) => {
           setType(value);
         }} /><button type='button' className={cx("close-btn")} onMouseDown={(event) => { event.stopPropagation() }} onClick={() => {
           close();
         }}><Icon icon="x" /></button></div><div className={cx('search-body', type)} onMouseDown={(event) => { event.stopPropagation() }}><Input className={cx("input")} value={searchWord} onUpdateValue={(value: any) => {
           setSearchWord(value);
-        }} placeholder={LL.editor.search.enterSearchQuery()} onEnter={() => {
-          searchNext();
+        }} placeholder={LL.editor.search.enterSearchQuery()} onEnter={event => {
+          if ((event as KeyboardEvent).shiftKey) searchPrev();
+          else searchNext();
         }} ref={searchInpRef} suffix={<><span className={cx("count")}>{searchIndex + 1}/{searchResults.length}</span><Divider type='vertical' margin={4} /><button type='button' className={cx('icon-btn', {
             'active': modifiers === 'g'
           })} data-tooltip={LL.editor.search.ignoreCase()} onMouseDown={(event) => { event.preventDefault() }} onClick={() => {

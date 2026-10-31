@@ -2,7 +2,7 @@ import { bindStyles } from '@/utils/cssm'
 import { Icon } from '@/components/Icon'
 import styles from './MoveablePanel.module.scss'
 const cx = bindStyles(styles)
-import { type CSSProperties, type ReactNode, useRef, useCallback, memo, useState, useEffect } from 'react'
+import { type CSSProperties, type ReactNode, type KeyboardEventHandler, useRef, useCallback, memo, useState, useEffect } from 'react'
 
 export type IMoveablePanelProps = {
   width: number
@@ -19,6 +19,7 @@ export type IMoveablePanelProps = {
   contentStyle?: CSSProperties
   className?: string
   onClose?: () => void
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>
   children?: ReactNode
 }
 
@@ -172,6 +173,7 @@ const MoveablePanel = memo((vrProps: IMoveablePanelProps) => {
     <div
       className={cx('moveable-panel', vrProps.className)}
       ref={moveablePanelRef}
+      onKeyDown={vrProps.onKeyDown}
       style={{
         width: w + 'px',
         height: h ? h + 'px' : 'auto',

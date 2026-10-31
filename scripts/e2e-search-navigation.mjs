@@ -17,8 +17,8 @@ try {
   const input = page.getByPlaceholder('Enter text to find')
   await input.fill('Needle')
   const failures = []
-  for (const [action, expectedSlide, expectedResult] of [['Enter', 0, 0], ['Next', 0, 1], ['Next', 1, 2], ['Next', 0, 0], ['Previous', 1, 2]]) {
-    if (action === 'Enter') await input.press('Enter')
+  for (const [action, expectedSlide, expectedResult] of [['Enter', 0, 0], ['Shift+Enter', 1, 2], ['Enter', 0, 0], ['Next', 0, 1], ['Next', 1, 2], ['Next', 0, 0], ['Previous', 1, 2]]) {
+    if (action.endsWith('Enter')) await input.press(action)
     else await page.locator(`[data-tooltip="${action}"]:visible`).click()
     await page.waitForTimeout(400)
     const actual = await page.evaluate(() => ({
@@ -26,7 +26,7 @@ try {
       active: [...(CSS.highlights.get('fika-search-active') || [])].map(range => ({ text: range.toString(), start: range.startOffset })),
     }))
     console.log({ action, actual, expectedSlide, expectedResult })
-    if (action === 'Enter') {
+    if (action === 'Enter' && actual.slide === expectedSlide) {
       assert.equal(await page.locator('#editable-element-text-0 .ProseMirror').evaluate(el => getComputedStyle(el, '::highlight(fika-search-active)').backgroundColor), 'rgb(255, 150, 50)', 'The active range has a visible highlight style')
       await page.screenshot({ path: '/tmp/fika-find-highlight.png' })
     }

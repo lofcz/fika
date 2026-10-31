@@ -194,6 +194,7 @@ export const e2eScripts = [
   'scripts/e2e-search-empty-replacement.mjs',
   'scripts/e2e-search-selected-text.mjs',
   'scripts/e2e-search-unchanged-replacement.mjs',
+  'scripts/e2e-search-escape.mjs',
   'scripts/e2e-frame-keyboard.mjs',
   'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-frame-pointer.mjs',
