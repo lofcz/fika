@@ -13,6 +13,7 @@ try {
     store.updateSlideIndex(0)
   })
   const before = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides)
+  const failures = []
   for (const field of ['find', 'replace']) {
     await page.keyboard.press('Control+f')
     const input = page.getByPlaceholder('Enter text to find')
@@ -23,6 +24,16 @@ try {
       await page.locator('[class*="search-tabs"]').getByText('Replace', { exact: true }).click()
       await page.getByPlaceholder('Enter replacement text').fill('Unused')
     }
+    const focused = field === 'find' ? input : page.getByPlaceholder('Enter replacement text')
+    await focused.evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true })))
+    await page.waitForTimeout(100)
+    const staysOpen = await input.isVisible()
+    console.log({ field, staysOpen })
+    if (!staysOpen) {
+      failures.push(`Composing Escape closed the ${field} input`)
+      continue
+    }
+    assert.equal(await focused.inputValue(), field === 'find' ? 'Needle' : 'Unused', 'Composition cancellation retains the query or replacement')
     await page.keyboard.press('Escape')
     await page.waitForTimeout(150)
     assert.equal(await input.isVisible(), false, `Escape closes Find from the ${field} input`)
@@ -30,5 +41,6 @@ try {
     assert.deepEqual(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides), before, 'Escape leaves document content unchanged')
   }
   assert.deepEqual(errors, [])
+  assert.deepEqual(failures, [])
   console.log('PASS Escape closes Find from both fields and clears highlights')
 } finally { await browser.close() }

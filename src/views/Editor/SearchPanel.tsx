@@ -58,7 +58,7 @@ const SearchPanel = memo(() => {
     });
   }, [type]);
   return <><MoveablePanel onKeyDown={event => {
-    if (event.key !== 'Escape') return;
+    if (event.key !== 'Escape' || event.nativeEvent.isComposing) return;
     event.preventDefault();
     event.stopPropagation();
     close();
