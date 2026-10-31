@@ -214,8 +214,8 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
     clearDragRef.current()
     isSettingClipRangeRef.current = true
     let isMouseDown = true
-    const minWidth = 50 / width * 100
-    const minHeight = 50 / height * 100
+    const minWidth = Math.min(50, width) / width * 100
+    const minHeight = Math.min(50, height) / height * 100
     const viewport = findSlideViewport(e.target)
     const startPointer = getPointerClient(e)
     const bottomPosition = imgPosition
