@@ -264,7 +264,8 @@ export default () => {
     const textList = getTextInfoList(textNodes);
     const content = textList.map(({ text }) => text).join('');
     const matches = getMatchList(content, searchWord);
-    const matchList = selectedIndex === undefined ? matches : matches.slice(selectedIndex, selectedIndex + 1);
+    const selectedMatches = selectedIndex === undefined ? matches : matches.slice(selectedIndex, selectedIndex + 1);
+    const matchList = selectedMatches.filter(match => match[0] !== replaceWord);
     if (!matchList.length) return html;
     highlight(textNodes, textList, matchList, 0);
     let lastMarkIndex = -1;
