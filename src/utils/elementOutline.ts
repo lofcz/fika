@@ -1,4 +1,4 @@
-import { ShapePathFormulasKeys, type LineStyleType, type PPTElementOutline, type PPTShapeElement } from '@/types/slides';
+import { ShapePathFormulasKeys, type LineStyleType, type PPTElement, type PPTElementOutline, type PPTShapeElement } from '@/types/slides';
 import { isAxisAlignedRectPath } from '@/utils/simpleShape';
 
 /** Values `<= 1` are a 0–1 fraction of max rounding (ECMA-376 / pptxgenjs `rectRadius`). Values `> 1` are legacy px. */
@@ -201,4 +201,16 @@ export const importOutlineFromPptx = (el: PptxOutlineSource, ratio: number, opti
     outline.radius = +Math.min(1, Math.max(0, adj)).toFixed(4);
   }
   return outline;
+};
+
+/** Capture only fields a border preview can change, including absent properties. */
+export const captureOutlineRestore = (el: PPTElement) => {
+  const keys = el.type === 'line' ? ['width', 'radius'] : ['outline'];
+  if (el.type === 'shape') keys.push('path', 'pathFormula', 'keypoints', 'viewBox');
+  const entries = Object.entries(el);
+  return {
+    id: el.id,
+    props: Object.fromEntries(entries.filter(([key]) => keys.includes(key))) as Partial<PPTElement>,
+    absent: keys.filter(key => !(key in el)),
+  };
 };

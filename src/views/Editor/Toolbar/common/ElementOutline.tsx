@@ -5,14 +5,14 @@ import { memo, useRef, useState } from 'react'
 
 import { useSlidesStore } from '@/store'
 import { getHandleElement, useHandleElementId, useHandleElementSelect, useHandleElementShallow } from './handleElement'
-import type { LineStyleType, PPTElementOutline, PPTShapeElement } from '@/types/slides'
+import type { LineStyleType, PPTElementOutline } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import SVGLine from './SVGLine'
 import PanelSection from './PanelSection'
 import ColorSwatches from '@/components/ColorSwatches'
 import SelectCustom from '@/components/SelectCustom'
 import Slider from '@/components/Slider'
-import { outlineElementPatch, outlineRadiusToPercent, percentToOutlineRadius, resolveOutlineRadiusPx } from '@/utils/elementOutline'
+import { captureOutlineRestore, outlineElementPatch, outlineRadiusToPercent, percentToOutlineRadius, resolveOutlineRadiusPx } from '@/utils/elementOutline'
 import { useI18nContext } from '@/i18n/useI18nContext'
 
 export const OUTLINE_WIDTH_MAX = 20
@@ -54,15 +54,11 @@ const ElementOutline = memo(({ fixed = false }: IElementOutlineProps) => {
   const startOutlineDrag = () => {
     const el = getHandleElement()
     if (!el || !('outline' in el)) return
-    const props: Partial<PPTShapeElement> = { outline: el.outline }
-    if (el.type === 'shape') {
-      Object.assign(props, { path: el.path, pathFormula: el.pathFormula, keypoints: el.keypoints, viewBox: el.viewBox })
-    }
+    const { props, absent } = captureOutlineRestore(el)
     dragRestore.current = () => {
       if (getHandleElement()?.id !== el.id) return
       const store = useSlidesStore.getState()
       store.updateElement({ id: el.id, props })
-      const absent = Object.keys(props).filter(key => !(key in el))
       if (absent.length) store.removeElementProps({ id: el.id, propName: absent })
     }
   }

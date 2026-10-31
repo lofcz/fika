@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './MultiStylePanel.module.scss'
 const cx = bindStyles(styles)
-import { memo, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useMainStore, useSlidesStore, selectActiveElementList, selectCurrentSlide } from '@/store'
 import type { LineStyleType, PPTElement, PPTElementOutline } from '@/types/slides'
@@ -18,7 +18,7 @@ import FormatChip from '@/components/FormatChip'
 import Select from '@/components/Select'
 import SelectCustom from '@/components/SelectCustom'
 import Slider from '@/components/Slider'
-import { outlineElementPatch, outlineRadiusToPercent, percentToOutlineRadius } from '@/utils/elementOutline'
+import { captureOutlineRestore, outlineElementPatch, outlineRadiusToPercent, percentToOutlineRadius } from '@/utils/elementOutline'
 import { Icon } from '@/components/Icon'
 import { useI18nContext } from '@/i18n/useI18nContext'
 
@@ -78,6 +78,25 @@ const MultiStylePanel = memo(function MultiStylePanel() {
     setOutline(prev => ({ ...prev, ...outlineProps }))
   }
 
+  const dragRestore = useRef<(() => void) | null>(null)
+  const startOutlineDrag = () => {
+    const original = activeElements().map(captureOutlineRestore)
+    const originalOutline = outline
+    dragRestore.current = () => {
+      const store = useSlidesStore.getState()
+      if (selectCurrentSlide(store)?.id !== slideId) return
+      for (const { id, props, absent } of original) {
+        store.updateElement({ id, props })
+        if (absent.length) store.removeElementProps({ id, propName: absent })
+      }
+      setOutline(originalOutline)
+    }
+  }
+  const cancelOutlineDrag = () => {
+    dragRestore.current?.()
+    dragRestore.current = null
+  }
+
   const updateOutline = (outlineProps: Partial<PPTElementOutline>) => {
     paintOutline(outlineProps)
     addHistorySnapshot()
@@ -131,6 +150,8 @@ const MultiStylePanel = memo(function MultiStylePanel() {
             max={Math.max(OUTLINE_WIDTH_MAX, outline.width || 0)}
             step={1}
             value={outline.width || 0}
+            onStart={startOutlineDrag}
+            onCancel={cancelOutlineDrag}
             onInput={value => paintOutline({ width: value })}
             onUpdateValue={value => updateOutline({ width: value })}
           />
@@ -144,6 +165,8 @@ const MultiStylePanel = memo(function MultiStylePanel() {
             step={1}
             tooltipSuffix="%"
             value={outlineRadiusToPercent(outline.radius, 0, 0)}
+            onStart={startOutlineDrag}
+            onCancel={cancelOutlineDrag}
             onInput={value => paintOutline({ radius: percentToOutlineRadius(value) })}
             onUpdateValue={value => updateOutline({ radius: percentToOutlineRadius(value) })}
           />
