@@ -103,6 +103,8 @@ const Slider = memo((vrProps: ISliderProps) => {
   const clampPercentage = (next: number) => Math.min(Math.max(next, 0), 100)
 
   const getNewValue = (next: number) => {
+    if (next <= 0) return min
+    if (next >= 100) return max
     let diff = next / 100 * (max - min)
     if (step >= 1) diff = Math.fround(diff)
     else {
@@ -117,7 +119,7 @@ const Slider = memo((vrProps: ISliderProps) => {
         }
       }
     }
-    return NP.plus(diff, min)
+    return Math.min(max, Math.max(min, NP.plus(diff, min)))
   }
 
   const formatTooltip = (next: number) => `${getNewValue(next)}${tooltipSuffix}`
@@ -142,6 +144,7 @@ const Slider = memo((vrProps: ISliderProps) => {
     let progress = (clientX - getBoundingClientRectViewLeft(sliderRef.current)) / sliderRef.current.clientWidth
     progress = Math.max(progress, 0)
     progress = Math.min(progress, 1)
+    if (progress === 0 || progress === 1) return progress * 100
 
     let next = progress * 100
     const stepPct = step / (max - min) * 100
@@ -150,7 +153,7 @@ const Slider = memo((vrProps: ISliderProps) => {
       if (remainder <= stepPct / 2) next = next - remainder
       else next = next - remainder + stepPct
     }
-    return next
+    return clampPercentage(next)
   }
 
   const readRangeValue = (): [number, number] => {
