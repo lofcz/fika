@@ -84,7 +84,7 @@ const Popover = memo((vrProps: IPopoverProps) => {
       ownerDocument.removeEventListener('keyup', onEscapeRelease, true)
     }
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || event.repeat) return
+      if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented || event.repeat) return
       if (openPopovers.at(-1) !== inst || !isAppOwnedEvent(event)) return
       event.preventDefault()
       event.stopPropagation()

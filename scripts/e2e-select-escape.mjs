@@ -20,6 +20,12 @@ try {
   const search = page.locator('[data-tippy-root] input:visible').first()
   await search.waitFor()
   await search.fill('Times')
+  await search.evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true })))
+  await page.waitForTimeout(300)
+  const compositionOpen = await search.isVisible()
+  console.log({ compositionOpen })
+  assert.equal(compositionOpen, true, 'Composing Escape keeps the font search open')
+  assert.equal(await search.inputValue(), 'Times')
   await page.evaluate(() => {
     window.escapeReleases = 0
     document.addEventListener('keyup', event => {
@@ -62,6 +68,12 @@ try {
   const linkInput = page.locator('[class*="link-popover"] input:visible')
   await linkInput.waitFor()
   await linkInput.focus()
+  await linkInput.fill('https://example.com/draft')
+  await linkInput.evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true })))
+  await page.waitForTimeout(300)
+  assert.equal(await linkInput.isVisible(), true, 'Composing Escape keeps the nested link picker open')
+  assert.equal(await moreMenu.isVisible(), true)
+  assert.equal(await linkInput.inputValue(), 'https://example.com/draft')
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
   assert.equal(await linkInput.isVisible(), false, 'Escape dismisses the nested link picker')
