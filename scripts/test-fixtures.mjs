@@ -140,6 +140,7 @@ export const e2eScripts = [
   'scripts/e2e-autoheight-styles.mjs',
   'scripts/e2e-text-fit-preview-consistency.mjs',
   'scripts/e2e-text-contrast-selection.mjs',
+  'scripts/e2e-shape-text-surface-contrast.mjs',
   'scripts/e2e-autoheight-stuck.mjs',
   'scripts/e2e-placeholder-slot.mjs',
   'scripts/e2e-hit-retarget-guard.mjs',

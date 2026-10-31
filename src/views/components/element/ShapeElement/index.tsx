@@ -90,7 +90,7 @@ const ShapeElement = memo((props: IShapeElementProps) => {
   useEffect(() => {
     if (handleElementId !== elementInfo.id) stopEdit();
   }, [handleElementId, elementInfo.id, stopEdit]);
-  const slide = selectCurrentSlide(useSlidesStore.getState());
+  const slide = useSlidesStore(selectCurrentSlide);
   const painted = resolveLiveTextPaint(
     (elementInfo.text?.defaultColor || theme.fontColor),
     (elementInfo.text?.content || ''),
