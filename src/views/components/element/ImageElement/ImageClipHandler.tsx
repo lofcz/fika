@@ -220,7 +220,9 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
     const startPointer = getPointerClient(e)
     const bottomPosition = imgPosition
     const originPositopn = { ...topImgWrapperPositionRef.current }
-    const aspectRatio = originPositopn.width / originPositopn.height
+    const leftCorner = type === OperateResizeHandlers.LEFT_TOP || type === OperateResizeHandlers.LEFT_BOTTOM
+    const rightCorner = type === OperateResizeHandlers.RIGHT_TOP || type === OperateResizeHandlers.RIGHT_BOTTOM
+    const topCorner = type === OperateResizeHandlers.LEFT_TOP || type === OperateResizeHandlers.RIGHT_TOP
 
     document.onmousemove = ev => {
       if (!isMouseDown) return
@@ -230,16 +232,24 @@ const ImageClipHandler = memo((props: IImageClipHandlerProps) => {
       const rot = _moveLRotate - rotate / 180 * Math.PI
       let moveX = _moveL * Math.cos(rot) / width * 100 * (flipH ? -1 : 1)
       let moveY = _moveL * Math.sin(rot) / height * 100 * (flipV ? -1 : 1)
-      if (ctrlOrShiftKeyActive) {
-        if (type === OperateResizeHandlers.RIGHT_BOTTOM || type === OperateResizeHandlers.LEFT_TOP) moveY = moveX / aspectRatio
-        if (type === OperateResizeHandlers.LEFT_BOTTOM || type === OperateResizeHandlers.RIGHT_TOP) moveY = -moveX / aspectRatio
-      }
       let targetLeft = originPositopn.left
       let targetTop = originPositopn.top
       let targetWidth = originPositopn.width
       let targetHeight = originPositopn.height
 
-      if (type === OperateResizeHandlers.LEFT_TOP) {
+      if (ctrlOrShiftKeyActive && (leftCorner || rightCorner)) {
+        const minScale = Math.max(minWidth / originPositopn.width, minHeight / originPositopn.height)
+        const availableWidth = leftCorner ? originPositopn.left + originPositopn.width : bottomPosition.width - originPositopn.left
+        const availableHeight = topCorner ? originPositopn.top + originPositopn.height : bottomPosition.height - originPositopn.top
+        const maxScale = Math.min(availableWidth / originPositopn.width, availableHeight / originPositopn.height)
+        const requestedScale = 1 + (leftCorner ? -moveX : moveX) / originPositopn.width
+        const scale = Math.min(maxScale, Math.max(minScale, requestedScale))
+        targetWidth = originPositopn.width * scale
+        targetHeight = originPositopn.height * scale
+        if (leftCorner) targetLeft += originPositopn.width - targetWidth
+        if (topCorner) targetTop += originPositopn.height - targetHeight
+      }
+      else if (type === OperateResizeHandlers.LEFT_TOP) {
         if (originPositopn.left + moveX < 0) moveX = -originPositopn.left
         if (originPositopn.top + moveY < 0) moveY = -originPositopn.top
         if (originPositopn.width - moveX < minWidth) moveX = originPositopn.width - minWidth
