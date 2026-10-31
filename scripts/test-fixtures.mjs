@@ -177,6 +177,7 @@ export const e2eScripts = [
   'scripts/e2e-keyboard-selection.mjs',
   'scripts/e2e-toolbar-keyboard-focus.mjs',
   'scripts/e2e-history-redo-shortcuts.mjs',
+  'scripts/e2e-creation-shortcut-modifiers.mjs',
   'scripts/e2e-frame-keyboard.mjs',
   'scripts/e2e-frame-marquee.mjs',
   'scripts/e2e-frame-pointer.mjs',

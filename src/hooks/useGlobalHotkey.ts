@@ -350,7 +350,7 @@ export default () => {
         e.preventDefault()
         tabActiveElement(shiftKey)
       }
-      if (mainStore.editorAreaFocus && !shiftKey && !ctrlOrMetaKeyActive && !mainStore.disableHotkeys) {
+      if (mainStore.editorAreaFocus && !shiftKey && !altKey && !ctrlOrMetaKeyActive && !mainStore.disableHotkeys) {
         if (key === KEYS.T) {
           mainStore.setCreatingElement({ type: 'text' })
         }
