@@ -61,7 +61,9 @@ try {
     window.Worker = class extends NativeWorker { constructor(url, options) { super(url, options); workerUrls.push(String(url)) } }
     const options = { onProgress: (_done, _total, detail) => { if (detail) progress.push(detail) }, assetBaseUrl: '/fika-assets', watermark: null }
     const box = { left: 30, top: 30, width: 400, height: 140, rotate: 0 }
+    const diagram = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160"><rect id="vector-sentinel" width="240" height="160" fill="red"/><circle cx="120" cy="80" r="40" fill="blue"/></svg>')
     const rich = { ...deck, slides: [{ id: 'rich', elements: [
+      { ...box, id: 'diagram', type: 'image', src: diagram, fixedRatio: true },
       { ...box, id: 'chart', type: 'chart', chartType: 'bar', data: { labels: ['A', 'B'], legends: ['Results'], series: [[2, 4]] }, themeColors: ['#4477aa'] },
       { ...box, id: 'table', type: 'table', colWidths: [0.5, 0.5], cellMinHeight: 30, outline: { color: '#111111', width: 1, style: 'solid' }, data: [[{ id: 'a', colspan: 1, rowspan: 1, text: 'Table sentinel' }, { id: 'b', colspan: 1, rowspan: 1, text: '42' }]] },
       { ...box, id: 'code', type: 'code', code: 'const answer = 42;', language: 'javascript', theme: 'github-dark', fontSize: 20, showLineNumbers: true },
@@ -147,6 +149,16 @@ try {
   const richSlide = await rich.file('ppt/slides/slide1.xml').async('string')
   assert.match(richSlide, /Table sentinel/)
   assert.match(richSlide, /answer/)
+  assert.match(richSlide, /svgBlip/, 'the original vector diagram remains in the PPTX')
+  const vectorPart = Object.keys(rich.files).find(name => /^ppt\/media\/.*\.svg$/.test(name))
+  assert.ok(vectorPart)
+  assert.match(await rich.file(vectorPart).async('string'), /vector-sentinel/)
+  const previewPart = Object.keys(rich.files).find(name => /^ppt\/media\/.*\.png$/.test(name))
+  assert.ok(previewPart)
+  const preview = await rich.file(previewPart).async('nodebuffer')
+  assert.equal(preview.subarray(1, 4).toString(), 'PNG')
+  assert.equal(preview.readUInt32BE(16), 480, 'preview contains a real raster, not a missing-image placeholder')
+  assert.equal(preview.readUInt32BE(20), 320)
   assert.ok(Object.keys(rich.files).some(name => /^ppt\/fonts\/.*fntdata$/.test(name)), 'custom font is embedded after worker decompression')
   const pptx = await JSZip.loadAsync(Uint8Array.from(output.first))
   assert.match(await pptx.file('ppt/slides/slide1.xml').async('string'), /Editable Czech/)

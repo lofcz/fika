@@ -63,6 +63,7 @@ async function resolveExportWatermark(resolver: FikaExportWatermarkResolver | nu
  *  does not retry a cross-origin XHR (which surfaces as a CORS console error). */
 const EMPTY_IMAGE_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 import BaseShapeElement from '@/views/components/element/ShapeElement/BaseShapeElement';
+import { preparePptxSvgPreviews } from '@/utils/pptxSvgPreview';
 interface ExportImageConfig {
   quality: number
   width: number
@@ -2093,6 +2094,7 @@ export function createPresentationExporter(
           for (const font of await collectEmbeddedFonts(preparePptxFontFamilies(commands))) {
             await pptx.addFont(font);
           }
+          await preparePptxSvgPreviews(commands);
           const bytes = await worker.request<ArrayBuffer>('pptx', { commands, stamp: stamp ? { watermark: stamp.watermark, images: {
             onLight: stamp.onLight,
             onDark: stamp.onDark,

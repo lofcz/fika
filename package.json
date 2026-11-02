@@ -138,7 +138,7 @@
     "parse5": "^8.0.1",
     "pdf-lib": "^1.17.1",
     "perfect-freehand": "^1.2.3",
-    "pptxgenjs-plus": "^4.3.4",
+    "pptxgenjs-plus": "^4.3.6",
     "pptxtojson": "npm:@lofcz/pptxtojson@^2.2.9",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-dropcursor": "^1.8.3",
