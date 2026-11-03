@@ -127,4 +127,5 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.version }}
           generate_release_notes: true
+          files: ${{ steps.pack.outputs.tarball }}
           token: ${{ steps.app-token.outputs.token }}
