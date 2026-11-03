@@ -326,7 +326,7 @@ export interface FikaTextContentUpdateInput {
   prepend?: string;
   append?: string;
 }
-export type FikaTextStylePatch = Partial<Pick<PPTTextElement, 'defaultFontName' | 'defaultColor' | 'outline' | 'fill' | 'lineHeight' | 'wordSpace' | 'opacity' | 'shadow' | 'paragraphSpace' | 'vertical' | 'textType' | 'inset'>>;
+export type FikaTextStylePatch = Partial<Pick<PPTTextElement, 'defaultFontName' | 'defaultColor' | 'outline' | 'fill' | 'lineHeight' | 'wordSpace' | 'opacity' | 'shadow' | 'paragraphSpace' | 'vertical' | 'textType' | 'inset' | 'minFontSize'>>;
 export interface FikaVideoPlaybackPatch {
   src?: string;
   ext?: string;
@@ -380,7 +380,7 @@ export type FikaCreateTableInput = FikaTableElementPatch & {
   element?: Partial<PPTTableElement>;
 };
 export type FikaSlideReference = string | number;
-export type FikaRichTextStylePatch = Partial<Pick<PPTTextElement, 'defaultFontName' | 'defaultColor' | 'lineHeight' | 'paragraphSpace' | 'wordSpace' | 'inset' | 'vertical'>> & Partial<Pick<ShapeText, 'align'>>;
+export type FikaRichTextStylePatch = Partial<Pick<PPTTextElement, 'defaultFontName' | 'defaultColor' | 'lineHeight' | 'paragraphSpace' | 'wordSpace' | 'inset' | 'vertical' | 'minFontSize'>> & Partial<Pick<ShapeText, 'align'>>;
 export interface FikaRichTextParagraphAttrs {
   align?: TextAlign | '';
   indent?: number;

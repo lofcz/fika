@@ -11,6 +11,8 @@ import {
   fitSessionKey,
   innerBoxFromLiveStyles,
   rememberFitScale,
+  extractFitBlocksFromHtml,
+  minimumTextFitScale,
   textFitScaleForHtml,
   DEFAULT_TEXT_FONT_FAMILY,
   DEFAULT_TEXT_FONT_SIZE,
@@ -46,6 +48,7 @@ const fitInsetOf = (el: FitSource): TextInset => (
 const fitAuthoredSizeOf = (el: FitSource) => (
   el.type === 'text' ? authoredTextFitSize(el) : 16
 )
+const fitMinimumOf = (el: FitSource) => el.type === 'shape' ? el.text?.minFontSize : el.minFontSize
 
 type LiveContentInput = string | null | undefined | RefObject<string | null | undefined>
 
@@ -102,7 +105,7 @@ export default (
   }
 
   const paintStyleFor = (scale: number): CSSProperties | undefined => {
-    if (!enabledNow() || scale >= 1) return undefined
+    if (!enabledNow() || scale === 1) return undefined
     // Font scaling (not zoom): spans render `calc(var(--text-fit-scale,1) * Npx)`
     // so the text RE-WRAPS at the smaller size — no over-shrink, and the raster
     // booth paints the identical CSS.
@@ -116,7 +119,7 @@ export default (
     fitScaleRef.current = next
     const host = hostElRef.current?.current
     if (!host) return
-    if (next >= 1) {
+    if (next === 1) {
       host.style.removeProperty('--text-fit-scale')
       host.style.removeProperty('--text-fit-base-size')
       return
@@ -190,7 +193,9 @@ export default (
       lineHeight: fitLineHeightOf(el),
       letterSpacing: fitWordSpaceOf(el) || 0,
       blockSpace: fitParagraphSpaceOf(el),
+      minFontSize: fitMinimumOf(el),
     }
+    const floor = Math.max(0.01, minimumTextFitScale(extractFitBlocksFromHtml(measuredContent(), params).blocks, params.minFontSize))
     // Pretext estimate first (fast, usually close), then converge on the REAL
     // rendered height: pretext and the browser disagree on wrap points (narrow
     // boxes compound the drift over many lines), and a one-shot correction
@@ -209,15 +214,15 @@ export default (
           commitScale(estimate)
           const rendered = content.scrollHeight
           if (rendered > height + 1) {
-            commitScale(Math.max(0.01, estimate * (height / Math.max(1, rendered)) * 0.995))
+            commitScale(Math.max(floor, estimate * (height / Math.max(1, rendered)) * 0.995))
           }
         }
         else {
           // Search a bounded interval: proportional retries can alternate
           // across a wrapping threshold and settle at a different size on
           // every keystroke, even when the text only gets longer.
-          let low = 0.01
-          let high = 1
+          let low = floor
+          let high = Math.max(1, floor)
           commitScale(high)
           if (content.scrollHeight <= height) low = high
           else {
@@ -294,6 +299,7 @@ export default (
     elementInfo.type === 'text' ? elementInfo.placeholderFontSize : undefined,
     elementInfo.type === 'text' ? elementInfo.placeholder : undefined,
     fitWordSpaceOf(elementInfo),
+    fitMinimumOf(elementInfo),
     fitInsetOf(elementInfo),
     hostEl,
     locale,

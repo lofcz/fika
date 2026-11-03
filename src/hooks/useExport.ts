@@ -693,6 +693,7 @@ export function createPresentationExporter(
   const formatHTML = (html: string, fallback?: {
     color?: string;
     fontSizePt?: number;
+    minFontSizePt?: number;
   }) => {
     const ast = toAST(html);
     let bulletFlag = false;
@@ -917,6 +918,12 @@ export function createPresentationExporter(
       }
     };
     parse(ast);
+    if (fallback?.minFontSizePt) {
+      for (const run of slices) {
+        run.options ??= {};
+        run.options.fontSize = Math.max(run.options.fontSize ?? fallback.fontSizePt ?? 12, fallback.minFontSizePt);
+      }
+    }
     return slices;
   };
   type Points = Array<{
@@ -1583,13 +1590,14 @@ export function createPresentationExporter(
               if (isEmptyHTMLText(el.content) && (phName || el.placeholder)) continue;
 
               const inset = el.inset || [10, 10, 10, 10];
-              const baseFontSizePx = el.placeholderFontSize ?? defaultFontSize;
+              const baseFontSizePx = Math.max(el.placeholderFontSize ?? defaultFontSize, el.minFontSize ?? 0);
               const baseFontSizePt = baseFontSizePx / ratioPx2Pt;
               const defaultColorFmt = el.defaultColor ? formatColor(el.defaultColor) : undefined;
               const defaultColor = defaultColorFmt ? defaultColorFmt.color : undefined;
               const textProps = formatHTML(el.content, {
                 color: defaultColor,
-                fontSizePt: baseFontSizePt
+                fontSizePt: baseFontSizePt,
+                minFontSizePt: el.minFontSize ? el.minFontSize / ratioPx2Pt : undefined,
               });
               const options: pptxgen.TextPropsOptions = {
                 x: el.left / ratioPx2Inch,
@@ -1749,11 +1757,12 @@ export function createPresentationExporter(
               }
               if (el.text) {
                 const inset = el.text.inset || [10, 10, 10, 10];
-                const shapeFontSizePt = defaultFontSize / ratioPx2Pt;
+                const shapeFontSizePt = Math.max(defaultFontSize, el.text.minFontSize ?? 0) / ratioPx2Pt;
                 const shapeDefaultColor = el.text.defaultColor ? formatColor(el.text.defaultColor).color : undefined;
                 const textProps = formatHTML(el.text.content, {
                   color: shapeDefaultColor,
-                  fontSizePt: shapeFontSizePt
+                  fontSizePt: shapeFontSizePt,
+                  minFontSizePt: el.text.minFontSize ? el.text.minFontSize / ratioPx2Pt : undefined,
                 });
                 const options: pptxgen.TextPropsOptions = {
                   x: el.left / ratioPx2Inch,

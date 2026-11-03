@@ -359,6 +359,7 @@ const paintShape = (
       inset: element.text.inset,
       vAlign: element.text.align,
       fit: element.text.fixedHeight !== false,
+      minFontSize: element.text.minFontSize,
       invalidate,
     })
   }
@@ -421,6 +422,7 @@ const paintTextElement = (
     vAlign: layout.vAlign,
     align: element.placeholder ? placeholderAlignOf(element) : undefined,
     fit: elementLocksTextBox(element),
+    minFontSize: element.minFontSize,
     vertical: element.vertical,
     shadow: element.shadow,
     invalidate,

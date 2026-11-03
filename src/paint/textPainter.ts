@@ -39,6 +39,7 @@ export type CanvasTextPaintOptions = {
   vAlign?: TextAlignVertical
   align?: TextAlign
   fit?: boolean
+  minFontSize?: number
   opacity?: number
   vertical?: boolean
   shadow?: { h: number; v: number; blur: number; color: string }
@@ -266,6 +267,7 @@ export const paintRichText = (
         lineHeight,
         letterSpacing,
         blockSpace: paragraphSpace,
+        minFontSize: options.minFontSize,
       })
     : 1
 

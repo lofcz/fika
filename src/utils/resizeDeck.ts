@@ -104,7 +104,7 @@ function scaleTypography(el: PPTElement, scale: number) {
     text.content = scalePixels(text.content, scale);
     text.inset = (text.inset ?? [10, 10, 10, 10]).map(v => v * scale) as [number, number, number, number];
     text.paragraphSpace = (text.paragraphSpace ?? 5);
-    for (const key of ['wordSpace', 'paragraphSpace', 'placeholderFontSize', 'placeholderLayoutHeight']) scaleNumber(text, key, scale);
+    for (const key of ['wordSpace', 'paragraphSpace', 'placeholderFontSize', 'placeholderLayoutHeight', 'minFontSize']) scaleNumber(text, key, scale);
     if (el.type === 'text' && el.structuredText) {
       // HTML is the source of truth; discard the stale import cache.
       delete el.structuredText;

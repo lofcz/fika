@@ -441,6 +441,16 @@ export interface FitFontScaleOptions {
   letterSpacing?: number;
   /** Smallest font factor to fall back to before clipping takes over (default 0.1). */
   minScale?: number;
+  minFontSize?: number;
+}
+
+/** Never make any authored run smaller than the caller's explicit floor. */
+export function minimumTextFitScale(blocks: TextFitBlock[], minFontSize?: number): number {
+  if (!minFontSize || !Number.isFinite(minFontSize) || minFontSize <= 0) return 0;
+  const sizes = blocks.flatMap(block => block.runs?.length
+    ? block.runs.filter(run => run.text.trim()).map(run => run.size)
+    : block.text.trim() ? [block.size] : []).filter(size => Number.isFinite(size) && size > 0);
+  return sizes.length ? minFontSize / Math.min(...sizes) : 0;
 }
 function measureAt(blocks: TextFitBlock[], options: FitFontScaleOptions, sizeScale: number): number {
   return measureTextBlocksHeight(blocks, {
@@ -461,7 +471,8 @@ function measureAt(blocks: TextFitBlock[], options: FitFontScaleOptions, sizeSca
  * Returns 1 when content already fits (or measurement isn't possible).
  */
 export function fitFontScaleForBlocks(blocks: TextFitBlock[], options: FitFontScaleOptions): number {
-  const minScale = options.minScale ?? 0.1;
+  const minScale = Math.max(options.minScale ?? 0.1, minimumTextFitScale(blocks, options.minFontSize));
+  if (minScale >= 1) return minScale;
   if (!blocks.length || options.innerWidth <= 2 || options.innerHeight <= 2) return 1;
   try {
     const fits = (sizeScale: number) => measureAt(blocks, options, sizeScale) <= options.innerHeight;
@@ -657,6 +668,7 @@ type FitScaleOptions = {
   locale?: string
   /** Pre-extracted blocks (e.g. after MathLive refined math chip sizes). */
   blocks?: TextFitBlock[]
+  minFontSize?: number
 }
 
 const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
@@ -673,7 +685,7 @@ const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
     options.locale || 'en',
     defaultSize,
   )
-  return `${key}\0${Math.round(options.innerWidth)}x${Math.round(options.innerHeight)}\0${options.blockSpace ?? 0}`
+  return `${key}\0${Math.round(options.innerWidth)}x${Math.round(options.innerHeight)}\0${options.blockSpace ?? 0}\0${options.minFontSize ?? 0}`
 }
 
 /**
@@ -689,6 +701,8 @@ export function subscribeFitScaleChanges(listener: (elementId: string) => void) 
 
 export function rememberFitScale(html: string, options: FitScaleOptions, scale: number, elementId?: string) {
   if (!html) return
+  const { blocks } = extractBlocksCached(html, options.defaultFontFamily || DEFAULT_FIT_FONT_FAMILY, options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE)
+  scale = Math.max(scale, minimumTextFitScale(blocks, options.minFontSize))
   const key = fitScaleMemoKey(html, options)
   if (fitScaleMemo.get(key) === scale) return
   if (fitScaleMemo.size >= FIT_SCALE_MEMO_MAX) {
@@ -733,6 +747,7 @@ export function textFitScaleForHtml(
           lineHeight: options.lineHeight,
           blockSpace: options.blockSpace ?? 0,
           letterSpacing: letterSpacing || undefined,
+          minFontSize: options.minFontSize,
         })
       }
       catch {

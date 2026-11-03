@@ -219,6 +219,8 @@ export interface PPTTextElement extends PPTBaseElement {
   textType?: TextType;
   inset?: TextInset;
   fixedHeight?: boolean;
+  /** Hard auto-fit floor in slide-coordinate pixels. Overflow must be resolved by layout, not smaller type. */
+  minFontSize?: number;
   vAlign?: TextAlignVertical;
   /** Optional structured runs retained from import (HTML remains source of truth for editing). */
   structuredText?: StructuredTextBody;
@@ -304,6 +306,8 @@ export interface ShapeText {
   type?: TextType;
   /** Lock height to the box. `false` grows the shape with the text, same as PPTTextElement. */
   fixedHeight?: boolean;
+  /** Hard auto-fit floor in slide-coordinate pixels. */
+  minFontSize?: number;
 }
 
 /**

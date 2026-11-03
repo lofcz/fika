@@ -670,7 +670,7 @@
           "name": "element",
           "type": "Partial<PPTTextElement>",
           "required": false,
-          "description": "Geometry/styling: left, top, width, height, rotate, defaultColor, defaultFontName, lineHeight, wordSpace, fill. Set fixedHeight:true (optionally vAlign:'top'|'middle'|'bottom') to lock the box to its height: the font then auto-fits (shrinks) so the text never overflows the region — the same guarantee layouts give."
+          "description": "Geometry/styling: left, top, width, height, rotate, defaultColor, defaultFontName, lineHeight, wordSpace, fill. Set fixedHeight:true (optionally vAlign:'top'|'middle'|'bottom') to lock the box to its height: the font then auto-fits (shrinks) so the text never overflows the region — the same guarantee layouts give. When the user specifies a minimum, also set minFontSize in slide-coordinate pixels; auto-fit will never shrink below it. Make the box larger or split the content if the floor prevents fitting."
         }
       ],
       "examples": [
@@ -681,7 +681,7 @@
       ],
       "tips": [
         "Prefer slides.insertFromTemplate for whole slides. Markdown flavor: markdown-it + markdown-it-texmath (KaTeX). Write Markdown + `style`, not HTML — `style` covers font, size, color, bold and alignment, which is everything needed to match hand-styled neighbouring slides.",
-        "For a box that must stay a fixed size, set fixedHeight:true so the text auto-shrinks to fit instead of overflowing."
+        "For a box that must stay a fixed size, set fixedHeight:true so the text auto-shrinks to fit. An explicit minFontSize is a hard floor; resolve remaining overflow by enlarging the box or splitting content."
       ],
       "related": [
         "text.setMarkdown",
