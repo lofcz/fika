@@ -1,4 +1,4 @@
-import { tableCellExportFill } from '@/utils/tableExport';
+import { tableCellExportFill, tableCellExportText } from '@/utils/tableExport';
 
 import { useEffect, useState } from 'react'
 import { saveAs } from 'file-saver';
@@ -1961,7 +1961,7 @@ export function createPresentationExporter(
                   if (cell.style?.color) cellOptions.color = formatColor(cell.style.color).color;
                   if (!hiddenCells.includes(`${i}_${j}`)) {
                     _row.push({
-                      text: cell.text,
+                      text: tableCellExportText(cell.text, { color: cellOptions.color as string | undefined, fontSizePt: cellOptions.fontSize }),
                       options: cellOptions
                     });
                   }

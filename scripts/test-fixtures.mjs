@@ -114,6 +114,7 @@ export const e2eScripts = [
   'scripts/e2e-table-merge-regions.mjs',
   'scripts/e2e-clipboard-errors.mjs',
   'scripts/e2e-presentation-export.mjs',
+  'scripts/e2e-table-math-export.mjs',
   'scripts/e2e-import-append.mjs',
   'scripts/e2e-imported-pptx-export.mjs',
   'scripts/e2e-myna-performance.mjs',
