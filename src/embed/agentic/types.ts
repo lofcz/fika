@@ -19,6 +19,8 @@ export type FikaCommandType = FikaKnownCommandType | (string & {});
 export interface FikaDeckViewport {
   size: number;
   ratio: number;
+  /** Physical page width for export. Legacy decks default to ten inches. */
+  widthInches?: number;
 }
 export type FikaSlideThemePatch = Omit<Partial<SlideTheme>, 'outline' | 'shadow'> & {
   outline?: Partial<SlideTheme['outline']>;

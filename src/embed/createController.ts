@@ -55,6 +55,7 @@ export function createController(
           viewport: {
             size: slidesStore.viewportSize,
             ratio: slidesStore.viewportRatio,
+            widthInches: slidesStore.viewportWidthInches,
           },
         })
       }, options.onChangeDebounceMs ?? 400)

@@ -114,6 +114,7 @@ export interface PresentationExportState {
   theme: SlideTheme
   viewportRatio: number
   viewportSize: number
+  viewportWidthInches?: number
   title: string
 }
 export interface PresentationExportOptions {
@@ -124,7 +125,7 @@ export interface PresentationExportOptions {
   watermark?: FikaExportWatermarkResolver | null
 }
 export function createPresentationExporter(
-  { slides, theme, viewportRatio, title, viewportSize }: PresentationExportState,
+  { slides, theme, viewportRatio, title, viewportSize, viewportWidthInches }: PresentationExportState,
   options: PresentationExportOptions = {},
   job = createJobProgress(),
 ) {
@@ -133,10 +134,10 @@ export function createPresentationExporter(
   const watermarkResolver = options.watermark === undefined ? getFikaExportWatermark() : options.watermark;
   const defaultFontSize = 16;
   const ratioPx2Inch = (() => {
-    return 96 * (viewportSize / 960);
+    return viewportSize / (viewportWidthInches ?? 10);
   })();
   const ratioPx2Pt = (() => {
-    return 96 / 72 * (viewportSize / 960);
+    return ratioPx2Inch / 72;
   })();
   const tickExportProgress = exportJob.tick;
   const pptxDefaultFontFace = () => theme.fontName || 'Calibri';
@@ -184,7 +185,7 @@ export function createPresentationExporter(
     pptx.recentColors = slots.slice(0, 8).map(slot => ({ scheme: slot.scheme }));
   };
   const setPPTXLayout = (pptx: pptxgen) => {
-    if (viewportRatio === 0.625) pptx.layout = 'LAYOUT_16x10';else if (viewportRatio === 0.75) pptx.layout = 'LAYOUT_4x3';else {
+    if (!viewportWidthInches && viewportRatio === 0.625) pptx.layout = 'LAYOUT_16x10';else if (!viewportWidthInches && viewportRatio === 0.75) pptx.layout = 'LAYOUT_4x3';else {
       const layoutName = 'FIKA_CUSTOM_LAYOUT';
       pptx.defineLayout({
         name: layoutName,
@@ -746,7 +747,7 @@ export function createPresentationExporter(
               }
             }
             const inheritedColor = mathOwnStyle.color || baseStyleObj.color;
-            const explicitFontSize = mathOwnStyle['font-size'] ? parseInt(mathOwnStyle['font-size']) / ratioPx2Pt : undefined;
+            const explicitFontSize = mathOwnStyle['font-size'] ? parseFloat(mathOwnStyle['font-size']) * (/pt$/i.test(mathOwnStyle['font-size']) ? 4 / 3 : 1) / ratioPx2Pt : undefined;
             if (explicitFontSize) options.fontSize = explicitFontSize;
             const mathColor = inheritedColor ? formatColor(inheritedColor).color : fallback?.color;
             if (mathColor) options.color = mathColor;
@@ -850,7 +851,7 @@ export function createPresentationExporter(
           const text = item.content.replace(/&nbsp;/g, ' ').replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&').replace(/\n/g, '');
           const options: pptxgen.TextPropsOptions = {};
           if (styleObj['font-size']) {
-            options.fontSize = parseInt(styleObj['font-size']) / ratioPx2Pt;
+            options.fontSize = parseFloat(styleObj['font-size']) * (/pt$/i.test(styleObj['font-size']) ? 4 / 3 : 1) / ratioPx2Pt;
           }
           if (styleObj['color']) {
             options.color = formatColor(styleObj['color']).color;
@@ -1391,7 +1392,7 @@ export function createPresentationExporter(
 
       const excludesMedia = ignoreMedia && _slides.some(slide => slide.elements.some(el => el.type === 'audio' || el.type === 'video'));
       const retained = options.preserveSourcePackage && !options.hiddenElementIds?.length && !excludesMedia
-        ? tryGetCleanRetainedPackage(_slides, { title, theme, viewportSize, viewportRatio })
+        ? tryGetCleanRetainedPackage(_slides, { title, theme, viewportSize, viewportRatio, viewportWidthInches })
         : null;
       if (retained) {
         try {
@@ -1938,7 +1939,7 @@ export function createPresentationExporter(
                     align: cell.style?.align || 'left',
                     valign: 'middle',
                     fontFace: cell.style?.fontname || pptxDefaultFontFace(),
-                    fontSize: (cell.style?.fontsize ? parseInt(cell.style?.fontsize) : 14) / ratioPx2Pt
+                    fontSize: (cell.style?.fontsize ? parseFloat(cell.style.fontsize) * (/pt$/i.test(cell.style.fontsize) ? 4 / 3 : 1) : 14) / ratioPx2Pt
                   };
                   let fillColor: FormatColor | null = null;
                   if (theme && headerColor && stripeColor && stripeAltColor) {
@@ -2149,13 +2150,14 @@ export default function useExport() {
   const viewportRatio = useSlidesStore(s => s.viewportRatio);
   const title = useSlidesStore(s => s.title);
   const viewportSize = useSlidesStore(s => s.viewportSize);
-  const state = { slides, theme, viewportRatio, title, viewportSize };
+  const viewportWidthInches = useSlidesStore(s => s.viewportWidthInches);
+  const state = { slides, theme, viewportRatio, title, viewportSize, viewportWidthInches };
   const exporter = createPresentationExporter(state, { preserveSourcePackage: true, hiddenElementIds: useMainStore.getState().hiddenElementIdList }, exportJob);
   return {
     ...exporter,
     exportPDF: async () => {
       if (exportJob.running.value) return;
-      const deck = structuredClone({ title: state.title, slides: state.slides, theme: state.theme, viewport: { size: state.viewportSize, ratio: state.viewportRatio } });
+      const deck = structuredClone({ title: state.title, slides: state.slides, theme: state.theme, viewport: { size: state.viewportSize, ratio: state.viewportRatio, widthInches: state.viewportWidthInches } });
       const gen = exportJob.start(deck.slides.length);
       try {
         const { exportPresentationPdf } = await import('@/embed/export');

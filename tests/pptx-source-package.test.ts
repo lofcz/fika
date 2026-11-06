@@ -32,7 +32,7 @@ describe('retained PPTX export eligibility', () => {
     const state = deck()
     retainSourcePackage('package', new ArrayBuffer(8))
     certifySourcePackageDocument('package', state)
-    for (const patch of [{ title: 'Renamed' }, { viewportSize: 1280 }, { viewportRatio: 1 }, { theme: { backgroundColor: '#123456' } }]) {
+    for (const patch of [{ title: 'Renamed' }, { viewportSize: 1280 }, { viewportRatio: 1 }, { viewportWidthInches: 20 }, { theme: { backgroundColor: '#123456' } }]) {
       expect(tryGetCleanRetainedPackage(state.slides, { ...state, ...patch })).toBeNull()
     }
   })

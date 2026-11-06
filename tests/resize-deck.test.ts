@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@rstest/core';
-import { resizeDeckSlides } from '@/utils/resizeDeck';
+import { resizeDeckSlides, scaleDeckSlides } from '@/utils/resizeDeck';
 import type { PPTElement, PPTTextElement, Slide } from '@/types/slides';
 const wide = { width: 1000, height: 562.5 };
 const standard = { width: 1000, height: 750 };
@@ -7,6 +7,19 @@ const text = (id: string, left: number, top: number, width: number, height: numb
 const slide = (elements: PPTElement[]): Slide[] => [{ id: 's', elements }];
 
 describe('content-aware deck resizing', () => {
+  it('uses one exact factor for a same-ratio canvas, including independent columns', () => {
+    const original = slide([text('heading', 50, 30, 900, 50), text('left', 50, 130, 360, 60), text('right', 540, 130, 360, 110)]);
+    const factor = 26 / 14;
+    const scaled = resizeDeckSlides(original, wide, { width: wide.width * factor, height: wide.height * factor });
+    expect(scaled).toEqual(scaleDeckSlides(original, factor));
+    scaled[0].elements.forEach((el, i) => {
+      expect(el.left).toBeCloseTo(original[0].elements[i].left * factor);
+      expect(el.top).toBeCloseTo(original[0].elements[i].top * factor);
+      expect(el.width).toBeCloseTo(original[0].elements[i].width * factor);
+      expect(el.height).toBeCloseTo(original[0].elements[i].height * factor);
+    });
+    expect(original[0].elements[1].top).toBe(130);
+  });
   it('distributes additional height between rows without stretching text or photos', () => {
     const original = slide([text('heading', 50, 30, 900, 50), text('row1', 50, 150, 900, 100), text('row2', 50, 350, 900, 100)]);
     const result = resizeDeckSlides(original, wide, standard);

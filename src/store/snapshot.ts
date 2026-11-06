@@ -47,6 +47,7 @@ function restoreSlides(slides: Slide[], index: number, extras?: {
   theme?: SlideTheme
   viewportSize?: number
   viewportRatio?: number
+  viewportWidthInches?: number
   templates?: SlideTemplate[]
 }) {
   const slideIndex = index > slides.length - 1 ? slides.length - 1 : index
@@ -56,6 +57,7 @@ function restoreSlides(slides: Slide[], index: number, extras?: {
   if (extras?.title !== undefined) slidesStore.setTitle(extras.title)
   if (extras?.viewportSize !== undefined) slidesStore.setViewportSize(extras.viewportSize)
   if (extras?.viewportRatio !== undefined) slidesStore.setViewportRatio(extras.viewportRatio)
+  slidesStore.setViewportWidthInches(extras?.viewportWidthInches)
   if (extras?.templates) slidesStore.setTemplates(extras.templates)
   cursorSlides = slides
   useMainStore.getState().setActiveElementIdList([])
@@ -102,6 +104,7 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
         theme: structuredClone(slidesStore.theme),
         viewportSize: slidesStore.viewportSize,
         viewportRatio: slidesStore.viewportRatio,
+        viewportWidthInches: slidesStore.viewportWidthInches,
         templates: structuredClone(slidesStore.templates),
         slides: structuredClone(slidesStore.slides),
       })
@@ -130,6 +133,7 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
       const theme = structuredClone(slidesStore.theme)
       const viewportSize = slidesStore.viewportSize
       const viewportRatio = slidesStore.viewportRatio
+      const viewportWidthInches = slidesStore.viewportWidthInches
       const templates = structuredClone(slidesStore.templates)
       // Blur/debounced editor commits may save the document again after undo.
       // An unchanged save must not discard redo or consume a history slot.
@@ -137,15 +141,16 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
         const current = await db.snapshots.get(keptOldKeys[keptOldKeys.length - 1])
         if (current && current.title === title
           && current.viewportSize === viewportSize && current.viewportRatio === viewportRatio
+          && current.viewportWidthInches === viewportWidthInches
           && deepEqual(current.theme, theme) && deepEqual(current.templates, templates)) return
       }
       let entry: Omit<Snapshot, 'id'>
       if (!cursorSlides || keptOldKeys.length === 0) {
-        entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, templates, slides: structuredClone(nextSlides) }
+        entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, viewportWidthInches, templates, slides: structuredClone(nextSlides) }
       }
       else {
         const [patches, inversePatches] = diffSlides(cursorSlides, nextSlides)
-        entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, templates, patches, inversePatches }
+        entry = { index: slideIndex, title, theme, viewportSize, viewportRatio, viewportWidthInches, templates, patches, inversePatches }
       }
 
       await db.transaction('rw', db.snapshots, async () => {

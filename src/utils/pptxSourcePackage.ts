@@ -17,10 +17,11 @@ export interface SourcePackageDocument {
   theme: unknown;
   viewportSize: number;
   viewportRatio: number;
+  viewportWidthInches?: number;
 }
 
-const documentSnapshot = ({ slides, title, theme, viewportSize, viewportRatio }: SourcePackageDocument) =>
-  JSON.stringify({ slides, title, theme, viewportSize, viewportRatio });
+const documentSnapshot = ({ slides, title, theme, viewportSize, viewportRatio, viewportWidthInches }: SourcePackageDocument) =>
+  JSON.stringify({ slides, title, theme, viewportSize, viewportRatio, viewportWidthInches });
 
 /** Certify only a fully applied import; retaining bytes alone is not sufficient. */
 export function certifySourcePackageDocument(packageId: string, document: SourcePackageDocument) {

@@ -49,12 +49,14 @@ export function inferViewportFromSlides(
   slides: Slide[],
   existing?: Partial<FikaDeckViewport>,
 ): FikaDeckViewport | undefined {
+  // A physical page is an explicit canvas. Decorative bleed must not resize it.
+  if (existing?.size && existing.ratio && existing.widthInches) return { ...existing } as FikaDeckViewport
   const { maxRight, maxBottom } = contentBounds(slides)
   const size = existing?.size ?? DEFAULT_SIZE
   const ratio = existing?.ratio ?? DEFAULT_RATIO
 
   if (fits(maxRight, maxBottom, size, ratio)) {
-    return existing?.size ? { size, ratio } : undefined
+    return existing?.size ? { ...existing, size, ratio } : undefined
   }
 
   for (const candidate of STANDARD_VIEWPORTS) {

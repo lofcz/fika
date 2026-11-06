@@ -61,6 +61,7 @@ export interface SlidesState {
   slideIndex: number
   viewportSize: number
   viewportRatio: number
+  viewportWidthInches: number | undefined
   templates: SlideTemplate[]
   importedTemplates: ImportedSlideTemplate[]
   /** Used for newly added slides after "Use on every slide". Defaults to Rise. */
@@ -72,6 +73,7 @@ export interface SlidesActions {
   setTheme: (themeProps: Partial<SlideTheme>) => void
   setViewportSize: (size: number) => void
   setViewportRatio: (viewportRatio: number) => void
+  setViewportWidthInches: (width: number | undefined) => void
   setSlides: (slides: Slide[], themeProps?: Partial<SlideTheme>, options?: { clone?: boolean }) => void
   setTemplates: (templates: SlideTemplate[]) => void
   addImportedTemplate: (template: ImportedSlideTemplate) => void
@@ -236,6 +238,7 @@ export const useSlidesStore = create<SlidesStore>()(
     slideIndex: 0,
     viewportSize: 1000,
     viewportRatio: 0.5625,
+    viewportWidthInches: undefined,
     templates: buildDefaultTemplates(),
     importedTemplates: [],
     defaultTurningMode: DEFAULT_TURNING_MODE,
@@ -256,6 +259,11 @@ export const useSlidesStore = create<SlidesStore>()(
       set((state) => {
         state.viewportSize = size
       })
+    },
+
+    setViewportWidthInches(width) {
+      if (width !== undefined && (!Number.isFinite(width) || width <= 0)) throw new Error('Page width must be finite and positive')
+      set((state) => { state.viewportWidthInches = width })
     },
 
     setViewportRatio(viewportRatio) {

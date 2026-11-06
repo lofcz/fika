@@ -40,7 +40,8 @@ function snapshot(document: FikaDocument): PresentationExportState {
   if (!document.slides?.length) throw new Error('Presentation has no slides')
   const viewportSize = document.viewport?.size ?? 1000
   const viewportRatio = document.viewport?.ratio ?? 0.5625
-  if (!Number.isFinite(viewportSize) || viewportSize <= 0 || !Number.isFinite(viewportRatio) || viewportRatio <= 0) {
+  const viewportWidthInches = document.viewport?.widthInches ?? 10
+  if (!Number.isFinite(viewportSize) || viewportSize <= 0 || !Number.isFinite(viewportRatio) || viewportRatio <= 0 || !Number.isFinite(viewportWidthInches) || viewportWidthInches <= 0) {
     throw new Error('Invalid presentation dimensions')
   }
   return structuredClone({
@@ -49,6 +50,7 @@ function snapshot(document: FikaDocument): PresentationExportState {
     theme: { ...useSlidesStore.getInitialState().theme, ...document.theme },
     viewportSize,
     viewportRatio,
+    viewportWidthInches: document.viewport?.widthInches,
   })
 }
 
@@ -115,7 +117,7 @@ export async function exportPresentationPdf(document: FikaDocument, options: Fik
   try {
     await worker.request('pdf-start', { title: deck.title, watermark, light, dark })
     // Match PPTX's 10-inch-wide layout, including custom/portrait aspect ratios.
-    const width = 720
+    const width = (deck.viewportWidthInches ?? 10) * 72
     const height = width * deck.viewportRatio
     options.onProgress?.(0, deck.slides.length, { phase: 'rendering', completed: 0, total: deck.slides.length, progress: 0.05 })
     // Bound canvas memory (~128 MiB, except a single oversized slide) while overlapping image loads and native

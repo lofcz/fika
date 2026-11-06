@@ -91,7 +91,7 @@ function bodyColumns(boxes: Bounds[], from: SlideCanvas) {
 
 function scalePixels(html: string, scale: number) {
   // CSS lengths only: do not rewrite lesson text containing quantities in px.
-  return html.replace(/style=(['"])(.*?)\1/gi, (_, quote: string, css: string) => `style=${quote}${css.replace(/(-?\d+(?:\.\d+)?)px\b/g, (_m, n: string) => `${Number((Number(n) * scale).toFixed(4))}px`)}${quote}`);
+  return html.replace(/style=(['"])(.*?)\1/gi, (_, quote: string, css: string) => `style=${quote}${css.replace(/(-?\d+(?:\.\d+)?)(px|pt)\b/gi, (_m, n: string, unit: string) => `${Number(n) * scale}${unit}`)}${quote}`);
 }
 function scaleNumber(record: object, key: string, scale: number) {
   const obj = record as Record<string, unknown>;
@@ -115,13 +115,76 @@ function scaleTypography(el: PPTElement, scale: number) {
     for (const row of el.data) for (const cell of row) {
       cell.text = scalePixels(cell.text, scale);
       if (cell.style?.fontsize) cell.style.fontsize = cell.style.fontsize.replace(/^(\d+(?:\.\d+)?)(px|pt)$/i, (_, value: string, unit: string) => `${Number(value) * scale}${unit}`);
+      if (cell.style) for (const key of ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth']) scaleNumber(cell.style, key, scale);
     }
   }
   if (el.type === 'chart') el.options = { ...el.options, fontSize: (el.options?.fontSize ?? 12) * scale };
   if (el.type === 'code') el.fontSize *= scale;
   if (el.type === 'latex') el.strokeWidth *= scale;
-  if ('outline' in el && el.outline) scaleNumber(el.outline, 'width', scale);
+  if ('outline' in el && el.outline) {
+    scaleNumber(el.outline, 'width', scale);
+    if ((el.outline.radius ?? 0) > 1) scaleNumber(el.outline, 'radius', scale);
+  }
   if ('shadow' in el && el.shadow) for (const key of ['h', 'v', 'blur']) scaleNumber(el.shadow, key, scale);
+}
+
+/** Change document units with one factor. No reflow, rounding of geometry, or
+ * independent text-box constraints: every distance keeps the same proportion.
+ */
+export function scaleDeckSlides(slides: readonly Slide[], factor: number): Slide[] {
+  if (!Number.isFinite(factor) || factor <= 0) throw new Error('Scale must be finite and positive.');
+  const result = structuredClone(slides) as Slide[];
+  for (const slide of result) {
+    if (slide.guides) for (const guide of slide.guides) guide.position *= factor;
+    for (const el of slide.elements) {
+      el.left *= factor;
+      el.top *= factor;
+      el.width *= factor;
+      if (el.type === 'line') {
+        const point = (p: [number, number]): [number, number] => [p[0] * factor, p[1] * factor];
+        el.start = point(el.start); el.end = point(el.end);
+        if (el.broken) el.broken = point(el.broken);
+        if (el.broken2) el.broken2 = point(el.broken2);
+        if (el.curve) el.curve = point(el.curve);
+        if (el.cubic) el.cubic = [point(el.cubic[0]), point(el.cubic[1])];
+      } else el.height *= factor;
+      scaleTypography(el, factor);
+      if ('radius' in el) scaleNumber(el, 'radius', factor);
+    }
+  }
+  return result;
+}
+
+/** Smallest authored font in editable text, table cells, charts and code. */
+export function minimumDeckFontSize(slides: readonly Slide[]): number | undefined {
+  const sizes: number[] = [];
+  const add = (n: number) => { if (Number.isFinite(n) && n > 0) sizes.push(n); };
+  const cssSize = (value: string) => {
+    const match = /^([\d.]+)(px|pt)?$/i.exec(value.trim());
+    if (match) add(Number(match[1]) * (match[2]?.toLowerCase() === 'pt' ? 4 / 3 : 1));
+  };
+  const html = (content: string, fallback = 16) => {
+    if (!content.replace(/<[^>]*>/g, '').trim()) return;
+    let found = false;
+    for (const attribute of content.matchAll(/style=(['"])(.*?)\1/gi)) {
+      for (const declaration of attribute[2].matchAll(/(?:^|;)\s*font-size\s*:\s*([\d.]+(?:px|pt)?)/gi)) {
+        cssSize(declaration[1]); found = true;
+      }
+    }
+    if (!found) add(fallback);
+  };
+  for (const slide of slides) for (const el of slide.elements) {
+    if (el.type === 'text') html(el.content);
+    if (el.type === 'shape' && el.text) html(el.text.content);
+    if (el.type === 'table') for (const row of el.data) for (const cell of row) {
+      if (!cell.text?.trim()) continue;
+      if (cell.style?.fontsize) cssSize(cell.style.fontsize);
+      html(cell.text, parseFloat(cell.style?.fontsize ?? '16') * (/pt$/i.test(cell.style?.fontsize ?? '') ? 4 / 3 : 1));
+    }
+    if (el.type === 'chart') add(el.options?.fontSize ?? 12);
+    if (el.type === 'code') add(el.fontSize);
+  }
+  return sizes.length ? Math.min(...sizes) : undefined;
 }
 
 /** Resize a deck without distorting media or changing reading order.
@@ -135,6 +198,8 @@ export function resizeDeckSlides(slides: readonly Slide[], from: SlideCanvas, to
   }
   const result = structuredClone(slides) as Slide[];
   if (from.width === to.width && from.height === to.height) return result;
+  const factor = to.width / from.width;
+  if (Math.abs(to.height / from.height - factor) < 1e-9) return scaleDeckSlides(slides, factor);
   for (const slide of result) {
     // Guides describe page coordinates; resize them proportionally along their own axis.
     if (slide.guides) slide.guides = slide.guides.map(guide => ({ ...guide,

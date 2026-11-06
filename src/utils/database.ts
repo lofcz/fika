@@ -14,6 +14,7 @@ export interface Snapshot {
   theme?: SlideTheme;
   viewportSize?: number;
   viewportRatio?: number;
+  viewportWidthInches?: number;
   templates?: SlideTemplate[];
   slides?: Slide[];
   patches?: Patch[];

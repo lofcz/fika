@@ -57,6 +57,7 @@ interface RuntimeState {
   templates: SlideTemplate[];
   viewportSize: number;
   viewportRatio: number;
+  viewportWidthInches: number | undefined;
   slideIndex: number;
   activeElementIdList: string[];
   handleElementId: string;
@@ -96,7 +97,8 @@ function issueFromError(error: unknown) {
 function viewportFromStores(stores: Stores): FikaDeckViewport {
   return {
     size: stores.slides.viewportSize,
-    ratio: stores.slides.viewportRatio
+    ratio: stores.slides.viewportRatio,
+    widthInches: stores.slides.viewportWidthInches,
   };
 }
 function mergeDeckTheme(theme: SlideTheme, patch?: FikaSlideThemePatch): SlideTheme {
@@ -245,6 +247,7 @@ function applyViewport(stores: Stores, viewport?: Partial<FikaDeckViewport>) {
   if (!viewport) return;
   if (viewport.size !== undefined) stores.slides.setViewportSize(viewport.size);
   if (viewport.ratio !== undefined) stores.slides.setViewportRatio(viewport.ratio);
+  if ('widthInches' in viewport) stores.slides.setViewportWidthInches(viewport.widthInches);
 }
 function documentFromStores(stores: Stores): FikaDeckDocument {
   return {
@@ -262,6 +265,7 @@ function restoreDocument(stores: Stores, document: FikaDeckInput, slideIndex = 0
   stores.slides.setTitle(nextDocument.title);
   stores.slides.setSlides(clonePlain(nextDocument.slides), mergeDeckTheme(stores.slides.theme, nextDocument.theme));
   applyViewport(stores, inferViewportFromSlides(nextDocument.slides, nextDocument.viewport) ?? nextDocument.viewport);
+  stores.slides.setViewportWidthInches(nextDocument.viewport?.widthInches);
   if (nextDocument.templates) stores.slides.setTemplates(clonePlain(nextDocument.templates));
   stores.slides.updateSlideIndex(clampIndex(slideIndex, stores.slides.slides.length));
   stores.main.setActiveElementIdList([]);
@@ -275,6 +279,7 @@ function captureRuntimeState(stores: Stores): RuntimeState {
     templates: stores.slides.templates,
     viewportSize: stores.slides.viewportSize,
     viewportRatio: stores.slides.viewportRatio,
+    viewportWidthInches: stores.slides.viewportWidthInches,
     slideIndex: stores.slides.slideIndex,
     activeElementIdList: [...stores.main.activeElementIdList],
     handleElementId: stores.main.handleElementId,
@@ -294,6 +299,7 @@ function restoreRuntimeState(stores: Stores, state: RuntimeState) {
   stores.slides.setTemplates(state.templates);
   stores.slides.setViewportSize(state.viewportSize);
   stores.slides.setViewportRatio(state.viewportRatio);
+  stores.slides.setViewportWidthInches(state.viewportWidthInches);
   stores.slides.updateSlideIndex(state.slideIndex);
   stores.main.updateSelectedSlidesIndex([...state.selectedSlidesIndex]);
   stores.main.setActiveElementIdList([...state.activeElementIdList]);
@@ -404,6 +410,12 @@ function normalizeDocumentViewport(value: unknown, path: string): Partial<FikaDe
   const viewport = optionalDocumentRecord(value, path);
   if (!viewport) return undefined;
   const normalized: Partial<FikaDeckViewport> = {};
+  if (viewport.widthInches !== undefined) {
+    if (typeof viewport.widthInches !== 'number' || !Number.isFinite(viewport.widthInches) || viewport.widthInches <= 0) {
+      throw new AgenticCommandError('InvalidDocument', 'Page width must be finite and positive', `${path}.widthInches`);
+    }
+    normalized.widthInches = viewport.widthInches;
+  }
   if (viewport.size !== undefined) {
     if (typeof viewport.size !== 'number' || !Number.isFinite(viewport.size)) {
       throw new AgenticCommandError('InvalidDocument', 'Viewport size must be a finite number', `${path}.size`);

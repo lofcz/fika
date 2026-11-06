@@ -279,6 +279,7 @@ export function getImportApi() {
       store.setDefaultTurningMode(DEFAULT_TURNING_MODE)
     }
     if (apply === 'replace') {
+      store.setViewportWidthInches(undefined);
       store.updateSlideIndex(0);
       store.setSlides(applied.slides, extras?.theme, { clone: false });
       if (extras?.title) store.setTitle(extras.title);

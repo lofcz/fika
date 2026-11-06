@@ -21,4 +21,5 @@ export function applyDocumentToStores(document: FikaInitialDocument): void {
   const viewport = inferViewportFromSlides(document.slides, document.viewport) ?? document.viewport
   if (viewport?.size) store.setViewportSize(viewport.size)
   if (viewport?.ratio) store.setViewportRatio(viewport.ratio)
+  store.setViewportWidthInches(document.viewport?.widthInches)
 }
