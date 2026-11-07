@@ -147,6 +147,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
   const textFormatPainter = useMainStore(s => s.textFormatPainter);
   const editorViewRef = useRef<HTMLDivElement | null>(null);
   const editorView = useRef<EditorView | null>(null);
+  const notifiedDocRef = useRef<ProsemirrorNode | null>(null);
   const valueRef = useRef(value);
   valueRef.current = value;
   const elementIdRef = useRef(elementId);
@@ -204,6 +205,11 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
 
   const handleInput = useMemo(() => debounce(function (isHanldeHistory = false) {
     if (!editorView.current) return;
+    // Focus, Escape and blur also schedule this callback. Their serialized
+    // DOM can differ from imported HTML without an authored transaction.
+    const doc = editorView.current.state.doc;
+    if (notifiedDocRef.current?.eq(doc)) return;
+    notifiedDocRef.current = doc;
     const html = normalizeFittedFontSizes(cleanEditorHtml(editorView.current.dom));
     if (valueRef.current.replace(/ style=\"\"/g, '') === html.replace(/ style=\"\"/g, '')) return;
     callbacksRef.current.onUpdate?.({
@@ -778,7 +784,10 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
         const wasEmpty = current.state.doc.textContent.trim().length === 0;
         const newState = current.state.apply(tr);
         current.updateState(newState);
-        if (externalSync) rememberEditorSource(current, elementIdRef.current);
+        if (externalSync) {
+          rememberEditorSource(current, elementIdRef.current);
+          notifiedDocRef.current = newState.doc;
+        }
         rememberTextSelection(current);
         if (!externalSync && wasEmpty && newState.doc.textContent.trim().length > 0) {
           callbacksRef.current.onPlaceholderFill?.();
@@ -797,6 +806,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       getPlaceholderFill: () => placeholderFillStylesRef.current ?? null
     });
     editorView.current = view;
+    notifiedDocRef.current = view.state.doc;
     (view.dom as HTMLElement & { __pmView?: EditorView }).__pmView = view;
     registerEditorView(elementIdRef.current, view);
     rememberEditorSource(view, elementIdRef.current);

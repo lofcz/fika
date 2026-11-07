@@ -65,6 +65,10 @@ try {
     if (run.text !== 'Explicit blue') assert.equal(run.color, 'rgb(255, 255, 255)', 'Fallback body ink remains readable')
   }
   assert.equal(before.runs.at(-1).color, 'rgb(24, 92, 161)', 'Authored explicit color is preserved')
+  // Escape schedules the debounced input callback even without typing. The
+  // subsequent blur/unmount must not persist normalized display HTML.
+  await page.keyboard.press('Escape')
+  await page.locator('.thumbnail-item.active').click()
   await page.evaluate(() => { const main = window.__FIKA_MAIN__.getState(); main.setActiveElementIdList([]); main.setHandleElementId('') })
   await page.waitForTimeout(500)
   const deselected = await snapshot()
@@ -73,7 +77,7 @@ try {
   await page.mouse.dblclick(target.x + target.width / 2, target.y + target.height / 2)
   await page.keyboard.press('Control+End')
   await page.keyboard.type(' edited')
-  await page.mouse.click(1450, 1020)
+  await page.locator('.thumbnail-item.active').click()
   await page.waitForTimeout(500)
   const edited = await snapshot()
   assert(edited.slide.elements[0].text.content.includes(' edited'), 'A real text edit must still persist')
