@@ -194,7 +194,10 @@ const paragraph: NodeSpec = {
     if (lineHeight) style += `line-height: ${lineHeight};`;
     if (node.attrs.marginTop) style += `margin-top: ${node.attrs.marginTop};`;
     if (node.attrs.marginBottom) style += `margin-bottom: ${node.attrs.marginBottom};`;
-    if (node.attrs.fontsize) style += `font-size: ${node.attrs.fontsize};`;
+    // The paragraph strut must shrink with its inline runs. Leaving an
+    // imported paragraph size fixed makes every fit candidate overflow and
+    // drives the visible glyphs down to the minimum scale.
+    if (node.attrs.fontsize) style += `font-size: calc(var(--text-fit-scale, 1) * ${node.attrs.fontsize});`;
     if (node.attrs.fontname) style += `font-family: ${node.attrs.fontname};`;
     const attr: Attr = {
       style
