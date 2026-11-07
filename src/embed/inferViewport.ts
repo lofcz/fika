@@ -38,19 +38,21 @@ function fits(maxRight: number, maxBottom: number, size: number, ratio: number):
 }
 
 /**
- * Recover the authored coordinate space from element bounds.
+ * Recover a missing coordinate space from element bounds.
  *
  * Agent/import pipelines often author at 1280×720. Remounting those slides on
- * the 1000×16:9 default (or a persisted default written before inference)
- * overflows the canvas. Prefer an explicit viewport when it actually contains
- * the content; otherwise upgrade to the smallest standard size that fits.
+ * the 1000×16:9 default overflows the canvas. An explicit viewport owns the
+ * coordinate space: off-canvas elements and decorative bleed must not resize
+ * every page. Only infer dimensions when the document does not supply them.
  */
 export function inferViewportFromSlides(
   slides: Slide[],
   existing?: Partial<FikaDeckViewport>,
 ): FikaDeckViewport | undefined {
-  // A physical page is an explicit canvas. Decorative bleed must not resize it.
-  if (existing?.size && existing.ratio && existing.widthInches) return { ...existing } as FikaDeckViewport
+  if (
+    existing?.size && Number.isFinite(existing.size) && existing.size > 0 &&
+    existing.ratio && Number.isFinite(existing.ratio) && existing.ratio > 0
+  ) return { ...existing } as FikaDeckViewport
   const { maxRight, maxBottom } = contentBounds(slides)
   const size = existing?.size ?? DEFAULT_SIZE
   const ratio = existing?.ratio ?? DEFAULT_RATIO

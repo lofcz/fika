@@ -37,7 +37,7 @@ const server = createServer(async (req, res) => {
   } catch { res.writeHead(404).end() }
 })
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-const browser = await chromium.launch({ headless: true })
+const browser = await chromium.launch({ headless: true, ...(process.env.E2E_CHROMIUM ? { executablePath: process.env.E2E_CHROMIUM } : {}) })
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
 const errors = []
 page.on('pageerror', error => { errors.push(error.message); console.error('Browser error:', error.stack) })
@@ -45,6 +45,34 @@ page.on('console', msg => { if (msg.type() === 'error') console.error(msg.text()
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`)
   await page.waitForFunction(() => window.fika)
+  const viewportResult = await page.evaluate(async () => {
+    const document = {
+      title: 'Authored viewport', viewport: { size: 1280, ratio: 9 / 16 },
+      slides: [{ id: 'bleed', elements: [{
+        id: 'decoration', type: 'shape', left: 52, top: 580, width: 180, height: 200,
+        rotate: 0, fill: '#f4dfd2', path: 'M0 0 L100 0 L100 100 L0 100 Z', viewBox: [100, 100], fixedRatio: false,
+      }] }],
+    }
+    const host = window.document.getElementById('host')
+    const controller = (await window.fika.mountFika(host, { document, assetBaseUrl: '/fika-assets' })).controller
+    const mounted = controller.getDocument()
+    const replacement = await controller.execute({
+      id: 'replace-bleed', type: 'deck.set', payload: document, meta: { source: 'agent' },
+    })
+    const saved = controller.getDocument()
+    controller.destroy()
+    const remounted = (await window.fika.mountFika(host, { document: saved, assetBaseUrl: '/fika-assets' })).controller
+    const restored = remounted.getDocument()
+    remounted.destroy()
+    return { mounted, saved, restored, replacement, expected: document }
+  })
+  assert.equal(viewportResult.replacement.ok, true, JSON.stringify(viewportResult.replacement))
+  for (const stage of ['mounted', 'saved', 'restored']) {
+    assert.equal(viewportResult[stage].viewport.size, 1280, stage)
+    assert.equal(viewportResult[stage].viewport.ratio, 9 / 16, stage)
+    assert.deepEqual(viewportResult[stage].slides, viewportResult.expected.slides, stage)
+  }
+  console.log('PASS: decorative bleed preserves viewport on mount, agent replacement and remount')
   await page.evaluate(async () => {
     const doc = { title: 'First deck', slides: [{ id: 'first', elements: [{ id: 'text', type: 'text', left: 100, top: 100, width: 600, height: 100, rotate: 0, content: '<p>Before</p>', defaultFontName: 'Arial', defaultColor: '#222' }] }] }
     window.saved = []
