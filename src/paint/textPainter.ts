@@ -4,6 +4,7 @@ import {
 } from '@chenglou/pretext/rich-inline'
 
 import type { TextAlign, TextAlignVertical } from '@/types/slides'
+import { serializeRichTextHtml, normalizeFittedFontSizes } from '@/utils/prosemirror'
 import { getInlineMathRaster } from '@/paint/rasterResources'
 import { latexFallbackText } from '@/utils/inlineMathBox'
 import { measureInlineMathBox } from '@/utils/math'
@@ -15,7 +16,9 @@ import {
   applyMeasuredMathBoxes,
   walkEditorTextLines,
   extractFitBlocksFromHtml,
-  lineBoxHeight,
+  blockLineBoxHeight,
+  fixedLineMetrics,
+  paragraphGap,
   richInlineFromRun,
   runVisualSize,
   textFitScaleForHtml,
@@ -76,7 +79,7 @@ const graphemeCount = (text: string) => {
 }
 
 const listInset = (block: TextFitBlock, size: number) => {
-  if (!block.listItem) return 0
+  if (!block.listItem) return (block.paragraphIndent || 0) * size / block.size
   const gutter = block.listIndentPx != null
     ? block.listIndentPx
     : block.listIndentEm != null
@@ -110,11 +113,15 @@ const textRunOf = (items: TextFitRun[]) => items.find(run => !run.mathLatex) || 
  */
 const lineBaseline = (
   ctx: CanvasRenderingContext2D,
-  line: { height: number; items: TextFitRun[]; fragments: { itemIndex: number; text?: string }[] },
+  line: { block: TextFitBlock; height: number; items: TextFitRun[]; fragments: { itemIndex: number; text?: string }[] },
   y: number,
   fallbackFamily: string,
   scale: number,
 ) => {
+  if (line.block.lineHeightPx != null) {
+    const runs = line.fragments.map(fragment => line.items[fragment.itemIndex]).filter(Boolean)
+    return y + fixedLineMetrics(line.block, runs.length ? runs : line.items, scale).ascent
+  }
   let anchor: TextFitRun | undefined
   for (const fragment of line.fragments) {
     const run = line.items[fragment.itemIndex]
@@ -210,13 +217,13 @@ const prepareLines = (
         items,
         fragments: line.fragments,
         width: line.width,
-        height: Math.max(1, lineBoxHeight(lineRuns, scale, lineHeight)),
+        height: Math.max(1, blockLineBoxHeight(block, lineRuns, scale, lineHeight)),
       })
     })
     // Empty paragraphs have no glyph fragments but still own an authored line.
     if (lines.length === firstLine) lines.push({
       block, items, fragments: [], width: 0,
-      height: Math.max(1, lineBoxHeight(items, scale, lineHeight)),
+      height: Math.max(1, blockLineBoxHeight(block, items, scale, lineHeight)),
     })
   }
   return lines
@@ -231,6 +238,7 @@ export const paintRichText = (
   options: CanvasTextPaintOptions,
 ): number => {
   if (!options.html || options.width <= 0 || options.height <= 0) return 0
+  const html = normalizeFittedFontSizes(serializeRichTextHtml(options.html))
   const inset = options.inset || [10, 10, 10, 10]
   const innerWidth = Math.max(1, options.width - inset[1] - inset[3])
   const innerHeight = Math.max(1, options.height - inset[0] - inset[2])
@@ -238,7 +246,7 @@ export const paintRichText = (
   const lineHeight = options.lineHeight ?? 1.5
   const letterSpacing = options.letterSpacing || 0
   const paragraphSpace = options.paragraphSpace ?? 5
-  const { blocks } = extractFitBlocksFromHtml(options.html, {
+  const { blocks } = extractFitBlocksFromHtml(html, {
     defaultFontFamily: options.defaultFontFamily,
     defaultSize,
   })
@@ -259,7 +267,7 @@ export const paintRichText = (
   }
   applyMeasuredMathBoxes(blocks, measureInlineMathBox)
   const fitScale = options.fit
-    ? textFitScaleForHtml(options.html, {
+    ? textFitScaleForHtml(html, {
         innerWidth,
         innerHeight,
         defaultFontFamily: options.defaultFontFamily,
@@ -298,7 +306,7 @@ export const paintRichText = (
 
   const lines = prepareLines(blocks, innerWidth, options.defaultFontFamily, fitScale, lineHeight, letterSpacing)
   let totalHeight = lines.reduce((sum, line) => sum + line.height, 0)
-  totalHeight += Math.max(0, blocks.length - 1) * paragraphSpace
+  totalHeight += blocks.reduce((sum, block, index) => sum + paragraphGap(blocks[index - 1], block, paragraphSpace), 0) + (blocks.at(-1)?.marginBottom ?? 0)
   const vOffset = options.vAlign === 'middle'
     ? Math.max(0, (innerHeight - totalHeight) / 2)
     : options.vAlign === 'bottom'
@@ -307,7 +315,7 @@ export const paintRichText = (
   let y = options.y + inset[0] + vOffset
   let previousBlock: TextFitBlock | undefined
   for (const line of lines) {
-    if (previousBlock && previousBlock !== line.block) y += paragraphSpace
+    if (previousBlock !== line.block) y += paragraphGap(previousBlock, line.block, paragraphSpace)
     const indent = listInset(line.block, blockEm(line.items, fitScale))
     const align = line.block.align || (line.block.listItem ? 'left' : options.align) || 'left'
     const available = innerWidth - indent

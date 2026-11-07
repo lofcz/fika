@@ -66,6 +66,13 @@ export interface TextFitBlock {
   whiteSpace?: 'pre-wrap';
   /** Authored font size in px (its largest run, to stay safe). */
   size: number;
+  /** Paragraph properties are independent of the largest inline font. */
+  paragraphSize?: number;
+  paragraphIndent?: number;
+  lineHeight?: number;
+  lineHeightPx?: number;
+  marginTop?: number;
+  marginBottom?: number;
   bold?: boolean;
   italic?: boolean;
   fontFamily: string;
@@ -208,7 +215,7 @@ function canvasFont(block: TextFitBlock, size: number): string {
   return `${style} ${weight} ${size}px ${quoteFontFamily(block.fontFamily)}`;
 }
 function listColumnInset(block: TextFitBlock, size: number, fallbackIndent?: number): number {
-  if (!block.listItem) return 0;
+  if (!block.listItem) return (block.paragraphIndent || 0) * size / block.size;
   const gutter = block.listIndentPx != null ? block.listIndentPx : block.listIndentEm != null ? block.listIndentEm * size : fallbackIndent ?? DEFAULT_LIST_PADDING_EM * size;
   return gutter + LIST_MARKER_GAP_EM * size;
 }
@@ -256,6 +263,47 @@ export const lineBoxHeight = (runs: TextFitRun[], sizeScale: number, lineHeight:
  * item occupies exactly the chip width.
  */
 export const MATH_PLACEHOLDER = '\uFFFC'
+
+let metricsContext: CanvasRenderingContext2D | null | undefined
+const fontMetricsCache = new Map<string, { ascent: number; descent: number }>()
+export const fixedLineMetrics = (block: TextFitBlock, runs: TextFitRun[], scale: number) => {
+  if (metricsContext === undefined && typeof document !== 'undefined') {
+    metricsContext = document.createElement('canvas').getContext('2d')
+    document.fonts?.addEventListener('loadingdone', () => fontMetricsCache.clear())
+  }
+  let ascent = 0, descent = 0
+  // CSS aligns every inline box AND the paragraph's own strut on one baseline.
+  // With absolute leading, different font sizes can make the line taller than
+  // that leading, even though each inline box has the same line-height.
+  for (const run of [{ text: '', size: block.paragraphSize || DEFAULT_TEXT_FONT_SIZE, fontFamily: block.fontFamily }, ...runs]) {
+    const size = run.size * scale
+    const font = runFont(run, run.fontFamily || block.fontFamily, size)
+    let metrics = fontMetricsCache.get(font)
+    if (!metrics) {
+      if (metricsContext) metricsContext.font = font
+      const measured = metricsContext?.measureText('Hg')
+      metrics = { ascent: measured?.fontBoundingBoxAscent || size * .8, descent: measured?.fontBoundingBoxDescent || size * .2 }
+      if (fontMetricsCache.size > 1000) fontMetricsCache.clear()
+      fontMetricsCache.set(font, metrics)
+    }
+    const halfLeading = ((block.lineHeightPx || 0) - metrics.ascent - metrics.descent) / 2
+    ascent = Math.max(ascent, metrics.ascent + halfLeading)
+    descent = Math.max(descent, metrics.descent + halfLeading)
+  }
+  return { ascent, descent }
+}
+
+export const blockLineBoxHeight = (block: TextFitBlock, runs: TextFitRun[], scale: number, fallback: number): number => {
+  if (block.lineHeightPx != null) {
+    const metrics = fixedLineMetrics(block, runs, scale)
+    return Math.max(metrics.ascent + metrics.descent, ...runs.map(run => (run.mathHeight || 0) * scale))
+  }
+  return Math.max((block.paragraphSize || DEFAULT_TEXT_FONT_SIZE) * scale * (block.lineHeight ?? fallback),
+    lineBoxHeight(runs, scale, block.lineHeight ?? fallback));
+}
+
+export const paragraphGap = (previous: TextFitBlock | undefined, block: TextFitBlock, fallback: number): number =>
+  previous ? Math.max(previous.marginBottom ?? 0, block.marginTop ?? fallback) : (block.marginTop ?? 0);
 const placeholderWidthCache = new Map<string, number>()
 const spaceWidthCache = new Map<string, number>()
 let placeholderCtx: CanvasRenderingContext2D | null | undefined
@@ -355,6 +403,7 @@ const measureRunsHeight = (
   lineHeight: number,
   letterSpacing?: number,
   whiteSpace?: TextFitBlock['whiteSpace'],
+  block?: TextFitBlock,
 ): number => {
   const items = runs.map(run => richInlineFromRun(
     run,
@@ -384,9 +433,9 @@ const measureRunsHeight = (
       const run = runs[fragment.itemIndex]
       if (run) lineRuns.push(run)
     }
-    height += lineBoxHeight(lineRuns.length ? lineRuns : runs, sizeScale, lineHeight)
+    height += block ? blockLineBoxHeight(block, lineRuns.length ? lineRuns : runs, sizeScale, lineHeight) : lineBoxHeight(lineRuns.length ? lineRuns : runs, sizeScale, lineHeight)
   })
-  return Math.max(height, lineBoxHeight(runs, sizeScale, lineHeight))
+  return Math.max(height, block ? blockLineBoxHeight(block, runs, sizeScale, lineHeight) : lineBoxHeight(runs, sizeScale, lineHeight))
 }
 
 /**
@@ -414,22 +463,25 @@ export function measureTextBlocksHeight(blocks: TextFitBlock[], options: Measure
   if (!blocks.length) return 0;
   const sizeScale = options.sizeScale ?? 1;
   let total = 0;
+  let previous: TextFitBlock | undefined;
   for (const block of blocks) {
+    total += paragraphGap(previous, block, options.blockSpace ?? 0);
+    previous = block;
     const width = Math.max(1, options.innerWidth - listColumnInset(block, block.size * sizeScale, options.bulletIndent));
     if (block.runs?.length) {
       // Mixed-size paragraph: measure exactly — rich-inline breaks lines across
       // the per-run fonts and each line costs its own max run size.
-      total += measureRunsHeight(block.runs, block.fontFamily, sizeScale, width, options.lineHeight, options.letterSpacing, block.whiteSpace)
+      total += measureRunsHeight(block.runs, block.fontFamily, sizeScale, width, options.lineHeight, options.letterSpacing, block.whiteSpace, block)
       continue
     }
     const size = block.size * sizeScale;
     if (size <= 0) continue;
-    const lineHeightPx = size * options.lineHeight;
+    const lineHeightPx = blockLineBoxHeight(block, [{ text: '', size: block.size }], sizeScale, options.lineHeight);
     const font = canvasFont(block, size);
     const prepared = prepareCached(block.text, font, options.letterSpacing || undefined, block.whiteSpace);
     total += Math.max(lineHeightPx, pretextLayout(prepared, editorWrapWidth(width, font), lineHeightPx).height);
   }
-  total += Math.max(0, blocks.length - 1) * (options.blockSpace ?? 0);
+  total += previous?.marginBottom ?? 0;
   return total
 }
 export interface FitFontScaleOptions {
@@ -588,7 +640,10 @@ export function measureSessionHeight(
 ): number {
   if (!session.items.length) return 0
   let total = 0
+  let previous: TextFitBlock | undefined
   for (const item of session.items) {
+    total += paragraphGap(previous, item.block, blockSpace)
+    previous = item.block
     const width = Math.max(1, innerWidth - listColumnInset(item.block, item.size, bulletIndent))
     if (item.block.runs?.length) {
       total += measureRunsHeight(
@@ -599,13 +654,14 @@ export function measureSessionHeight(
         session.lineHeight,
         session.letterSpacing,
         item.block.whiteSpace,
+        item.block,
       )
       continue
     }
-    const lineHeightPx = item.size * session.lineHeight
+    const lineHeightPx = blockLineBoxHeight(item.block, [{ text: '', size: item.size }], 1, session.lineHeight)
     total += Math.max(lineHeightPx, pretextLayout(item.handle, editorWrapWidth(width, canvasFont(item.block, item.size)), lineHeightPx).height)
   }
-  total += Math.max(0, session.items.length - 1) * blockSpace
+  total += previous?.marginBottom ?? 0
   return total
 }
 
@@ -977,10 +1033,24 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
           : '•')
       : undefined
     const align = paragraphAlignOf(el)
+    const paragraph = (isList ? el.querySelector('p') ?? el : el) as HTMLElement
+    const paragraphSize = parseFontSizePx(paragraph.style.fontSize) || defaultSize
+    const leading = paragraph.style.lineHeight
+    const leadingValue = Number(leading)
+    const toPx = (value: string) => {
+      if (/^0(?:px|pt|em)?$/.test(value)) return 0
+      const length = cssLengthParts(value, paragraphSize)
+      return length.px ?? (length.em != null ? length.em * paragraphSize : undefined)
+    }
     blocks.push({
       text,
       ...(whiteSpace ? { whiteSpace } : {}),
       size: blockFontSize(el, defaultSize),
+      paragraphSize,
+      paragraphIndent: Math.max(0, Math.min(8, Number(paragraph.dataset.indent) || 0)) * paragraphSize,
+      ...(leading && Number.isFinite(leadingValue) && leadingValue > 0 ? { lineHeight: leadingValue } : leading ? { lineHeightPx: toPx(leading) } : {}),
+      ...(paragraph.style.marginTop ? { marginTop: toPx(paragraph.style.marginTop) } : {}),
+      ...(paragraph.style.marginBottom ? { marginBottom: toPx(paragraph.style.marginBottom) } : {}),
       bold: runs[0]?.bold || !!el.querySelector('strong, b'),
       italic: runs[0]?.italic || !!el.querySelector('em, i'),
       fontFamily: blockFontFamily(el, defaultFamily),

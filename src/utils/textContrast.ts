@@ -747,7 +747,11 @@ export const resolveLiveTextPaint = (
   if (!surfaces.length) {
     return { ink: preferred || options.themeFontColor || '#333', html };
   }
-  const ink = resolveDefaultFontColor(preferred || options.themeFontColor || '#333', surfaces);
+  const base = preferred || options.themeFontColor || '#333';
+  // The element fallback is not an explicit rich-text color choice. Imported
+  // decks often retain a tinted theme fallback after their background changes.
+  // Never use that unreadable fallback to repaint already legible body runs.
+  const ink = fixColorForBackgrounds(base, surfaces) || resolveDefaultFontColor(base, surfaces);
   return {
     ink,
     html: rewriteDefaultInksInHtml(html, ink),

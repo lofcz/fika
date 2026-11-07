@@ -3,6 +3,7 @@ import { resolveDesignThemes, setFikaDesignThemes, listFikaDesignThemes, getFika
 import { applyDesignTheme } from '@/utils/applyDesignTheme'
 import type { Slide, SlideTheme } from '@/types/slides'
 import { matchPresetTheme, PRESET_THEMES, resolvePresetBackground } from '@/configs/theme'
+import tinycolor from 'tinycolor2'
 
 const paper: FikaDesignTheme = {
   id: 'host-paper', name: 'Paper', background: '#FAF8F4', fontColor: '#2B3445',
@@ -39,6 +40,21 @@ describe('embed design catalog', () => {
 
 
 describe('host design application shared by picker and agent', () => {
+  it('applies tech headings and readable panel/table/badge ink without changing geometry', () => {
+    const tech = { ...paper, id: 'tech', background: '#0F172A', fontColor: '#F1F5F9', headingFontColor: '#2ECC71', colors: ['#2ECC71', '#67D8F5'], preserveColorRoles: true };
+    const theme: SlideTheme = { backgroundColor: paper.background, fontColor: paper.fontColor, fontName: 'Inter', themeColors: paper.colors, outline: {}, shadow: { h: 0, v: 0, blur: 0, color: '#000' } };
+    const text = (id: string, top: number): Slide['elements'][number] => ({ id, type: 'text', left: 20, top, width: 400, height: 50, rotate: 0, defaultColor: '#2B3445', defaultFontName: 'Inter', content: '<p style="color:#2B3445;font-size:24px">Keep text</p>', textType: id === 'title' ? 'title' : 'content' });
+    const slide: Slide = { id: 'slide', elements: [text('title', 20), text('body', 100), { id: 'badge', type: 'shape', left: 20, top: 200, width: 40, height: 40, rotate: 0, path: '', viewBox: [40,40], fixedRatio: false, fill: paper.colors[0], text: { align: 'middle', defaultColor: '#fff', defaultFontName: 'Inter', content: '<p style="color:#fff">1</p>' } }] };
+    const result = applyDesignTheme([slide], theme, tech);
+    const [title, body, badge] = result.slides[0].elements;
+    expect(title.type === 'text' && title.defaultColor).toBe(tech.headingFontColor);
+    expect(title.type === 'text' && title.content).toContain(tech.headingFontColor);
+    expect(body.type === 'text' && body.defaultColor).toBe(tech.fontColor);
+    expect(badge.type === 'shape' && tinycolor.readability(badge.fill, badge.text!.defaultColor)).toBeGreaterThanOrEqual(4.5);
+    expect(result.theme.headingFontColor).toBe(tech.headingFontColor);
+    expect(result.slides[0].elements.map(({ id, left, top, width }) => ({ id, left, top, width }))).toEqual(slide.elements.map(({ id, left, top, width }) => ({ id, left, top, width })));
+    expect(applyDesignTheme(result.slides, result.theme, tech).slides).toEqual(result.slides);
+  });
   it('discovers and applies the active host design without changing content or the input', () => {
     setFikaDesignThemes([paper])
     expect(listFikaDesignThemes().map(item => item.id)).toEqual(['host-paper'])

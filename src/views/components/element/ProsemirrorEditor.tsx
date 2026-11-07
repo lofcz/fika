@@ -778,6 +778,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
         const wasEmpty = current.state.doc.textContent.trim().length === 0;
         const newState = current.state.apply(tr);
         current.updateState(newState);
+        if (externalSync) rememberEditorSource(current, elementIdRef.current);
         rememberTextSelection(current);
         if (!externalSync && wasEmpty && newState.doc.textContent.trim().length > 0) {
           callbacksRef.current.onPlaceholderFill?.();

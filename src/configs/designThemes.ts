@@ -14,7 +14,7 @@ export function resolveDesignThemes(themes?: readonly FikaDesignTheme[]): readon
     if (ids.has(theme.id)) throw new Error(`Duplicate design theme id: ${theme.id}`);
     ids.add(theme.id);
     if (!theme.colors?.length) throw new Error(`Design theme ${theme.id} needs accent colors.`);
-    for (const color of [theme.background, theme.fontColor, ...theme.colors, ...(theme.chartColors ?? []), theme.featureFontColor, theme.borderColor].filter(value => value !== undefined)) {
+    for (const color of [theme.background, theme.fontColor, ...theme.colors, ...(theme.chartColors ?? []), theme.featureFontColor, theme.headingFontColor, theme.borderColor].filter(value => value !== undefined)) {
       if (!tinycolor(color).isValid()) throw new Error(`Invalid color in design theme ${theme.id}: ${color}`);
     }
   }

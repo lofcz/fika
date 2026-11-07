@@ -1,5 +1,5 @@
 export const editorHtmlLooksEmpty = (html: string) => (
-  !html.replace(/<br\s*\/?>/gi, '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim()
+  !html.replace(/<!--[\s\S]*?-->/g, '').replace(/<\/?[a-z][^>]*>/gi, '').replace(/&nbsp;/g, ' ').trim()
 )
 
 /**

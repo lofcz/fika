@@ -15,6 +15,7 @@ import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 import { resolveElementDefaultFontColor, resolveLiveTextPaint } from '@/utils/textContrast';
 import { resolveShapePaintPath } from '@/utils/elementOutline'
 import { serializeRichTextHtml } from '@/utils/prosemirror';
+import { editorHtmlLooksEmpty } from '@/utils/prosemirror/commitPolicy';
 import GradientDefs from './GradientDefs';
 import PatternDefs from './PatternDefs';
 import ProsemirrorEditor from '@/views/components/element/ProsemirrorEditor';
@@ -148,8 +149,7 @@ const ShapeElement = memo((props: IShapeElementProps) => {
     const info = elementInfoRef.current;
     const currentText = readStoreShape(info.id)?.text || info.text;
     if (!currentText) return;
-    const pureText = currentText.content.replace(/<[^>]+>/g, '');
-    if (!pureText) {
+    if (editorHtmlLooksEmpty(currentText.content)) {
       useSlidesStore.getState().removeElementProps({
         id: info.id,
         propName: 'text'

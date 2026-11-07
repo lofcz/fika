@@ -87,9 +87,12 @@ export const setSlideTheme = (slide: Slide, theme: PresetTheme, index = 0, sourc
     }
     for (const el of slide.elements) {
       const surface = textSurface(slide, el, theme.background);
-      const elementInk = roles ? roles.ink(surface) : ink;
+      const heading = el.type === 'text' && (el.textType === 'title' || el.textType === 'itemTitle');
+      const headingInk = heading && theme.headingFontColor && tinycolor.readability(surface, theme.headingFontColor) >= 4.5
+        ? theme.headingFontColor : undefined;
+      const elementInk = headingInk || (roles ? roles.ink(surface) : ink);
       const formatText = (html: string) => roles
-        ? retintInlineText(stripThemeInlineStyles(html, { fontName: theme.fontname }), surface, roles.ink)
+        ? retintInlineText(stripThemeInlineStyles(html, { fontName: theme.fontname }), surface, headingInk ? () => headingInk : roles.ink)
         : stripThemeInlineStyles(html, { fontColor: ink, fontName: theme.fontname });
       if (el.type === 'shape') {
         if (el.fill && !roles) el.fill = getColor(el.fill);
@@ -153,6 +156,7 @@ export function applyDesignTheme(slides: readonly Slide[], currentTheme: SlideTh
     backgroundColor: preset.background,
     themeColors: [...preset.colors],
     fontColor: preset.fontColor,
+    headingFontColor: preset.headingFontColor,
     fontName: preset.fontname,
     outline: preset.outline ? { ...preset.outline } : { ...currentTheme.outline, ...(preset.borderColor ? { color: preset.borderColor } : {}) },
     ...(preset.shadow ? { shadow: { ...preset.shadow } } : {}),

@@ -39,17 +39,12 @@
   }
 
   a {
-    color: #0563C1;
+    color: inherit;
     text-decoration: underline;
     cursor: pointer;
   }
   a:visited {
-    color: #954F72;
-  }
-  a [style*='color: #0563C1'],
-  a [style*='color:#0563C1'],
-  a [style*='color: #0563c1'] {
-    color: inherit !important;
+    color: inherit;
   }
 
   ul, ol {

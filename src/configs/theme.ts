@@ -9,6 +9,8 @@ export interface PresetTheme {
   background: string;
   fontColor: string;
   featureFontColor?: string;
+  /** Optional heading ink, kept distinct from readable body copy. */
+  headingFontColor?: string;
   /** Retain pale panels and accent roles when restyling host-authored decks. */
   preserveColorRoles?: boolean;
   fontname: string;

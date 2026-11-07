@@ -25,6 +25,16 @@ export const serializeRichTextHtml = (content: string) => {
   if (cached !== undefined) return cached;
   const wrap = document.createElement('div');
   wrap.appendChild(serializer.serializeFragment(createDocument(content).content));
+  // ProseMirror's view supplies a caret break to empty paragraphs. The model
+  // serializer does not: without it static slides collapse blank lines and
+  // selecting the shape moves every following paragraph.
+  for (const paragraph of wrap.querySelectorAll('p')) {
+    if (!paragraph.hasChildNodes()) {
+      const br = document.createElement('br');
+      br.className = 'ProseMirror-trailingBreak';
+      paragraph.appendChild(br);
+    }
+  }
   const html = wrap.innerHTML;
   serializeCache.set(content, html);
   return html;
