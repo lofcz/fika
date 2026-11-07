@@ -45,6 +45,8 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ***************************************************************************** */
 
+/*! @license DOMPurify 3.4.14 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.4.14/LICENSE */
+
 /*! Fast Average Color | © 2026 Denis Seleznev | MIT License | https://github.com/fast-average-color/fast-average-color */
 
 /*! markdown-it 15.0.0 https://github.com/markdown-it/markdown-it @license MIT */
