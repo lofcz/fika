@@ -1,4 +1,5 @@
 import { richTableCellExportText, tableCellExportFill, tableCellExportText } from '@/utils/tableExport';
+import { speakerNotesToText } from '@/utils/speakerNotes';
 
 import { useEffect, useState } from 'react'
 import { saveAs } from 'file-saver';
@@ -1573,14 +1574,7 @@ export function createPresentationExporter(
             }
           }
           if (slide.remark) {
-            const doc = new DOMParser().parseFromString(slide.remark, 'text/html');
-            const pList = doc.body.querySelectorAll('p');
-            const text = [];
-            for (const p of pList) {
-              const textContent = p.textContent;
-              text.push(textContent || '');
-            }
-            pptxSlide.addNotes(text.join('\n'));
+            pptxSlide.addNotes(speakerNotesToText(slide.remark));
           }
           if (!slide.elements) continue;
           for (const el of slide.elements) {

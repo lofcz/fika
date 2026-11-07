@@ -37,7 +37,7 @@ const server = createServer(async (req, res) => {
   } catch { res.writeHead(404).end() }
 })
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-const browser = await chromium.launch({ headless: true })
+const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH })
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
 const errors = []
 page.on('pageerror', error => { errors.push(error.message); console.error('Browser error:', error.stack) })
@@ -52,7 +52,7 @@ try {
       title: 'Export regression', viewport: { size: 1000, ratio: 0.75 },
       slides: [
         { id: 'first', background: { type: 'solid', color: '#ff0000' }, elements: [{ id: 'text', type: 'text', left: 50, top: 50, width: 700, height: 100, rotate: 0, content: '<p><span style="font-family: Inter;">Editable Czech: Příliš žluťoučký kůň</span><span style="font-family: Montserrat;"> Řešení</span></p>', defaultFontName: 'Arial', defaultColor: '#ffffff' }] },
-        { id: 'second', background: { type: 'solid', color: '#0000ff' }, elements: [] },
+        { id: 'second', background: { type: 'solid', color: '#0000ff' }, elements: [], remark: '<h2>Speaker &amp; audience</h2><ul><li>First point<br>Continue here</li><li><p>Examples</p><ol start="3"><li>Nested example</li></ol></li></ul><p><br></p><p>Last line</p>' },
       ],
     }
     const progress = []
@@ -167,6 +167,13 @@ try {
   assert.match(fontManifest, /<p:font typeface="Montserrat"/)
   assert.equal(Object.keys(pptx.files).filter(name => name.endsWith('.fntdata')).length, 2, 'inline-only bundled fonts travel with the deck')
   assert.ok(pptx.file('ppt/slides/slide2.xml'))
+  const notesXml = await pptx.file('ppt/notesSlides/notesSlide2.xml').async('string')
+  const notes = await page.evaluate(xml => {
+    const doc = new DOMParser().parseFromString(xml, 'application/xml')
+    const body = Array.from(doc.getElementsByTagName('p:sp')).find(shape => shape.getElementsByTagName('p:ph')[0]?.getAttribute('type') === 'body')
+    return Array.from(body.getElementsByTagName('a:p')).map(p => Array.from(p.getElementsByTagName('a:t')).map(t => t.textContent).join(''))
+  }, notesXml)
+  assert.deepEqual(notes, ['Speaker & audience', '• First point', 'Continue here', '• Examples', '  3. Nested example', '', 'Last line'])
   const other = await JSZip.loadAsync(Uint8Array.from(output.pptx))
   assert.equal(other.file('ppt/slides/slide2.xml'), null)
   assert.match(await other.file('ppt/presentation.xml').async('string'), /cy="13716000"/)

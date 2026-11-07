@@ -53,7 +53,7 @@
         "parse5": "^8.0.1",
         "pdf-lib": "^1.17.1",
         "perfect-freehand": "^1.2.3",
-        "pptxgenjs-plus": "^4.3.6",
+        "pptxgenjs-plus": "^4.3.7",
         "pptxtojson": "npm:@lofcz/pptxtojson@^2.2.9",
         "prosemirror-commands": "^1.7.2",
         "prosemirror-dropcursor": "^1.8.3",
@@ -1504,7 +1504,7 @@
 
     "postcss-selector-parser": ["postcss-selector-parser@7.1.5", "", { "dependencies": { "cssesc": "^3.0.0", "util-deprecate": "^1.0.2" } }, "sha512-KvvtD7SrlBP7dlgkBghEE3r84CABm5SmV2aNcG4oCA+qDnJ/tvKonFVvwWAyyWUEwxuNawdfEAZKP9zM3oZ2Uw=="],
 
-    "pptxgenjs-plus": ["pptxgenjs-plus@4.3.6", "", { "dependencies": { "@node-projects/jszip": "^4.2.1", "@rgrove/parse-xml": "^4.2.3", "pako": "^3.0.1" } }, "sha512-sZtZeFu3f2qxZZbMRxfEatZdLp52FkvJ9yw+ROkdg1Y13cA42eKbtq4HXg9/2RNBTZjZtoVgXu8/PyJQ3OZQ7g=="],
+    "pptxgenjs-plus": ["pptxgenjs-plus@4.3.7", "", { "dependencies": { "@node-projects/jszip": "^4.2.1", "@rgrove/parse-xml": "^4.2.3", "pako": "^3.0.1" } }, "sha512-1oV/E2Z+DlB9SZU6EqNj/xQX7gVTeiU0Z1xOhf2LFxU6nGB/Vc37WkXqxBhV4fyYLo2vQzLp6F6+/JIk0c81uw=="],
 
     "pptxtojson": ["@lofcz/pptxtojson@2.2.9", "", { "dependencies": { "dwml-ts": "^0.5.3", "entities": "^8.0.0", "jszip": "^3.10.1", "tinycolor2": "1.6.0", "txml": "^6.0.0" } }, "sha512-1frVclIkzF1kiH/62crCXUDJ7S4H/lzywXJlZ80CL3FjySnIqwwEAaktLHESXPgEE6rY5n1LOLikhGSuuIAOfw=="],
 

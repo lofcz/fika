@@ -248,6 +248,7 @@ export const e2eScripts = [
 ]
 
 export const rstestFiles = [
+  'tests/speaker-notes.test.ts',
   'tests/pptx-source-package.test.ts',
   'tests/slides-empty-deck.test.ts',
   'tests/paste-elements.test.ts',
