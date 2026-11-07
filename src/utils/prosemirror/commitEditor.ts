@@ -1,5 +1,6 @@
 import { useMainStore, useSlidesStore } from '@/store'
 import type { EditorView } from 'prosemirror-view'
+import type { Node as ProseMirrorNode } from 'prosemirror-model'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import type { PPTElement, ShapeText } from '@/types/slides'
 import { repairFilledPlaceholderHtml } from '@/utils/placeholderPaint'
@@ -31,11 +32,11 @@ export const storeHtmlForElement = (elementId: string): string => {
   return ''
 }
 
-const editorSources = new WeakMap<EditorView, string>()
+const editorSources = new WeakMap<EditorView, { html: string; doc: ProseMirrorNode }>()
 
 /** Remember which store content this view has actually synchronized. */
 export function rememberEditorSource(view: EditorView, elementId: string) {
-  editorSources.set(view, storeHtmlForElement(elementId))
+  editorSources.set(view, { html: storeHtmlForElement(elementId), doc: view.state.doc })
 }
 
 /** Activity remounts must not rebuild an empty view over store-owned text. */
@@ -64,10 +65,13 @@ export function commitLiveEditorToStore(elementId: string, options?: { history?:
   const { slideId, el } = found
   const isAuthoritative = view.hasFocus() || useMainStore.getState().editingElementId === elementId
   const source = editorSources.get(view)
+  // Mounting, selection and paint-only synchronization are not authored edits.
+  // Persisting their normalized DOM rewrites imported HTML and contrast colors.
+  if (source?.doc.eq(view.state.doc)) return
   const storeHtml = el.type === 'text' ? el.content : el.type === 'shape' ? el.text?.content || '' : ''
   // Undo and external updates can replace the store before React updates or
   // unmounts this view. An idle view must not overwrite that newer content.
-  if (!isAuthoritative && source !== undefined && source !== storeHtml) return
+  if (!isAuthoritative && source !== undefined && source.html !== storeHtml) return
   const history = options?.history !== false
   if (el.type === 'text') {
     const next = el.placeholder ? repairFilledPlaceholderHtml(el, html) : html

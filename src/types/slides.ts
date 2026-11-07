@@ -669,6 +669,8 @@ export interface Slide {
  * Slide theme (background, accent colors, default font).
  */
 export interface SlideTheme {
+  /** Optional ink for title and item-title text when generating more slides. */
+  headingFontColor?: string;
   backgroundColor: string;
   themeColors: string[];
   fontColor: string;

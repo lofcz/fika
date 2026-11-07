@@ -120,6 +120,18 @@ const paragraph: NodeSpec = {
     },
     lineHeight: {
       default: ''
+    },
+    marginTop: {
+      default: ''
+    },
+    marginBottom: {
+      default: ''
+    },
+    fontsize: {
+      default: ''
+    },
+    fontname: {
+      default: ''
     }
   },
   content: 'inline*',
@@ -144,11 +156,20 @@ const paragraph: NodeSpec = {
         }
       }
       const indent = +((dom as HTMLElement).getAttribute('data-indent') || 0);
+      const paragraph = dom as HTMLElement;
+      // PPTX uses styled whitespace runs as vertical spacers. The parser
+      // removes those runs, so retain their typography on the empty paragraph.
+      const spacer = !paragraph.textContent?.trim()
+        ? paragraph.querySelector<HTMLElement>('span[style*="font-size"]') : null;
       return {
         align,
         indent,
         textIndent: textIndentLevel,
-        lineHeight: lineHeight || ''
+        lineHeight: lineHeight || '',
+        marginTop: (dom as HTMLElement).style.marginTop || '',
+        marginBottom: paragraph.style.marginBottom || '',
+        fontsize: paragraph.style.fontSize || spacer?.style.fontSize || '',
+        fontname: paragraph.style.fontFamily || spacer?.style.fontFamily || ''
       };
     }
   }, {
@@ -171,6 +192,10 @@ const paragraph: NodeSpec = {
     if (align) style += `text-align: ${align};`;
     if (textIndent) style += `text-indent: ${textIndent}em;`;
     if (lineHeight) style += `line-height: ${lineHeight};`;
+    if (node.attrs.marginTop) style += `margin-top: ${node.attrs.marginTop};`;
+    if (node.attrs.marginBottom) style += `margin-bottom: ${node.attrs.marginBottom};`;
+    if (node.attrs.fontsize) style += `font-size: ${node.attrs.fontsize};`;
+    if (node.attrs.fontname) style += `font-family: ${node.attrs.fontname};`;
     const attr: Attr = {
       style
     };

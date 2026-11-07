@@ -416,8 +416,7 @@ const TextElement = memo((props: ITextElementProps) => {
   const checkEmptyText = useMemo(() => debounce(function () {
     const info = selectCurrentSlide(useSlidesStore.getState())?.elements.find(el => el.id === elementId) as PPTTextElement | undefined;
     if (!info || info.placeholder) return;
-    const pureText = info.content.replace(/<[^>]+>/g, '');
-    if (!pureText) useSlidesStore.getState().deleteElement(info.id);
+    if (isEmptyRichText(info.content)) useSlidesStore.getState().deleteElement(info.id);
   }, 300, {
     trailing: true
   }), [elementId]);

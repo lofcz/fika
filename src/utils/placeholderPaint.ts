@@ -10,6 +10,7 @@ import {
   placeholderWeightOf,
 } from '@/configs/textPresets'
 import type { PlaceholderStyleOptions } from '@/utils/prosemirror/commands/applyPlaceholderStyles'
+import { editorHtmlLooksEmpty } from '@/utils/prosemirror/commitPolicy'
 
 export { isListPlaceholderType, placeholderAlignOf }
 
@@ -17,7 +18,7 @@ export const EMPTY_LIST_HTML = '<ul><li><p></p></li></ul>'
 export const EMPTY_PARA_HTML = '<p></p>'
 
 export const isEmptyRichText = (html?: string) => (
-  !html?.replace(/<br\s*\/?>/gi, '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim()
+  !html || editorHtmlLooksEmpty(html)
 )
 
 export const isUnfilledPlaceholder = (el: { placeholder?: string; content?: string }) => (

@@ -5,6 +5,7 @@ import { subscribeLiveBox } from '@/utils/liveElementSize'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { useMainStore } from '@/store'
 import { normalizeFittedFontSizes } from '@/utils/richTextFontSize'
+import { serializeRichTextHtml } from '@/utils/prosemirror'
 import {
   contentBoxOfHost,
   createFitMeasureSession,
@@ -94,7 +95,7 @@ export default (
 
   const measuredContent = () => {
     const live = readLive(liveContentRef.current)
-    return normalizeFittedFontSizes(live !== null && live !== undefined ? live : fitContentOf(elementInfoRef.current))
+    return normalizeFittedFontSizes(serializeRichTextHtml(live !== null && live !== undefined ? live : fitContentOf(elementInfoRef.current)))
   }
 
   const authoredSize = () => fitAuthoredSizeOf(elementInfoRef.current)
