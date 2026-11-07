@@ -10,7 +10,7 @@
  * pretext uses canvas, so this only does real work in a DOM/canvas runtime;
  * callers wrap usage so a non-DOM context falls back gracefully.
  */
-import { layout as pretextLayout, prepare as pretextPrepare } from '@chenglou/pretext';
+import { layout as pretextLayout, prepare as pretextPrepare, clearCache as clearPretextCache } from '@chenglou/pretext';
 import { prepareRichInline, layoutNextRichInlineLineRange, type PreparedRichInline, type RichInlineCursor, type RichInlineLineRange } from '@chenglou/pretext/rich-inline';
 import { normalizeFittedFontSizes } from './richTextFontSize';
 import { cssLengthParts, cssLengthToPx } from './cssLength';
@@ -18,6 +18,7 @@ import { estimateInlineMathBox, isPlausibleInlineMathBox, MATH_CLASS } from './i
 
 /** ProseMirror's default text size (assets/styles/prosemirror.scss). */
 export const DEFAULT_TEXT_FONT_SIZE = 16;
+let fontRevision = 0;
 /**
  * Live text boxes use `$textElementFont` when the theme/element family is
  * empty. Canvas wrap must use the same stack — generic `sans-serif` is a
@@ -269,7 +270,6 @@ const fontMetricsCache = new Map<string, { ascent: number; descent: number }>()
 export const fixedLineMetrics = (block: TextFitBlock, runs: TextFitRun[], scale: number) => {
   if (metricsContext === undefined && typeof document !== 'undefined') {
     metricsContext = document.createElement('canvas').getContext('2d')
-    document.fonts?.addEventListener('loadingdone', () => fontMetricsCache.clear())
   }
   let ascent = 0, descent = 0
   // CSS aligns every inline box AND the paragraph's own strut on one baseline.
@@ -585,7 +585,7 @@ export function fitSessionKey(
   locale: string,
   defaultSize = DEFAULT_TEXT_FONT_SIZE,
 ): string {
-  return `${locale}\0${fontFamily}\0${lineHeight}\0${letterSpacing}\0${defaultSize}\0${html}`
+  return `${fontRevision}\0${locale}\0${fontFamily}\0${lineHeight}\0${letterSpacing}\0${defaultSize}\0${html}`
 }
 
 /**
@@ -750,6 +750,24 @@ const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
  * later applies, and export reuse the corrected value instead of re-overflow.
  */
 const fitScaleListeners = new Set<(elementId: string) => void>()
+const fontChangeListeners = new Set<() => void>()
+export function subscribeTextFontChanges(listener: () => void) {
+  fontChangeListeners.add(listener)
+  return () => { fontChangeListeners.delete(listener) }
+}
+if (typeof document !== 'undefined') document.fonts?.addEventListener('loadingdone', () => {
+  // A family name can now resolve to a different font than its fallback.
+  // Prepared handles and DOM-verified scales both contain the old metrics.
+  fontRevision++
+  clearPretextCache()
+  preparedHandleCache.clear()
+  richInlineCache.clear()
+  fontMetricsCache.clear()
+  placeholderWidthCache.clear()
+  spaceWidthCache.clear()
+  fitScaleMemo.clear()
+  for (const listener of fontChangeListeners) listener()
+})
 export function subscribeFitScaleChanges(listener: (elementId: string) => void) {
   fitScaleListeners.add(listener)
   return () => { fitScaleListeners.delete(listener) }

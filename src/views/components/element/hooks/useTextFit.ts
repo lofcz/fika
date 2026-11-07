@@ -12,6 +12,7 @@ import {
   fitSessionKey,
   innerBoxFromLiveStyles,
   rememberFitScale,
+  subscribeTextFontChanges,
   extractFitBlocksFromHtml,
   minimumTextFitScale,
   textFitScaleForHtml,
@@ -313,14 +314,18 @@ export default (
   }), [])
 
   useEffect(() => {
+    const refreshFonts = () => {
+      sessionRef.current = null
+      lastInnerRef.current = { width: 0, height: 0 }
+      scheduleRef.current()
+    }
+    const unsubscribeFonts = subscribeTextFontChanges(refreshFonts)
     if (typeof document !== 'undefined' && document.fonts?.ready) {
-      document.fonts.ready.then(() => {
-        lastInnerRef.current = { width: 0, height: 0 }
-        scheduleRef.current()
-      }).catch(() => {})
+      document.fonts.ready.then(refreshFonts).catch(() => {})
     }
     scheduleRef.current()
     return () => {
+      unsubscribeFonts()
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = 0
     }
