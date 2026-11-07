@@ -433,6 +433,8 @@ export interface TableCell {
   colspan: number;
   rowspan: number;
   text: string;
+  /** Omitted for legacy plain text (including literal HTML); rich cells store sanitized HTML. */
+  textFormat?: 'html';
   style?: TableCellStyle;
 }
 

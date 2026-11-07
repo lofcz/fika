@@ -416,6 +416,8 @@ if (text.ok && text.data) {
 
 Domain helpers cover specialized model areas without requiring store access:
 
+Table cells default to literal plain text, including TeX delimiters. Set `textFormat: 'html'` alongside `text` for rich cells, for example `{ textFormat: 'html', text: '<p>Area <strong>A</strong>: <span class="fika-math" data-latex="x^2"></span></p>' }`. Rich cells preserve inline formatting and editable equations through the editor and PowerPoint export/import. When replacing cell text with `tables.setCell`, include `textFormat` each time; omitting it selects plain text. `tables.setCellStyle` formats the whole cell, while editor controls format the selected text when a selection exists.
+
 ```ts
 await controller.tables.setCell(tableElementId, 0, 1, { text: 'Hypothesis' }, { slideId })
 await controller.charts.setData(chartElementId, {

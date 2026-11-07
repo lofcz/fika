@@ -4,9 +4,6 @@ const cx = bindStyles(styles)
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, useMemo, useCallback, useRef, memo, useState, useEffect, useLayoutEffect } from 'react';
 
 import { openContextmenu } from '@/utils/openContextmenu';
-import { debounce } from '@/utils/debounce';
-import { registerCommitFlusher } from '@/utils/commitQueue';
-import { shouldWriteEditorHtml } from '@/utils/prosemirror/commitPolicy';
 import { arraysEqual } from '@/utils/object';
 import { nanoid } from 'nanoid';
 import { useMainStore } from '@/store';
@@ -18,16 +15,23 @@ import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/uti
 import emitter, { EmitterEvents, type TableCommand } from '@/utils/emitter';
 import message from '@/utils/message';
 import { getCellStyle, getTextStyle, formatText } from './utils';
-import { applyExcelPaste, deleteTableGridLine, insertColIntoGrid, insertRowIntoGrid, locateTableCell, replaceTableCellText, tableSelectionBounds, type TableCellDraft } from './cellEdit';
+import { applyExcelPaste, deleteTableGridLine, insertColIntoGrid, insertRowIntoGrid, locateTableCell, tableSelectionBounds } from './cellEdit';
 import { areTableCellViewEqual, isTableCellHtmlEcho, numArrEqual, outlineEqual, tableGridStructureEqual, tableGridTextEqual, themeEqual } from './gridCompare';
 import useHideCells from './useHideCells';
 import useSubThemeColor from './useSubThemeColor';
 import useMathReady from './useMathReady';
-import CustomTextarea, { type TableCellCommitSource } from './CustomTextarea';
+import TableCellEditor from './TableCellEditor';
+import { getTableEditor, type TableEditorSession } from '@/utils/prosemirror/tableEditor';
+import { parseTableText, serializeTableText } from '@/utils/prosemirror/table';
+import { closeHistory } from 'prosemirror-history';
+import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 import { useI18nContext } from '@/i18n/useI18nContext';
 import { subscribeLiveBox } from '@/utils/liveElementSize';
 
 type TableCellViewProps = {
+  elementId: string;
+  sessions: Map<string, TableEditorSession>;
+  mathReady: boolean;
   cell: TableCell;
   rowIndex: number;
   colIndex: number;
@@ -39,12 +43,12 @@ type TableCellViewProps = {
   onMouseDown: (e: MouseEvent, rowIndex: number, colIndex: number) => void;
   onMouseEnter: (rowIndex: number, colIndex: number) => void;
   onContextMenu: (event: ReactMouseEvent<HTMLTableCellElement>) => void;
-  onInput: (value: string, rowIndex: number, colIndex: number, cellId: string) => void;
-  onCommit: (value: string, rowIndex: number, colIndex: number, cellId: string, source?: TableCellCommitSource) => void;
-  onInsertExcel: (value: string[][], rowIndex: number, colIndex: number) => void;
+  onInput: (value: string, rowIndex: number, colIndex: number, cellId: string, ignoreHistory?: boolean) => void;
+  onInsertExcel: (value: string[][], rowIndex: number, colIndex: number, rich?: boolean) => void;
 };
 
 const areTableCellViewPropsEqual = (prev: TableCellViewProps, next: TableCellViewProps) => {
+  if (prev.mathReady !== next.mathReady || prev.elementId !== next.elementId) return false;
   if (prev.outline !== next.outline && !outlineEqual(prev.outline, next.outline)) return false;
   return areTableCellViewEqual(prev, next);
 };
@@ -63,7 +67,6 @@ const TableCellView = memo((props: TableCellViewProps) => {
     onMouseEnter,
     onContextMenu,
     onInput,
-    onCommit,
     onInsertExcel
   } = props;
   return <td
@@ -84,14 +87,15 @@ const TableCellView = memo((props: TableCellViewProps) => {
     onMouseEnter={() => { onMouseEnter(rowIndex, colIndex); }}
     onContextMenu={onContextMenu}
   >
-    {isActive ? <CustomTextarea
+    {isActive ? <TableCellEditor
+      elementId={props.elementId}
+      sessions={props.sessions}
+      cell={cell}
       className={cx('cell-text', { active: isActive })}
-      style={getTextStyle(cellMinHeight, cell.style)}
-      value={cell.text}
-      onUpdateValue={value => onInput(value, rowIndex, colIndex, cell.id)}
-      onCommitValue={(value, source) => onCommit(value, rowIndex, colIndex, cell.id, source)}
-      onInsertExcelData={value => onInsertExcel(value, rowIndex, colIndex)}
-    /> : <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style)} dangerouslySetInnerHTML={{ __html: formatText(cell.text) }} />}
+      style={getTextStyle(cellMinHeight, cell.style, true)}
+      onUpdateValue={(value, ignoreHistory) => onInput(value, rowIndex, colIndex, cell.id, ignoreHistory)}
+      onInsertExcelData={(value, rich) => onInsertExcel(value, rowIndex, colIndex, rich)}
+    /> : <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style, cell.textFormat === 'html')} dangerouslySetInnerHTML={{ __html: formatText(cell.text, cell.textFormat) }} />}
   </td>;
 }, areTableCellViewPropsEqual);
 TableCellView.displayName = 'TableCellView';
@@ -107,13 +111,14 @@ export type IEditableTableProps = {
   editable?: boolean;
   onMouseDown?: (e: ReactMouseEvent) => void;
 } & {
-  onChange?: (payload: TableCell[][]) => void;
+  onChange?: (payload: TableCell[][], ignoreHistory?: boolean) => void;
   onChangeColWidths?: (payload: number[]) => void;
   onChangeSelectedCells?: (payload: string[]) => void;
 };
 
 const EditableTable = memo((props: IEditableTableProps) => {
   const { LL } = useI18nContext();
+  const history = useHistorySnapshot();
   const {
     elementId,
     data,
@@ -129,18 +134,17 @@ const EditableTable = memo((props: IEditableTableProps) => {
     onMouseDown
   } = props;
   const canvasScale = useMainStore(s => s.canvasScale);
+  const sessions = useRef(new Map<string, TableEditorSession>()).current;
   const contextmenusRef = useRef<(el: HTMLElement) => ContextmenuItem[]>(() => []);
   const [isStartSelect, setIsStartSelect] = useState(false);
   const [startCell, setStartCell] = useState<number[]>([]);
   const [endCell, setEndCell] = useState<number[]>([]);
   const lastPropsDataRef = useRef(data);
   const dataRef = useRef(data);
-  const draftRef = useRef<TableCellDraft | null>(null);
   const [gridRev, setGridRev] = useState(0);
   if (lastPropsDataRef.current !== data) {
     lastPropsDataRef.current = data;
-    const draft = draftRef.current;
-    dataRef.current = draft ? (replaceTableCellText(data, draft) ?? data) : data;
+    dataRef.current = data;
   }
   const tableCells = dataRef.current;
   const onChangeRef = useRef(onChange);
@@ -151,49 +155,16 @@ const EditableTable = memo((props: IEditableTableProps) => {
     text: '',
     id: nanoid(10)
   });
-  const writeGrid = (next: TableCell[][]) => {
+  const writeGrid = (next: TableCell[][], ignoreHistory = false) => {
     dataRef.current = next;
-    onChangeRef.current?.(next);
+    onChangeRef.current?.(next, ignoreHistory);
     setGridRev(n => n + 1);
   };
-  const commitDraftNow = () => {
-    const draft = draftRef.current;
-    if (!draft) return;
-    draftRef.current = null;
-    const next = replaceTableCellText(dataRef.current, draft);
-    if (next) writeGrid(next);
-  };
-  const scheduleCommit = useMemo(() => debounce(() => { commitDraftNow(); }, 300, { trailing: true }), []);
-  const flushDraft = () => {
-    scheduleCommit.cancel();
-    commitDraftNow();
-  };
-  const flushDraftRef = useRef(flushDraft);
-  flushDraftRef.current = flushDraft;
-  const persistDraft = () => {
-    flushDraftRef.current();
-  };
-  const takeCommittedGrid = () => {
-    scheduleCommit.cancel();
-    const draft = draftRef.current;
-    draftRef.current = null;
-    if (!draft) return dataRef.current;
-    const next = replaceTableCellText(dataRef.current, draft);
-    if (!next) return dataRef.current;
-    dataRef.current = next;
-    return next;
-  };
+  const takeCommittedGrid = () => dataRef.current;
   const setTableCells = (newData: TableCell[][]) => {
     writeGrid(newData);
   };
   const cloneCommittedGrid = () => JSON.parse(JSON.stringify(takeCommittedGrid())) as TableCell[][];
-  useEffect(() => {
-    const unreg = registerCommitFlusher(persistDraft);
-    return () => {
-      persistDraft();
-      unreg();
-    };
-  }, []);
 
   const { themeColors } = useSubThemeColor(theme);
   const mathIsReady = useMathReady(tableCells);
@@ -279,7 +250,6 @@ const EditableTable = memo((props: IEditableTableProps) => {
 
   const skipStyleTargetSyncRef = useRef(false);
   const removeSelectedCells = useCallback((forgetStyleTarget = false) => {
-    flushDraftRef.current();
     if (!forgetStyleTarget) skipStyleTargetSyncRef.current = true;
     setStartCell([]);
     setEndCell([]);
@@ -322,10 +292,9 @@ const EditableTable = memo((props: IEditableTableProps) => {
     const isFirst = prevSelectedCells.current === undefined;
     prevSelectedCells.current = selectedCells;
     if (isFirst) return;
-    if (skipStyleTargetSyncRef.current) {
-      skipStyleTargetSyncRef.current = false;
-      return;
-    }
+    const skipEmptySelection = skipStyleTargetSyncRef.current && !selectedCells.length;
+    skipStyleTargetSyncRef.current = false;
+    if (skipEmptySelection) return;
     onChangeSelectedCells?.(selectedCells);
   }, [selectedCells, onChangeSelectedCells]);
 
@@ -336,7 +305,6 @@ const EditableTable = memo((props: IEditableTableProps) => {
   isStartSelectRef.current = isStartSelect;
   const handleCellMousedown = useCallback((e: MouseEvent, rowIndex: number, colIndex: number) => {
     if (e.button === 0) {
-      flushDraftRef.current();
       setEndCell([]);
       setIsStartSelect(true);
       setStartCell([rowIndex, colIndex]);
@@ -470,7 +438,6 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const tabActiveCell = (backward: boolean) => {
-    flushDraft();
     const visibleCells: [number, number][] = [];
     tableCells.forEach((row, i) => row.forEach((_, j) => {
       if (!isHideCell(i, j)) visibleCells.push([i, j]);
@@ -490,7 +457,6 @@ const EditableTable = memo((props: IEditableTableProps) => {
   };
 
   const moveActiveCell = (dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
-    flushDraft();
     const rowIndex = +selectedCells[0].split('_')[0];
     const colIndex = +selectedCells[0].split('_')[1];
     const cell = tableCells[rowIndex][colIndex];
@@ -518,33 +484,24 @@ const EditableTable = memo((props: IEditableTableProps) => {
     focusActiveCell();
   };
 
-  const getCaretPosition = (element: HTMLDivElement) => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const preCaretRange = range.cloneRange();
-      preCaretRange.selectNodeContents(element);
-      preCaretRange.setEnd(range.startContainer, range.startOffset);
-      const start = preCaretRange.toString().length;
-      preCaretRange.setEnd(range.endContainer, range.endOffset);
-      const end = preCaretRange.toString().length;
-      const len = element.textContent?.length || 0;
-      return { start, end, len };
-    }
-    return null;
-  };
-
   const keydownListener = (e: KeyboardEvent) => {
-    if (!editable || !selectedCells.length) return;
+    if (!editable || !selectedCells.length || e.isComposing || e.defaultPrevented) return;
     // A cell selection can survive focus moving to the title or a toolbar.
     // Keep shortcuts local, while allowing body focus for a dragged cell range.
     if (e.target !== document.body && !(e.target instanceof Node && tableRef.current?.contains(e.target))) return;
     const key = e.key.toUpperCase();
+    if ((e.ctrlKey || e.metaKey) && (key === 'Z' || key === 'Y')) {
+      e.preventDefault();
+      sessions.clear();
+      if (key === 'Y' || e.shiftKey) history.redo(); else history.undo();
+      return;
+    }
     if (selectedCells.length < 2) {
       if (key === KEYS.TAB) {
         e.preventDefault();
         tabActiveCell(e.shiftKey);
       }
+      else if (e.shiftKey || e.altKey) return;
       else if ((e.ctrlKey || e.metaKey) && key === KEYS.UP) {
         e.preventDefault();
         const rowIndex = +selectedCells[0].split('_')[0];
@@ -570,20 +527,16 @@ const EditableTable = memo((props: IEditableTableProps) => {
         focusActiveCell();
       }
       else if (key === KEYS.UP) {
-        const range = getCaretPosition(e.target as HTMLDivElement);
-        if (range && range.start === range.end && range.start === 0) moveActiveCell('UP');
+        if (getTableEditor(elementId)?.atBoundary('start')) { e.preventDefault(); moveActiveCell('UP'); }
       }
       else if (key === KEYS.DOWN) {
-        const range = getCaretPosition(e.target as HTMLDivElement);
-        if (range && range.start === range.end && range.start === range.len) moveActiveCell('DOWN');
+        if (getTableEditor(elementId)?.atBoundary('end')) { e.preventDefault(); moveActiveCell('DOWN'); }
       }
       else if (key === KEYS.LEFT) {
-        const range = getCaretPosition(e.target as HTMLDivElement);
-        if (range && range.start === range.end && range.start === 0) moveActiveCell('LEFT');
+        if (getTableEditor(elementId)?.atBoundary('start')) { e.preventDefault(); moveActiveCell('LEFT'); }
       }
       else if (key === KEYS.RIGHT) {
-        const range = getCaretPosition(e.target as HTMLDivElement);
-        if (range && range.start === range.end && range.start === range.len) moveActiveCell('RIGHT');
+        if (getTableEditor(elementId)?.atBoundary('end')) { e.preventDefault(); moveActiveCell('RIGHT'); }
       }
     }
     else if (key === KEYS.DELETE) {
@@ -598,36 +551,30 @@ const EditableTable = memo((props: IEditableTableProps) => {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const handleInput = useCallback((value: string, rowIndex: number, colIndex: number, cellId: string) => {
-    const prev = draftRef.current;
-    if (prev && prev.cellId !== cellId) {
-      scheduleCommit.cancel();
-      commitDraftNow();
-    }
-    draftRef.current = { cellId, row: rowIndex, col: colIndex, text: value };
-    scheduleCommit();
-  }, [scheduleCommit]);
-
-  const handleCommit = useCallback((value: string, rowIndex: number, colIndex: number, cellId: string, source: TableCellCommitSource = 'blur') => {
+  const handleInput = useCallback((value: string, rowIndex: number, colIndex: number, cellId: string, ignoreHistory = false) => {
     const pos = locateTableCell(dataRef.current, { cellId, row: rowIndex, col: colIndex });
-    const current = pos ? dataRef.current[pos.row][pos.col].text : '';
-    if (!shouldWriteEditorHtml({
-      nextHtml: value,
-      storeHtml: current,
-      isAuthoritative: source === 'blur',
-    })) {
-      draftRef.current = null;
-      scheduleCommit.cancel();
-      return;
-    }
-    draftRef.current = { cellId, row: rowIndex, col: colIndex, text: value };
-    flushDraftRef.current();
-  }, [scheduleCommit]);
+    if (!pos) return;
+    const next = dataRef.current.map((row, r) => r === pos.row ? row.map((cell, c) => c === pos.col ? { ...cell, text: value, textFormat: 'html' as const } : cell) : row);
+    writeGrid(next, ignoreHistory);
+  }, []);
 
-  const insertExcelData = (excel: string[][], rowIndex: number, colIndex: number) => {
+  const insertExcelData = (excel: string[][], rowIndex: number, colIndex: number, rich = false) => {
     const base = takeCommittedGrid();
     const extraCols = Math.max(0, colIndex + (excel[0]?.length ?? 0) - (base[0]?.length ?? 0));
     const next = applyExcelPaste(base, rowIndex, colIndex, excel, createEmptyCell);
+    for (let r = 0; r < excel.length; r++) {
+      for (let c = 0; c < excel[r].length; c++) {
+        const cell = next[rowIndex + r][colIndex + c];
+        const doc = parseTableText({ ...cell, textFormat: rich ? 'html' : undefined });
+        const text = serializeTableText(doc);
+        next[rowIndex + r][colIndex + c] = { ...cell, textFormat: 'html', text };
+        const cached = sessions.get(cell.id);
+        if (cached) {
+          const state = cached.state.apply(closeHistory(cached.state.tr).replaceWith(0, cached.state.doc.content.size, doc.content));
+          sessions.set(cell.id, { ...cached, state: state.apply(closeHistory(state.tr)), value: text });
+        }
+      }
+    }
     if (extraCols) {
       const nextCols = [...colSizeListRef.current, ...new Array(extraCols).fill(100)];
       setColSizeList(nextCols);
@@ -700,7 +647,6 @@ const EditableTable = memo((props: IEditableTableProps) => {
     const rowIndex = +cellIndex.split('_')[0];
     const colIndex = +cellIndex.split('_')[1];
     if (!selectedCells.includes(`${rowIndex}_${colIndex}`)) {
-      flushDraft();
       setStartCell([rowIndex, colIndex]);
       setEndCell([]);
     }
@@ -737,8 +683,8 @@ const EditableTable = memo((props: IEditableTableProps) => {
 
   const insertExcelDataRef = useRef(insertExcelData);
   insertExcelDataRef.current = insertExcelData;
-  const onInsertExcel = useCallback((value: string[][], rowIndex: number, colIndex: number) => {
-    insertExcelDataRef.current(value, rowIndex, colIndex);
+  const onInsertExcel = useCallback((value: string[][], rowIndex: number, colIndex: number, rich = false) => {
+    insertExcelDataRef.current(value, rowIndex, colIndex, rich);
   }, []);
 
   return <div className={cx('editable-table')} data-live-table data-grid-rev={gridRev} style={{ width: totalWidth + 'px', height: paintRowHeight * data.length + 'px' }} onMouseDown={onMouseDown}>
@@ -767,6 +713,9 @@ const EditableTable = memo((props: IEditableTableProps) => {
       <colgroup>{colSizeList.map((colWidth, index) => <col span={1} key={index} width={colWidth} />)}</colgroup>
       <tbody>{tableCells.map((rowCells, rowIndex) => <tr key={rowIndex} style={{ height: paintRowHeight + 'px' }}>
         {rowCells.map((cell, colIndex) => <TableCellView
+          elementId={elementId}
+          sessions={sessions}
+          mathReady={mathIsReady}
           key={`${cell.id}:${rowIndex}_${colIndex}`}
           cell={cell}
           rowIndex={rowIndex}
@@ -780,7 +729,6 @@ const EditableTable = memo((props: IEditableTableProps) => {
           onMouseEnter={handleCellMouseenter}
           onContextMenu={handleCellContextMenu}
           onInput={handleInput}
-          onCommit={handleCommit}
           onInsertExcel={onInsertExcel}
         />)}
       </tr>)}</tbody>

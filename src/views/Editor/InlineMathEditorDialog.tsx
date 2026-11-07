@@ -67,6 +67,7 @@ const InlineMathEditorDialog = memo(() => {
     }
     emitter.emit(EmitterEvents.APPLY_INLINE_MATH, {
       elementId: target.elementId,
+      cellId: target.cellId,
       pos: target.pos,
       latex,
       html: renderMathToHtml(latex, target.display),

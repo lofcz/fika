@@ -1,6 +1,7 @@
 import type { Gradient, PPTElement, PPTElementOutline, PPTTableElement, Slide, SlideTheme } from '@/types/slides'
 import { frameClipPolygon, frameDescendantIds } from '@/utils/nestedFrames'
 import { paintRichText, type CanvasTextPaintOptions } from '@/paint/textPainter'
+import { tableTextHtml } from '@/paint/slidePainter'
 import { renderSlideImage } from '@/embed/render'
 import { getElementListRange, getLineElementRenderPath, getTableThemeColors } from '@/utils/element'
 import { imageClipPathData, imageClipKind, imageCornerRadius, outlineDashArray } from '@/utils/elementPaint'
@@ -158,8 +159,7 @@ export async function exportMynaSvg(target: MynaSvgTarget, options: MynaSvgOptio
       const edges = [[s.borderTopWidth, 0, 0, w, 0], [s.borderRightWidth, w, 0, w, h], [s.borderBottomWidth, 0, h, w, h], [s.borderLeftWidth, 0, 0, 0, h]]
       for (const [sw, x1, y1, x2, y2] of edges) chunks.push(`<path d="M${x1} ${y1}L${x2} ${y2}" ${outline({ ...e.outline, width: sw ?? e.outline?.width })}/>`)
       const key = id(); defs.push(`<clipPath id="${key}">${rect(w, h, '#fff')}</clipPath>`)
-      const css = `font-size:${s.fontsize || '14px'};color:${s.color || theme.fontColor};font-family:${s.fontname || theme.fontName};text-align:${s.align || 'left'};font-weight:${s.bold ? 'bold' : 'normal'};font-style:${s.em ? 'italic' : 'normal'};text-decoration:${s.underline ? 'underline' : ''} ${s.strikethrough ? 'line-through' : ''}`
-      chunks.push(`<g clip-path="url(#${key})">${vectorText({ html: `<p style="${xml(css)}">${xml(cell.text).replace(/\n/g, '<br>')}</p>`, x: 0, y: 0, width: w, height: h, defaultFontFamily: resolvePaintFontFamily(s.fontname || theme.fontName), defaultColor: s.color || theme.fontColor, defaultSize: parseFloat(s.fontsize || '14'), lineHeight: 1.45, paragraphSpace: 0, inset: [10, 14, 10, 14], vAlign: s.vAlign || 'middle', align: s.align || 'left' })}</g></g>`)
+      chunks.push(`<g clip-path="url(#${key})">${vectorText({ html: tableTextHtml(cell.text, cell.style, theme.fontColor, cell.textFormat), x: 0, y: 0, width: w, height: h, defaultFontFamily: resolvePaintFontFamily(s.fontname || theme.fontName), defaultColor: s.color || theme.fontColor, defaultSize: parseFloat(s.fontsize || '14'), lineHeight: 1.45, paragraphSpace: 0, inset: [10, 14, 10, 14], vAlign: s.vAlign || 'middle', align: s.align || 'left' })}</g></g>`)
       left += cw
     }}
     return chunks.join('')

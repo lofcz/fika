@@ -85,11 +85,8 @@ assert(editor.includes('persistLiveEditor();'), 'teardown reuses the same persis
 assert(editor.includes('resolveEditorMountHtml'), 'Activity remounts initialize from store-owned HTML')
 assert(!/handleInputRef\.current\.cancel\(\)/.test(editor), 'pending typed HTML is never dropped on hide')
 
-const table = read('src/views/components/element/TableElement/EditableTable.tsx')
-assert(table.includes('registerCommitFlusher(persistDraft)'), 'table drafts register one persist helper')
-assert(table.includes('persistDraft()'), 'table unmount reuses the same persist helper')
-assert(table.includes('setGridRev'), 'table commits refresh the live cell value')
-assert(table.includes('shouldWriteEditorHtml'), 'table unmount cannot wipe authored cell text')
+// Table cells now commit each document transaction; their lifecycle and external
+// replacement behavior are covered by e2e-table-rich-text rather than draft hooks.
 
 const tableStyle = read('src/utils/tableCellStyle.ts')
 assert(tableStyle.includes('export function applyTableCellStyles'), 'cell styles go through one writer')

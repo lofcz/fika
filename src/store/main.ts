@@ -222,11 +222,11 @@ export const useMainStore = create<MainStore>()((set, get) => ({
     const handleElementId = activeElementIdList.length === 1 ? activeElementIdList[0] : ''
     const prev = get()
     if (prev.handleElementId === handleElementId && sameIdList(prev.activeElementIdList, activeElementIdList)) return
-    set({ handleElementId, activeElementIdList })
+    set({ handleElementId, activeElementIdList, ...(prev.handleElementId !== handleElementId ? { selectedTableCells: [] } : {}) })
   },
   setHandleElementId(handleElementId) {
     if (get().handleElementId === handleElementId) return
-    set({ handleElementId })
+    set({ handleElementId, selectedTableCells: [] })
   },
   setActiveGroupElementId(activeGroupElementId) {
     set({ activeGroupElementId })

@@ -1,6 +1,7 @@
 import type { PPTElementOutline, TableCellStyle } from '@/types/slides';
 import { containsMath, tokenizeMath } from '@/utils/markdown';
 import { ensureMathliveReady, mathReady, renderMathToHtml } from '@/utils/math';
+import { parseTableText, serializeTableText } from '@/utils/prosemirror/table';
 
 /**
  * Compute table cell box styles from outline and optional cell style. The
@@ -24,8 +25,7 @@ export const getCellStyle = (outline: PPTElementOutline, style?: TableCellStyle)
 /**
  * Compute table cell text layout styles from optional cell style.
  */
-export const getTextStyle = (_cellMinHeight: number, style?: TableCellStyle): any => {
-  if (!style) return {};
+export const getTextStyle = (_cellMinHeight: number, style?: TableCellStyle, rich = false): any => {
   const {
     bold,
     em,
@@ -35,15 +35,15 @@ export const getTextStyle = (_cellMinHeight: number, style?: TableCellStyle): an
     fontsize,
     fontname,
     align
-  } = style;
+  } = style || {};
   let textDecoration = `${underline ? 'underline' : ''} ${strikethrough ? 'line-through' : ''}`;
   if (textDecoration === ' ') textDecoration = 'none';
   return {
-    ...(bold !== undefined ? {
-      fontWeight: bold ? 600 : 'normal'
+    ...(bold !== undefined || rich ? {
+      fontWeight: !rich && bold ? 600 : 'normal'
     } : {}),
-    fontStyle: em ? 'italic' : 'normal',
-    textDecoration,
+    fontStyle: !rich && em ? 'italic' : 'normal',
+    textDecoration: rich ? 'none' : textDecoration,
     color: color || '#000',
     fontSize: fontsize || '14px',
     fontFamily: fontname || '',
@@ -65,8 +65,9 @@ export const escapeCellText = (text: string) => text
  * MathLive finishes loading (kicked off lazily here on first math encounter);
  * until then math segments fall back to their literal LaTeX source.
  */
-export const formatText = (text: string) => {
+export const formatText = (text: string, textFormat?: 'html') => {
   if (!text) return '';
+  if (textFormat === 'html') return serializeTableText(parseTableText({ text, textFormat }), true);
   if (!containsMath(text)) return escapeCellText(text);
   if (!mathReady.value) void ensureMathliveReady();
   return tokenizeMath(text).map(segment => segment.type === 'math' ? renderMathToHtml(segment.value, segment.display) : escapeCellText(segment.value)).join('');

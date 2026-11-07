@@ -2,5 +2,6 @@
   border: 0;
   white-space: pre-wrap;
   outline: 0;
-  -webkit-user-modify: read-write-plaintext-only;
+  min-width: 0;
+  p { margin: 0; }
 }

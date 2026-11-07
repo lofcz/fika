@@ -1,4 +1,4 @@
-import { tableCellExportFill, tableCellExportText } from '@/utils/tableExport';
+import { richTableCellExportText, tableCellExportFill, tableCellExportText } from '@/utils/tableExport';
 
 import { useEffect, useState } from 'react'
 import { saveAs } from 'file-saver';
@@ -1931,13 +1931,13 @@ export function createPresentationExporter(
                   const cellOptions: pptxgen.TableCellProps = {
                     colspan: cell.colspan,
                     rowspan: cell.rowspan,
-                    bold: cell.style?.bold || false,
-                    italic: cell.style?.em || false,
+                    bold: cell.textFormat !== 'html' && (cell.style?.bold || false),
+                    italic: cell.textFormat !== 'html' && (cell.style?.em || false),
                     underline: {
-                      style: cell.style?.underline ? 'sng' : 'none'
+                      style: cell.textFormat !== 'html' && cell.style?.underline ? 'sng' : 'none'
                     },
                     align: cell.style?.align || 'left',
-                    valign: 'middle',
+                    valign: cell.style?.vAlign || 'top',
                     fontFace: cell.style?.fontname || pptxDefaultFontFace(),
                     fontSize: (cell.style?.fontsize ? parseFloat(cell.style.fontsize) * (/pt$/i.test(cell.style.fontsize) ? 4 / 3 : 1) : 14) / ratioPx2Pt
                   };
@@ -1961,8 +1961,13 @@ export function createPresentationExporter(
                   }
                   if (cell.style?.color) cellOptions.color = formatColor(cell.style.color).color;
                   if (!hiddenCells.includes(`${i}_${j}`)) {
+                    const text = cell.textFormat === 'html'
+                      ? richTableCellExportText(cell, { color: cellOptions.color as string | undefined, fontSizePt: cellOptions.fontSize }, ratioPx2Pt)
+                      : tableCellExportText(cell.text, { color: cellOptions.color as string | undefined, fontSizePt: cellOptions.fontSize });
                     _row.push({
-                      text: tableCellExportText(cell.text, { color: cellOptions.color as string | undefined, fontSizePt: cellOptions.fontSize }),
+                      // Resolve inheritance before handing runs to the writer: an omitted
+                      // alignment next to an inherited one must not create a new paragraph.
+                      text: typeof text === 'string' ? text : text.map(run => ({ ...run, options: { ...run.options, align: run.options?.align || cellOptions.align } })),
                       options: cellOptions
                     });
                   }

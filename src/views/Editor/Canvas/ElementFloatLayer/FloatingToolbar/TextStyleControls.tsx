@@ -12,13 +12,16 @@ import Select from '@/components/Select'
 import Popover from '@/components/Popover'
 import ColorPicker from '@/components/ColorPicker/index'
 import { useI18nContext } from '@/i18n/useI18nContext'
+import type { TableTextAttrs } from '@/utils/prosemirror/table'
 
-const TextStyleControls = memo(() => {
+const TextStyleControls = memo((props: { attrs?: TableTextAttrs; onCommand?: (command: string, value?: string) => void } = {}) => {
   const { LL } = useI18nContext()
   const fonts = useFonts()
-  const richTextAttrs = useMainStore(s => s.richTextAttrs)
+  const storeAttrs = useMainStore(s => s.richTextAttrs)
+  const richTextAttrs = props.attrs || storeAttrs
 
   const emitRichTextCommand = (command: string, value?: string) => {
+    if (props.onCommand) return props.onCommand(command, value)
     emitter.emit(EmitterEvents.RICH_TEXT_COMMAND, { action: { command, value } })
   }
 
@@ -62,16 +65,19 @@ const TextStyleControls = memo(() => {
       </Popover>
       <button
         className={cx('toolbar-btn', { active: richTextAttrs.bold })}
+        aria-label={LL.editor.stylePanel.table.bold()}
         onMouseDown={event => { event.preventDefault() }}
         onClick={() => emitRichTextCommand('bold')}
       ><Icon icon="bold" /></button>
       <button
         className={cx('toolbar-btn', { active: richTextAttrs.em })}
+        aria-label={LL.editor.stylePanel.table.italic()}
         onMouseDown={event => { event.preventDefault() }}
         onClick={() => emitRichTextCommand('em')}
       ><Icon icon="italic" /></button>
       <button
         className={cx('toolbar-btn', { active: richTextAttrs.underline })}
+        aria-label={LL.editor.stylePanel.table.underline()}
         onMouseDown={event => { event.preventDefault() }}
         onClick={() => emitRichTextCommand('underline')}
       ><Icon icon="underline" /></button>

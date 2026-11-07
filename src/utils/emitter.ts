@@ -1,7 +1,9 @@
 import mitt, { type Emitter } from 'mitt';
+import type { TableTextAttrs } from './prosemirror/table';
 export const enum EmitterEvents {
   RICH_TEXT_COMMAND = 'RICH_TEXT_COMMAND',
   TABLE_COMMAND = 'TABLE_COMMAND',
+  TABLE_TEXT_ATTRS = 'TABLE_TEXT_ATTRS',
   SYNC_RICH_TEXT_ATTRS_TO_STORE = 'SYNC_RICH_TEXT_ATTRS_TO_STORE',
   OPEN_CHART_DATA_EDITOR = 'OPEN_CHART_DATA_EDITOR',
   OPEN_LATEX_EDITOR = 'OPEN_LATEX_EDITOR',
@@ -27,6 +29,7 @@ export interface TableCommand {
 /** Request to open the inline-math (MathLive) editor for a math node in a text element. */
 export interface OpenInlineMathPayload {
   elementId: string;
+  cellId?: string;
   /** Document position immediately before the math node (for `setNodeMarkup`). */
   pos: number;
   latex: string;
@@ -36,6 +39,7 @@ export interface OpenInlineMathPayload {
 /** Result of editing an inline-math node, applied back to its text element. */
 export interface ApplyInlineMathPayload {
   elementId: string;
+  cellId?: string;
   pos: number;
   latex: string;
   html: string;
@@ -44,6 +48,7 @@ export interface ApplyInlineMathPayload {
 type Events = {
   [EmitterEvents.RICH_TEXT_COMMAND]: RichTextCommand;
   [EmitterEvents.TABLE_COMMAND]: TableCommand;
+  [EmitterEvents.TABLE_TEXT_ATTRS]: { elementId: string; attrs: TableTextAttrs };
   [EmitterEvents.SYNC_RICH_TEXT_ATTRS_TO_STORE]: void;
   [EmitterEvents.OPEN_CHART_DATA_EDITOR]: void;
   [EmitterEvents.OPEN_LATEX_EDITOR]: void;

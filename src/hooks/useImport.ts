@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { parseTableText, serializeTableText } from '@/utils/prosemirror/table';
 import { parse, type Shape, type Element, type ChartItem, type BaseElement } from 'pptxtojson';
 import { nanoid } from 'nanoid';
 import tinycolor from 'tinycolor2';
@@ -1077,12 +1078,6 @@ export function getImportApi() {
                     const cellData = el.data[i][j];
                     let textDiv: HTMLDivElement | null = document.createElement('div');
                     textDiv.innerHTML = cellData.text;
-                    for (const mathSpan of Array.from(textDiv.querySelectorAll('span.omml-math'))) {
-                      const latex = normalizeImportedLatex(
-                        (mathSpan.getAttribute('data-latex') || mathSpan.textContent || '').trim()
-                      );
-                      mathSpan.replaceWith(document.createTextNode(latex ? `$${latex}$` : ''));
-                    }
                     const p = textDiv.querySelector('p');
                     const align = p?.style.textAlign || 'left';
                     const span = textDiv.querySelector('span');
@@ -1099,7 +1094,8 @@ export function getImportApi() {
                       id: nanoid(10),
                       colspan: cellData.colSpan || 1,
                       rowspan: cellData.rowSpan || 1,
-                      text: textDiv.innerText,
+                      textFormat: 'html',
+                      text: serializeTableText(parseTableText({ textFormat: 'html', text: `${cellData.fontBold ? '<strong>' : ''}${convertTextContent(cellData.text, ratio)}${cellData.fontBold ? '</strong>' : ''}` })),
                       style: {
                         ...style,
                         vAlign: vAlignMap[cellData.vAlign] || 'middle',

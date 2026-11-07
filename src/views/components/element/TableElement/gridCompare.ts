@@ -62,7 +62,7 @@ export const tableGridTextEqual = (a: TableCell[][], b: TableCell[][]) => {
     const rowB = b[i]
     if (rowA.length !== rowB.length) return false
     for (let j = 0; j < rowA.length; j++) {
-      if (rowA[j].text !== rowB[j].text) return false
+      if (rowA[j].text !== rowB[j].text || rowA[j].textFormat !== rowB[j].textFormat) return false
     }
   }
   return true
@@ -84,7 +84,7 @@ export const areTableCellViewEqual = (
   const b = next.cell
   if (a.id !== b.id || a.rowspan !== b.rowspan || a.colspan !== b.colspan) return false
   if (a.style !== b.style && !styleEqual(a.style, b.style)) return false
-  return a.text === b.text
+  return a.text === b.text && a.textFormat === b.textFormat
 }
 
 export const areTableElementInfosEqual = (a: PPTTableElement, b: PPTTableElement) => {

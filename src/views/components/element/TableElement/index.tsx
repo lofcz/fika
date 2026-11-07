@@ -46,7 +46,6 @@ const TableElement = memo((props: ITableElementProps) => {
   useEffect(() => {
     if (handleElementId === props.elementInfo.id) return
     if (useMainStore.getState().editingElementId === props.elementInfo.id) drainCommitQueue()
-    if (useMainStore.getState().selectedTableCells.length) useMainStore.getState().setSelectedTableCells([])
   }, [handleElementId, props.elementInfo.id]);
   useEffect(() => {
     useMainStore.getState().setDisableHotkeysState(editable);
@@ -124,13 +123,13 @@ const TableElement = memo((props: ITableElementProps) => {
     syncHeightToTable();
   }, [syncHeightToTable, elementInfo.height, elementInfo.cellMinHeight, elementInfo.data]);
 
-  const updateTableCells = useCallback((data: TableCell[][]) => {
+  const updateTableCells = useCallback((data: TableCell[][], ignoreHistory = false) => {
     rememberTableCellWrite(elementIdRef.current, data);
     useSlidesStore.getState().updateElement({
       id: elementIdRef.current,
       props: { data }
     });
-    addHistorySnapshot();
+    if (!ignoreHistory) addHistorySnapshot();
   }, [addHistorySnapshot]);
 
   const updateColWidths = useCallback((widths: number[]) => {
@@ -144,6 +143,7 @@ const TableElement = memo((props: ITableElementProps) => {
   }, [addHistorySnapshot]);
 
   const updateSelectedCells = useCallback((cells: string[]) => {
+    if (useMainStore.getState().handleElementId !== elementIdRef.current) return;
     rememberTableStyleTarget(elementIdRef.current, cells);
     useMainStore.getState().setSelectedTableCells(cells);
   }, []);

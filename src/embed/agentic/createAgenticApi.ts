@@ -2,6 +2,9 @@ import { canvasOperationCommand } from './canvasOperations';
 import type { FikaCanvasOperation, FikaCanvasApplyResult } from './types';
 import { summarizeCanvas } from './canvasContext';
 import { resizeDeckSlides } from '@/utils/resizeDeck';
+import { getHiddenTableCells } from '@/utils/tableHiddenCells';
+import { getSearchHtmlText, replaceSearchHtmlRanges } from '@/utils/searchText';
+import { updateTableCellTextAttrs } from '@/utils/prosemirror/table';
 import { listFikaDesignThemes, getFikaDesignTheme } from '@/configs/designThemes';
 import { applyDesignTheme } from '@/utils/applyDesignTheme';
 import { getAttentionAnimations, getEnterAnimations, getExitAnimations, getSlideAnimations, SLIDE_ANIMATIONS } from '@/configs/animation';
@@ -3224,7 +3227,8 @@ export function createAgenticApi(options: {
     const col = assertIndexInRange(payload.col, data[row]?.length || 0, 'col');
     data[row][col] = {
       ...data[row][col],
-      ...payload.patch
+      ...payload.patch,
+      ...(payload.patch.text !== undefined ? { textFormat: payload.patch.textFormat } : {}),
     };
     return updateElementAt(stores, found.slideIndex, found.elementIndex, {
       data,
@@ -3245,10 +3249,10 @@ export function createAgenticApi(options: {
     } = normalizeTableShape(found.element, clonePlain(found.element.data));
     const row = assertIndexInRange(payload.row, data.length, 'row');
     const col = assertIndexInRange(payload.col, data[row]?.length || 0, 'col');
-    data[row][col].style = {
-      ...(data[row][col].style || {}),
-      ...payload.style
-    };
+    const cell = data[row][col];
+    const hasTextStyle = ['bold', 'em', 'underline', 'strikethrough', 'color', 'fontsize', 'fontname', 'align'].some(key => key in payload.style);
+    data[row][col] = hasTextStyle ? updateTableCellTextAttrs(cell, payload.style) : cell;
+    data[row][col].style = { ...data[row][col].style, ...payload.style };
     return updateElementAt(stores, found.slideIndex, found.elementIndex, {
       data,
       colWidths
@@ -4306,8 +4310,10 @@ export function createAgenticApi(options: {
             path: 'text.content'
           }));
         } else if (element.type === 'table') {
+          const hidden = new Set(getHiddenTableCells(element.data));
           element.data.forEach((row, rowIndex) => row.forEach((cell, colIndex) => {
-            results.push(...findTextMatches(cell.text, pattern, {
+            if (hidden.has(`${rowIndex}_${colIndex}`)) return;
+            results.push(...findTextMatches(cell.textFormat === 'html' ? getSearchHtmlText(cell.text) : cell.text, pattern, {
               slideId: slide.id,
               elementId: element.id,
               elementType: element.type,
@@ -4354,15 +4360,24 @@ export function createAgenticApi(options: {
             path: 'text.content'
           });
         } else if (element.type === 'table') {
+          const hidden = new Set(getHiddenTableCells(element.data));
           element.data.forEach((row, rowIndex) => row.forEach((cell, colIndex) => {
-            cell.text = replace(cell.text, {
+            if (hidden.has(`${rowIndex}_${colIndex}`)) return;
+            const base = {
               slideId: slide.id,
               elementId: element.id,
               elementType: element.type,
               path: `data.${rowIndex}.${colIndex}.text`,
               row: rowIndex,
               col: colIndex
-            });
+            };
+            if (cell.textFormat === 'html') {
+              const matches = findTextMatches(getSearchHtmlText(cell.text), pattern, base);
+              const selected = payload.options?.replaceAll ? matches : results.length ? [] : matches.slice(0, 1);
+              cell.text = replaceSearchHtmlRanges(cell.text, selected.map(match => ({ start: match.start!, end: match.end! })), payload.replacement);
+              results.push(...selected);
+            }
+            else cell.text = replace(cell.text, base);
           }));
         }
       }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
+import { tableCellText } from './lib/table-cell-text.mjs'
 
 const browser = await chromium.launch({ headless: true })
 try {
@@ -38,7 +39,7 @@ try {
     if (mode === 'plain') {
       await active.fill('Edited cell')
       await navigate('Tab', '0_1')
-      assert.equal((await grid())[0][0].text, 'Edited cell', 'Tab commits the pending cell draft')
+      assert.equal(tableCellText((await grid())[0][0]), 'Edited cell', 'Tab commits the cell document')
       await navigate('Tab', '1_0')
       await navigate('Shift+Tab', '0_1')
       await navigate('Shift+Tab', '0_0')
@@ -72,7 +73,7 @@ try {
   }
   await active.fill('Merged draft')
   await arrow('ArrowRight', '0_2')
-  assert.equal((await grid())[0][0].text, 'Merged draft', 'Arrow navigation commits the pending draft')
+  assert.equal(tableCellText((await grid())[0][0]), 'Merged draft', 'Arrow navigation preserves the cell document')
   await arrow('ArrowDown', '1_2')
   await arrow('ArrowLeft', '0_0')
   await arrow('ArrowDown', '2_0')

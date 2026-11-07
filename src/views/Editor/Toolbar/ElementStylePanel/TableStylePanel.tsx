@@ -8,6 +8,7 @@ import { useI18nContext } from '@/i18n/useI18nContext'
 import { useMainStore, useSlidesStore } from '@/store'
 import { applyTableCellStyles } from '@/utils/tableCellStyle'
 import { tableStyleTarget } from '@/utils/tableStyleTarget'
+import { getTableEditor } from '@/utils/prosemirror/tableEditor'
 import { shallowEqual, useHandleElementId, useHandleElementSelect } from '../common/handleElement'
 import type { PPTTableElement, TableCellStyle, TableTheme } from '@/types/slides'
 import { FONT_SIZE_PX_OPTIONS, useFonts } from '@/configs/font'
@@ -100,7 +101,17 @@ const TableStylePanel = memo(() => {
 
   useEffect(() => {
     updateTextAttrState()
+    const editor = selectedCells.length === 1 ? getTableEditor(handleElementId) : undefined
+    if (editor) setTextAttrs(prev => ({ ...prev, ...editor.getAttrs() }))
   }, [tableStyle, selectedCells])
+
+  useEffect(() => {
+    const update = (payload: { elementId: string; attrs: Partial<TableCellStyle> }) => {
+      if (payload.elementId === handleElementId) setTextAttrs(prev => ({ ...prev, ...payload.attrs }))
+    }
+    emitter.on(EmitterEvents.TABLE_TEXT_ATTRS, update)
+    return () => emitter.off(EmitterEvents.TABLE_TEXT_ATTRS, update)
+  }, [handleElementId])
 
   const updateElement = (props: Partial<PPTTableElement>) => {
     useSlidesStore.getState().updateElement({ id: handleElementId, props })

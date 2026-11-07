@@ -3,6 +3,8 @@ import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import type { TableCell, TableCellStyle } from '@/types/slides'
 import { flushCommitQueue } from '@/utils/commitQueue'
 import { rememberTableStyleTarget, tableStyleTarget } from '@/utils/tableStyleTarget'
+import { updateTableCellTextAttrs, type TableTextAttrs } from '@/utils/prosemirror/table'
+import { getTableEditor } from '@/utils/prosemirror/tableEditor'
 
 export { rememberTableStyleTarget, tableStyleTarget } from '@/utils/tableStyleTarget'
 
@@ -24,6 +26,7 @@ export function applyTableCellStyles(
     cells?: string[]
     allCells?: boolean
     history?: boolean
+    clearText?: boolean
   },
 ) {
   flushCommitQueue()
@@ -32,16 +35,33 @@ export function applyTableCellStyles(
   if (!elementId) return false
   const slide = selectCurrentSlide(useSlidesStore.getState())
   const el = slide?.elements.find(item => item.id === elementId)
-  if (!el || el.type !== 'table') return false
+  if (!el || el.type !== 'table' || el.lock || main.readOnly) return false
   const cells = options?.allCells ? [] : tableStyleTarget(elementId, options?.cells ?? main.selectedTableCells)
   if (cells.length) rememberTableStyleTarget(elementId, cells)
   const data = cloneGrid(el.data)
+  const textAttrs: TableTextAttrs = options?.clearText ? { clear: true } : {}
+  const boxStyle = { ...style }
+  for (const key of ['bold', 'em', 'underline', 'strikethrough', 'color', 'fontsize', 'fontname', 'align'] as const) {
+    if (style[key] !== undefined) Object.assign(textAttrs, { [key]: style[key] })
+    delete boxStyle[key]
+  }
+  const hasTextAttrs = Object.keys(textAttrs).length > 0
+  const editor = !options?.allCells && cells.length === 1 ? getTableEditor(elementId) : undefined
   let wrote = false
   for (let i = 0; i < data.length; i++) {
     for (let j = 0; j < data[i].length; j++) {
       if (cells.length && !cells.includes(cellKey(i, j))) continue
-      const prev = data[i][j].style || {}
-      data[i][j].style = { ...prev, ...style }
+      let cell = data[i][j]
+      if (hasTextAttrs) {
+        if (editor?.cellId === cell.id) {
+          const result = editor.applyAttrs(textAttrs)
+          if (!result) continue
+          const { clear: _clear, ...defaults } = textAttrs
+          cell = { ...cell, text: result.text, textFormat: 'html', style: { ...cell.style, ...(result.wholeCell ? defaults : {}) } }
+        }
+        else cell = updateTableCellTextAttrs(cell, textAttrs)
+      }
+      data[i][j] = { ...cell, style: { ...cell.style, ...boxStyle } }
       wrote = true
     }
   }

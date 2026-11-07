@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
+import { tableCellText } from './lib/table-cell-text.mjs'
 import { ensureDevServer } from './lib/dev-server.mjs'
 
 const { url, child } = await ensureDevServer()
@@ -42,7 +43,7 @@ try {
       const rendered = page.locator('#editable-element-clipboard-table [data-cell-index="0_0"] .cell-text')
       assert.equal(await rendered.textContent(), '<b>literal</b>', 'Literal cell text remains correct after leaving edit mode')
     }
-    const grid = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data.map(row => row.map(c => c.text)))
+    const grid = (await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data)).map(row => row.map(tableCellText))
     assert.deepEqual(grid, expected, 'Spreadsheet cells preserve rows and literal text')
     assert.deepEqual(errors, [])
     if (text.startsWith('<b>') || expected[0][0].includes('\n')) {
@@ -53,7 +54,7 @@ try {
       await page.keyboard.press('Control+End')
       await page.keyboard.insertText(' & < >')
       await page.locator('.viewport-wrapper').first().click({ position: { x: 10, y: 10 } })
-      assert.equal(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data[0][0].text), expected[0][0] + ' & < >', 'Typing commits plain text without HTML encoding')
+      assert.equal(tableCellText(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data[0][0])), expected[0][0] + ' & < >', 'Typing preserves literal text in the rich cell document')
     }
     console.log(`PASS spreadsheet paste ${JSON.stringify(text)}`)
   }
@@ -75,21 +76,21 @@ try {
   await page.waitForTimeout(300)
   assert.deepEqual(errors, [], 'Ragged HTML tables must not crash paste')
   await page.locator('.viewport-wrapper').first().click({ position: { x: 10, y: 10 } })
-  assert.deepEqual(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data.map(row => row.map(c => c.text))), [['A', 'B'], ['C', '']], 'Missing HTML cells are padded with empty text')
+  assert.deepEqual((await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data)).map(row => row.map(tableCellText)), [['A', 'B'], ['C', '']], 'Missing HTML cells are padded with empty text')
   await page.mouse.dblclick(tablePoint.x, tablePoint.y)
   await page.locator('#editable-element-clipboard-table .custom-textarea').first().focus()
   await page.evaluate(() => navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob(['<table><tr><td rowspan="2">Merged</td><td>Top</td></tr><tr><td>Bottom</td></tr></table>'], { type: 'text/html' }) })]))
   await page.keyboard.press('Control+v')
   await page.waitForTimeout(300)
   await page.locator('.viewport-wrapper').first().click({ position: { x: 10, y: 10 } })
-  assert.deepEqual(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data.map(row => row.map(c => c.text))), [['Merged', 'Top'], ['Merged', 'Bottom']], 'Vertical merged cells preserve the columns below them')
+  assert.deepEqual((await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data)).map(row => row.map(tableCellText)), [['Merged', 'Top'], ['Merged', 'Bottom']], 'Vertical merged cells preserve the columns below them')
   await page.mouse.dblclick(tablePoint.x, tablePoint.y)
   await page.locator('#editable-element-clipboard-table .custom-textarea').first().focus()
   await page.evaluate(() => navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob(['<table><tr><td>First<br>second &amp; third</td><td><div>Top</div><div>Bottom</div></td></tr></table>'], { type: 'text/html' }) })]))
   await page.keyboard.press('Control+v')
   await page.waitForTimeout(300)
   await page.locator('.viewport-wrapper').first().click({ position: { x: 10, y: 10 } })
-  assert.deepEqual(await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data[0].map(c => c.text)), ['First\nsecond & third', 'Top\nBottom'], 'HTML spreadsheet cells preserve explicit and block line breaks')
+  assert.deepEqual((await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data[0])).map(tableCellText), ['First\nsecond & third', 'Top\nBottom'], 'HTML spreadsheet cells preserve explicit and block line breaks')
   assert.equal(await page.locator('#editable-element-clipboard-table [data-cell-index="0_0"] .cell-text').innerText(), 'First\nsecond & third', 'Pasted HTML line breaks remain visible after editing')
   assert.deepEqual(errors, [], 'HTML paste produces no browser errors')
   console.log('PASS HTML spreadsheet cell line breaks')

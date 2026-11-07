@@ -6,7 +6,7 @@ import { ensureMathliveReady, mathReady } from '@/utils/math'
 /** `formatText` reads the `mathReady` flag during render. */
 export default (cells: TableCell[][]) => {
   const needsMath = useMemo(() => (
-    cells.some(row => row.some(cell => containsMath(cell.text || '')))
+    cells.some(row => row.some(cell => containsMath(cell.text || '') || (cell.textFormat === 'html' && cell.text.includes('data-latex'))))
   ), [cells])
   const [ready, setReady] = useState(mathReady.value)
   useEffect(() => {

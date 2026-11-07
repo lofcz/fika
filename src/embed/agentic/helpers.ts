@@ -916,6 +916,7 @@ function normalizeTableCell(cell?: Partial<TableCell>, defaultStyle?: TableCellS
     colspan: cell?.colspan ?? 1,
     rowspan: cell?.rowspan ?? 1,
     text: cell?.text ?? '',
+    ...(cell?.textFormat === 'html' ? { textFormat: 'html' as const } : {}),
     ...(cell?.style ? {
       style: clonePlain(cell.style)
     } : defaultStyle ? {

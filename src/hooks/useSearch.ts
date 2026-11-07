@@ -75,7 +75,7 @@ export default () => {
             for (let j = 0; j < row.length; j++) {
               const cell = row[j];
               if (!cell.text || hidden.has(`${i}_${j}`)) continue;
-              const text = cell.text;
+              const text = cell.textFormat === 'html' ? getSearchHtmlText(cell.text) : cell.text;
               const rets = [...text.matchAll(matchRegex)];
               textList.push(...rets.map<SearchTableResult>(match => ({
                 offset: match.index,
@@ -215,7 +215,7 @@ export default () => {
     } else if (element.type === 'table' && target.elType === 'table') {
       const data = element.data.map((row, rowIndex) => row.map((cell, columnIndex) => (
         rowIndex === target.cellIndex[0] && columnIndex === target.cellIndex[1]
-          ? { ...cell, text: replacePlainTextMatches(cell.text, localIndex) }
+          ? { ...cell, text: cell.textFormat === 'html' ? replaceHtmlMatches(cell.text, localIndex) : replacePlainTextMatches(cell.text, localIndex) }
           : cell
       )));
       updateElement({ id: element.id, slideId: target.slideId, props: { data } });
@@ -281,7 +281,7 @@ export default () => {
             if (!cell.text || hidden.has(`${rowIndex}_${colIndex}`)) return cell;
             return {
               ...cell,
-              text: replacePlainTextMatches(cell.text)
+              text: cell.textFormat === 'html' ? replaceHtmlMatches(cell.text) : replacePlainTextMatches(cell.text)
             };
           });
         });

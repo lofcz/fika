@@ -166,6 +166,9 @@
     padding: 10px 14px;
     line-height: 1.45;
     display: block;
+    p { margin: 0; }
+    // Match the editor's final caret line without storing helper DOM.
+    &:not([contenteditable]) p::after { content: '\200b'; }
   }
 }
 

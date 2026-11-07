@@ -41,6 +41,7 @@ import { containsMath, tokenizeMath } from '@/utils/markdown'
 import { escapeLatexAttr } from '@/utils/math'
 import { SLIDE_SKELETON_BLOCKS, SLIDE_SKELETON_FILL, SLIDE_SKELETON_RADIUS } from '@/configs/slideSkeleton'
 import { paintRichText } from './textPainter'
+import { parseTableText, serializeTableText } from '@/utils/prosemirror/table'
 import { getChartRaster, getCodeRaster, getLatexRaster, getMermaidRaster } from './rasterResources'
 
 export type PaintSlideOptions = {
@@ -555,7 +556,8 @@ const tableCellInnerHtml = (text: string) => {
     .join('')
 }
 
-const tableTextHtml = (text: string, style: TableCellStyle | undefined, fallback: string) => {
+export const tableTextHtml = (text: string, style: TableCellStyle | undefined, fallback: string, textFormat?: 'html') => {
+  if (textFormat === 'html') return serializeTableText(parseTableText({ text, textFormat }))
   const decorations = [style?.underline ? 'underline' : '', style?.strikethrough ? 'line-through' : ''].filter(Boolean).join(' ')
   const css = [
     `font-size:${style?.fontsize || '14px'}`,
@@ -651,7 +653,7 @@ const paintTable = (
       ctx.rect(x, row * rowHeight, width, height)
       ctx.clip()
       paintRichText(ctx, {
-        html: tableTextHtml(cell.text || '', cell.style, theme.fontColor),
+        html: tableTextHtml(cell.text || '', cell.style, theme.fontColor, cell.textFormat),
         x,
         y: row * rowHeight,
         width,

@@ -51,6 +51,8 @@ try {
         [cell(String.raw`Obvod \(O\) a obsah \(S\)`), cell('Bez vzorca')],
         [cell(String.raw`\(a^2\)`), cell(String.raw`\(a \cdot v_a = \frac{e \cdot f}{2}\)`)],
         [cell(String.raw`Výška \(v_a\) a text za vzorcom.`), cell('Prvý riadok\n$90^\\circ$\nPosledný riadok')],
+        [{ ...cell('<p>Rich <strong>bold</strong> <em>italic</em> <span style="font-size:32px;color:#167438"><span class="fika-math" data-latex="x^2"></span></span> after</p><p></p><p>Last line</p>'), textFormat: 'html', style: { fontsize: '24px', color: '#2B3445', vAlign: 'bottom' } },
+          { ...cell('<p><u>underlined</u> <s>removed</s> H<sub>2</sub>O</p>'), textFormat: 'html' }],
       ],
     }] }] }
     const options = { assetBaseUrl: '/fika-assets', watermark: null }
@@ -65,10 +67,17 @@ try {
     const zip = await JSZip.loadAsync(bytes)
     const xml = await zip.file('ppt/slides/slide1.xml').async('string')
     const table = xml.match(/<a:tbl>[\s\S]*?<\/a:tbl>/)[0]
-    assert.equal((table.match(/<m:oMath[ >]/g) || []).length, 6)
+    const firstCell = table.match(/<a:tc>[\s\S]*?<\/a:tc>/)[0]
+    assert.equal((firstCell.match(/<a:p>/g) || []).length, 1, 'Inline equations and surrounding prose share one paragraph')
+    assert.equal((table.match(/<m:oMath[ >]/g) || []).length, 7)
     for (const tag of ['m:f', 'm:sSub', 'm:sSup']) assert.ok(table.includes(`<${tag}>`))
     for (const text of [' a obsah ', ' a text za vzorcom.', 'Prvý riadok', 'Posledný riadok', 'Bez vzorca']) assert.ok(table.includes(`<a:t>${text}</a:t>`))
     assert.doesNotMatch(table, /\\\(|\\frac|\$90/)
+    assert.match(table, /b="1"[^>]*>[\s\S]*?<a:t>bold<\/a:t>/)
+    assert.match(table, /i="1"[^>]*>[\s\S]*?<a:t>italic<\/a:t>/)
+    assert.match(table, /sz="1800"[^>]*>[\s\S]*?val="167438"/)
+    assert.ok(table.includes('anchor="b"'), 'Cell vertical alignment is exported')
+    assert.ok(table.includes('<a:t>Last line</a:t>'))
   }
   await verify(Uint8Array.from(output))
   await page.locator('[data-editor-tool="export"]').click()
@@ -76,8 +85,53 @@ try {
   await page.locator('[data-export-format="pptx"]').click()
   await verify(await readFile(await (await download).path()))
   assert.equal(await page.evaluate(() => window.tableProofSource() === window.tableProofBefore), true, 'export never mutates stored cell text')
+  const imported = await page.evaluate(async bytes => {
+    await window.tableProofController.importPptx(new Uint8Array(bytes).buffer)
+    return window.tableProofController.getDocument().slides.flatMap(slide => slide.elements.filter(el => el.type === 'table'))
+  }, output)
+  assert.equal(imported.length, 1)
+  const importedCells = imported[0].data.flat()
+  assert.ok(importedCells.every(cell => cell.textFormat === 'html'))
+  const rich = importedCells.find(cell => cell.text.includes('Last line'))
+  assert.ok(rich, 'Rich cell survives native PowerPoint import')
+  const importedStyle = await page.evaluate(html => {
+    const el = document.createElement('div')
+    el.innerHTML = html
+    return { bold: el.querySelector('strong')?.textContent, italic: el.querySelector('em')?.textContent }
+  }, rich.text)
+  assert.equal(importedStyle.bold, 'bold')
+  assert.equal(importedStyle.italic, 'italic')
+  assert.match(rich.text, /data-latex=/)
+  const apiProof = await page.evaluate(async () => {
+    const api = window.tableProofController
+    const table = () => api.getDocument().slides.flatMap(slide => slide.elements).find(el => el.type === 'table')
+    const id = table().id
+    const source = '<p><strong>Pri<em>ce</em></strong> <span class="fika-math" data-latex="secret_x"></span> Price</p>'
+    const check = result => { if (!result.ok) throw new Error(JSON.stringify(result)); return result.data }
+    check(await api.tables.setCell(id, 0, 0, { text: source, textFormat: 'html' }))
+    const count = check(await api.search.find('Price')).count
+    const sourceCount = check(await api.search.find('secret_x')).count
+    const replaced = check(await api.search.replace('Price', '<i>&', { replaceAll: true })).count
+    const html = table().data[0][0].text
+    check(await api.history.undo())
+    const undo = table().data[0][0].text
+    check(await api.tables.setCellStyle(id, 0, 0, { color: '#123456', bold: false }))
+    const styled = table().data[0][0].text
+    check(await api.tables.setCell(id, 0, 0, { text: '<b>literal</b>' }))
+    return { count, sourceCount, replaced, html, undo, source, styled, plain: table().data[0][0] }
+  })
+  assert.equal(apiProof.count, 2, 'Search matches visible text across inline marks')
+  assert.equal(apiProof.sourceCount, 0, 'Search excludes equation source and HTML attributes')
+  assert.equal(apiProof.replaced, 2)
+  assert.match(apiProof.html, /<strong>&lt;i&gt;&amp;/)
+  assert.match(apiProof.html, /data-latex="secret_x"/)
+  assert.equal(apiProof.undo, apiProof.source)
+  assert.doesNotMatch(apiProof.styled, /<strong>/)
+  assert.match(apiProof.styled, /color: rgb\(18, 52, 86\)/)
+  assert.equal(apiProof.plain.textFormat, undefined, 'Replacing cell text without a format restores literal plain text')
+  assert.equal(apiProof.plain.text, '<b>literal</b>')
   assert.deepEqual(errors, [])
-  console.log('PASS table equations: native math, surrounding text, line breaks, archive API and editor download; source unchanged.')
+  console.log('PASS table rich text: native math, formatting and line breaks through PPTX export/import, source unchanged, API search/replacement/styles and plain-text compatibility.')
 } finally {
   await browser.close()
   await new Promise(resolve => server.close(resolve))

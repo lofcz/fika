@@ -59,7 +59,7 @@ const StaticTable = memo((props: IStaticTableProps) => {
           rowSpan={cell.rowspan}
           colSpan={cell.colspan}
         >
-          <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style)} dangerouslySetInnerHTML={{ __html: formatText(cell.text) }} />
+          <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style, cell.textFormat === 'html')} dangerouslySetInnerHTML={{ __html: formatText(cell.text, cell.textFormat) }} />
         </td>)}
       </tr>)}</tbody>
     </table>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@rstest/core'
 import PptxGen from 'pptxgenjs-plus'
-import { JSZip } from '@node-projects/jszip'
+import JSZip from 'jszip'
 import { tableCellExportFill } from '../src/utils/tableExport'
 import { getTableThemeColors } from '../src/utils/element'
 

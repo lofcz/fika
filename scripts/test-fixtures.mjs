@@ -107,6 +107,7 @@ export const e2eScripts = [
   'scripts/e2e-group-member-lock.mjs',
   'scripts/e2e-cut-clipboard.mjs',
   'scripts/e2e-table-clipboard.mjs',
+  'scripts/e2e-table-rich-text.mjs',
   'scripts/e2e-table-keyboard.mjs',
   'scripts/e2e-table-keyboard-scope.mjs',
   'scripts/e2e-table-insert-merge.mjs',

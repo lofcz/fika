@@ -43,7 +43,7 @@ function planTyped(element: PPTElement): TypedPlan | null {
     let units = 0
     element.data.forEach((row, r) => {
       row.forEach((cell, c) => {
-        const cellUnits = Math.max(1, revealUnits(cell.text))
+        const cellUnits = Math.max(1, cell.textFormat === 'html' ? revealUnits(cell.text) : cell.text.length)
         cells.push({ row: r, col: c, units: cellUnits })
         units += cellUnits
       })
@@ -111,8 +111,10 @@ function partialTable(plan: Extract<TypedPlan, { kind: 'table' }>, progress: num
       budget -= cell.units
       continue
     }
-    const text = plan.element.data[cell.row][cell.col].text
-    shown.set(key, budget > 0 ? revealPrefix(text, Math.floor(revealUnits(text) * (budget / cell.units))) : '')
+    const source = plan.element.data[cell.row][cell.col]
+    shown.set(key, budget > 0 ? (source.textFormat === 'html'
+      ? revealPrefix(source.text, Math.floor(budget))
+      : source.text.slice(0, Math.floor(budget))) : '')
     budget = 0
   }
   const data: TableCell[][] = plan.element.data.map((row, r) => row.map((cell, c) => ({ ...cell, text: shown.get(`${r}:${c}`) ?? '' })))

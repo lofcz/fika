@@ -114,12 +114,13 @@ export const setSlideTheme = (slide: Slide, theme: PresetTheme, index = 0, sourc
         if (el.theme) el.theme.color = getColor(el.theme.color);
         for (const rowCells of el.data) {
           for (const cell of rowCells) {
-            if (cell.style) {
-              if (roles && cell.style.backcolor) cell.style.backcolor = getColor(cell.style.backcolor);
-              cell.style.color = roles ? roles.ink(cell.style.backcolor ?? theme.background) : ink;
-              cell.style.fontname = theme.fontname;
-              if (roles) cell.text = retintInlineText(stripThemeInlineStyles(cell.text, { fontName: theme.fontname }), cell.style.backcolor ?? theme.background, roles.ink);
-            }
+            cell.style ||= {};
+            if (roles && cell.style.backcolor) cell.style.backcolor = getColor(cell.style.backcolor);
+            cell.style.color = roles ? roles.ink(cell.style.backcolor ?? theme.background) : ink;
+            cell.style.fontname = theme.fontname;
+            if (cell.textFormat === 'html') cell.text = roles
+              ? retintInlineText(stripThemeInlineStyles(cell.text, { fontName: theme.fontname }), cell.style.backcolor ?? theme.background, roles.ink)
+              : formatText(cell.text);
           }
         }
       }

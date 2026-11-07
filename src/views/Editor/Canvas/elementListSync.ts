@@ -1,5 +1,5 @@
 import type { PPTElement, Slide } from '@/types/slides'
-import { tableGridStructureEqual } from '@/views/components/element/TableElement/gridCompare'
+import { isTableCellHtmlEcho, tableGridStructureEqual } from '@/views/components/element/TableElement/gridCompare'
 
 const shallowChangedKeys = (prev: object, next: object): string[] => {
   const keys = new Set([...Object.keys(prev), ...Object.keys(next)])
@@ -23,7 +23,7 @@ const isShapeTextContentOnly = (prev: PPTElement, next: PPTElement): boolean => 
 export const isContentLikeKey = (key: string, prev: PPTElement, next: PPTElement): boolean => {
   if (key === 'content') return true
   if (key === 'data') {
-    if (prev.type === 'table' && next.type === 'table') return tableGridStructureEqual(prev.data, next.data)
+    if (prev.type === 'table' && next.type === 'table') return tableGridStructureEqual(prev.data, next.data) && isTableCellHtmlEcho(next.id, next.data)
     return true
   }
   if (key === 'text') return isShapeTextContentOnly(prev, next)

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
+import { tableCellText } from './lib/table-cell-text.mjs'
 
 const browser = await chromium.launch({ headless: true })
 const failures = []
@@ -49,7 +50,7 @@ try {
       await page.keyboard.insertText('Continued typing')
       await page.keyboard.press('Tab')
       const committed = await page.evaluate(() => window.__FIKA_SLIDES__.getState().slides[0].elements[0].data.flat())
-      assert.equal(committed.find(cell => cell.id === selectedId)?.text, 'Continued typing', 'Typing after insertion is committed to the active cell')
+      assert.equal(tableCellText(committed.find(cell => cell.id === selectedId)), 'Continued typing', 'Typing after insertion is committed to the active cell')
       console.log(`PASS insert ${axis} ${position} a merged region`)
     } catch (error) { failures.push(error.message); console.error(error.message) }
   }

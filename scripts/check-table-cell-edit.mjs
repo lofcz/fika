@@ -145,7 +145,6 @@ assert(indexSrc.includes('areTableElementInfosEqual'), 'TableElement memo ignore
 assert(editableSrc.includes('TableCellView'), 'cells are isolated in TableCellView')
 assert(editableSrc.includes('areTableCellViewEqual'), 'cells skip re-render when their HTML is unchanged')
 assert(editableSrc.includes('isTableCellHtmlEcho'), 'EditableTable does not rebuild on cell HTML echoes')
-assert(editableSrc.includes('isActive ? <CustomTextarea'), 'active cell keeps the CustomTextarea editor')
 const compareSrc = readFileSync(join(root, 'src/views/components/element/TableElement/gridCompare.ts'), 'utf8')
 assert(!compareSrc.includes('if (next.isActive) return true'), 'active editor still receives committed cell HTML')
 assert(compareSrc.includes('return a.text === b.text'), 'active and idle cells compare text the same way')
@@ -229,23 +228,7 @@ for (const [insert, span] of [[insertRowIntoGrid, 'rowspan'], [insertColIntoGrid
 }
 
 
-const textareaSrc = readFileSync(join(root, 'src/views/components/element/TableElement/CustomTextarea.tsx'), 'utf8')
-assert(textareaSrc.includes('onCommitValue'), 'CustomTextarea exposes an immediate commit callback')
-assert(textareaSrc.includes("onCommitValueRef.current?.(el.innerText, 'blur')"), 'CustomTextarea blur is an authoritative cell commit')
-assert(textareaSrc.includes("onCommitValueRef.current?.(el.innerText, 'unmount')"), 'CustomTextarea unmount reports a non-authoritative commit')
-assert(textareaSrc.includes('!next.trim() && el.innerText.trim()'), 'idle empty remount does not wipe live cell text')
-assert(textareaSrc.includes('return () =>'), 'CustomTextarea flushes via the React ref cleanup, not a cancelled debounce')
-
-assert(editableSrc.includes('replaceTableCellText'), 'EditableTable commits through an immutable cell replace')
-assert(editableSrc.includes('flushDraft'), 'EditableTable flushes the pending cell draft')
-assert(editableSrc.includes('takeCommittedGrid'), 'structural edits apply the pending draft before rewriting the grid')
-assert(editableSrc.includes('onCommit={handleCommit}'), 'active cells flush immediately on blur/unmount')
-assert(editableSrc.includes('shouldWriteEditorHtml'), 'empty unmount commits cannot erase authored cell text')
-assert(editableSrc.includes("source === 'blur'"), 'only an authoritative blur may clear a cell')
-assert(editableSrc.includes('setGridRev'), 'committing a cell re-renders so the editor value is not stuck empty')
-assert(editableSrc.includes('flushDraftRef.current()'), 'changing the active cell flushes the previous draft first')
-assert(!editableSrc.includes('dataRef.current[rowIndex][colIndex].text'), 'EditableTable does not mutate store cells in place')
-assert(!/handleInput\.cancel\(\)/.test(editableSrc), 'unmount flushes the pending draft instead of dropping it')
+// Live cell ownership, navigation and undo are exercised in e2e-table-rich-text.
 assert(editableSrc.includes('lastPropsDataRef'), 'local grid is not reset to a stale echo of props.data')
 assert(editableSrc.includes('applyExcelPaste'), 'excel paste is a single immutable write')
 assert(editableSrc.includes('insertColIntoGrid'), 'insert column copies rows instead of splicing store arrays')
@@ -285,9 +268,15 @@ const styledData = [
 const baseTable = tableEl(original.data)
 const typedTable = { ...baseTable, data: typedData }
 const styledTable = { ...baseTable, data: styledData }
+rememberTableCellWrite('table-1', typedData)
 assert(
   classifyElementListSync(slideOf(baseTable), slideOf(typedTable), 'table-1') === 'skip',
   'typing while the table is being edited does not rebuild the canvas element list',
+)
+forgetTableCellWrite('table-1')
+assert(
+  classifyElementListSync(slideOf(baseTable), slideOf(typedTable), 'table-1') === 'replace',
+  'an external cell text replacement reaches the focused editor',
 )
 assert(
   classifyElementListSync(slideOf(typedTable), slideOf(styledTable), 'table-1') === 'replace',

@@ -112,7 +112,7 @@ const htmlCellText = (cell: HTMLElement): string => {
   return text.trim();
 };
 
-export const pasteHTMLTableClipboardString = (text: string): string[][] | null => {
+export const pasteHTMLTableClipboardString = (text: string, rich = false): string[][] | null => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(text, 'text/html');
   const table = doc.querySelector('table');
@@ -124,7 +124,7 @@ export const pasteHTMLTableClipboardString = (text: string): string[][] | null =
     let column = 0;
     for (const cell of Array.from(row.cells)) {
       while (data[rowIndex][column] !== undefined) column++;
-      const text = htmlCellText(cell);
+      const text = rich ? `<div style="${cell.getAttribute('style')?.replace(/"/g, '&quot;') || ''}">${cell.innerHTML}</div>` : htmlCellText(cell);
       const rowSpan = Math.min(cell.rowSpan || rows.length - rowIndex, rows.length - rowIndex);
       for (let r = rowIndex; r < rowIndex + rowSpan; r++) {
         data[r] ??= [];

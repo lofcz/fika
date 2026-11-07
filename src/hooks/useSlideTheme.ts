@@ -5,6 +5,8 @@ import type { Slide, SlideBackground } from '@/types/slides';
 import { DEFAULT_PRESET_THEME, type PresetTheme } from '@/configs/theme';
 import { applySlideBackgroundWithContrast } from '@/utils/textContrast';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
+import { parseTableText } from '@/utils/prosemirror/table';
+import { stripThemeInlineStyles } from '@/embed/agentic/themeFormatting';
 interface ThemeValueWithArea {
   area: number;
   value: string;
@@ -125,7 +127,23 @@ export default () => {
                   value: cell.style?.backcolor
                 });
               }
-              if (cell.text) {
+              if (cell.textFormat === 'html') {
+                const runs: { length: number; color: string; font: string }[] = [];
+                parseTableText(cell).descendants(node => {
+                  if (!node.isText && node.type.name !== 'math') return;
+                  runs.push({
+                    length: node.isText ? (node.text || '').length : 1,
+                    color: node.marks.find(mark => mark.type.name === 'forecolor')?.attrs.color || cell.style?.color || theme.fontColor,
+                    font: node.marks.find(mark => mark.type.name === 'fontname')?.attrs.fontname || cell.style?.fontname || theme.fontName,
+                  });
+                });
+                const length = runs.reduce((sum, run) => sum + run.length, 0);
+                for (const run of runs) {
+                  const weight = area / cellCount * run.length / Math.max(10, length);
+                  fontColorValues.push({ area: weight, value: run.color });
+                  fontNameValues.push({ area: weight, value: run.font });
+                }
+              } else if (cell.text) {
                 const percent = cell.text.length >= 10 ? 1 : cell.text.length / 10;
                 if (cell.style?.color) {
                   fontColorValues.push({
@@ -134,7 +152,7 @@ export default () => {
                   });
                 }
                 if (cell.style?.fontname) {
-                  fontColorValues.push({
+                  fontNameValues.push({
                     area: area / cellCount * percent,
                     value: cell.style?.fontname
                   });
@@ -282,9 +300,8 @@ export default () => {
         if (el.type === 'table') {
           for (const rowCells of el.data) {
             for (const cell of rowCells) {
-              if (cell.style) {
-                cell.style.fontname = fontname;
-              }
+              cell.style = { ...cell.style, fontname };
+              if (cell.textFormat === 'html') cell.text = stripThemeInlineStyles(cell.text, { fontName: fontname });
             }
           }
         }

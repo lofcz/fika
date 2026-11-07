@@ -2,7 +2,7 @@ import { bindStyles } from '@/utils/cssm'
 import { Icon } from '@/components/Icon'
 import styles from './TableToolbar.module.scss'
 const cx = bindStyles(styles)
-import { useCallback, memo } from 'react'
+import { useCallback, memo, useEffect, useState } from 'react'
 
 import { useMainStore, useSlidesStore } from '@/store'
 import type { PPTTableElement } from '@/types/slides'
@@ -15,6 +15,11 @@ import PopoverMenuItem from '@/components/PopoverMenuItem'
 import ColorPicker from '@/components/ColorPicker/index'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { findSlideElement, sameElementId } from '../floatCompare'
+import TextStyleControls from './TextStyleControls'
+import { getTableEditor } from '@/utils/prosemirror/tableEditor'
+import { getTableTextAttrs, parseTableText, type TableTextAttrs } from '@/utils/prosemirror/table'
+import { EditorState } from 'prosemirror-state'
+import type { TableCellStyle } from '@/types/slides'
 
 export type ITableToolbarProps = {
   elementInfo: PPTTableElement
@@ -24,6 +29,29 @@ const TableToolbar = memo((props: ITableToolbarProps) => {
   const { LL } = useI18nContext()
   const handleElementId = useMainStore(s => s.handleElementId)
   const selectedTableCells = useMainStore(s => s.selectedTableCells)
+  const cell = useSlidesStore(s => {
+    const el = findSlideElement(s, handleElementId)
+    if (el?.type !== 'table') return undefined
+    const [r, c] = (tableStyleTarget(handleElementId, selectedTableCells)[0] || '0_0').split('_').map(Number)
+    return el.data[r]?.[c]
+  })
+  const [attrs, setAttrs] = useState<TableTextAttrs>({})
+  useEffect(() => {
+    if (!cell) return
+    const editor = selectedTableCells.length === 1 ? getTableEditor(handleElementId) : undefined
+    setAttrs(editor?.getAttrs() || getTableTextAttrs(EditorState.create({ doc: parseTableText(cell) }), cell.style))
+  }, [cell, handleElementId, selectedTableCells])
+  useEffect(() => {
+    const sync = (payload: { elementId: string; attrs: TableTextAttrs }) => {
+      if (payload.elementId === handleElementId) setAttrs(payload.attrs)
+    }
+    emitter.on(EmitterEvents.TABLE_TEXT_ATTRS, sync)
+    return () => emitter.off(EmitterEvents.TABLE_TEXT_ATTRS, sync)
+  }, [handleElementId])
+  const formatText = (command: string, value?: string) => {
+    if (command === 'clear') applyTableCellStyles({ bold: false, em: false, underline: false, strikethrough: false, color: cell?.style?.color || '#000000', fontsize: cell?.style?.fontsize || '14px', fontname: cell?.style?.fontname || '' }, { clearText: true })
+    else applyTableCellStyles({ [command]: value ?? !attrs[command as keyof TableTextAttrs] } as Partial<TableCellStyle>)
+  }
 
   const cellBackcolor = useSlidesStore(s => {
     const el = findSlideElement(s, handleElementId)
@@ -48,6 +76,8 @@ const TableToolbar = memo((props: ITableToolbarProps) => {
 
   return (
     <div className={cx('toolbar-content')}>
+      <TextStyleControls attrs={attrs} onCommand={formatText} />
+      <div className={cx('divider')} />
       <Popover
         trigger="click"
         content={<ColorPicker modelValue={cellBackcolor} onUpdateModelValue={value => updateCellBackcolor(value)} />}

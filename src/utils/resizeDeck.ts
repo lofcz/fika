@@ -113,7 +113,7 @@ function scaleTypography(el: PPTElement, scale: number) {
   if (el.type === 'table') {
     el.cellMinHeight *= scale;
     for (const row of el.data) for (const cell of row) {
-      cell.text = scalePixels(cell.text, scale);
+      if (cell.textFormat === 'html') cell.text = scalePixels(cell.text, scale);
       if (cell.style?.fontsize) cell.style.fontsize = cell.style.fontsize.replace(/^(\d+(?:\.\d+)?)(px|pt)$/i, (_, value: string, unit: string) => `${Number(value) * scale}${unit}`);
       if (cell.style) for (const key of ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth']) scaleNumber(cell.style, key, scale);
     }

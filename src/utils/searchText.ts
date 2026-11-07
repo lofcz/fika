@@ -10,6 +10,12 @@ export const getSearchText = (root: Node) => {
     if (content && !content.endsWith('\n')) content += '\n'
   }
   const visit = (node: Node) => {
+    if (node.nodeType === Node.ELEMENT_NODE && (node as Element).matches('script, style, template')) return
+    if (node.nodeType === Node.ELEMENT_NODE && (node as Element).matches('.fika-math, .omml-math, [data-latex]')) {
+      // Math is an atomic node. Replacing typeset glyph text would corrupt it.
+      content += '\ufffc'
+      return
+    }
     if (node.nodeType === Node.TEXT_NODE) {
       const text = (node as Text).data
       if (!text) return
@@ -37,4 +43,24 @@ export const getSearchHtmlText = (html: string) => {
   const root = document.createElement('div')
   root.innerHTML = html
   return getSearchText(root).content
+}
+
+/** Apply visible-text ranges backwards so inline formatting and math remain intact. */
+export const replaceSearchHtmlRanges = (html: string, ranges: { start: number; end: number }[], replacement: string) => {
+  const root = document.createElement('div')
+  root.innerHTML = html
+  const { textNodes, textList } = getSearchText(root)
+  for (const range of [...ranges].reverse()) {
+    let inserted = false
+    for (let i = 0; i < textList.length; i++) {
+      const { startIdx, endIdx } = textList[i]
+      if (endIdx <= range.start || startIdx >= range.end) continue
+      const node = textNodes[i]
+      const from = Math.max(0, range.start - startIdx)
+      const to = Math.min(node.data.length, range.end - startIdx)
+      node.replaceData(from, to - from, inserted ? '' : replacement)
+      inserted = true
+    }
+  }
+  return root.innerHTML
 }
