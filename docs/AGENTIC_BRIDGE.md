@@ -109,6 +109,7 @@ interface FikaCommandResult<TData = unknown> {
   commandId?: string
   type: FikaCommandType
   changed: boolean
+  changedSlideIds?: string[]
   documentVersion: number
   snapshotId?: number
   data?: TData
@@ -134,6 +135,8 @@ Result rules:
 - `commandId` mirrors the incoming command `id`.
 - `type` always mirrors the incoming command `type`.
 - `changed` is true only when the command changed document or view state and was not a dry run.
+- Reapplying an already-applied patch succeeds with `changed: false`; it does not create an undo snapshot or advance the document version. A successful no-op is not a reason to retry.
+- `changedSlideIds` identifies slides whose stored content or position actually changed, including inserted or deleted slides. Hosts should use these ids when capturing edits made without an explicit `slideId`.
 - `documentVersion` increments after successful, non-dry-run changed commands.
 - `snapshotId` is present only when that command created its own history snapshot.
 - `data` contains the command-specific return payload, usually the updated model object or current bridge state.

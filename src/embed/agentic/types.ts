@@ -97,6 +97,8 @@ export interface FikaCommandResult<TData = unknown> {
   commandId?: string;
   type: FikaCommandType;
   changed: boolean;
+  /** Actual changed/inserted/deleted/reordered slide ids; absent on no-ops and rollbacks. */
+  changedSlideIds?: string[];
   documentVersion: number;
   snapshotId?: number;
   data?: TData;

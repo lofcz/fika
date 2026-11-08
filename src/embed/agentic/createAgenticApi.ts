@@ -1,4 +1,5 @@
 import { canvasOperationCommand } from './canvasOperations';
+import { deepEqual } from 'fast-equals';
 import type { FikaCanvasOperation, FikaCanvasApplyResult } from './types';
 import { summarizeCanvas } from './canvasContext';
 import { resizeDeckSlides } from '@/utils/resizeDeck';
@@ -314,6 +315,17 @@ function restoreRuntimeState(stores: Stores, state: RuntimeState) {
   stores.screen.setScreening(state.screening);
   stores.snapshot.setSnapshotCursor(state.snapshotCursor);
   stores.snapshot.setSnapshotLength(state.snapshotLength);
+}
+/** Store updates are immutable: unchanged slides compare by reference first. */
+function changedSlideIds(before: Slide[], after: Slide[]): string[] {
+  const previous = new Map(before.map((slide, index) => [slide.id, { slide, index }]));
+  const changed: string[] = [];
+  after.forEach((slide, index) => {
+    const old = previous.get(slide.id);
+    if (!old || old.index !== index || !deepEqual(old.slide, slide)) changed.push(slide.id);
+    previous.delete(slide.id);
+  });
+  return [...changed, ...previous.keys()];
 }
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -1340,6 +1352,7 @@ export function createAgenticApi(options: {
   const markRolledBack = (result: FikaCommandResult): FikaCommandResult => ({
     ...result,
     changed: false,
+    changedSlideIds: undefined,
     snapshotId: undefined,
     warnings: [...(result.warnings || []), createIssue('BatchRolledBack', 'Rolled back because a command failed in an atomic batch.', undefined, true)]
   });
@@ -1360,7 +1373,15 @@ export function createAgenticApi(options: {
         restoreAuthoringState(beforeAuthoring);
         return failResult(command, new Error('Fika controller has been destroyed')) as FikaCommandResult<TData>;
       }
-      const didChange = typeof changed === 'function' ? changed(data) : changed;
+      const mayChange = typeof changed === 'function' ? changed(data) : changed;
+      // A mutating command describes its capability, not its outcome. Replaying
+      // an already-applied patch must not invent progress, an undo entry or a
+      // new version (which hosts use to trigger captures and further checks).
+      const didChange = mayChange && (
+        !deepEqual(before, captureRuntimeState(stores)) ||
+        !deepEqual(beforeAuthoring, captureAuthoringState()) ||
+        command.type === 'view.setLocale'
+      );
       if (didChange && (runOptions.restoreOnSuccess ?? dryRun)) {
         restoreRuntimeState(stores, before);
         restoreAuthoringState(beforeAuthoring);
@@ -1384,6 +1405,7 @@ export function createAgenticApi(options: {
         if (runOptions.version !== false) documentVersion++;
       }
       const result = makeResult(command, didChange && !dryRun, syncDataDocumentVersion(data), true, warnings);
+      if (result.changed && changesDocument(command)) result.changedSlideIds = changedSlideIds(before.slides, stores.slides.slides);
       if (nextSnapshotId !== undefined) result.snapshotId = nextSnapshotId;
       if (destroyed) return result;
       if (result.changed && runOptions.emitDocumentChanged !== false) emitDocumentChanged(command);
@@ -4564,7 +4586,12 @@ export function createAgenticApi(options: {
           const skippedBootstrap = (command.type === 'deck.applyStyle' || command.type === 'deck.planComposition') && (data as {
             skipped?: boolean;
           })?.skipped;
-          const changed = command.type === 'search.replace' ? (data as FikaSearchResults).count > 0 : skippedBootstrap ? false : descriptor.mutates;
+          const mayChange = command.type === 'search.replace' ? (data as FikaSearchResults).count > 0 : skippedBootstrap ? false : descriptor.mutates;
+          const changed = mayChange && (
+            !deepEqual(commandBefore, captureRuntimeState(stores)) ||
+            !deepEqual(commandBeforeAuthoring, captureAuthoringState()) ||
+            command.type === 'view.setLocale'
+          );
           const blocking = warnings.find(w => w.recoverable === false && w.code === 'SlideQualityError');
           if (blocking && changed && !batchDryRun && !commandDryRun) {
             restoreRuntimeState(stores, commandBefore);
@@ -4573,6 +4600,7 @@ export function createAgenticApi(options: {
             result.errors = [blocking];
           } else {
             result = makeResult(command, changed && !batchDryRun && !commandDryRun, data, !blocking, warnings);
+            if (result.changed && changesDocument(command)) result.changedSlideIds = changedSlideIds(commandBefore.slides, stores.slides.slides);
             if (blocking) result.errors = [blocking];
           }
           if (commandDryRun) {

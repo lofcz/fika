@@ -1375,6 +1375,48 @@ async function runSuite(page) {
       rec('executeBatch success applies create then update', results.every(r => r.ok) && slideById('slide_batch_ok')?.remark === '<p>batch</p>', { ok: results.map(r => r.ok), remark: slideById('slide_batch_ok')?.remark })
     }
 
+    // Production replay pattern: six text boxes in a single batch, followed
+    // by repeat attempts. A retry acknowledges existing state; it must not
+    // manufacture 80 versions/undo entries and cause 80 more screenshots.
+    {
+      const slideId = 'slide_edit_receipts'
+      await agent('slides.create', { select: false, slide: {
+        id: slideId,
+        elements: Array.from({ length: 6 }, (_, index) => ({
+          id: `receipt_text_${index}`, type: 'text', left: 30 + index * 120, top: 60,
+          width: 110, height: 60, rotate: 0, content: '<p>Before</p>',
+          defaultFontName: '', defaultColor: '#111111',
+        })),
+      } })
+      const commands = Array.from({ length: 6 }, (_, index) => ({
+        type: 'elements.update',
+        payload: { elementId: `receipt_text_${index}`, patch: { content: `<p>Fact ${index + 1}</p>` } },
+      }))
+      const first = await window.__FIKA_AGENTIC__.executeBatch(commands)
+      const version = first[0].documentVersion
+      let finalVersion = version
+      const snapshots = window.__FIKA_SNAPSHOT__.getState().snapshotLength
+      let retriesChanged = 0
+      let retriesFailed = 0
+      for (let retry = 0; retry < 79; retry++) {
+        const results = await window.__FIKA_AGENTIC__.executeBatch(commands)
+        finalVersion = results[0].documentVersion
+        retriesChanged += results.filter(result => result.changed).length
+        retriesFailed += results.filter(result => !result.ok).length
+      }
+      rec('six text edits report the actual offscreen slide', first.every(result => result.ok && result.changed && result.changedSlideIds?.length === 1 && result.changedSlideIds[0] === slideId), { changedSlideIds: first.map(result => result.changedSlideIds) })
+      rec('79 repeated six-text batches are successful no-ops', retriesChanged === 0 && retriesFailed === 0 && finalVersion === version && window.__FIKA_SNAPSHOT__.getState().snapshotLength === snapshots, { retriesChanged, retriesFailed, version, finalVersion })
+      const revision = await agent('elements.update', { slideId, elementId: 'receipt_text_0', patch: { content: '<p>A genuine correction</p>' } }, { commit: true })
+      const repeat = await agent('elements.update', { slideId, elementId: 'receipt_text_0', patch: { content: '<p>A genuine correction</p>' } }, { commit: true })
+      rec('a real correction still commits; its replay does not', revision.result.ok && revision.result.changed && !repeat.result.changed && repeat.result.ok && repeat.result.snapshotId === undefined && revision.result.documentVersion === repeat.result.documentVersion, { revision: revision.result.documentVersion, repeat: repeat.result.documentVersion })
+      const beforeRollback = JSON.stringify(slideById(slideId))
+      const rollback = await window.__FIKA_AGENTIC__.executeBatch([
+        { type: 'elements.update', payload: { slideId, elementId: 'receipt_text_0', patch: { content: '<p>Must roll back</p>' } } },
+        { type: 'elements.update', payload: { slideId, elementId: 'missing', patch: { content: '<p>Missing</p>' } } },
+      ])
+      rec('atomic rollback does not claim a changed slide', JSON.stringify(slideById(slideId)) === beforeRollback && rollback.every(result => !result.changed && !result.changedSlideIds?.length), { changed: rollback.map(result => result.changed), changedSlideIds: rollback.map(result => result.changedSlideIds) })
+    }
+
     {
       await agent('deck.applyStyle', { styleId: 'minimal' })
       const dryRun = await agent('deck.setup', { styleId: 'minimal', slideCount: 23 }, { dryRun: true })
