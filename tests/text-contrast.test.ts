@@ -6,6 +6,7 @@ import { createRsbuild } from '@rsbuild/core'
 import { pluginNodePolyfill } from '@rsbuild/plugin-node-polyfill'
 import { afterAll, beforeAll, describe, expect, it } from '@rstest/core'
 import { chromium, type Browser, type Page } from 'playwright'
+import tinycolor from 'tinycolor2'
 import type { PPTShapeElement, PPTTextElement, Slide } from '../src/types/slides'
 import type * as SlidePainter from '../src/paint/slidePainter'
 import { applySlideBackgroundWithContrast, isDefaultInk, resolveLiveTextPaint } from '../src/utils/textContrast'
@@ -36,15 +37,18 @@ describe('default text ink contrast', () => {
     }
   })
 
-  it('preserves saturated dark ink regardless of the slide or own fill', () => {
+  it('preserves authored saturated colors while keeping fallback ink readable', () => {
     for (const color of brandInks) {
       expect(isDefaultInk(color)).toBe(false)
       const html = `<p style="color:${color}">Brand</p>`
       for (const surface of ['#ffffff', '#F6EBD4', '#0b1220']) {
         for (const fill of [undefined, '#ffffff', '#0b1220']) {
-          expect(resolveLiveTextPaint(color, html, {
+          const painted = resolveLiveTextPaint(color, html, {
             background: { type: 'solid', color: surface }, fill,
-          })).toEqual({ ink: color, defaultInk: color, html })
+          })
+          expect(painted.html).toBe(html)
+          expect(painted.defaultInk).toBe(painted.ink)
+          expect(tinycolor.readability(painted.ink, fill || surface)).toBeGreaterThanOrEqual(3)
         }
       }
     }
@@ -82,9 +86,8 @@ describe('default text ink contrast', () => {
       const painted = resolveLiveTextPaint(color, label.content, {
         element: label, elements: [chip, label], background: { type: 'solid', color: '#ffffff' },
       })
-      const ink = color === '#333333' ? '#ffffff' : color
-      expect(painted.ink).toBe(ink)
-      expect(painted.html).toContain(ink)
+      expect(painted.ink).toBe('#ffffff')
+      expect(painted.html).toContain(color === '#333333' ? '#ffffff' : color)
     }
   })
 
@@ -156,14 +159,16 @@ describe('native Canvas text color fidelity', () => {
     if (output) await rm(output, { recursive: true, force: true })
   })
 
-  it('paints authored teal/navy and adaptive defaults in both text and shape text', async () => {
+  it('paints authored colors and readable inherited ink in both text and shape text', async () => {
     const cases = [
-      { color: '#214846', surface: '#F6EBD4', expected: '#214846' },
-      { color: '#172B43', surface: '#F6EBD4', expected: '#172b43' },
-      { color: '#333333', surface: '#F6EBD4', expected: '#000000' },
-      { color: '#333333', surface: '#0b1220', expected: '#ffffff' },
+      { color: '#214846', surface: '#F6EBD4', authored: '#214846', inherited: '#214846' },
+      { color: '#172B43', surface: '#F6EBD4', authored: '#172b43', inherited: '#172b43' },
+      { color: '#214846', surface: '#0b1220', authored: '#214846', inherited: '#ffffff' },
+      { color: '#172B43', surface: '#0b1220', authored: '#172b43', inherited: '#ffffff' },
+      { color: '#333333', surface: '#F6EBD4', authored: '#000000', inherited: '#000000' },
+      { color: '#333333', surface: '#0b1220', authored: '#ffffff', inherited: '#ffffff' },
     ]
-    for (const { color, surface, expected } of cases) {
+    for (const { color, surface, authored, inherited } of cases) {
       for (const element of [text('text', color), shape('shape', color)]) {
         for (const inline of [true, false]) {
           const result = await page.evaluate(({ element, surface, inline }) => {
@@ -187,6 +192,7 @@ describe('native Canvas text color fidelity', () => {
             return Object.fromEntries(colors)
           }, { element, surface, inline })
           // Count fully painted glyph pixels, excluding antialiased edges.
+          const expected = inline ? authored : inherited
           expect(result[expected]).toBeGreaterThan(100)
           if (color !== '#333333') expect(result['#000000'] || 0).toBe(0)
         }

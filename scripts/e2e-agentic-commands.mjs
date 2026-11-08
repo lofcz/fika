@@ -224,7 +224,8 @@ async function runSuite(page) {
           { id: IDS.mermaid, type: 'mermaid', left: 40, top: 480, width: 280, height: 120, rotate: 0, code: 'graph TD;A-->B' },
           { id: IDS.code, type: 'code', left: 340, top: 480, width: 260, height: 120, rotate: 0, code: 'const n = 1', language: 'typescript' },
           { id: IDS.video, type: 'video', left: 610, top: 390, width: 160, height: 90, rotate: 0, src: VIDEO, autoplay: false, poster: PNG, ext: 'mp4' },
-          { id: IDS.audio, type: 'audio', left: 790, top: 390, width: 48, height: 48, rotate: 0, fixedRatio: true, color: '#4472c4', loop: false, autoplay: false, src: AUDIO, ext: 'mp3' },
+          // Keep asynchronous poster synthesis out of exact snapshot comparisons.
+          { id: IDS.audio, type: 'audio', left: 790, top: 390, width: 48, height: 48, rotate: 0, fixedRatio: true, color: '#4472c4', loop: false, autoplay: false, src: AUDIO, poster: PNG, ext: 'mp3' },
         ],
       }],
     })
@@ -1231,7 +1232,14 @@ async function runSuite(page) {
     }
     {
       const { result } = await agent('search.replace', { query: 'A1', replacement: 'A1x' })
-      rec('search.replace variant: table cell', result.ok && elById(IDS.table)?.data?.[0]?.[0]?.text === 'A1x', { text: elById(IDS.table)?.data?.[0]?.[0]?.text, error: err(result) })
+      const cell = elById(IDS.table)?.data?.[0]?.[0]
+      const content = document.createElement('div')
+      content.innerHTML = cell?.textFormat === 'html' ? cell.text : ''
+      rec('search.replace variant: table cell retains rich formatting', result.ok
+        && content.textContent === 'A1x'
+        && content.querySelector('strong')?.textContent === 'A1x'
+        && content.querySelector('[data-color-explicit="true"]')?.style.color === 'rgb(17, 17, 17)',
+      { text: cell?.text, textFormat: cell?.textFormat, error: err(result) })
     }
 
     // --- history ---
