@@ -1,6 +1,6 @@
 {
   "name": "fika-editor",
-  "version": "3.6.6",
+  "version": "3.6.7",
   "description": "Fika presentation editor embed bundle with a typed agentic bridge.",
   "type": "module",
   "main": "dist/embed/fika-embed.js",
@@ -125,7 +125,7 @@
     "lucide-react": "^1.33.0",
     "markdown-it": "^15.0.0",
     "markdown-it-texmath": "^1.0.0",
-    "mathlive": "npm:@lofcz/mathlive@^0.110.10",
+    "mathlive": "npm:@lofcz/mathlive@^0.111.5",
     "mathml2omml-plus": "^0.6.4",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-math": "^3.0.0",
