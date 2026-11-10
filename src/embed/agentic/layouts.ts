@@ -1491,9 +1491,27 @@ function buildComparison(ctx: LayoutCtx, slots: Slots): FikaLayoutElementInput[]
 interface CardEntry {
   heading?: string;
   body?: string;
+  image?: {
+    src: string;
+    sourceUrl?: string;
+    natural?: ImageNaturalSize;
+  };
 }
 
-/** Parse a `cards`/`steps` slot: an array of { heading, body } objects or plain strings. */
+/** A card's own picture: `image` as a URL string or `{ src, sourceUrl, width, height }`. */
+function readCardImage(rec: Record<string, unknown>): CardEntry['image'] {
+  const image = resolveImageSlot({
+    image: rec.image ?? rec.imageSrc ?? rec.photo ?? rec.picture,
+    sourceUrl: rec.sourceUrl ?? rec.href
+  });
+  return image.src ? {
+    src: image.src,
+    ...(image.sourceUrl ? { sourceUrl: image.sourceUrl } : {}),
+    ...(image.natural ? { natural: image.natural } : {})
+  } : undefined;
+}
+
+/** Parse a `cards`/`steps` slot: an array of { heading, body, image? } objects or plain strings. */
 function readCardEntries(value: unknown): CardEntry[] {
   if (!Array.isArray(value)) return [];
   return value.map((entry): CardEntry | null => {
@@ -1509,10 +1527,12 @@ function readCardEntries(value: unknown): CardEntry[] {
     const bodyRaw = rec.body ?? rec.text ?? rec.description ?? rec.detail ?? rec.definition ?? rec.def;
     const heading = headingRaw == null ? '' : stripLeadingListMarkers(normalizeAgentText(String(headingRaw)));
     const body = bodyRaw == null ? '' : normalizeAgentText(String(bodyRaw)).trim();
-    if (!heading && !body) return null;
+    const image = readCardImage(rec);
+    if (!heading && !body && !image) return null;
     return {
       heading: heading || undefined,
-      body: body || undefined
+      body: body || undefined,
+      ...(image ? { image } : {})
     };
   }).filter((entry): entry is CardEntry => entry != null);
 }
@@ -1536,7 +1556,9 @@ function buildCards(ctx: LayoutCtx, slots: Slots, warnings: string[]): FikaLayou
     warnings.push(`Layout "cards" shows at most 6 cards — dropped ${cards.length - count} extra. Split across slides or trim to ≤6.`);
   }
   const visible = cards.slice(0, count);
-  const cols = count <= 3 ? count : Math.ceil(count / 2);
+  // Picture cards read as a photo row: up to four stay side by side so each picture keeps its height.
+  const pictured = visible.some(card => card.image);
+  const cols = count <= (pictured ? 4 : 3) ? count : Math.ceil(count / 2);
   const rows = Math.ceil(count / cols);
   const gutter = round(ctx.W * 0.025);
   const regionH = ctx.H - ctx.m - contentTop;
@@ -1544,8 +1566,10 @@ function buildCards(ctx: LayoutCtx, slots: Slots, warnings: string[]): FikaLayou
 
   const splitPanel = ctx.variantId === 'accentPanel' || ctx.anchor === 'split';
   const wantsOffset = ctx.variantId === 'leftOffset' || ctx.variantId === 'rightOffset';
-  const offset = wantsOffset && count <= 3;
-  if (wantsOffset && count > 3) {
+  const offset = wantsOffset && count <= 3 && !pictured;
+  if (wantsOffset && pictured) {
+    warnings.push(`Collapsed "${ctx.variantId}" → full-width grid because picture cards need the width.`);
+  } else if (wantsOffset && count > 3) {
     warnings.push(`Collapsed "${ctx.variantId}" → full-width grid because ${count} cards need the width. Prefer ≤3 cards for offset variants, or use variant "grid"/"accentPanel".`);
   }
   const gridWidth = offset ? round(ctx.cw * 0.68) : ctx.cw;
@@ -1593,17 +1617,48 @@ function buildCards(ctx: LayoutCtx, slots: Slots, warnings: string[]): FikaLayou
       height: 5,
       fill: topFill
     }));
-    const innerLeft = left + pad;
-    const innerW = cardW - pad * 2;
-    const y0 = top + pad + 4;
-    const bottom = top + cardH - pad;
+    // A pictured card gives part of itself to the image, edge to edge under the accent bar:
+    // the upper part in a single row of tall cards, the left part in a grid of short ones.
+    const hasText = Boolean(card.heading || card.body);
+    const beside = Boolean(card.image) && rows > 1 && hasText;
+    const imageW = !card.image ? 0 : beside ? round(cardW * 0.44) : cardW;
+    const imageH = !card.image ? 0 : beside || !hasText ? cardH - 5 : round((cardH - 5) * 0.52);
+    if (card.image) {
+      const natural = card.image.natural;
+      const boxRatio = imageW / imageH;
+      const mismatch = natural ? Math.max(natural.width / natural.height / boxRatio, boxRatio / (natural.width / natural.height)) : 1;
+      elements.push(imageElement({
+        left,
+        top: top + 5,
+        width: imageW,
+        height: imageH,
+        src: card.image.src,
+        sourceUrl: card.image.sourceUrl,
+        natural,
+        // A portrait in a wide slot (or the reverse) would lose its subject to a center crop.
+        fit: mismatch > 2 ? 'contain' : 'cover'
+      }));
+    }
+    // Text boxes carry their own inset, so text next to a picture needs only a sliver of card padding.
+    const tight = round(pad * 0.3);
+    const innerLeft = left + (beside ? imageW + tight : pad);
+    const innerW = cardW - (beside ? imageW + tight * 2 : pad * 2);
+    const under = Boolean(card.image) && !beside;
+    const y0 = under ? top + 5 + imageH + tight : beside ? top + 5 + tight : top + pad + 4;
+    const bottom = top + cardH - (card.image ? tight : pad);
     const available = Math.max(0, bottom - y0);
     const hasHeading = Boolean(card.heading);
     const hasBody = Boolean(card.body);
     let headingH = 0;
     let bodyH = 0;
+    // Names beside or under a picture sit in a narrow column and often wrap: size the heading
+    // so that two whole lines always fit the room it gets.
+    const headingShare = card.image ? 0.5 : 0.42;
+    const headingSize = card.image
+      ? Math.max(11, Math.min(round(sc.sectionHeader * 0.78), Math.floor((available * (hasBody ? headingShare : 1) - TEXT_PAD * 2) / (2 * 1.18))))
+      : sc.sectionHeader;
     if (hasHeading && hasBody) {
-      const idealHeading = Math.min(regionHeight(sc.sectionHeader, 2, 1.18), round(available * 0.42));
+      const idealHeading = Math.min(regionHeight(headingSize, 2, 1.18), round(available * headingShare));
       headingH = Math.max(14, Math.min(idealHeading, available - minBodyH - 2));
       bodyH = Math.max(minBodyH, available - headingH - 2);
       if (available < idealHeading + minBodyH + 2) squeezed += 1;
@@ -1624,7 +1679,7 @@ function buildCards(ctx: LayoutCtx, slots: Slots, warnings: string[]): FikaLayou
         font: fonts.heading,
         bold: true,
         lineHeight: 1.18,
-        maxSize: sc.sectionHeader,
+        maxSize: headingSize,
         minSize: 11
       }));
       y += headingH + 2;
@@ -1639,7 +1694,8 @@ function buildCards(ctx: LayoutCtx, slots: Slots, warnings: string[]): FikaLayou
         color: c.body,
         font: fonts.body,
         lineHeight: 1.35,
-        maxSize: sc.body,
+        // A picture card's blurb is a caption, not body copy: caption-scale type is its designed size.
+        maxSize: card.image ? Math.max(sc.label, round(sc.body * 0.75)) : sc.body,
         minSize: 10
       }));
     }
@@ -2258,8 +2314,8 @@ export const PPTX_LAYOUTS: FikaLayout[] = [{
 }, {
   id: 'cards',
   label: 'Cards',
-  summary: 'Title + a row/grid of 2–6 surface cards, each an accent-topped panel with a heading and a short blurb.',
-  bestFor: 'Parallel items: features, pillars, categories, options, key takeaways. A livelier alternative to a single bullet list.',
+  summary: 'Title + a row/grid of 2–6 surface cards, each an accent-topped panel with a heading and a short blurb — and, optionally, its own picture on top (a photo grid).',
+  bestFor: 'Parallel items: features, pillars, categories, options, key takeaways. With a picture per card: several places, people, objects or works shown side by side, each under its name.',
   feature: false,
   slots: [{
     name: 'title',
@@ -2270,7 +2326,7 @@ export const PPTX_LAYOUTS: FikaLayout[] = [{
     name: 'cards',
     type: 'cards',
     required: true,
-    description: 'Array of { heading, body } (or plain strings). 2–6 items; laid out in a row, or a 2-row grid when there are 4+. A short final row is centered automatically.'
+    description: 'Array of { heading, body, image? } (or plain strings). 2–6 items; laid out in a row, or a 2-row grid when there are 4+ (5+ with pictures). A short final row is centered automatically. image: a URL or { src, sourceUrl } puts that picture on top of the card; keep heading/body short on picture cards.'
   }, {
     name: 'eyebrow',
     type: 'text',
@@ -2801,6 +2857,18 @@ export async function buildLayoutSlide(layoutId: string, slots: Slots, preset: F
         };
       }
     }
+  }
+  if (layout.slots.some(slot => slot.type === 'cards') && Array.isArray(safeSlots.cards)) {
+    safeSlots.cards = await Promise.all((safeSlots.cards as unknown[]).map(async entry => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
+      const image = readCardImage(entry as Record<string, unknown>);
+      if (!image || image.natural) return entry;
+      const natural = await probeImageNaturalSize(image.src);
+      return natural ? {
+        ...entry,
+        image: { src: image.src, ...(image.sourceUrl ? { sourceUrl: image.sourceUrl } : {}), ...natural }
+      } : entry;
+    }));
   }
   const builder = LAYOUT_BUILDERS[layoutId];
   const W = viewport.width;
