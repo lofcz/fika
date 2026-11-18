@@ -10,7 +10,7 @@ import { findSlideViewport, getPointerClient, getViewportRenderedScale, pointerD
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { applyLiveSize, autoHeightInsetSum, measureAutoTextHeight, measureLiveTableHeight, tableCellMinHeight } from '@/utils/liveElementSize'
 import { placeholderHeightFloor } from '@/utils/placeholderLayout'
-import { commitSlideElements } from '@/utils/commitSlideElements'
+import { captureSlideCommitBase, commitSlideElements } from '@/utils/commitSlideElements'
 
 const applyLiveMultiSelectBox = (minX: number, minY: number, maxX: number, maxY: number, canvasScale: number) => {
   const multi = document.querySelector('.multi-select-operate') as HTMLElement | null
@@ -154,6 +154,7 @@ export default (
     gesturingRef.current = true
     useMainStore.getState().setScalingState(true)
     useMainStore.getState().setGesturingState(true)
+    const commitBase = captureSlideCommitBase()
 
     const elOriginLeft = element.left
     const elOriginTop = element.top
@@ -400,7 +401,7 @@ export default (
       const currentPointer = getPointerClient(e)
       const moved = startPointer.x !== currentPointer.x || startPointer.y !== currentPointer.y
       if (moved) {
-        const merged = commitSlideElements(liveList)
+        const merged = commitSlideElements(liveList, commitBase)
         elementListRef.current = merged
         setElementList(merged)
         addHistorySnapshot()
@@ -424,6 +425,7 @@ export default (
     gesturingRef.current = true
     useMainStore.getState().setScalingState(true)
     useMainStore.getState().setGesturingState(true)
+    const commitBase = captureSlideCommitBase()
     
     const { minX, maxX, minY, maxY } = range
     const operateWidth = maxX - minX
@@ -543,7 +545,7 @@ export default (
       const currentPointer = getPointerClient(e)
       const moved = startPointer.x !== currentPointer.x || startPointer.y !== currentPointer.y
       if (moved) {
-        const merged = commitSlideElements(liveList)
+        const merged = commitSlideElements(liveList, commitBase)
         elementListRef.current = merged
         setElementList(merged)
         addHistorySnapshot()

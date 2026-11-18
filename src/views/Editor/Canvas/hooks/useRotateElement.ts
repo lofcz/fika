@@ -4,7 +4,7 @@ import type { PPTElement, PPTLineElement, PPTVideoElement, PPTAudioElement, PPTC
 import { bindDocumentDrag, rafCoalesce } from '@/utils/gestureBind'
 import { clientToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
-import { commitSlideElements } from '@/utils/commitSlideElements'
+import { captureSlideCommitBase, commitSlideElements } from '@/utils/commitSlideElements'
 
 /**
  * Angle from the origin to the given coordinate, in degrees.
@@ -60,6 +60,7 @@ export default (
 
     gesturingRef.current = true
     useMainStore.getState().setGesturingState(true)
+    const commitBase = captureSlideCommitBase()
 
     const handleMousemove = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
@@ -98,7 +99,7 @@ export default (
 
       if (elOriginRotate === angle) return
 
-      const next = commitSlideElements(elementList.map(el => element.id === el.id ? { ...el, rotate: angle } : el))
+      const next = commitSlideElements(elementList.map(el => element.id === el.id ? { ...el, rotate: angle } : el), commitBase)
       elementListRef.current = next
       setElementList(next)
       addHistorySnapshot()

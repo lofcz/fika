@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react'
-import { commitSlideElements } from '@/utils/commitSlideElements'
+import { captureSlideCommitBase, commitSlideElements } from '@/utils/commitSlideElements'
 import type { PPTElement, PPTShapeElement } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
@@ -38,6 +38,7 @@ export default (
     if (isTouchEvent && (!e.changedTouches || !e.changedTouches[0])) return
 
     let isMouseDown = true
+    const commitBase = captureSlideCommitBase()
   
     const viewport = findSlideViewport(e.target)
     const startPointer = getPointerClient(e)
@@ -113,7 +114,7 @@ export default (
 
       if (startPointer.x === currentPointer.x && startPointer.y === currentPointer.y) return
 
-      commitSlideElements(liveList)
+      commitSlideElements(liveList, commitBase)
       addHistorySnapshot()
     }
 

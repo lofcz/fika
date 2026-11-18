@@ -15,7 +15,7 @@ import { buildSnapIndex } from '@/utils/spatial'
 import { resolveGridSize, sameSnapGuides, snapMovingBox, type SnapBox } from '@/utils/snap'
 import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
-import { commitSlideElements } from '@/utils/commitSlideElements'
+import { captureSlideCommitBase, commitSlideElements } from '@/utils/commitSlideElements'
 import { resolvePagePositions } from '@/views/Myna/pageLayout'
 import { clientToCanvas } from '@/utils/canvasPointer'
 
@@ -89,6 +89,7 @@ export default (
   
     const viewport = findSlideViewport(e.target)
     const sourcePageId = selectCurrentSlide(useSlidesStore.getState())?.id
+    const commitBase = captureSlideCommitBase()
     const clip = viewport?.parentElement
     const oldOverflow = clip?.style.overflow || ''
     const dragRoots = mynaViewRef.current ? originActiveElementList
@@ -334,7 +335,7 @@ export default (
           canvasScaleRef.current,
         )
       }
-      commitLiveList(commitSlideElements(next))
+      commitLiveList(commitSlideElements(next, commitBase))
       if (mynaViewRef.current && viewport && sourcePageId) {
         const store = useSlidesStore.getState()
         const positions = resolvePagePositions(store.slides, store.viewportSize, store.viewportSize * store.viewportRatio)

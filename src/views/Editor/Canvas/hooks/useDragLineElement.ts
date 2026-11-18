@@ -5,7 +5,7 @@ import { OperateLineHandlers } from '@/types/edit'
 import { getBroken2LineDirection } from '@/utils/element'
 import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
-import { commitSlideElements } from '@/utils/commitSlideElements'
+import { captureSlideCommitBase, commitSlideElements } from '@/utils/commitSlideElements'
 
 interface AdsorptionPoint {
   x: number
@@ -31,6 +31,7 @@ export default (elementList: PPTElement[],
   const dragLineElement = useCallback((e: MouseEvent, element: PPTLineElement, command: OperateLineHandlers) => {
     draggingRef.current = true
     let isMouseDown = true
+    const commitBase = captureSlideCommitBase()
 
     const sorptionRange = 8
 
@@ -237,7 +238,7 @@ export default (elementList: PPTElement[],
 
       if (startPointer.x === currentPointer.x && startPointer.y === currentPointer.y) return
 
-      commitSlideElements(liveList)
+      commitSlideElements(liveList, commitBase)
       addHistorySnapshot()
     }
   }, [setElementList, addHistorySnapshot])

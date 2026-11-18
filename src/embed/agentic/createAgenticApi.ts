@@ -36,6 +36,7 @@ import { AGENTIC_DOCS, describeAgenticCommand, listAgenticDomains } from './mani
 import type { FikaAgentApi, FikaAgentCapability, FikaAgentCommand, FikaAudioElementPatch, FikaAudioSourceInput, FikaAudioTransformPatch, FikaAnimationCatalog, FikaAnimationSequenceStep, FikaBatchOptions, FikaBridgeEvent, FikaBridgeListener, FikaBridgeState, FikaChartElementPatch, FikaCommandIssue, FikaCommandMeta, FikaCommandResult, FikaCommandType, FikaCreateChartInput, FikaCreateAudioInput, FikaCreateLatexElementInput, FikaCreateShapeInput, FikaCreateTableInput, FikaCreateLineElementInput, FikaDeckDocument, FikaDeckInput, FikaDeckPatch, FikaDeckViewport, FikaApplyThemeOptions, FikaElementFlipInput, FikaInsertElementsInput, FikaInsertSlidesInput, FikaElementMoveInput, FikaElementResizeInput, FikaElementTransformPatch, FikaLatexElementPatch, FikaLineDirectionInput, FikaLineElementPatch, FikaLineStyleInput, FikaMediaAssetInput, FikaMediaAssetKind, FikaNoteInput, FikaNotePatch, FikaNoteReplyInput, FikaReplaceOptions, FikaSearchOptions, FikaSearchResult, FikaSearchResults, FikaSectionRange, FikaShapeFillInput, FikaShapePatch, FikaShapePreset, FikaSlideReference, FikaTableElementPatch, FikaSlideThemePatch, FikaRichTextElement, FikaRichTextParagraphAttrs, FikaRichTextStylePatch, FikaThemeExtractionOptions, FikaVideoPatch, FikaVideoPlaybackPatch, FikaVideoPositionPatch, FikaVideoSizePatch, FikaVideoSourcePatch } from './types';
 import { assertColorFields, assertElementPatch, assertIndexInRange, assertPositiveNumber, fromApiInsertSlideIndex, fromApiSlideIndex, toApiSlideIndex } from './validators';
 import { beginScreening, exitScreening } from '@/utils/screening';
+import { repairDuplicateElementIds } from '@/utils/repairElementIds';
 type Stores = ReturnType<typeof createStores>;
 type Handler = (payload: unknown, command: FikaAgentCommand) => unknown | Promise<unknown>;
 type ElementOrderCommand = 'forward' | 'backward' | 'front' | 'back';
@@ -397,7 +398,7 @@ function normalizeDocumentElement(value: unknown, path: string): PPTElement {
 }
 function normalizeDocumentSlides(value: unknown, path: string): Slide[] {
   if (!Array.isArray(value)) throw new AgenticCommandError('InvalidDocument', 'Document slides must be an array', path);
-  return value.map((slideValue, index) => {
+  return repairDuplicateElementIds(value.map((slideValue, index) => {
     const slidePath = `${path}[${index}]`;
     const slide = requireDocumentRecord(slideValue, slidePath);
     if (slide.id !== undefined && typeof slide.id !== 'string') {
@@ -415,7 +416,7 @@ function normalizeDocumentSlides(value: unknown, path: string): Slide[] {
       ...slide,
       elements
     } as Partial<Slide>);
-  });
+  }));
 }
 function normalizeDocumentTheme(value: unknown, path: string): FikaSlideThemePatch | undefined {
   const theme = optionalDocumentRecord(value, path);

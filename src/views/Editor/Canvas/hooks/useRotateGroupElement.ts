@@ -4,7 +4,7 @@ import type { PPTElement, PPTLineElement } from '@/types/slides'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { canRotateGroupElements, getElementListRange, getGroupElementCenter, normalizeAngle, rotateLineElement, rotateRectLikeElement } from '@/utils/element'
 import { bindDocumentDrag, rafCoalesce } from '@/utils/gestureBind'
-import { commitSlideElements } from '@/utils/commitSlideElements'
+import { captureSlideCommitBase, commitSlideElements } from '@/utils/commitSlideElements'
 import { clientToCanvas } from '@/utils/canvasPointer'
 
 const getAngleFromCoordinate = (x: number, y: number) => {
@@ -155,6 +155,7 @@ export default (
 
     gesturingRef.current = true
     useMainStore.getState().setGesturingState(true)
+    const commitBase = captureSlideCommitBase()
 
     const handleMousemove = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
@@ -201,7 +202,7 @@ export default (
 
       if (!deltaAngle) return
 
-      const merged = commitSlideElements(liveList)
+      const merged = commitSlideElements(liveList, commitBase)
       elementListRef.current = merged
       setElementList(merged)
       addHistorySnapshot()

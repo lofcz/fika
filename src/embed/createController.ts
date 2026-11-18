@@ -169,6 +169,9 @@ export function createController(
 
     goToSlide(slideIdOrIndex: string | number) {
       if (destroyed) return
+      // Hosts follow their own edits (AI bridge, streamed generation). Never
+      // pull the slide out from under a drag/resize/rotate the teacher is doing.
+      if (useMainStore.getState().isGesturing) return
       const storeIndex = resolveSlideIndex(slideIdOrIndex)
       runLegacyCommand(agentic.api.view.goToSlide(
         typeof slideIdOrIndex === 'number' ? storeIndex + 1 : slideIdOrIndex,

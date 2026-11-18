@@ -1,4 +1,4 @@
-import { useMainStore, useSlidesStore } from '@/store'
+import { selectCurrentSlide, useMainStore, useSlidesStore } from '@/store'
 import type { EditorView } from 'prosemirror-view'
 import type { Node as ProseMirrorNode } from 'prosemirror-model'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
@@ -47,7 +47,13 @@ export const resolveEditorMountHtml = (elementId: string, value: string): string
 }
 
 const findElementInPresentation = (elementId: string): { slideId: string; el: PPTElement } | null => {
-  for (const slide of useSlidesStore.getState().slides) {
+  // Live editors are mounted on the visible slide; resolve there first so a
+  // deck with ids repeated across slides never commits into another slide.
+  const state = useSlidesStore.getState()
+  const current = selectCurrentSlide(state)
+  const own = current?.elements.find(item => item.id === elementId)
+  if (current && own) return { slideId: current.id, el: own }
+  for (const slide of state.slides) {
     const el = slide.elements.find(item => item.id === elementId)
     if (el) return { slideId: slide.id, el }
   }
