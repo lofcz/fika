@@ -57,7 +57,7 @@ export interface FikaHeaderMenuItem {
   /** Menu item label (host-localized). */
   label: string;
   /**
-   * Optional Lucide kebab-case name (`link`, `share-2`, `globe`, `cloud`)
+   * Optional Lucide kebab-case name (`link`, `share-2`, `globe`, `cloud`, `history`)
    * rendered before the label. Only a curated set is supported; unknown names
    * render no icon.
    */

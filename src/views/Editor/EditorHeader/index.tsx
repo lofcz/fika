@@ -33,6 +33,7 @@ const HOST_MENU_ICONS = new Set([
   'share-2',
   'globe',
   'cloud',
+  'history',
 ])
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
