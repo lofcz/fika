@@ -30,6 +30,12 @@ export type {
   FikaExportWatermarkResolver,
   FikaWatermarkSurface,
 } from '@/configs/exportWatermark'
+export type {
+  FikaExportMetadata,
+  FikaExportMetadataContext,
+  FikaExportMetadataResolver,
+  FikaExportMetadataXmpNamespace,
+} from '@/configs/exportMetadata'
 export {
   createFikaMediaUploader,
 } from '@/configs/mediaUpload'

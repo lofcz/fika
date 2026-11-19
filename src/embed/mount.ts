@@ -22,6 +22,7 @@ import { setFikaDesignThemes, resolveDesignThemes } from '@/configs/designThemes
 import { setFikaExportTabs } from '@/configs/exportTabs'
 import { setFikaExportMediaResolver } from '@/configs/exportMediaResolver'
 import { setFikaExportWatermark } from '@/configs/exportWatermark'
+import { setFikaExportMetadata } from '@/configs/exportMetadata'
 import { setFikaMediaConfig } from '@/configs/mediaUpload'
 import { setFikaHeaderMenuItems } from '@/configs/headerMenu'
 import { setFikaLocaleSwitcherEnabled } from '@/configs/localeSwitcher'
@@ -119,6 +120,7 @@ export async function mountFika(
     setFikaExportTabs(options.exportTabs)
     setFikaExportMediaResolver(options.exportMediaResolver)
     setFikaExportWatermark(options.exportWatermark)
+    setFikaExportMetadata(options.exportMetadata)
     setFikaMediaConfig(options.media)
     setFikaHeaderMenuItems(options.headerMenuItems)
     setFikaLocaleSwitcherEnabled(options.showLocaleSwitcher)
@@ -183,6 +185,7 @@ export async function mountFika(
       }
       setFikaExportMediaResolver(null)
       setFikaExportWatermark(null)
+      setFikaExportMetadata(null)
       setFikaMediaConfig(null)
       setFikaDesignThemes()
       setFikaHeaderMenuItems()

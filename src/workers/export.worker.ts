@@ -24,11 +24,24 @@ async function run(task: string, data: any): Promise<any> {
       const { applyPptxExportWatermark } = await import('../utils/pptxExportWatermark')
       bytes = new Uint8Array(await applyPptxExportWatermark(bytes, data.stamp.watermark, data.stamp.images)).buffer
     }
+    if (data.metadata) {
+      const { applyPptxExportMetadata } = await import('../utils/pptxExportMetadata')
+      bytes = new Uint8Array(await applyPptxExportMetadata(bytes, data.metadata)).buffer
+    }
     return bytes
   }
   if (task === 'stamp') {
-    const { applyPptxExportWatermark } = await import('../utils/pptxExportWatermark')
-    return new Uint8Array(await applyPptxExportWatermark(data.bytes, data.watermark, data.images)).buffer
+    // Finishes a retained source package: optional watermark, then optional metadata.
+    let bytes: ArrayBuffer | Uint8Array = data.bytes
+    if (data.watermark) {
+      const { applyPptxExportWatermark } = await import('../utils/pptxExportWatermark')
+      bytes = await applyPptxExportWatermark(bytes, data.watermark, data.images)
+    }
+    if (data.metadata) {
+      const { applyPptxExportMetadata } = await import('../utils/pptxExportMetadata')
+      bytes = await applyPptxExportMetadata(bytes, data.metadata)
+    }
+    return new Uint8Array(bytes).buffer
   }
   if (task === 'pdf-start') {
     const { PDFDocument } = await import('pdf-lib')
@@ -37,6 +50,10 @@ async function run(task: string, data: any): Promise<any> {
     pdf.setCreator('Fika')
     const embed = (image: any) => image.mime === 'image/png' ? pdf!.embedPng(image.bytes) : pdf!.embedJpg(image.bytes)
     marks = data.watermark ? { config: data.watermark, light: await embed(data.light), dark: data.dark ? await embed(data.dark) : null } : null
+    if (data.metadata) {
+      const { applyPdfExportMetadata } = await import('../utils/pdfExportMetadata')
+      applyPdfExportMetadata(pdf, data.metadata, { title: data.title || 'Presentation' })
+    }
     return null
   }
   if (task === 'pdf-page') {

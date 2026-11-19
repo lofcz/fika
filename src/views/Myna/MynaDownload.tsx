@@ -9,6 +9,7 @@ import { createMynaPdf, type MynaPdfPage } from './pdf'
 import { useMainStore, useSlidesStore } from '@/store'
 import { renderSlideImage } from '@/embed/render'
 import { getFikaExportWatermark } from '@/configs/exportWatermark'
+import { getFikaExportMetadata, resolveExportMetadata } from '@/configs/exportMetadata'
 import { loadWatermarkImage, watermarkSurfaceFromHex } from '@/utils/pptxExportWatermark'
 import { drainCommitQueue } from '@/utils/commitQueue'
 import { bindStyles } from '@/utils/cssm'
@@ -115,7 +116,19 @@ export default function MynaDownload({ onClose }: { onClose: () => void }) {
         else zip.file(`${String(indices[i] + 1).padStart(3, '0')}.${format === 'jpeg' ? 'jpg' : format}`, blob)
       }
       if (cancelled.current) return
-      if (format === 'pdf') saveAs(new Blob([new Uint8Array(createMynaPdf(pdfPages))], { type: 'application/pdf' }), `${name}.pdf`)
+      if (format === 'pdf') {
+        let bytes = createMynaPdf(pdfPages)
+        const metadata = await resolveExportMetadata(getFikaExportMetadata(), { format: 'pdf', title: doc.title || name })
+        if (metadata) {
+          const [{ PDFDocument }, { applyPdfExportMetadata }] = await Promise.all([import('pdf-lib'), import('@/utils/pdfExportMetadata')])
+          const pdf = await PDFDocument.load(bytes, { updateMetadata: false })
+          if (doc.title) pdf.setTitle(doc.title)
+          applyPdfExportMetadata(pdf, metadata, { title: doc.title || name })
+          bytes = await pdf.save()
+        }
+        if (cancelled.current) return
+        saveAs(new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }), `${name}.pdf`)
+      }
       else if (pages.length > 1) { setProgress('zip'); const blob = await zip.generateAsync({ type: 'blob' }); if (cancelled.current) return; saveAs(blob, `${name}.zip`) }
       if (svgFallback) setSvgNotice(true)
       else onClose()

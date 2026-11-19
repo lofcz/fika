@@ -4,6 +4,7 @@ import type { FikaDocument } from './types'
 import type { PresentationExportOptions, PresentationExportState } from '@/hooks/useExport'
 import { useSlidesStore } from '@/store'
 import { getFikaExportWatermark } from '@/configs/exportWatermark'
+import { getFikaExportMetadata, resolveExportMetadata } from '@/configs/exportMetadata'
 import { getFikaExportMediaResolver } from '@/configs/exportMediaResolver'
 import { createExportWorker, yieldExportTask } from '@/utils/exportWorker'
 
@@ -15,7 +16,7 @@ export interface FikaExportProgress {
   progress: number
 }
 
-export interface FikaExportOptions extends Pick<PresentationExportOptions, 'mediaResolver' | 'watermark'> {
+export interface FikaExportOptions extends Pick<PresentationExportOptions, 'mediaResolver' | 'watermark' | 'metadata'> {
   /** Runtime assets/chunks when exporting before mounting an editor. */
   assetBaseUrl?: string
   /** PDF raster width in pixels. Default 2560, maximum 8192. */
@@ -63,6 +64,7 @@ export async function exportPresentationPptx(document: FikaDocument, options: Fi
   const config = {
     mediaResolver: options.mediaResolver === undefined ? getFikaExportMediaResolver() : options.mediaResolver,
     watermark: options.watermark === undefined ? getFikaExportWatermark() : options.watermark,
+    metadata: options.metadata === undefined ? getFikaExportMetadata() : options.metadata,
   }
   const { createPresentationExporter } = await import('@/hooks/useExport')
   const { createJobProgress } = await import('@/utils/jobProgress')
@@ -88,6 +90,7 @@ export async function exportPresentationPdf(document: FikaDocument, options: Fik
   await yieldExportTask()
   configureAssets(options)
   const resolver = options.watermark === undefined ? getFikaExportWatermark() : options.watermark
+  const metadataResolver = options.metadata === undefined ? getFikaExportMetadata() : options.metadata
   const mediaResolver = options.mediaResolver === undefined ? getFikaExportMediaResolver() : options.mediaResolver
   const rasterWidth = options.width ?? 2560
   const format = options.imageFormat ?? 'image/jpeg'
@@ -113,9 +116,10 @@ export async function exportPresentationPdf(document: FikaDocument, options: Fik
   const watermark = await resolver?.()
   const light = watermark ? await loadWatermarkImage(watermark.image) : null
   const dark = watermark?.imageOnDark ? await loadWatermarkImage(watermark.imageOnDark) : null
+  const metadata = await resolveExportMetadata(metadataResolver, { format: 'pdf', title: deck.title })
   const worker = createExportWorker()
   try {
-    await worker.request('pdf-start', { title: deck.title, watermark, light, dark })
+    await worker.request('pdf-start', { title: deck.title, watermark, light, dark, metadata })
     // Match PPTX's 10-inch-wide layout, including custom/portrait aspect ratios.
     const width = (deck.viewportWidthInches ?? 10) * 72
     const height = width * deck.viewportRatio
