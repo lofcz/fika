@@ -2,6 +2,7 @@ import type { FikaDesignTheme } from '@/configs/designThemes';
 import type { FikaExportTabsConfig } from '@/configs/exportTabs';
 import type { FikaExportMediaResolver } from '@/configs/exportMediaResolver';
 import type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver, FikaWatermarkSurface } from '@/configs/exportWatermark';
+import type { FikaExportMetadata, FikaExportMetadataContext, FikaExportMetadataResolver, FikaExportMetadataXmpNamespace } from '@/configs/exportMetadata';
 import type { FikaMediaConfig } from '@/configs/mediaUpload';
 import type { Locales } from '@/i18n/locale';
 import type { Slide, SlideTheme, SlideTemplate } from '@/types/slides';
@@ -9,6 +10,7 @@ import type { FikaAgentApi, FikaDeckViewport, FikaSlideReference } from './agent
 import type { FikaRevealOptions } from './reveal';
 export type { FikaExportMediaResolver };
 export type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver, FikaWatermarkSurface };
+export type { FikaExportMetadata, FikaExportMetadataContext, FikaExportMetadataResolver, FikaExportMetadataXmpNamespace };
 export type { FikaRevealOptions };
 export type { FikaMediaConfig, FikaMediaConstraints, FikaMediaKind, FikaMediaSizeLimit, FikaMediaUploadProgress, FikaMediaUploadRequest, FikaMediaUploadResult, FikaMediaUploader, FikaXhrMediaUploaderOptions } from '@/configs/mediaUpload';
 export interface FikaTemplatePayload {
@@ -112,6 +114,16 @@ export interface FikaMountOptions {
    * Applies to regenerated decks and retained source packages alike.
    */
   exportWatermark?: FikaExportWatermarkResolver;
+  /**
+   * Machine-readable document metadata written into every PPTX and PDF
+   * download (editor export dialog and `exportPresentationPptx` /
+   * `exportPresentationPdf` without an explicit `metadata` option). Use it to
+   * label files as AI-generated: generator, IPTC digital source type, a
+   * disclosure statement and an optional custom XMP namespace. Evaluated at
+   * the start of each export; return null to keep Fika's defaults. A throwing
+   * resolver fails the export.
+   */
+  exportMetadata?: FikaExportMetadataResolver;
   /**
    * Local media picker used by the unified Insert → Media action (images,
    * video, and audio). Pass `upload` to send files to your backend instead of

@@ -30,6 +30,7 @@ import { getLL } from '@/i18n/getLL';
 import { getFikaExportMediaResolver, type FikaExportMediaResolver } from '@/configs/exportMediaResolver';
 import { getFikaExportWatermark, type FikaExportWatermarkResolver, type FikaExportWatermark, type FikaWatermarkSurface } from '@/configs/exportWatermark';
 import { loadWatermarkImage, type WatermarkImage } from '@/utils/pptxExportWatermark';
+import { getFikaExportMetadata, resolveExportMetadata, type FikaExportMetadata, type FikaExportMetadataResolver } from '@/configs/exportMetadata';
 import { getInternedBlob, isBlobUrl, persistableMediaSrc } from '@/utils/mediaIntern';
 import { transitionExportForMode } from '@/configs/transitions';
 import { createJobProgress } from '@/utils/jobProgress';
@@ -124,6 +125,8 @@ export interface PresentationExportOptions {
   hiddenElementIds?: string[]
   mediaResolver?: FikaExportMediaResolver | null
   watermark?: FikaExportWatermarkResolver | null
+  /** Document metadata for the written file; `undefined` falls back to the mounted `exportMetadata`. */
+  metadata?: FikaExportMetadataResolver | null
 }
 export function createPresentationExporter(
   { slides, theme, viewportRatio, title, viewportSize, viewportWidthInches }: PresentationExportState,
@@ -133,6 +136,7 @@ export function createPresentationExporter(
   const exportJob = job;
   const mediaResolver = options.mediaResolver === undefined ? getFikaExportMediaResolver() : options.mediaResolver;
   const watermarkResolver = options.watermark === undefined ? getFikaExportWatermark() : options.watermark;
+  const metadataResolver = options.metadata === undefined ? getFikaExportMetadata() : options.metadata;
   const defaultFontSize = 16;
   const ratioPx2Inch = (() => {
     return viewportSize / (viewportWidthInches ?? 10);
@@ -1390,6 +1394,13 @@ export function createPresentationExporter(
         console.error('PPTX export failed to resolve the watermark:', error);
         throw error;
       }
+      let metadata: FikaExportMetadata | null;
+      try {
+        metadata = await resolveExportMetadata(metadataResolver, { format: 'pptx', title });
+      } catch (error) {
+        console.error('PPTX export failed to resolve the document metadata:', error);
+        throw error;
+      }
 
       const excludesMedia = ignoreMedia && _slides.some(slide => slide.elements.some(el => el.type === 'audio' || el.type === 'video'));
       const retained = options.preserveSourcePackage && !options.hiddenElementIds?.length && !excludesMedia
@@ -1398,13 +1409,13 @@ export function createPresentationExporter(
       if (retained) {
         try {
           await tickExportProgress(0.96, _slides.length + 1, gen);
-          const bytes = stamp
-            ? new Uint8Array(await worker.request<ArrayBuffer>('stamp', { bytes: retained, watermark: stamp.watermark, images: {
+          const bytes = stamp || metadata
+            ? new Uint8Array(await worker.request<ArrayBuffer>('stamp', { bytes: retained, metadata, watermark: stamp?.watermark ?? null, images: stamp ? {
               onLight: stamp.onLight,
               onDark: stamp.onDark,
               slideSurfaces: _slides.map((slide) => slideWatermarkSurface(slide.background, theme.backgroundColor)),
               masterSurface: slideWatermarkSurface(undefined, theme.backgroundColor),
-            } }))
+            } : null }))
             : new Uint8Array(retained);
           return new Blob([new Uint8Array(bytes)], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
         } catch {
@@ -2109,7 +2120,7 @@ export function createPresentationExporter(
             onDark: stamp.onDark,
             slideSurfaces: _slides.map((slide) => slideWatermarkSurface(slide.background, theme.backgroundColor)),
             masterSurface: slideWatermarkSurface(undefined, theme.backgroundColor),
-          } } : null });
+          } } : null, metadata });
           await tickExportProgress(1, slideCount + 1, gen);
           if (failedSources.size) {
             message.warning(`${getLL().export.exportPartial()} (${failedSources.size})`);
