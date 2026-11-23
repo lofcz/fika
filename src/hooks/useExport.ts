@@ -16,6 +16,8 @@ import { LATEX_ELEMENT_FONT_SIZE, MATH_CLASS } from '@/utils/math';
 import { latexPaintScale } from '@/utils/latex';
 import { applyOmmlRunStyle, prepareLatexToOmml, stripXmlIllegalChars, tryLatexToOmmlSync } from '@/utils/latexToOmml';
 import { collectEmbeddedFonts, preparePptxFontFamilies } from '@/utils/exportFonts';
+import { applyPptxLanguage } from '@/utils/exportLanguage';
+import { getFikaExportLanguage, pptxLanguageTag } from '@/configs/exportLanguage';
 import { svg2Base64 } from '@/utils/svg2Base64';
 import { renderMermaidForImage } from '@/utils/mermaid';
 import { codeElementPptxBox, codeElementToPptxText } from '@/utils/codePptxExport';
@@ -127,6 +129,8 @@ export interface PresentationExportOptions {
   watermark?: FikaExportWatermarkResolver | null
   /** Document metadata for the written file; `undefined` falls back to the mounted `exportMetadata`. */
   metadata?: FikaExportMetadataResolver | null
+  /** Proofing language of the deck's text (BCP-47); `undefined` falls back to the mounted `exportLanguage`. */
+  language?: string | null
 }
 export function createPresentationExporter(
   { slides, theme, viewportRatio, title, viewportSize, viewportWidthInches }: PresentationExportState,
@@ -137,6 +141,7 @@ export function createPresentationExporter(
   const mediaResolver = options.mediaResolver === undefined ? getFikaExportMediaResolver() : options.mediaResolver;
   const watermarkResolver = options.watermark === undefined ? getFikaExportWatermark() : options.watermark;
   const metadataResolver = options.metadata === undefined ? getFikaExportMetadata() : options.metadata;
+  const language = options.language === undefined ? getFikaExportLanguage() : pptxLanguageTag(options.language);
   const defaultFontSize = 16;
   const ratioPx2Inch = (() => {
     return viewportSize / (viewportWidthInches ?? 10);
@@ -2111,6 +2116,7 @@ export function createPresentationExporter(
         await tickExportProgress(0.96, slideCount + 1, gen);
         try {
           // Collect after recording so inline runs and all element types are covered.
+          applyPptxLanguage(commands, language);
           for (const font of await collectEmbeddedFonts(preparePptxFontFamilies(commands))) {
             await pptx.addFont(font);
           }

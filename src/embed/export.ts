@@ -16,7 +16,7 @@ export interface FikaExportProgress {
   progress: number
 }
 
-export interface FikaExportOptions extends Pick<PresentationExportOptions, 'mediaResolver' | 'watermark' | 'metadata'> {
+export interface FikaExportOptions extends Pick<PresentationExportOptions, 'mediaResolver' | 'watermark' | 'metadata' | 'language'> {
   /** Runtime assets/chunks when exporting before mounting an editor. */
   assetBaseUrl?: string
   /** PDF raster width in pixels. Default 2560, maximum 8192. */
@@ -65,6 +65,7 @@ export async function exportPresentationPptx(document: FikaDocument, options: Fi
     mediaResolver: options.mediaResolver === undefined ? getFikaExportMediaResolver() : options.mediaResolver,
     watermark: options.watermark === undefined ? getFikaExportWatermark() : options.watermark,
     metadata: options.metadata === undefined ? getFikaExportMetadata() : options.metadata,
+    language: options.language,
   }
   const { createPresentationExporter } = await import('@/hooks/useExport')
   const { createJobProgress } = await import('@/utils/jobProgress')

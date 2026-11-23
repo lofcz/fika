@@ -125,6 +125,13 @@ export interface FikaMountOptions {
    */
   exportMetadata?: FikaExportMetadataResolver;
   /**
+   * Language of the deck's text (BCP-47, e.g. `cs` or `sk-SK`) written to
+   * every PPTX text run, so PowerPoint checks spelling in that language
+   * instead of US English. Applies to the editor export dialog and to
+   * `exportPresentationPptx` without an explicit `language` option.
+   */
+  exportLanguage?: string;
+  /**
    * Local media picker used by the unified Insert → Media action (images,
    * video, and audio). Pass `upload` to send files to your backend instead of
    * embedding data/blob URLs. Constraints (count, size, MIME, extensions) are
