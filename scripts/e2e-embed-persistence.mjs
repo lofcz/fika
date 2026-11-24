@@ -7,19 +7,22 @@ import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
+import { findBun } from './find-bun.mjs'
 import { inflateSync } from 'node:zlib'
 import { chromium } from 'playwright'
 import JSZip from 'jszip'
 import { PDFDocument, PDFName, PDFRawStream } from 'pdf-lib'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(import.meta.url)
+const bun = findBun()
+if (!bun) throw new Error('The embed browser fixture requires Bun')
 const temp = await mkdtemp(join(tmpdir(), 'fika-persistence-'))
 const imports = {}
 for (const [index, name] of ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/compiler-runtime'].entries()) {
   const entry = join(temp, `entry-${index}.js`)
   const exports = Object.keys(require(name)).filter(key => key !== 'default' && /^[a-zA-Z_$][\w$]*$/.test(key))
   await writeFile(entry, `import value from ${JSON.stringify(require.resolve(name))}; export default value; ${exports.map(key => `export const ${key} = value.${key};`).join('\n')}`)
-  execFileSync('bun', ['build', entry, '--target=browser', '--format=esm', '--define=process.env.NODE_ENV="production"', '--external=react', '--external=react-dom', '--outfile', join(temp, `${index}.js`)], { stdio: 'pipe', cwd: root })
+  execFileSync(bun, ['build', entry, '--target=browser', '--format=esm', '--define=process.env.NODE_ENV="production"', '--external=react', '--external=react-dom', '--outfile', join(temp, `${index}.js`)], { stdio: 'pipe', cwd: root })
   imports[name] = `/vendor/${index}.js`
 }
 const server = createServer(async (req, res) => {
@@ -45,6 +48,80 @@ page.on('console', msg => { if (msg.type() === 'error') console.error(msg.text()
 try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`)
   await page.waitForFunction(() => window.fika)
+  const review = {
+    id: 'review', name: 'Board review', cover: '', origin: 'host',
+    description: 'Quarterly financial results', categories: [' Report ', 'Briefing'],
+    tags: ['Finance', 'Quarterly '], useWhen: 'Reporting results', avoidWhen: 'Launching a product',
+  }
+  const classic = { id: 'classic', name: 'Classic', cover: '' }
+  const loaderOnly = { id: 'legacy', name: 'legacy', cover: '' }
+  const catalog = await page.evaluate(async ({ review, classic }) => {
+    const host = document.getElementById('host')
+    const calls = []
+    const load = (id, payload) => async () => { calls.push(id); return payload }
+    const mount = async options => (await window.fika.mountFika(host, {
+      assetBaseUrl: '/fika-assets', document: { title: 'Catalog', slides: [] }, ...options,
+    })).controller
+    const controller = await mount({
+      templates: [review, classic, { id: 'unregistered', name: 'Picker only', cover: '' }],
+      templateLoaders: {
+        legacy: load('legacy', [{ id: 'one', type: 'cover', elements: [] }]),
+        classic: load('classic', []), review: load('review', { slides: [] }),
+      },
+    })
+    const all = controller.templates.catalog()
+    const detached = controller.templates.catalog()[0]
+    detached.categories.length = 0
+    detached.tags.push('caller edit')
+    const queries = [
+      undefined, { category: '  ', tags: [' '] }, { category: 'briefing' }, { tags: [' fINAnce '] },
+      { category: 'REPORT', tags: [' quarterly', 'FINANCE'] }, { tags: ['finance', 'missing'] },
+      { category: 'other', tags: ['finance'] }, { category: 'rep' }, { tags: ['quart'] },
+    ]
+    const filtered = []
+    for (const query of queries) {
+      const result = await controller.execute({ type: 'templates.catalog', payload: query })
+      if (!result.ok || result.changed) throw new Error(JSON.stringify(result))
+      filtered.push([controller.templates.catalog(query), result.data])
+    }
+    const updated = { ...review, description: '', tags: ['Annual', 'Finance'], avoidWhen: 'New audience' }
+    const set = await controller.deck.setTemplates([updated], { commit: false })
+    const saved = controller.export.json()
+    await controller.deck.setTemplates([], { commit: false })
+    const restored = await controller.import.json(saved, { commit: false })
+    const roundTrip = controller.templates.catalog()[0]
+    const invalid = await controller.execute({
+      type: 'deck.setTemplates', payload: { templates: [{ ...review, tags: [false] }] },
+    })
+    const afterInvalid = controller.deck.get().templates
+    const discoveryCalls = [...calls]
+    const slides = await controller.templates.slidesCatalog('legacy')
+    await controller.templates.slidesCatalog('review')
+    controller.destroy()
+    const remounted = await mount({ templateLoaders: { review: load('second', { slides: [] }) } })
+    const remountedCatalog = remounted.templates.catalog()
+    const second = await remounted.templates.slidesCatalog('review')
+    remounted.destroy()
+    return { all, filtered, set, saved, restored, roundTrip, invalid, afterInvalid, discoveryCalls,
+      slides, remountedCatalog, second, calls }
+  }, { review, classic })
+  const all = [review, classic, loaderOnly]
+  assert.deepEqual(catalog.all, all)
+  const expected = [all, all, [review], [review], [review], [], [], [], []]
+  assert.deepEqual(catalog.filtered, expected.map(matches => [matches, matches]))
+  const updated = { ...review, description: '', tags: ['Annual', 'Finance'], avoidWhen: 'New audience' }
+  assert.deepEqual(catalog.set.data, [updated])
+  assert.deepEqual(catalog.saved.templates, [updated])
+  assert.deepEqual(catalog.restored.data.templates, [updated])
+  assert.deepEqual(catalog.roundTrip, updated)
+  assert.equal(catalog.invalid.errors[0].path, 'payload.templates[0].tags')
+  assert.deepEqual(catalog.afterInvalid, [updated])
+  assert.deepEqual(catalog.discoveryCalls, [])
+  assert.equal(catalog.slides.data.byType.cover[0].slug, 'cover_1')
+  assert.deepEqual(catalog.remountedCatalog, [{ id: 'review', name: 'review', cover: '' }])
+  assert.equal(catalog.second.data.slideCount, 0)
+  assert.deepEqual(catalog.calls, ['legacy', 'review', 'second'])
+  console.log('PASS: template discovery round-trips metadata, filters both APIs and leaves legacy loaders lazy')
   const viewportResult = await page.evaluate(async () => {
     const document = {
       title: 'Authored viewport', viewport: { size: 1280, ratio: 9 / 16 },

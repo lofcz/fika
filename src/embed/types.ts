@@ -86,11 +86,11 @@ export interface FikaMountOptions {
   /** Base URL for runtime image/font assets and fallback mock decks. */
   assetBaseUrl?: string;
   /**
-   * Host-supplied template catalog shown in the design picker.
-   * Payload JSON is resolved with `templateLoaders` keyed by `templates[].id`.
+   * Host-supplied picker entries. Optional discovery fields are available to
+   * `controller.templates.catalog()` for entries with a matching loader.
    */
   templates?: SlideTemplate[];
-  /** Optional custom template payload loaders keyed by `templates[].id`. */
+  /** Lazy payload loaders keyed by template id. Loader-only ids also appear in the agent catalog. */
   templateLoaders?: Record<string, FikaTemplateLoader>;
   /** Fired when title, slides, or theme change (debounced). */
   onChange?: (document: FikaDocument) => void;

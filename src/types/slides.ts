@@ -690,6 +690,16 @@ export interface SlideTemplate {
   id: string;
   cover: string;
   origin?: string;
+  /** The presentation's purpose and intended audience, in the host's locale. */
+  description?: string;
+  /** Presentation classes such as report, proposal, portfolio, or lesson. */
+  categories?: string[];
+  /** Specific tasks, audiences, and visual structures supported by this template. */
+  tags?: string[];
+  /** Guidance for an author deciding whether to select this template. */
+  useWhen?: string;
+  /** Conditions under which another presentation structure is a better fit. */
+  avoidWhen?: string;
 }
 
 /** Theme pack imported from a local .json / .fika file */

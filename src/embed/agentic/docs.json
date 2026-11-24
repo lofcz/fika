@@ -389,10 +389,26 @@
       ]
     },
     "templates.catalog": {
-      "summary": "List host-registered presentation templates. Empty unless the embed host passed templates / templateLoaders.",
-      "details": "If the catalog is empty, skip the templates flow and use styles + layouts. If the host registered templates, pick one id, then apply it with deck.applyTemplate before inserting slides.",
+      "summary": "Discover host-registered presentation templates without loading their slides.",
+      "details": "Omit the payload to list all registered loaders. A matching host entry supplies the name, cover and optional description, categories, tags, useWhen and avoidWhen. Loader-only entries use the id as their name and an empty cover. If the unfiltered catalog is empty, use styles and layouts.",
+      "params": [
+        {
+          "name": "category",
+          "type": "string",
+          "required": false,
+          "description": "Match one declared category. Category and tag comparisons trim whitespace, ignore case and match whole values."
+        },
+        {
+          "name": "tags",
+          "type": "string[]",
+          "required": false,
+          "description": "Require every nonblank tag together with the category, if supplied. Blank filters are ignored."
+        }
+      ],
       "examples": [
-        "const templates = controller.templates.catalog() // -> [] unless the host registered templates"
+        "const all = controller.templates.catalog()",
+        "const reviews = controller.templates.catalog({ category: \"Report\", tags: [\"quarterly\"] })",
+        "const result = await controller.execute({ type: 'templates.catalog', payload: { tags: ['quarterly'] } })"
       ],
       "related": [
         "deck.applyTemplate",
@@ -411,7 +427,7 @@
         }
       ],
       "examples": [
-        "await controller.deck.applyTemplate(templates.catalog()[0].id)"
+        "await controller.deck.applyTemplate(controller.templates.catalog()[0].id)"
       ],
       "tips": [
         "Keep one template style for the whole deck. Do not hand-pick colors or fonts on top of a template."
@@ -434,8 +450,8 @@
         }
       ],
       "examples": [
-        "const catalog = await controller.templates.slidesCatalog(templateId)",
-        "// catalog.byType.cover -> [{ slug:'cover_1', description:'...', ... }, ...]"
+        "const result = await controller.templates.slidesCatalog(templateId)",
+        "if (result.ok) console.log(result.data?.byType.cover)"
       ],
       "related": [
         "slides.insertFromTemplate",

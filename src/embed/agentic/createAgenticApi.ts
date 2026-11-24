@@ -26,7 +26,7 @@ import { applySlideBackgroundWithContrast, resolveChartLabelColor } from '@/util
 import { resolveImportApply, type ImportApplyOptions } from '@/utils/importApply';
 import { applyImportTransitions, isTurningMode as isImportTurningMode, parseImportTurningMode } from '@/utils/importTransition';
 import { DEFAULT_TURNING_MODE } from '@/configs/animation';
-import { assertKnownTemplateId, buildTemplateSlidesCatalog, listTemplateCatalog, loadTemplatePayload, resolveTemplateSlide, templateThemePatch } from './templates';
+import { type FikaTemplateCatalogQuery, assertKnownTemplateId, buildTemplateSlidesCatalog, listTemplateCatalog, loadTemplatePayload, resolveTemplateSlide, templateThemePatch } from './templates';
 import { buildLayoutSlide, layoutExpectsBody, listLayouts, type FikaLayoutBackgroundMode } from './layouts';
 import { pickNearestAnchor, sequenceComposition, toApiCompositionPlan, type CompositionAnchor } from './composition';
 import { validateSlide } from './qa';
@@ -455,19 +455,24 @@ function normalizeDocumentTemplates(value: unknown, path: string): SlideTemplate
     if (typeof template.name !== 'string') throw new AgenticCommandError('InvalidDocument', 'Template name must be a string', `${templatePath}.name`);
     if (typeof template.id !== 'string') throw new AgenticCommandError('InvalidDocument', 'Template id must be a string', `${templatePath}.id`);
     if (typeof template.cover !== 'string') throw new AgenticCommandError('InvalidDocument', 'Template cover must be a string', `${templatePath}.cover`);
-    let origin: string | undefined;
-    if (template.origin !== undefined) {
-      if (typeof template.origin !== 'string') {
-        throw new AgenticCommandError('InvalidDocument', 'Template origin must be a string when provided', `${templatePath}.origin`);
+    const normalized: SlideTemplate = { name: template.name, id: template.id, cover: template.cover };
+    for (const key of ['origin', 'description', 'useWhen', 'avoidWhen'] as const) {
+      const field = template[key];
+      if (field === undefined) continue;
+      if (typeof field !== 'string') {
+        throw new AgenticCommandError('InvalidDocument', `Template ${key} must be a string when provided`, `${templatePath}.${key}`);
       }
-      origin = template.origin;
+      if (key !== 'origin' || field) normalized[key] = field;
     }
-    return {
-      name: template.name,
-      id: template.id,
-      cover: template.cover,
-      ...(origin ? { origin } : {}),
-    };
+    for (const key of ['categories', 'tags'] as const) {
+      const field = template[key];
+      if (field === undefined) continue;
+      if (!Array.isArray(field) || !field.every(item => typeof item === 'string')) {
+        throw new AgenticCommandError('InvalidDocument', `Template ${key} must be an array of strings`, `${templatePath}.${key}`);
+      }
+      normalized[key] = field;
+    }
+    return normalized;
   });
 }
 function documentFromPayload(payload: unknown, path = 'payload'): FikaDeckInput {
@@ -1696,7 +1701,7 @@ export function createAgenticApi(options: {
       theme: clonePlain(stores.slides.theme)
     };
   });
-  register('templates.catalog', () => listTemplateCatalog());
+  register('templates.catalog', (payload?: FikaTemplateCatalogQuery) => listTemplateCatalog(payload));
   register('templates.slidesCatalog', async (payload: {
     templateId: string;
   } = {
@@ -1917,7 +1922,7 @@ export function createAgenticApi(options: {
     return getState(stores, documentVersion);
   });
   register('deck.setTemplates', (payload: {
-    templates: Parameters<typeof stores.slides.setTemplates>[0];
+    templates: SlideTemplate[];
   }) => {
     const root = requireDocumentRecord(cloneJsonSafePayload(payload, 'payload'), 'payload');
     const templates = normalizeDocumentTemplates(root.templates, 'payload.templates');
@@ -4850,7 +4855,7 @@ export function createAgenticApi(options: {
       }, meta)
     },
     templates: {
-      catalog: () => listTemplateCatalog(),
+      catalog: listTemplateCatalog,
       slidesCatalog: (templateId, meta) => command('templates.slidesCatalog', {
         templateId
       }, meta)

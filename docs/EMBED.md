@@ -521,6 +521,35 @@ through storage, static rendering, and editing.
 Pass `assetBaseUrl` to `mountFika()` to resolve lazy editor CSS under the same
 asset directory as the embed stylesheet.
 
+### Presentation template catalog
+
+Register picker entries in `templates` and lazy loaders in `templateLoaders`.
+Use the same id in both. The agent catalog lists entries with loaders in picker
+order, then any remaining loader ids. A loader can resolve to a slide array or
+to a template payload such as `{ slides, theme }`.
+
+```ts
+import { mountFika, type FikaTemplateLoader } from 'fika-editor/embed'
+
+async function mountReviewEditor(host: HTMLElement, loadReview: FikaTemplateLoader) {
+  return mountFika(host, {
+    templates: [{
+      id: 'review', name: 'Quarterly review', cover: '/covers/review.png',
+      description: 'A results briefing for the board.',
+      categories: ['Report'], tags: ['quarterly', 'finance'],
+      useWhen: 'Compare results against targets.',
+      avoidWhen: 'Introducing a product for the first time.',
+    }],
+    templateLoaders: { review: loadReview },
+  })
+}
+```
+
+The five discovery fields are optional. Entries with just `id`, `name` and
+`cover` still work, as does optional `origin`. A loader registered on its own
+appears with its id as the name and an empty cover. Both catalog APIs read this
+metadata without invoking loaders. See [template discovery](./AGENTIC_BRIDGE.md#template-discovery).
+
 ### Host-configured slide designs
 
 Pass `designThemes` to replace the built-in design cards (not editor chrome).

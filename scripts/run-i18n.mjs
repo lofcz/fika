@@ -1,26 +1,10 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { findBun } from './find-bun.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const bunName = process.platform === 'win32' ? 'bun.exe' : 'bun'
-const bunCandidates = [
-  process.env.BUN_INSTALL && join(process.env.BUN_INSTALL, 'bin', bunName),
-  join(homedir(), '.bun', 'bin', bunName),
-].filter(Boolean)
-
-function findBun() {
-  const which = spawnSync(process.platform === 'win32' ? 'where.exe' : 'which', ['bun'], {
-    encoding: 'utf8',
-  })
-  if (which.status === 0) {
-    const first = which.stdout.trim().split(/\r?\n/)[0]
-    if (first && existsSync(first)) return first
-  }
-  return bunCandidates.find((path) => existsSync(path))
-}
 
 const bun = findBun()
 if (!bun) {
@@ -40,6 +24,7 @@ const result = spawnSync(bun, ['--bun', cli, ...extra], {
   },
 })
 
+if (result.error) throw result.error
 if (result.status !== 0) process.exit(result.status ?? 1)
 
 if (extra.includes('--no-watch')) {

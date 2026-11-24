@@ -1,4 +1,4 @@
-import { workspaceLabelsBounds } from './workspaceLabels'
+import { workspaceLabelsBounds } from './workspaceLabelGeometry'
 import { resolvePagePositions, pageLayoutBounds } from './pageLayout'
 import { useLayoutEffect, useRef } from 'react'
 import { Minus, Plus, Focus } from 'lucide-react'

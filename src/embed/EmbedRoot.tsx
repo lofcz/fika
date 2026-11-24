@@ -30,7 +30,6 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
   const myna = init.viewMode === 'canva' || init.viewMode === 'myna'
   const slides = useSlidesStore(s => s.slides)
   const setSlides = useSlidesStore(s => s.setSlides)
-  const setTemplates = useSlidesStore(s => s.setTemplates)
   const updateSlideIndex = useSlidesStore(s => s.updateSlideIndex)
   const screening = useScreenStore(s => s.screening)
   const setScreening = useScreenStore(s => s.setScreening)
@@ -71,7 +70,6 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
       if (typeof openPanelOnTextSelection === 'boolean') {
         useMainStore.getState().setOpenPanelOnTextSelection(openPanelOnTextSelection)
       }
-      if (init.templates?.length) setTemplates(init.templates)
       await resolveInitialDocument()
       await deleteDiscardedDB()
       initSnapshotDatabase()

@@ -6,7 +6,7 @@
  *
  * Do not trust `npm pack --dry-run --json`: Bun's `npm` shim on PATH can
  * return a JSON object with no `files` list. Pack a real `.tgz` with the npm
- * that sits next to `process.execPath`, then list it with `tar`.
+ * that sits next to `process.execPath` or invoked this script, then list it with `tar`.
  *
  *   node scripts/verify-embed-pack.mjs
  *   node scripts/verify-embed-pack.mjs --tarball
@@ -15,7 +15,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { validateCanvasOperations } from './generate-agentic-manifest.mjs'
 
@@ -31,6 +31,10 @@ const REQUIRED = [
   'dist/embed/agentic-manifest.json',
   'dist/types/embed/index.d.ts',
   'dist/types/embed/agentic/types.d.ts',
+  'dist/types/embed/agentic/templates.d.ts',
+  'dist/types/types/slides.d.ts',
+  'docs/AGENTIC_BRIDGE.md',
+  'docs/EMBED.md',
   'dist/layout/utils/resizeDeck.js',
   'dist/types/utils/resizeDeck.d.ts',
   'dist/text/index.js',
@@ -49,10 +53,12 @@ function resolveNpmCli() {
     join(dir, 'node_modules/npm/bin/npm-cli.js'),
     join(dir, '../lib/node_modules/npm/bin/npm-cli.js'),
   ]
+  const invokingCli = process.env.npm_execpath
+  if (invokingCli && basename(invokingCli) === 'npm-cli.js') candidates.push(invokingCli)
   for (const candidate of candidates) {
     if (existsSync(candidate)) return candidate
   }
-  throw new Error(`npm-cli.js not found next to ${process.execPath}`)
+  throw new Error(`npm-cli.js not found next to ${process.execPath}. Run npm run pack:verify or pass an existing tarball.`)
 }
 
 function runNpm(args, options = {}) {
@@ -64,8 +70,7 @@ function runNpm(args, options = {}) {
   })
 }
 
-function packTarball() {
-  const dest = mkdtempSync(join(tmpdir(), 'fika-pack-'))
+function packTarball(dest) {
   const cli = resolveNpmCli()
   const version = runNpm(['--version']).trim()
   console.log(`pack: node=${process.execPath}`)
@@ -74,11 +79,8 @@ function packTarball() {
     stdio: ['ignore', 'pipe', 'inherit'],
   })
   const tgz = readdirSync(dest).find((name) => name.endsWith('.tgz'))
-  if (!tgz) {
-    rmSync(dest, { recursive: true, force: true })
-    throw new Error(`npm pack produced no tarball in ${dest}`)
-  }
-  return { dest, tarball: join(dest, tgz) }
+  if (!tgz) throw new Error(`npm pack produced no tarball in ${dest}`)
+  return join(dest, tgz)
 }
 
 function listTarball(tarball) {
@@ -151,9 +153,8 @@ try {
   if (checkTarball) {
     let tarball = explicitTarball
     if (!tarball) {
-      const packed = packTarball()
-      packedDir = packed.dest
-      tarball = packed.tarball
+      packedDir = mkdtempSync(join(tmpdir(), 'fika-pack-'))
+      tarball = packTarball(packedDir)
     }
     if (!existsSync(tarball)) {
       failures.push(`tarball not found: ${tarball}`)

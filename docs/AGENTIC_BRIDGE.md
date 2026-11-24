@@ -33,6 +33,7 @@ controller.describe(commandType)
 controller.guides(guideId?)
 
 controller.deck.*
+controller.templates.*
 controller.slides.*
 controller.elements.*
 controller.element.*
@@ -52,6 +53,30 @@ controller.export.*
 
 Use domain wrappers for common flows. Use `execute()` for command-only operations that are registered but do not yet have a wrapper method.
 
+## Template discovery
+
+`controller.templates.catalog()` synchronously returns all registered template
+summaries. Pass the same optional query as a command payload to get the list in
+`result.data` on success.
+
+```ts
+const query = { category: 'Report', tags: ['quarterly', 'finance'] }
+const matches = controller.templates.catalog(query)
+const result = await controller.execute({ type: 'templates.catalog', payload: query })
+if (matches.length) {
+  const slides = await controller.templates.slidesCatalog(matches[0].id)
+  if (slides.ok) console.log(slides.data?.byType.cover)
+}
+```
+
+A template must declare the requested category and every requested tag.
+Comparisons match whole values after trimming and ignoring case. Blank criteria
+are ignored. Each summary includes `id`, `name` and `cover`, plus any supplied
+`origin`, `description`, `categories`, `tags`, `useWhen` and `avoidWhen`.
+Discovery leaves slide payloads unloaded. To inspect a template's slides and
+their insertion slugs, call `templates.slidesCatalog` with its id. An empty
+unfiltered catalog means the host registered no loaders.
+
 ## API Naming
 
 Command names use `domain.action` with lower-camel-case actions:
@@ -60,7 +85,7 @@ Command names use `domain.action` with lower-camel-case actions:
 type FikaCommandType = `${string}.${string}`
 ```
 
-Canonical domains are `deck`, `import`, `export`, `slides`, `elements`, `animations`, `tables`, `charts`, `notes`, `sections`, `search`, `history`, and `view`.
+Canonical domains include `deck`, `templates`, `import`, `export`, `slides`, `elements`, `animations`, `tables`, `charts`, `notes`, `sections`, `search`, `history`, and `view`.
 
 Naming rules:
 

@@ -1,8 +1,16 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { expect, test } from '@rstest/core'
+import { beforeAll, expect, test } from '@rstest/core'
 import { extractDecls, stripComments, validateCanvasOperations } from '../scripts/generate-agentic-manifest.mjs'
+
+beforeAll(() => {
+  execFileSync(process.execPath, [resolve('scripts/generate-agentic-manifest.mjs')], { cwd: resolve('.') })
+})
+
+function readManifest() {
+  return JSON.parse(readFileSync(resolve('dist/embed/agentic-manifest.json'), 'utf8'))
+}
 
 test('declarations retain documented union and intersection members across blank lines', () => {
   const declarations = extractDecls(stripComments(`
@@ -28,9 +36,8 @@ export interface Next { untouched: boolean; }
 })
 
 test('generated canvas manifest retains every public operation and image payload', () => {
-  execFileSync(process.execPath, [resolve('scripts/generate-agentic-manifest.mjs')], { cwd: resolve('.') })
   const declarations = readFileSync(resolve('dist/types/embed/agentic/types.d.ts'), 'utf8')
-  const manifest = JSON.parse(readFileSync(resolve('dist/embed/agentic-manifest.json'), 'utf8'))
+  const manifest = readManifest()
   expect(() => validateCanvasOperations(manifest, declarations)).not.toThrow()
   const schema = manifest.helperTypes.FikaCanvasOperation
   expect([...schema.matchAll(/\bop: '([^']+)'/g)].map(match => match[1])).toEqual([
@@ -41,4 +48,19 @@ test('generated canvas manifest retains every public operation and image payload
   expect(schema).toContain('sourceUrl?: string')
   const truncated = { ...manifest, helperTypes: { ...manifest.helperTypes, FikaCanvasOperation: schema.split(" | { op: 'image'")[0] } }
   expect(() => validateCanvasOperations(truncated, declarations)).toThrow('Canvas manifest operations differ')
+})
+
+test('template discovery describes an optional query and the complete summary', () => {
+  const manifest = readManifest()
+  const catalog = manifest.commands.find(command => command.name === 'templates.catalog')
+  expect(catalog).toMatchObject({
+    optional: true, payload: 'FikaTemplateCatalogQuery', returns: 'FikaTemplateSummary[]',
+  })
+  expect(catalog.doc.params.map(param => param.name)).toEqual(['category', 'tags'])
+  expect(manifest.commands.find(command => command.name === 'deck.setTemplates').payload).toBe('{ templates: SlideTemplate[] }')
+  expect(manifest.helperTypes.FikaTemplateCatalogQuery).toContain('category?: string; tags?: readonly string[]')
+  expect(manifest.helperTypes.FikaTemplateSummary).toContain('= SlideTemplate')
+  for (const field of ['description?: string', 'categories?: string[]', 'tags?: string[]', 'useWhen?: string', 'avoidWhen?: string']) {
+    expect(manifest.modelTypes.SlideTemplate).toContain(field)
+  }
 })

@@ -10,7 +10,7 @@ import { resolvePagePositions } from './pageLayout'
 import { useMynaViewStore } from './viewStore'
 import styles from './WorkspaceLabels.module.scss'
 import { useWorkspacePages, useWorkspaceAnnotations } from './workspaceSelectors'
-import { workspaceObjectRect } from './workspaceLabels'
+import { workspaceObjectRect } from './workspaceLabelGeometry'
 import { WorkspaceObjectsPanel, WorkspaceObject } from './WorkspaceObjects'
 
 const messages = {

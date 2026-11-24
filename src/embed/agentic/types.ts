@@ -2,7 +2,7 @@ import type { Locales } from '@/i18n/locale';
 import type { ShapeCategoryKey, ShapePoolItem } from '@/configs/shapes';
 import type { Broken2LineDirection, ChartData, ChartOptions, ChartType, Gradient, LinePoint, LineStyleType, Note, NoteReply, PPTAnimation, PPTAudioElement, PPTChartElement, PPTElement, PPTElementLink, PPTElementOutline, PPTElementShadow, PPTImageElement, PPTLatexElement, PPTLineElement, PPTShapeElement, PPTTableElement, PPTTextElement, PPTVideoElement, ShapeText, Slide, SlideBackground, SlideTemplate, SlideTheme, TableCell, TableCellStyle, TextAlign, TurningMode } from '@/types/slides';
 import type { FikaDocument } from '../types';
-import type { FikaTemplateSlidesCatalogResult, FikaTemplateSummary } from './templates';
+import type { FikaTemplateCatalogQuery, FikaTemplateSlidesCatalogResult, FikaTemplateSummary } from './templates';
 import type { FikaLayout, FikaLayoutBackgroundMode } from './layouts';
 import type { FikaStyleMotif, FikaStyleSummary } from './styles';
 import type { CompositionAnchor, CompositionPlan, CompositionSlideHint } from './composition';
@@ -10,7 +10,7 @@ import type { FikaAgenticDocs, FikaCommandDescription, FikaDesignGuide, FikaDoma
 import type { TextRunStyle } from '@/utils/markdown';
 export type { TextRunStyle } from '@/utils/markdown';
 export type { FikaAgenticDocs, FikaCommandDescription, FikaCommandDoc, FikaDesignGuide, FikaDesignSystem, FikaDocParam, FikaDomainDoc, FikaDomainSummary } from './manifestDocs';
-export type { FikaTemplateSummary, FikaTemplateSlideEntry, FikaTemplateSlidesCatalog, FikaTemplateSlidesCatalogResult } from './templates';
+export type { FikaTemplateCatalogQuery, FikaTemplateSummary, FikaTemplateSlideEntry, FikaTemplateSlidesCatalog, FikaTemplateSlidesCatalogResult } from './templates';
 export type { FikaLayout, FikaLayoutSlotDef, FikaLayoutBackgroundMode, FikaLayoutVariant } from './layouts';
 export type { FikaStyleSummary, FikaStylePreset, FikaStylePalette, FikaStyleScale, FikaStyleFonts, FikaStyleMotif } from './styles';
 export type { CompositionAnchor, CompositionDensity, CompositionPlan, CompositionPlanEntry, CompositionSlideHint } from './composition';
@@ -486,8 +486,8 @@ export interface FikaInsertFromTemplateResult {
   placeholderElementIds: string[];
 }
 export interface FikaAgentTemplatesApi {
-  /** List host-registered presentation templates shown in the template picker. */
-  catalog(): FikaTemplateSummary[];
+  /** Discover registered templates by category and tags without loading any slides. */
+  catalog(query?: FikaTemplateCatalogQuery): FikaTemplateSummary[];
   /** List insertable slides for a template, grouped by type (cover, contents, …). */
   slidesCatalog(templateId: string, meta?: FikaCommandMeta): Promise<FikaCommandResult<FikaTemplateSlidesCatalogResult>>;
 }
@@ -1272,7 +1272,7 @@ export interface FikaCommandPayloadMap {
   'deck.setTemplates': {
     templates: SlideTemplate[];
   };
-  'templates.catalog': undefined;
+  'templates.catalog': FikaTemplateCatalogQuery | undefined;
   'templates.slidesCatalog': {
     templateId: string;
   };

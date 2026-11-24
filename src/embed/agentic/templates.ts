@@ -1,15 +1,17 @@
 import { getLL } from '@/i18n/getLL';
 import { isKnownTemplateId, listCustomTemplateIds, loadConfiguredTemplate, normalizeTemplatePayload, setCustomTemplateLoaders, type TemplatePayload, type TemplatePayloadLoader } from '@/configs/templates';
 import { useSlidesStore } from '@/store/slides';
-import type { PPTElement, Slide, SlideTheme, SlideType } from '@/types/slides';
+import type { PPTElement, Slide, SlideTheme, SlideTemplate, SlideType } from '@/types/slides';
 
 const SLIDE_TYPES: SlideType[] = ['cover', 'contents', 'transition', 'content', 'end'];
 
-export interface FikaTemplateSummary {
-  id: string;
-  name: string;
-  cover: string;
-  origin?: string;
+export type FikaTemplateSummary = SlideTemplate;
+
+export interface FikaTemplateCatalogQuery {
+  /** Match one declared category. Category and tag comparisons trim whitespace and ignore case. */
+  category?: string;
+  /** Match every nonblank tag in addition to the category, when supplied. */
+  tags?: readonly string[];
 }
 
 export interface FikaTemplateSlideEntry {
@@ -68,14 +70,19 @@ function slugForType(type: SlideType, indexWithinType: number): string {
   return `${type}_${indexWithinType}`;
 }
 
-export function listTemplateCatalog(): FikaTemplateSummary[] {
+export function listTemplateCatalog(query?: FikaTemplateCatalogQuery): FikaTemplateSummary[] {
   const storeTemplates = useSlidesStore.getState().templates.filter(item => isKnownTemplateId(item.id));
   const seen = new Set(storeTemplates.map(item => item.id));
   const fromStore = storeTemplates.map(item => ({
     id: item.id,
     name: item.name,
     cover: item.cover,
-    ...(item.origin ? { origin: item.origin } : {})
+    ...(item.origin ? { origin: item.origin } : {}),
+    ...(item.description !== undefined ? { description: item.description } : {}),
+    ...(item.categories !== undefined ? { categories: [...item.categories] } : {}),
+    ...(item.tags !== undefined ? { tags: [...item.tags] } : {}),
+    ...(item.useWhen !== undefined ? { useWhen: item.useWhen } : {}),
+    ...(item.avoidWhen !== undefined ? { avoidWhen: item.avoidWhen } : {})
   }));
   const fromLoaders = listCustomTemplateIds()
     .filter(id => !seen.has(id))
@@ -84,7 +91,16 @@ export function listTemplateCatalog(): FikaTemplateSummary[] {
       name: id,
       cover: ''
     }));
-  return [...fromStore, ...fromLoaders];
+  const catalog: FikaTemplateSummary[] = [...fromStore, ...fromLoaders];
+  const normalize = (value: string) => value.trim().toLowerCase();
+  const category = normalize(query?.category ?? '');
+  const tags = query?.tags?.map(normalize).filter(Boolean) ?? [];
+  if (!category && !tags.length) return catalog;
+  return catalog.filter(template => {
+    if (category && !template.categories?.some(value => normalize(value) === category)) return false;
+    const declared = template.tags?.map(normalize);
+    return tags.every(tag => declared?.includes(tag));
+  });
 }
 
 export async function loadTemplatePayload(templateId: string): Promise<TemplatePayload> {

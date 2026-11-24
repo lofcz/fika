@@ -27,12 +27,13 @@ import { setFikaExportLanguage } from '@/configs/exportLanguage'
 import { setFikaMediaConfig } from '@/configs/mediaUpload'
 import { setFikaHeaderMenuItems } from '@/configs/headerMenu'
 import { setFikaLocaleSwitcherEnabled } from '@/configs/localeSwitcher'
-import { setCustomTemplateLoaders } from '@/configs/templates'
+import { registerTemplateLoaders } from './agentic/templates'
 import { applyLocale } from './localeBridge'
 import { bindTooltips } from '@/utils/tooltipBind'
 import { setContextmenuRenderer } from '@/utils/openContextmenu'
 import { createController } from './createController'
 import { useMainStore } from '@/store/main'
+import { useSlidesStore } from '@/store/slides'
 import { applyDocumentToStores } from './initialDocument'
 import { buildStarterPresentation } from '@/configs/starterPresentation'
 import { getLL } from '@/i18n/getLL'
@@ -126,7 +127,8 @@ export async function mountFika(
     setFikaMediaConfig(options.media)
     setFikaHeaderMenuItems(options.headerMenuItems)
     setFikaLocaleSwitcherEnabled(options.showLocaleSwitcher)
-    setCustomTemplateLoaders(options.templateLoaders)
+    registerTemplateLoaders(options.templateLoaders)
+    useSlidesStore.getState().setTemplates(options.templates ?? [])
 
     const locale: Locales = options.locale ?? getFikaLocale()
     setFikaLocale(locale)
