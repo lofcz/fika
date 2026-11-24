@@ -19,6 +19,7 @@ import Remark from './Remark/index'
 import ChartDataEditorDialog from './ChartDataEditorDialog'
 import LatexEditorDialog from './LatexEditorDialog'
 import InlineMathEditorDialog from './InlineMathEditorDialog'
+import ImageReplaceDialog from './ImageReplaceDialog'
 import ImportReplaceDialog from './ImportReplaceDialog'
 import JobProgressOverlay from '@/components/JobProgressOverlay'
 import ExportDialog from './ExportDialog/index'
@@ -345,6 +346,7 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
         <CodeEditorDialog />
       </Suspense>
       <InlineMathEditorDialog />
+      <ImageReplaceDialog />
       <ImportReplaceDialog />
       <JobProgressOverlay labels={importLabels} />
 

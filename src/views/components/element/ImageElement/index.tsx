@@ -4,10 +4,13 @@ const cx = bindStyles(styles)
 import { useCallback, memo } from 'react'
 
 import { openContextmenu } from '@/utils/openContextmenu'
-import { useMainStore, useSlidesStore } from '@/store'
+import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 import type { ImageElementClip, PPTImageElement } from '@/types/slides'
 import type { ImageClipedEmitData } from '@/types/edit'
 import type { ContextmenuItem } from '@/components/Contextmenu/types'
+import emitter, { EmitterEvents } from '@/utils/emitter'
+import { isElementSelectable } from '@/utils/selection'
+import { useI18nContext } from '@/i18n/useI18nContext'
 import useElementShadow from '@/views/components/element/hooks/useElementShadow'
 import useElementFlip from '@/views/components/element/hooks/useElementFlip'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
@@ -27,8 +30,10 @@ export type IImageElementProps = {
 
 const ImageElement = memo((props: IImageElementProps) => {
   const { elementInfo, contextmenus } = props
+  const { LL } = useI18nContext()
   const clipingImageElementId = useMainStore(s => s.clipingImageElementId)
   const setClipingImageElementId = useMainStore(s => s.setClipingImageElementId)
+  const readOnly = useMainStore(s => s.readOnly)
   const updateElement = useSlidesStore(s => s.updateElement)
   const isMediaUnresolved = elementInfo.mediaState?.status === 'pending' || elementInfo.mediaState?.status === 'error' || !elementInfo.src
   const isCliping = clipingImageElementId === props.elementInfo.id && !isMediaUnresolved
@@ -44,6 +49,16 @@ const ImageElement = memo((props: IImageElementProps) => {
     e.stopPropagation()
     props.selectElement(e, props.elementInfo)
   }, [props.elementInfo, props.selectElement])
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    const main = useMainStore.getState()
+    if (main.readOnly || props.elementInfo.lock) return
+    const slide = selectCurrentSlide(useSlidesStore.getState())
+    if (!slide || slide.skeleton) return
+    if (!isElementSelectable(props.elementInfo, slide.elements, main.hiddenElementIdList)) return
+    e.stopPropagation()
+    emitter.emit(EmitterEvents.OPEN_IMAGE_REPLACE_DIALOG, props.elementInfo.id)
+  }, [props.elementInfo])
 
   const handleClip = useCallback((data: ImageClipedEmitData | null) => {
     setClipingImageElementId('')
@@ -105,6 +120,7 @@ const ImageElement = memo((props: IImageElementProps) => {
             }}
             onMouseDown={event => handleSelectElement(event.nativeEvent)}
             onTouchStart={event => handleSelectElement(event.nativeEvent)}
+            onDoubleClick={handleDoubleClick}
           >
             <ImageOutline elementInfo={elementInfo} />
             <div className={cx('image-content')} style={{ clipPath: clipShape.style }}>
@@ -113,6 +129,7 @@ const ImageElement = memo((props: IImageElementProps) => {
                 src={elementInfo.src}
                 mediaState={elementInfo.mediaState}
                 altText={elementInfo.altText}
+                replaceHint={!readOnly && !elementInfo.lock ? LL.editor.mediaSlot.doubleClickToReplace() : undefined}
                 draggable={false}
                 style={{
                   top: imgPosition.top,

@@ -4,6 +4,10 @@
   gap: 16px;
   min-height: 420px;
   max-height: min(72vh, 640px);
+
+  &[data-media-picker-mode='replace'] {
+    min-height: 0;
+  }
 }
 .header {
   display: flex;
@@ -191,6 +195,32 @@
   justify-content: center;
   color: $ink;
   font-size: 18px;
+}
+.error-thumb {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $themeColor;
+  background: color-mix(in srgb, #{$themeColor} 8%, #fff);
+  font-size: 18px;
+}
+.inline-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #{$themeColor} 32%, #e4e4e7);
+  background: color-mix(in srgb, #{$themeColor} 7%, #fff);
+  color: color-mix(in srgb, #{$themeColor} 85%, $ink);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.inline-error-icon {
+  flex-shrink: 0;
+  font-size: 15px;
 }
 .progress-ring {
   position: absolute;

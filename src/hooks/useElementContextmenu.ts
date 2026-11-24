@@ -9,6 +9,7 @@ import useCopyAndPasteElement from '@/hooks/useCopyAndPasteElement';
 import useSelectElement from '@/hooks/useSelectElement';
 import { ElementOrderCommands, ElementAlignCommands } from '@/types/edit';
 import { useI18nContext } from '@/i18n/useI18nContext';
+import emitter, { EmitterEvents } from '@/utils/emitter';
 export default (openLinkDialog: () => void) => {
   const {
     LL
@@ -117,6 +118,10 @@ export default (openLinkDialog: () => void) => {
       }]
     }, {
       divider: true
+    }, {
+      text: LL.editor.canvasTool.mediaPicker.replaceTitle(),
+      handler: () => emitter.emit(EmitterEvents.OPEN_IMAGE_REPLACE_DIALOG, element.id),
+      hide: isMultiSelect || element.type !== 'image'
     }, {
       text: canvasMenu.setLink(),
       handler: openLinkDialog

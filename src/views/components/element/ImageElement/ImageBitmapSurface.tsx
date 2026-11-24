@@ -12,6 +12,7 @@ export type IImageBitmapSurfaceProps = {
   src: string
   mediaState?: ImageMediaState
   altText?: string
+  replaceHint?: string
   className?: string
   style?: CSSProperties
   draggable?: boolean
@@ -19,7 +20,7 @@ export type IImageBitmapSurfaceProps = {
 }
 
 const ImageBitmapSurface = memo((props: IImageBitmapSurfaceProps) => {
-  const { src, mediaState, altText, className, style, draggable = false, onDragStart } = props
+  const { src, mediaState, altText, replaceHint, className, style, draggable = false, onDragStart } = props
   const { LL } = useI18nContext()
   const explicitPending = mediaState?.status === 'pending'
   const explicitError = mediaState?.status === 'error'
@@ -55,6 +56,7 @@ const ImageBitmapSurface = memo((props: IImageBitmapSurfaceProps) => {
       <ImageMediaSlot
         status="error"
         label={mediaState.error || mediaState.label || altText || LL.editor.mediaSlot.error()}
+        hint={replaceHint}
         slotId={mediaState.slotId}
       />
     )
@@ -76,6 +78,7 @@ const ImageBitmapSurface = memo((props: IImageBitmapSurfaceProps) => {
       <ImageMediaSlot
         status="error"
         label={altText || LL.editor.mediaSlot.error()}
+        hint={replaceHint}
         slotId={mediaState?.slotId}
       />
     )

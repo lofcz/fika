@@ -19,6 +19,7 @@ import type { ChartData, ChartOptions, ChartType, Gradient, ImageMediaFit, Image
 import { applyLocale } from '../localeBridge';
 import { inferViewportFromSlides } from '../inferViewport';
 import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern';
+import { computeImageAspectFitPatch, findManuallyReplacedElementIdForSlot, isManualImageReplacementProtected } from '@/utils/imageReplace';
 import { clampIndex, cloneElementsWithRemappedIds, clonePatch, clonePlain, cloneSlidesWithRemappedIds, createId, createIssue, createTableCell, ensureElementOnSlide, ensureSlide, findElement, findSlideLinkReferences, insertIndex, isCanonicalCommandType, mergeShapeElement, mergeTheme, normalizeAnimation, normalizeAudioElement, normalizeAudioPatch, deriveLatexGeometry, normalizeElement, normalizeElementLink, normalizeLatexElement, normalizeLineElement, normalizeNote, normalizeNotePatch, normalizeReply, normalizeShapeElement, normalizeSlide, normalizeTableElementPatch, resolveMediaAsset, toIdList, updateLineElement } from './helpers';
 import { stripThemeInlineStyles } from './themeFormatting';
 import { agentTextToHtmlBreaks } from '@/utils/agentText';
@@ -3648,7 +3649,6 @@ export function createAgenticApi(options: {
     const meta = asset.metadata?.sourceUrl;
     return typeof meta === 'string' && meta.trim() ? meta.trim() : undefined;
   };
-  const round2 = (value: number) => Math.round(value * 100) / 100;
   const locateImageTarget = (payload: {
     elementId?: string;
     slotId?: string;
@@ -3695,83 +3695,35 @@ export function createAgenticApi(options: {
       true,
     );
   };
-  const computeAspectFitPatch = (
-    element: PPTImageElement,
-    natural: { width: number; height: number } | undefined,
-    fit: ImageMediaFit,
-    explicitPatch?: Partial<PPTImageElement>,
-  ): { patch: Partial<PPTImageElement>; removeClip: boolean } => {
-    if (!natural || !Number.isFinite(natural.width) || !Number.isFinite(natural.height) || natural.width <= 0 || natural.height <= 0) {
-      return { patch: {}, removeClip: false };
-    }
-    const width = explicitPatch?.width ?? element.width;
-    const height = explicitPatch?.height ?? element.height;
-    const left = explicitPatch?.left ?? element.left;
-    const top = explicitPatch?.top ?? element.top;
-    if (width <= 0 || height <= 0) return { patch: {}, removeClip: false };
-    const boxRatio = width / height;
-    const imgRatio = natural.width / natural.height;
-    if (Math.abs(imgRatio - boxRatio) <= 0.005) {
-      const existingShape = element.clip?.shape;
-      return {
-        patch: {
-          fixedRatio: true,
-          ...(existingShape && existingShape !== 'rect' ? { clip: { shape: existingShape, range: fullImageRange } } : {}),
-        },
-        removeClip: !existingShape || existingShape === 'rect',
-      };
-    }
-    if (fit === 'contain') {
-      let nextLeft = left;
-      let nextTop = top;
-      let nextWidth = width;
-      let nextHeight = height;
-      if (imgRatio > boxRatio) {
-        const fitted = width / imgRatio;
-        nextTop += (height - fitted) / 2;
-        nextHeight = fitted;
-      } else {
-        const fitted = height * imgRatio;
-        nextLeft += (width - fitted) / 2;
-        nextWidth = fitted;
+  const findProtectedManualImage = (payload: {
+    elementId?: string;
+    slotId?: string;
+    slideId?: string;
+  }) => {
+    const candidateId = payload.elementId ?? (payload.slotId ? findManuallyReplacedElementIdForSlot(payload.slotId) : undefined);
+    if (!candidateId) return null;
+    try {
+      const found = imageElement(stores, candidateId, payload.slideId);
+      if (isManualImageReplacementProtected(found.element, { slotId: payload.slotId })) {
+        return found.element;
       }
-      const existingShape = element.clip?.shape;
-      return {
-        patch: {
-          left: Math.round(nextLeft),
-          top: Math.round(nextTop),
-          width: Math.round(nextWidth),
-          height: Math.round(nextHeight),
-          fixedRatio: true,
-          ...(existingShape && existingShape !== 'rect' ? { clip: { shape: existingShape, range: fullImageRange } } : {}),
-        },
-        removeClip: !existingShape || existingShape === 'rect',
-      };
+    } catch {
+      return null;
     }
-    const shape = element.clip?.shape ?? 'rect';
-    if (imgRatio > boxRatio) {
-      const keep = boxRatio / imgRatio * 100;
-      const start = (100 - keep) / 2;
-      return {
-        patch: {
-          fixedRatio: true,
-          clip: { shape, range: [[round2(start), 0], [round2(start + keep), 100]] },
-        },
-        removeClip: false,
-      };
-    }
-    const keep = imgRatio / boxRatio * 100;
-    const start = (100 - keep) / 2;
-    return {
-      patch: {
-        fixedRatio: true,
-        clip: { shape, range: [[0, round2(start)], [100, round2(start + keep)]] },
-      },
-      removeClip: false,
-    };
+    return null;
   };
   const setImageSource = (payload: FikaSetImageSourcePayload) => {
-    const found = locateImageTarget(payload);
+    let found: ReturnType<typeof locateImageTarget>;
+    try {
+      found = locateImageTarget(payload);
+    } catch (error) {
+      const protectedElement = findProtectedManualImage(payload);
+      if (protectedElement) return clonePlain(protectedElement);
+      throw error;
+    }
+    if (isManualImageReplacementProtected(found.element, { slotId: payload.slotId })) {
+      return clonePlain(found.element);
+    }
     if (payload.onlyIfPending && found.element.mediaState?.status !== 'pending') {
       return clonePlain(found.element);
     }
@@ -3785,7 +3737,7 @@ export function createAgenticApi(options: {
     const hasExplicitClip = !!(payload.patch && 'clip' in payload.patch);
     const fitResult = hasExplicitClip
       ? { patch: {}, removeClip: false }
-      : computeAspectFitPatch(found.element, natural, fit, payload.patch);
+      : computeImageAspectFitPatch(found.element, natural, fit, payload.patch);
     const patch: Partial<PPTImageElement> = {
       ...fitResult.patch,
       ...payload.patch,
@@ -3824,7 +3776,18 @@ export function createAgenticApi(options: {
   }) => resolveMediaAsset(payload.asset, payload.kind));
   register('media.setImageSource', setImageSource);
   register('media.setImageState', (payload: FikaSetImageStatePayload) => {
-    const found = locateImageTarget(payload);
+    const stateSlotId = payload.slotId ?? payload.state?.slotId;
+    let found: ReturnType<typeof locateImageTarget>;
+    try {
+      found = locateImageTarget(payload);
+    } catch (error) {
+      const protectedElement = findProtectedManualImage({ ...payload, slotId: stateSlotId });
+      if (protectedElement) return clonePlain(protectedElement);
+      throw error;
+    }
+    if (isManualImageReplacementProtected(found.element, { slotId: stateSlotId })) {
+      return clonePlain(found.element);
+    }
     if (payload.onlyIfPending && found.element.mediaState?.status !== 'pending') {
       return clonePlain(found.element);
     }

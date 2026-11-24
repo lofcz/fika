@@ -9,6 +9,7 @@ export const enum EmitterEvents {
   OPEN_LATEX_EDITOR = 'OPEN_LATEX_EDITOR',
   OPEN_MERMAID_EDITOR = 'OPEN_MERMAID_EDITOR',
   OPEN_CODE_EDITOR = 'OPEN_CODE_EDITOR',
+  OPEN_IMAGE_REPLACE_DIALOG = 'OPEN_IMAGE_REPLACE_DIALOG',
   OPEN_INLINE_MATH_EDITOR = 'OPEN_INLINE_MATH_EDITOR',
   APPLY_INLINE_MATH = 'APPLY_INLINE_MATH',
 }
@@ -54,6 +55,7 @@ type Events = {
   [EmitterEvents.OPEN_LATEX_EDITOR]: void;
   [EmitterEvents.OPEN_MERMAID_EDITOR]: string;
   [EmitterEvents.OPEN_CODE_EDITOR]: string;
+  [EmitterEvents.OPEN_IMAGE_REPLACE_DIALOG]: string;
   [EmitterEvents.OPEN_INLINE_MATH_EDITOR]: OpenInlineMathPayload;
   [EmitterEvents.APPLY_INLINE_MATH]: ApplyInlineMathPayload;
 };

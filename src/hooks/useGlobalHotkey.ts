@@ -5,6 +5,7 @@ import { KEYS } from '@/configs/hotkey'
 import { isElementSelectable } from '@/utils/selection'
 import { isTypingTarget, isInteractiveControlTarget } from '@/utils/hotkeyTarget'
 import { isAppOwnedEvent } from '@/utils/portal'
+import emitter, { EmitterEvents } from '@/utils/emitter'
 
 import useSlideHandler from './useSlideHandler'
 import useLockElement from './useLockElement'
@@ -342,6 +343,15 @@ export default () => {
       }
       if (key === KEYS.ENTER) {
         if (mainStore.disableHotkeys || mainStore.clipingImageElementId) return
+        if (!ctrlOrMetaKeyActive && !altKey && !shiftKey && mainStore.editorAreaFocus && !mainStore.thumbnailsFocus && mainStore.activeElementIdList.length === 1) {
+          const slide = selectCurrentSlide(useSlidesStore.getState())
+          const handleElement = selectHandleElement(mainStore)
+          if (slide && !slide.skeleton && handleElement?.type === 'image' && isElementSelectable(handleElement, slide.elements, mainStore.hiddenElementIdList)) {
+            e.preventDefault()
+            emitter.emit(EmitterEvents.OPEN_IMAGE_REPLACE_DIALOG, handleElement.id)
+            return
+          }
+        }
         e.preventDefault()
         create()
       }

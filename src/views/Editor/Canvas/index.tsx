@@ -17,7 +17,7 @@ import type { AlignmentLineProps, CreateCustomShapeData } from '@/types/edit'
 import { SlideScaleContext } from '@/types/injectKey'
 import { isElementSelectable, removeAllRanges } from '@/utils/selection'
 import { clientToCanvas } from '@/utils/canvasPointer'
-import { clicksToEditText, collectVisualHitPlan, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInAnyVisualHitRect, pointInVisualHitRect, resizeHandleDirectionsFor, retryPendingCaret, type ClientCoords, type VisualHitRect } from '@/utils/canvasHitTest'
+import { clicksToEditText, collectVisualHitPlan, elementVisualHitRect, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInAnyVisualHitRect, pointInVisualHitRect, resizeHandleDirectionsFor, retryPendingCaret, type ClientCoords, type VisualHitRect } from '@/utils/canvasHitTest'
 import { layerStackAtPoint, nextSelectableLayer, type LayerStackEntry } from '@/utils/layerStack'
 import { drainCommitQueue, registerAfterCommitDrain } from '@/utils/commitQueue'
 import { richTextAttrsFromElement } from '@/utils/prosemirror/richTextAttrsFromElement'
@@ -68,6 +68,7 @@ import LinkDialog from './LinkDialog'
 import Modal from '@/components/Modal'
 import { fillPhotoFrame } from '@/views/Myna/photoFrames'
 import { beginPhotoFrameReplacement, loadPhotoFrameImage } from '@/views/Myna/photoFrameUpload'
+import { recordManualImageReplacement } from '@/utils/imageReplace'
 import { photoFrameLabels } from '@/views/Myna/photoFrameLabels'
 import { getFikaLocale } from '@/i18n/locale'
 import message from '@/utils/message'
@@ -287,6 +288,10 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
       if (main.readOnly || !latestPage || latest?.type !== 'image' || !latest.photoFrame || latest.src !== target.src
         || !isElementSelectable(latest, latestPage.elements, main.hiddenElementIdList)) return
       drainCommitQueue()
+      if (latest.mediaState !== undefined) {
+        store.removeElementProps({ id: latest.id, slideId: page.id, propName: 'mediaState' })
+      }
+      recordManualImageReplacement(latest)
       store.updateElement({ id: latest.id, slideId: page.id, props: fillPhotoFrame(latest, src, width, height) })
       addHistorySnapshot()
     }).catch(() => {
@@ -519,7 +524,27 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
 
   const handleDblClick = useCallback((e: MouseEvent) => {
     const main = useMainStore.getState()
-    if (main.activeElementIdList.length || main.creatingElement || main.creatingCustomShape) return
+    if (main.creatingElement || main.creatingCustomShape) return
+    if (main.activeElementIdList.length) {
+      // When double-clicking an unselected image, click 1 selects it on HitLayer
+      // and swaps the target to Operate before click 2; browsers then dispatch
+      // `dblclick` on the common ancestor (`.viewport-wrapper`) instead of either
+      // child surface. Route that split-target double-click to the selected image.
+      if (main.activeElementIdList.length === 1 && !main.editingElementId && !main.clipingImageElementId && !isOperateChromeTarget(e.target)) {
+        const selected = elementList.find(el => el.id === main.handleElementId)
+        if (selected?.type === 'image' && isElementSelectable(selected, elementList, main.hiddenElementIdList)) {
+          const wrapper = findViewportWrapper(e.target, canvasRef.current)
+          if (wrapper) {
+            const bounds = wrapper.getBoundingClientRect()
+            const rect = elementVisualHitRect(selected, main.canvasScale, 1)
+            if (pointInVisualHitRect(e.clientX - bounds.left, e.clientY - bounds.top, rect)) {
+              focusElementEditor(selected.id)
+            }
+          }
+        }
+      }
+      return
+    }
     if (!viewportRef.current) return
     const scale = main.canvasScale
     const { x: left, y: top } = clientToCanvas(e, viewportRef.current, scale)
@@ -529,7 +554,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
       width: 200 / scale,
       height: 0,
     })
-  }, [createTextElement])
+  }, [createTextElement, elementList])
 
   useEffect(() => () => {
     const main = useMainStore.getState()

@@ -1,6 +1,7 @@
 import { useMainStore, useSlidesStore, selectHandleElement, selectCurrentSlide } from '@/store'
 import type { PPTImageElement } from '@/types/slides'
 import { getImageDataURL, getImageSize } from '@/utils/image'
+import { recordManualImageReplacement } from '@/utils/imageReplace'
 import { internMediaSrc } from '@/utils/mediaIntern'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import message from '@/utils/message'
@@ -8,6 +9,10 @@ import { getLL } from '@/i18n/getLL'
 import { isElementSelectable } from '@/utils/selection'
 
 const replacementRequests = new Map<string, symbol>()
+
+export function cancelImageReplacement(slideId: string, elementId: string) {
+  replacementRequests.delete(JSON.stringify([slideId, elementId]))
+}
 
 export default () => {
   const { addHistorySnapshot } = useHistorySnapshot()
@@ -45,12 +50,18 @@ export default () => {
         left: current.left + (current.width - w) / 2,
         top: current.top,
       }
+      const removePropNames: Array<keyof PPTImageElement> = []
+      if (current.mediaState !== undefined) removePropNames.push('mediaState')
       if (current.clip && current.clip.shape !== 'rect') {
         props.clip = { ...current.clip, range: [[0, 0], [100, 100]] }
       }
       else {
-        store.removeElementProps({ id: imageElementId, slideId, propName: 'clip' })
+        removePropNames.push('clip')
       }
+      if (removePropNames.length) {
+        store.removeElementProps({ id: imageElementId, slideId, propName: removePropNames })
+      }
+      recordManualImageReplacement(current)
       store.updateElement({ id: imageElementId, slideId, props })
       addHistorySnapshot()
     }

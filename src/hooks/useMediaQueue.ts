@@ -12,10 +12,13 @@ import {
   detectMediaKind,
   getFileExtension,
   validateMediaFile,
+  type MediaConstraintOverrides,
   type MediaFileRejection,
 } from '@/utils/mediaFile'
+import { decodeImageSource, type ImageNaturalSize } from '@/utils/imageReplace'
 
 export type MediaQueueStatus = 'queued' | 'uploading' | 'processing' | 'ready' | 'error'
+export type MediaQueueErrorCode = 'decode' | 'upload'
 
 export interface MediaQueueItem {
   id: string
@@ -25,7 +28,23 @@ export interface MediaQueueItem {
   status: MediaQueueStatus
   progress: number
   error?: string
+  errorCode?: MediaQueueErrorCode
   result?: FikaMediaUploadResult
+  naturalSize?: ImageNaturalSize
+}
+
+export interface UseMediaQueueOptions extends MediaConstraintOverrides {
+  /** Replace any existing queued/ready/error item when a new file is added. */
+  replaceOnAdd?: boolean
+  /** Decode image files (and uploaded image URLs) before marking items ready. */
+  verifyImageDecode?: boolean
+}
+
+class ImageDecodeError extends Error {
+  constructor(message = 'Unable to decode image') {
+    super(message)
+    this.name = 'ImageDecodeError'
+  }
 }
 
 const isAbortError = (error: unknown) =>
@@ -65,10 +84,12 @@ const normalizeResult = (
   return ext ? { src: parsed.src, ext } : { src: parsed.src }
 }
 
-export default () => {
+export default (options?: UseMediaQueueOptions) => {
   const itemsRef = useRef<MediaQueueItem[]>([])
   const activeCountRef = useRef(0)
   const controllers = useRef(new Map<string, AbortController>()).current
+  const optionsRef = useRef(options)
+  optionsRef.current = options
   const [items, setItems] = useState<MediaQueueItem[]>([])
 
   const syncItems = (next: MediaQueueItem[]) => {
@@ -109,13 +130,31 @@ export default () => {
     controllers.set(item.id, controller)
 
     const uploader = getMediaUploader()
+    const verifyImageDecode = !!optionsRef.current?.verifyImageDecode
     patchItem(item.id, {
-      status: uploader ? 'uploading' : 'processing',
+      status: uploader && !verifyImageDecode ? 'uploading' : 'processing',
       progress: 0,
       error: undefined,
+      errorCode: undefined,
+      naturalSize: undefined,
     })
 
     try {
+      let naturalSize: ImageNaturalSize | undefined
+      if (item.kind === 'image' && verifyImageDecode) {
+        try {
+          naturalSize = await decodeImageSource(item.previewUrl, controller.signal)
+        }
+        catch (error) {
+          if (isAbortError(error)) throw error
+          throw new ImageDecodeError()
+        }
+      }
+
+      if (uploader) {
+        patchItem(item.id, { status: 'uploading' })
+      }
+
       let result: FikaMediaUploadResult
       if (uploader) {
         const uploaded = await uploader({
@@ -140,18 +179,39 @@ export default () => {
         result = normalizeResult(item.previewUrl, item.file, item.kind)
       }
 
-      patchItem(item.id, { status: 'ready', progress: 100, result, error: undefined })
+      if (item.kind === 'image' && verifyImageDecode) {
+        try {
+          naturalSize = await decodeImageSource(result.src, controller.signal)
+        }
+        catch (error) {
+          if (isAbortError(error)) throw error
+          throw new ImageDecodeError()
+        }
+      }
+
+      patchItem(item.id, {
+        status: 'ready',
+        progress: 100,
+        result,
+        naturalSize,
+        error: undefined,
+        errorCode: undefined,
+      })
     }
     catch (error) {
       if (isAbortError(error)) return
+      const isDecode = error instanceof ImageDecodeError
       patchItem(item.id, {
         status: 'error',
         progress: 0,
-        error: error instanceof Error ? error.message : 'Upload failed',
+        error: isDecode ? undefined : (error instanceof Error ? error.message : 'Upload failed'),
+        errorCode: isDecode ? 'decode' : 'upload',
       })
     }
     finally {
-      finishItem(item.id)
+      if (controllers.get(item.id) === controller) {
+        finishItem(item.id)
+      }
     }
   }
 
@@ -166,10 +226,51 @@ export default () => {
     }
   }
 
+  const revokePreview = (item: MediaQueueItem, preserveReadySrc = false) => {
+    if (preserveReadySrc && item.result?.src === item.previewUrl) return
+    URL.revokeObjectURL(item.previewUrl)
+  }
+
   const addFiles = (fileList: FileList | File[]): MediaFileRejection[] => {
     const incoming = Array.from(fileList)
+    if (!incoming.length) return []
+    const opts = optionsRef.current
     const constraints = getMediaConstraints()
-    const maxFiles = constraints.maxFiles ?? 12
+    const maxFiles = opts?.maxFiles ?? constraints.maxFiles ?? 12
+    const replaceOnAdd = !!opts?.replaceOnAdd
+
+    if (replaceOnAdd) {
+      const rejections: MediaFileRejection[] = incoming.slice(maxFiles).map(file => ({
+        file,
+        reason: 'tooMany' as const,
+      }))
+      const candidate = incoming[0]
+      const rejection = validateMediaFile(candidate, opts)
+      if (rejection) {
+        rejections.push(rejection)
+        return rejections
+      }
+      const kind = detectMediaKind(candidate)
+      if (!kind) {
+        rejections.push({ file: candidate, reason: 'type' })
+        return rejections
+      }
+      for (const controller of controllers.values()) controller.abort()
+      controllers.clear()
+      activeCountRef.current = 0
+      for (const item of itemsRef.current) revokePreview(item)
+      syncItems([{
+        id: nanoid(10),
+        file: candidate,
+        kind,
+        previewUrl: URL.createObjectURL(candidate),
+        status: 'queued',
+        progress: 0,
+      }])
+      void pump()
+      return rejections
+    }
+
     const remaining = Math.max(0, maxFiles - itemsRef.current.length)
     const rejections: MediaFileRejection[] = incoming.slice(remaining).map(file => ({
       file,
@@ -178,7 +279,7 @@ export default () => {
 
     const nextItems: MediaQueueItem[] = []
     for (const file of incoming.slice(0, remaining)) {
-      const rejection = validateMediaFile(file)
+      const rejection = validateMediaFile(file, opts)
       if (rejection) {
         rejections.push(rejection)
         continue
@@ -206,11 +307,6 @@ export default () => {
     return rejections
   }
 
-  const revokePreview = (item: MediaQueueItem, preserveReadySrc = false) => {
-    if (preserveReadySrc && item.result?.src === item.previewUrl) return
-    URL.revokeObjectURL(item.previewUrl)
-  }
-
   const removeItem = (id: string) => {
     const item = itemsRef.current.find(entry => entry.id === id)
     if (!item) return
@@ -223,7 +319,7 @@ export default () => {
   const retryItem = (id: string) => {
     const item = itemsRef.current.find(entry => entry.id === id)
     if (!item || item.status !== 'error') return
-    patchItem(id, { status: 'queued', progress: 0, error: undefined })
+    patchItem(id, { status: 'queued', progress: 0, error: undefined, errorCode: undefined })
     void pump()
   }
 

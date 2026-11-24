@@ -88,14 +88,37 @@
   color: inherit;
 }
 
+.hint {
+  position: relative;
+  z-index: 1;
+  max-width: 88%;
+  font-size: clamp(9px, 4.5cqmin, 11px);
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  opacity: 0.78;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+
 @container (max-height: 92px) {
-  .caption {
+  .caption,
+  .hint {
     display: none;
   }
 }
 
 @container (max-width: 92px) {
-  .caption {
+  .caption,
+  .hint {
+    display: none;
+  }
+}
+
+@container (max-height: 124px) {
+  .hint {
     display: none;
   }
 }

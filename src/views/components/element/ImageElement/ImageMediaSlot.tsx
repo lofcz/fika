@@ -9,12 +9,13 @@ export type ImageMediaSlotKind = 'pending' | 'loading' | 'error'
 export interface ImageMediaSlotProps {
   status: ImageMediaSlotKind
   label: string
+  hint?: string
   slotId?: string
   /** Hide the shimmer sweep (used for neutral static empty placeholders). */
   staticSurface?: boolean
 }
 
-const ImageMediaSlot = memo(({ status, label, slotId, staticSurface = false }: ImageMediaSlotProps) => {
+const ImageMediaSlot = memo(({ status, label, hint, slotId, staticSurface = false }: ImageMediaSlotProps) => {
   const isError = status === 'error'
   const showShimmer = !isError && !staticSurface
 
@@ -64,6 +65,7 @@ const ImageMediaSlot = memo(({ status, label, slotId, staticSurface = false }: I
         )}
       </div>
       {label ? <span className={cx('caption')}>{label}</span> : null}
+      {isError && hint ? <span className={cx('hint')}>{hint}</span> : null}
     </div>
   )
 })

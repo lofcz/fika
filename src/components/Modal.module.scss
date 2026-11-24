@@ -13,6 +13,10 @@
   align-items: center;
   outline: 0;
   border: 0;
+
+  &.leaving {
+    pointer-events: none;
+  }
 }
 
 .mask {
@@ -47,6 +51,9 @@
   position: absolute;
   top: 12px;
   right: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   border-radius: 8px;
   color: $inkMuted;
   cursor: pointer;
@@ -54,6 +61,11 @@
   &:hover {
     color: $ink;
     background: $surface;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $themeColor;
+    outline-offset: 2px;
   }
 }
 

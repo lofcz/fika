@@ -17,7 +17,9 @@ export type IButtonProps = {
   'data-tooltip'?: string
   'data-export-format'?: string
   'data-editor-insert'?: string
+  'data-editor-replace'?: string
   'data-align'?: string
+  'aria-label'?: string
 }
 
 export default function Button({
@@ -34,7 +36,9 @@ export default function Button({
   'data-tooltip': dataTooltip,
   'data-export-format': dataExportFormat,
   'data-editor-insert': dataEditorInsert,
+  'data-editor-replace': dataEditorReplace,
   'data-align': dataAlign,
+  'aria-label': ariaLabel,
 }: IButtonProps) {
   const classes = cx(
     'button',
@@ -49,12 +53,15 @@ export default function Button({
 
   return (
     <button
+      type="button"
       className={classes}
       style={style}
       data-tooltip={dataTooltip}
       data-export-format={dataExportFormat}
       data-editor-insert={dataEditorInsert}
+      data-editor-replace={dataEditorReplace}
       data-align={dataAlign}
+      aria-label={ariaLabel}
       disabled={disabled}
       onMouseDown={(event) => event.preventDefault()}
       onClick={event => {

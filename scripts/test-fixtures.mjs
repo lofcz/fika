@@ -250,10 +250,12 @@ export const e2eScripts = [
   'scripts/e2e-thumb-snapshot.mjs',
   'scripts/e2e-agentic-commands.mjs',
   'scripts/e2e-gap-insert-and-media-slot.mjs',
+  'scripts/e2e-image-source-replace.mjs',
 ]
 
 export const rstestFiles = [
   'tests/ai-slide-insert.test.ts',
+  'tests/image-replace.test.ts',
   'tests/pending-image-slot.test.ts',
   'tests/speaker-notes.test.ts',
   'tests/pptx-source-package.test.ts',

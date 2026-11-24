@@ -2719,6 +2719,53 @@ export type NamespaceEditorTranslation = {
 			 * C​o​u​l​d​ ​n​o​t​ ​p​r​e​p​a​r​e​ ​t​h​i​s​ ​f​i​l​e
 			 */
 			errorPrepare: string
+			/**
+			 * R​e​p​l​a​c​e​ ​i​m​a​g​e
+			 */
+			replaceTitle: string
+			/**
+			 * D​r​o​p​ ​a​n​ ​i​m​a​g​e​ ​f​r​o​m​ ​y​o​u​r​ ​c​o​m​p​u​t​e​r​ ​o​r​ ​b​r​o​w​s​e​ ​f​i​l​e​s​ ​t​o​ ​r​e​p​l​a​c​e​ ​t​h​i​s​ ​p​i​c​t​u​r​e​.
+			 */
+			replaceExplainer: string
+			/**
+			 * C​h​o​o​s​e​ ​a​ ​n​e​w​ ​i​m​a​g​e
+			 */
+			replaceDropTitle: string
+			/**
+			 * D​r​o​p​ ​i​m​a​g​e​ ​t​o​ ​r​e​p​l​a​c​e
+			 */
+			replaceDropHere: string
+			/**
+			 * C​h​o​o​s​e​ ​a​ ​d​i​f​f​e​r​e​n​t​ ​i​m​a​g​e
+			 */
+			replaceChooseAnother: string
+			/**
+			 * {​t​y​p​e​s​}​ ​·​ ​m​a​x​ ​{​m​a​x​S​i​z​e​}
+			 * @param {unknown} maxSize
+			 * @param {unknown} types
+			 */
+			replaceConstraintsHint: RequiredParams<'maxSize' | 'types'>
+			/**
+			 * R​e​p​l​a​c​e
+			 */
+			replaceAction: string
+			/**
+			 * I​m​a​g​e​ ​d​r​o​p​ ​a​r​e​a
+			 */
+			dropzoneLabel: string
+			/**
+			 * T​h​i​s​ ​i​m​a​g​e​ ​c​o​u​l​d​ ​n​o​t​ ​b​e​ ​d​e​c​o​d​e​d​.​ ​C​h​o​o​s​e​ ​a​n​o​t​h​e​r​ ​f​i​l​e​.
+			 */
+			errorDecode: string
+			/**
+			 * {​n​a​m​e​}​ ​i​s​ ​n​o​t​ ​a​ ​s​u​p​p​o​r​t​e​d​ ​i​m​a​g​e​ ​f​i​l​e
+			 * @param {unknown} name
+			 */
+			errorImageOnly: RequiredParams<'name'>
+			/**
+			 * C​h​o​o​s​e​ ​o​n​e​ ​i​m​a​g​e​ ​f​i​l​e​ ​a​t​ ​a​ ​t​i​m​e
+			 */
+			errorSingleOnly: string
 		}
 		/**
 		 * I​n​s​e​r​t​ ​c​h​a​r​t
@@ -4489,6 +4536,10 @@ export type NamespaceEditorTranslation = {
 		 * I​m​a​g​e​ ​u​n​a​v​a​i​l​a​b​l​e
 		 */
 		error: string
+		/**
+		 * D​o​u​b​l​e​-​c​l​i​c​k​ ​t​o​ ​r​e​p​l​a​c​e
+		 */
+		doubleClickToReplace: string
 	}
 	elementAnimation: {
 		/**
@@ -8824,6 +8875,50 @@ export type TranslationFunctions = {
 				 * Could not prepare this file
 				 */
 				errorPrepare: () => LocalizedString
+				/**
+				 * Replace image
+				 */
+				replaceTitle: () => LocalizedString
+				/**
+				 * Drop an image from your computer or browse files to replace this picture.
+				 */
+				replaceExplainer: () => LocalizedString
+				/**
+				 * Choose a new image
+				 */
+				replaceDropTitle: () => LocalizedString
+				/**
+				 * Drop image to replace
+				 */
+				replaceDropHere: () => LocalizedString
+				/**
+				 * Choose a different image
+				 */
+				replaceChooseAnother: () => LocalizedString
+				/**
+				 * {types} · max {maxSize}
+				 */
+				replaceConstraintsHint: (arg: { maxSize: unknown, types: unknown }) => LocalizedString
+				/**
+				 * Replace
+				 */
+				replaceAction: () => LocalizedString
+				/**
+				 * Image drop area
+				 */
+				dropzoneLabel: () => LocalizedString
+				/**
+				 * This image could not be decoded. Choose another file.
+				 */
+				errorDecode: () => LocalizedString
+				/**
+				 * {name} is not a supported image file
+				 */
+				errorImageOnly: (arg: { name: unknown }) => LocalizedString
+				/**
+				 * Choose one image file at a time
+				 */
+				errorSingleOnly: () => LocalizedString
 			}
 			/**
 			 * Insert chart
@@ -10569,6 +10664,10 @@ export type TranslationFunctions = {
 			 * Image unavailable
 			 */
 			error: () => LocalizedString
+			/**
+			 * Double-click to replace
+			 */
+			doubleClickToReplace: () => LocalizedString
 		}
 		elementAnimation: {
 			/**

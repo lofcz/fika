@@ -9,6 +9,7 @@ import { getFikaPortalTarget, resolveFikaPortalTarget } from '@/utils/portal'
 import { useHoldAfterOpen } from '@/hooks/useHoldAfterOpen'
 import { useOverlayPhase } from '@/hooks/useOverlayPhase'
 import { markOverlaySurface, useReportOverlayTrigger } from '@/components/OverlayTrigger'
+import { useI18nContext } from '@/i18n/useI18nContext'
 
 export type IModalProps = {
   visible: boolean
@@ -16,6 +17,8 @@ export type IModalProps = {
   closeButton?: boolean
   closeOnClickMask?: boolean
   closeOnEsc?: boolean
+  ariaLabel?: string
+  ariaLabelledBy?: string
   contentStyle?: CSSProperties
   wrapStyle?: CSSProperties
   className?: string
@@ -25,6 +28,7 @@ export type IModalProps = {
 }
 
 const Modal = memo((vrProps: IModalProps) => {
+  const { LL } = useI18nContext()
   const visible = vrProps.visible
   const width = vrProps.width ?? 480
   const closeButton = vrProps.closeButton ?? false
@@ -33,9 +37,10 @@ const Modal = memo((vrProps: IModalProps) => {
   const wrapStyle = vrProps.wrapStyle || {}
 
   const modalRef = useRef<HTMLDivElement | null>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
   const portalLockedRef = useRef(false)
   const [portalTarget, setPortalTarget] = useState<HTMLElement>(() => getFikaPortalTarget())
-  const { phase, onAnimationEnd, shown, entering } = useOverlayPhase(visible)
+  const { phase, onAnimationEnd, shown, entering, leaving } = useOverlayPhase(visible)
   const held = useHoldAfterOpen(shown)
   useReportOverlayTrigger(phase === 'enter' || phase === 'open')
   const composingEscapeRef = useRef(false)
@@ -71,7 +76,19 @@ const Modal = memo((vrProps: IModalProps) => {
   }, [])
 
   useEffect(() => {
-    if (visible) Promise.resolve().then(() => modalRef.current?.focus())
+    if (visible) {
+      const active = document.activeElement
+      previousFocusRef.current = active instanceof HTMLElement ? active : null
+      Promise.resolve().then(() => modalRef.current?.focus())
+      return
+    }
+    const prev = previousFocusRef.current
+    previousFocusRef.current = null
+    if (prev && prev.isConnected) {
+      Promise.resolve().then(() => {
+        if (prev.isConnected && !modalRef.current?.contains(prev)) prev.focus({ preventScroll: true })
+      })
+    }
   }, [visible])
 
   const close = useCallback(() => {
@@ -84,7 +101,10 @@ const Modal = memo((vrProps: IModalProps) => {
     const composing = event.nativeEvent.isComposing || composingEscapeRef.current
     composingEscapeRef.current = false
     if (composing) return
-    if (visibleRef.current && closeOnEsc) close()
+    if (visibleRef.current && closeOnEsc) {
+      event.stopPropagation()
+      close()
+    }
   }, [closeOnEsc, close])
 
   const onClickMask = useCallback(() => {
@@ -94,7 +114,7 @@ const Modal = memo((vrProps: IModalProps) => {
 
   return createPortal(
     <div
-      className={cx('modal', vrProps.className)}
+      className={cx('modal', { leaving }, vrProps.className)}
       ref={modalRef}
       style={{
         ...wrapStyle,
@@ -109,13 +129,22 @@ const Modal = memo((vrProps: IModalProps) => {
       <div className={cx('mask', maskAnimClass)} onClick={onClickMask} />
       <div
         className={cx('modal-content', animClass)}
+        role="dialog"
+        aria-modal="true"
+        aria-label={vrProps.ariaLabel}
+        aria-labelledby={vrProps.ariaLabelledBy}
         style={contentStyle}
         onAnimationEnd={onAnimationEnd}
       >
         {closeButton ? (
-          <span className={cx('close-btn')} onClick={close}>
+          <button
+            type="button"
+            className={cx('close-btn')}
+            aria-label={LL.common.close()}
+            onClick={close}
+          >
             <Icon icon="x" />
-          </span>
+          </button>
         ) : null}
         {held ? vrProps.children : null}
       </div>

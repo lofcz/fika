@@ -66,6 +66,8 @@ export default (
     const viewportRatio = viewportRatioRef.current
 
     if (!activeElementIdList.includes(element.id)) return
+    const main = useMainStore.getState()
+    if (!main.editorAreaFocus) main.setEditorareaFocus(true)
     draggingRef.current = true
     let isMouseDown = true
 
