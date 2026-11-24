@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type CSSProperties, type RefObject } from 'react'
 import type { PPTShapeElement, PPTTextElement, TextInset } from '@/types/slides'
 import { authoredTextFitSize, elementLocksTextBox } from '@/utils/placeholderLayout'
+import { placeholderWeightOf } from '@/configs/textPresets'
 import { subscribeLiveBox } from '@/utils/liveElementSize'
 import { useI18nContext } from '@/i18n/useI18nContext'
-import { useMainStore } from '@/store'
+import { useMainStore, useSlidesStore } from '@/store'
 import { normalizeFittedFontSizes } from '@/utils/richTextFontSize'
 import { serializeRichTextHtml } from '@/utils/prosemirror'
 import {
@@ -12,12 +13,11 @@ import {
   fitSessionKey,
   innerBoxFromLiveStyles,
   rememberFitScale,
+  resolvePaintFontFamily,
   subscribeTextFontChanges,
   extractFitBlocksFromHtml,
   minimumTextFitScale,
   textFitScaleForHtml,
-  DEFAULT_TEXT_FONT_FAMILY,
-  DEFAULT_TEXT_FONT_SIZE,
   type FitMeasureSession,
 } from '@/utils/textFit'
 
@@ -38,8 +38,8 @@ const fitParagraphSpaceOf = (el: FitSource) => (
     ? (el.text?.paragraphSpace === undefined ? DEFAULT_PARAGRAPH_SPACE : el.text.paragraphSpace)
     : (el.paragraphSpace ?? DEFAULT_PARAGRAPH_SPACE)
 )
-const fitFontNameOf = (el: FitSource) => (
-  (el.type === 'shape' ? el.text?.defaultFontName : el.defaultFontName) || DEFAULT_TEXT_FONT_FAMILY
+const fitFontNameOf = (el: FitSource, themeFontName?: string) => (
+  resolvePaintFontFamily((el.type === 'shape' ? el.text?.defaultFontName : el.defaultFontName) || themeFontName)
 )
 const fitWordSpaceOf = (el: FitSource) => (
   (el.type === 'shape' ? el.text?.wordSpace : el.wordSpace) || 0
@@ -49,6 +49,12 @@ const fitInsetOf = (el: FitSource): TextInset => (
 )
 const fitAuthoredSizeOf = (el: FitSource) => (
   el.type === 'text' ? authoredTextFitSize(el) : 16
+)
+const fitDefaultWeightOf = (el: FitSource) => (
+  el.type === 'text' && el.placeholder ? placeholderWeightOf(el, false) : undefined
+)
+const fitDefaultItalicOf = (el: FitSource) => (
+  el.type === 'text' && el.placeholder ? !!el.placeholderItalic : undefined
 )
 const fitMinimumOf = (el: FitSource) => el.type === 'shape' ? el.text?.minFontSize : el.minFontSize
 
@@ -78,6 +84,9 @@ export default (
   options?: { observeResize?: boolean },
 ) => {
   const { locale } = useI18nContext()
+  const themeFontName = useSlidesStore(s => s.theme.fontName)
+  const themeFontNameRef = useRef(themeFontName)
+  themeFontNameRef.current = themeFontName
   const fitScaleRef = useRef(1)
   const sessionRef = useRef<FitMeasureSession | null>(null)
   const lastInnerRef = useRef({ width: 0, height: 0 })
@@ -113,7 +122,7 @@ export default (
     // booth paints the identical CSS.
     return {
       '--text-fit-scale': String(scale),
-      '--text-fit-base-size': `${Math.round(DEFAULT_TEXT_FONT_SIZE * scale * 100) / 100}px`,
+      '--text-fit-base-size': `${Math.round(authoredSize() * scale * 100) / 100}px`,
     } as CSSProperties
   }
 
@@ -127,7 +136,7 @@ export default (
       return
     }
     host.style.setProperty('--text-fit-scale', String(next))
-    host.style.setProperty('--text-fit-base-size', `${Math.round(DEFAULT_TEXT_FONT_SIZE * next * 100) / 100}px`)
+    host.style.setProperty('--text-fit-base-size', `${Math.round(authoredSize() * next * 100) / 100}px`)
   }
 
   const ensureSession = () => {
@@ -137,7 +146,7 @@ export default (
       sessionRef.current = null
       return null
     }
-    const fontFamily = fitFontNameOf(el)
+    const fontFamily = fitFontNameOf(el, themeFontNameRef.current)
     const lineHeight = fitLineHeightOf(el)
     const letterSpacing = fitWordSpaceOf(el)
     const defaultSize = authoredSize()
@@ -190,8 +199,10 @@ export default (
     const params = {
       innerWidth,
       innerHeight,
-      defaultFontFamily: fitFontNameOf(el),
+      defaultFontFamily: fitFontNameOf(el, themeFontNameRef.current),
       defaultSize: authoredSize(),
+      defaultWeight: fitDefaultWeightOf(el),
+      defaultItalic: fitDefaultItalicOf(el),
       lineHeight: fitLineHeightOf(el),
       letterSpacing: fitWordSpaceOf(el) || 0,
       blockSpace: fitParagraphSpaceOf(el),
@@ -297,9 +308,11 @@ export default (
     elementInfo.height,
     fitLineHeightOf(elementInfo),
     fitParagraphSpaceOf(elementInfo),
-    fitFontNameOf(elementInfo),
+    fitFontNameOf(elementInfo, themeFontName),
     elementInfo.type === 'text' ? elementInfo.placeholderFontSize : undefined,
     elementInfo.type === 'text' ? elementInfo.placeholder : undefined,
+    elementInfo.type === 'text' ? elementInfo.placeholderBold : undefined,
+    elementInfo.type === 'text' ? elementInfo.placeholderItalic : undefined,
     fitWordSpaceOf(elementInfo),
     fitMinimumOf(elementInfo),
     fitInsetOf(elementInfo),

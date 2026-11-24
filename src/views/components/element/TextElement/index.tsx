@@ -71,6 +71,7 @@ const TextElement = memo((props: ITextElementProps) => {
     fallbackSurface: theme?.backgroundColor
   });
   const defaultInkColor = painted.ink;
+  const resolvedFontName = elementInfo.defaultFontName || theme?.fontName || '';
   const elementRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const prosemirrorEditorRef = useRef<ElementRef<typeof ProsemirrorEditor> | null>(null);
@@ -149,7 +150,7 @@ const TextElement = memo((props: ITextElementProps) => {
   const placeholderEditorDefaults = elementInfo.placeholder
     ? { defaultFontSize: filledSeed.fontSize, defaultAlign: filledSeed.align as TextAlign }
     : { defaultFontSize: undefined as string | undefined, defaultAlign: undefined as TextAlign | undefined };
-  const [placeholderSeeded, setPlaceholderSeeded] = useState(false);
+  const [placeholderSeeded, setPlaceholderSeeded] = useState(() => !isEmptyRichText(elementInfo.content));
   const placeholderSeededRef = useRef(placeholderSeeded);
   placeholderSeededRef.current = placeholderSeeded;
   const seedPlaceholderContentStyles = useCallback(() => {
@@ -179,6 +180,7 @@ const TextElement = memo((props: ITextElementProps) => {
       setPlaceholderSeeded(false);
       return;
     }
+    if (placeholderSeededRef.current) return;
     setPlaceholderTextEditing(true);
     seedPlaceholderContentStyles();
     setPlaceholderSeeded(true);
@@ -393,9 +395,8 @@ const TextElement = memo((props: ITextElementProps) => {
     const resizeObserver = new ResizeObserver(entries => updateTextElementHeightRef.current(entries));
     if (el) resizeObserver.observe(el);
     const info = elementInfoRef.current;
-    if (info.placeholder) {
-      if (isEmptyRichText(info.content)) applyPlaceholderPreset();
-      else Promise.resolve().then(() => seedPlaceholder(info, false));
+    if (info.placeholder && isEmptyRichText(info.content)) {
+      applyPlaceholderPreset();
     }
     return () => {
       if (el) resizeObserver.unobserve(el);
@@ -471,7 +472,7 @@ const TextElement = memo((props: ITextElementProps) => {
         letterSpacing: (elementInfo.wordSpace || 0) + 'px',
         color: defaultInkColor,
         caretColor: defaultInkColor,
-        fontFamily: elementInfo.defaultFontName,
+        fontFamily: resolvedFontName || undefined,
         ...placeholderTypography,
         writingMode: elementInfo.vertical ? 'vertical-rl' : 'horizontal-tb',
         padding: `${inset[0]}px ${inset[1]}px ${inset[2]}px ${inset[3]}px`,
@@ -490,6 +491,6 @@ const TextElement = memo((props: ITextElementProps) => {
           return;
         }
         handleSelectElement($event, !(isEditing || placeholderTextEditing));
-      }} onDoubleClick={(event) => { event.stopPropagation(); startEdit(); }}><ElementOutline width={elementInfo.width} height={elementInfo.height} outline={elementInfo.outline} /><div className={cx('paint-clip')} style={{ overflow: textBoxLayout.lockPaintHeight || outlineBorderRadius ? 'hidden' : undefined, borderRadius: outlineBorderRadius, display: useFlexColumn ? 'flex' : undefined, flexDirection: useFlexColumn ? 'column' : undefined, justifyContent: contentBoxJustify }}><div className={cx('text-fit-host')} ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}><div className={cx('text')}><ProsemirrorEditor elementId={elementId} defaultColor={defaultInkColor} paintDefaultInk={painted.defaultInk} defaultFontName={elementInfo.defaultFontName} defaultFontSize={placeholderEditorDefaults.defaultFontSize} defaultAlign={placeholderEditorDefaults.defaultAlign} editable={!elementInfo.lock && !!(isEditing || placeholderTextEditing)} wrapEmptyAs={listPlaceholder ? 'bullet' : undefined} value={(isEditing || placeholderTextEditing || editorFocused) ? elementInfo.content : painted.html} autoFocus={!!(isEditing || placeholderTextEditing)} ref={prosemirrorEditorRef} onUpdate={handleUpdate} onMouseDown={handleEditorMouseDown} onFocus={handleEditorFocus} onBlur={handleEditorBlur} onEmptyChange={handleEmptyChange} onPlaceholderFill={() => seedPlaceholder(elementInfoRef.current, false)} placeholderFillStyles={elementInfo.placeholder ? placeholderSeed(elementInfo, 'filled', defaultInkColor) : undefined} onDocChange={handleDocChange} onPlaceholderStyle={handlePlaceholderStyle} /></div></div></div>{}<div className={cx('drag-handler', 'top')} /><div className={cx('drag-handler', 'bottom')} /></div></div></div>;
+      }} onDoubleClick={(event) => { event.stopPropagation(); startEdit(); }}><ElementOutline width={elementInfo.width} height={elementInfo.height} outline={elementInfo.outline} /><div className={cx('paint-clip')} style={{ overflow: textBoxLayout.lockPaintHeight || outlineBorderRadius ? 'hidden' : undefined, borderRadius: outlineBorderRadius, display: useFlexColumn ? 'flex' : undefined, flexDirection: useFlexColumn ? 'column' : undefined, justifyContent: contentBoxJustify }}><div className={cx('text-fit-host')} ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}><div className={cx('text')}><ProsemirrorEditor elementId={elementId} defaultColor={defaultInkColor} paintDefaultInk={painted.defaultInk} defaultFontName={resolvedFontName} defaultFontSize={placeholderEditorDefaults.defaultFontSize} defaultAlign={placeholderEditorDefaults.defaultAlign} editable={!elementInfo.lock && !!(isEditing || placeholderTextEditing)} wrapEmptyAs={listPlaceholder ? 'bullet' : undefined} value={(isEditing || placeholderTextEditing || editorFocused) ? elementInfo.content : painted.html} autoFocus={!!(isEditing || placeholderTextEditing)} ref={prosemirrorEditorRef} onUpdate={handleUpdate} onMouseDown={handleEditorMouseDown} onFocus={handleEditorFocus} onBlur={handleEditorBlur} onEmptyChange={handleEmptyChange} onPlaceholderFill={() => seedPlaceholder(elementInfoRef.current, false)} placeholderFillStyles={elementInfo.placeholder ? placeholderSeed(elementInfo, 'filled', defaultInkColor) : undefined} onDocChange={handleDocChange} onPlaceholderStyle={handlePlaceholderStyle} /></div></div></div>{}<div className={cx('drag-handler', 'top')} /><div className={cx('drag-handler', 'bottom')} /></div></div></div>;
 });
 export default TextElement;

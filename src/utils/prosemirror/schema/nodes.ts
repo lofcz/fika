@@ -30,7 +30,7 @@ function listStyleToDOM(node: Node): string {
   } = node.attrs;
   let style = '';
   if (listStyleType) style += `list-style-type: ${listStyleType};`;
-  if (fontsize) style += `font-size: ${fontsize};`;
+  if (fontsize) style += `font-size: calc(var(--text-fit-scale, 1) * ${fontsize});`;
   if (color) style += `color: ${color};`;
   if (paddingInlineStart) style += `padding-inline-start: ${paddingInlineStart};`;
   return style;

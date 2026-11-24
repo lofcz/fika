@@ -70,6 +70,7 @@ const SlideGapBar = memo(function SlideGapBar({
   afterSlideId,
   beforeSlideId,
   aiDisabled,
+  standalone = false,
   labels,
   onRequestAi,
   onInsertBlank,
@@ -79,6 +80,7 @@ const SlideGapBar = memo(function SlideGapBar({
   afterSlideId: string | null
   beforeSlideId: string | null
   aiDisabled: boolean
+  standalone?: boolean
   labels: GapLabels
   onRequestAi: (spliceIndex: number) => void
   onInsertBlank: (spliceIndex: number) => void
@@ -91,7 +93,7 @@ const SlideGapBar = memo(function SlideGapBar({
 
   return (
     <div
-      className={cx('gap-bar')}
+      className={cx('gap-bar', `gap-${position}`, { 'gap-standalone': standalone })}
       data-fika-slide-gap={position}
       data-after-slide-id={afterSlideId ?? ''}
       data-before-slide-id={beforeSlideId ?? ''}
@@ -639,6 +641,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
           afterSlideId={null}
           beforeSlideId={null}
           aiDisabled={aiDisabled}
+          standalone
           labels={gapLabels}
           onRequestAi={requestAiInsertAtGap}
           onInsertBlank={insertBlankSlideAtGap}

@@ -23,7 +23,7 @@ import { computeImageAspectFitPatch, findManuallyReplacedElementIdForSlot, isMan
 import { clampIndex, cloneElementsWithRemappedIds, clonePatch, clonePlain, cloneSlidesWithRemappedIds, createId, createIssue, createTableCell, ensureElementOnSlide, ensureSlide, findElement, findSlideLinkReferences, insertIndex, isCanonicalCommandType, mergeShapeElement, mergeTheme, normalizeAnimation, normalizeAudioElement, normalizeAudioPatch, deriveLatexGeometry, normalizeElement, normalizeElementLink, normalizeLatexElement, normalizeLineElement, normalizeNote, normalizeNotePatch, normalizeReply, normalizeShapeElement, normalizeSlide, normalizeTableElementPatch, resolveMediaAsset, toIdList, updateLineElement } from './helpers';
 import { stripThemeInlineStyles } from './themeFormatting';
 import { agentTextToHtmlBreaks } from '@/utils/agentText';
-import { applyTextRunStyle, markdownToHtml, type TextRunStyle } from '@/utils/markdown';
+import { applyTextRunStyle, extractDominantTextRunStyle, markdownToHtml, mergeTextRunStyles, type TextRunStyle } from '@/utils/markdown';
 import { applySlideBackgroundWithContrast, resolveChartLabelColor } from '@/utils/textContrast';
 import { resolveImportApply, type ImportApplyOptions } from '@/utils/importApply';
 import { applyImportTransitions, isTurningMode as isImportTurningMode, parseImportTurningMode } from '@/utils/importTransition';
@@ -1577,18 +1577,14 @@ export function createAgenticApi(options: {
       }
       if (operation.op === 'textUpdate') {
         const { element } = getTextElement(operation.id, operation.pageId);
-        const document = new DOMParser().parseFromString(element.content, 'text/html');
-        const nodes = Array.from(document.body.querySelectorAll<HTMLElement>('*'));
-        const value = (property: string) => nodes.map(node => node.style.getPropertyValue(property)).find(Boolean);
-        const weight = value('font-weight');
-        (command.payload as { style: TextRunStyle }).style = {
-          fontSize: parseFloat(value('font-size') || '') || 32,
-          fontName: value('font-family') || element.defaultFontName,
-          color: value('color') || element.defaultColor,
-          bold: weight === 'bold' || Number(weight) >= 600 || !!document.querySelector('strong,b'),
-          align: (value('text-align') || 'left') as TextRunStyle['align'],
-          ...operation.style,
-        };
+        const inherited = extractDominantTextRunStyle(element.content, {
+          defaultFontName: element.defaultFontName,
+          defaultColor: element.defaultColor,
+        });
+        (command.payload as { style: TextRunStyle }).style = mergeTextRunStyles(
+          { fontSize: 32, align: 'left', ...inherited },
+          operation.style,
+        ) ?? {};
       }
       if (['text', 'shape', 'image', 'element'].includes(operation.op)) {
         const id = operation.op === 'element' ? operation.element.id : 'id' in operation ? operation.id : undefined;
@@ -3003,8 +2999,16 @@ export function createAgenticApi(options: {
     style?: TextRunStyle;
   }) => {
     warnLiteralHtml(payload.markdown, 'payload.markdown');
+    const { element } = getTextElement(payload.elementId, payload.slideId);
+    const inherited = extractDominantTextRunStyle(element.content, {
+      defaultFontName: element.defaultFontName,
+      defaultColor: element.defaultColor,
+    });
+    const resolvedStyle = mergeTextRunStyles(inherited, payload.style);
     return updateTextElement(payload.elementId, payload.slideId, {
-      content: applyTextRunStyle(await markdownToHtml(payload.markdown), payload.style)
+      content: applyTextRunStyle(await markdownToHtml(payload.markdown), resolvedStyle),
+      ...(resolvedStyle?.fontName ? { defaultFontName: resolvedStyle.fontName } : {}),
+      ...(resolvedStyle?.color ? { defaultColor: resolvedStyle.color } : {}),
     });
   });
   register('text.updateContent', (payload: {

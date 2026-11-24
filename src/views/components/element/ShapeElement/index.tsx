@@ -105,7 +105,11 @@ const ShapeElement = memo((props: IShapeElementProps) => {
     },
   );
   const text: ShapeText = elementInfo.text
-    ? { ...elementInfo.text, defaultColor: painted.ink }
+    ? {
+        ...elementInfo.text,
+        defaultFontName: elementInfo.text.defaultFontName || theme.fontName,
+        defaultColor: painted.ink,
+      }
     : defaultShapeText(elementInfo, theme);
   const liveContentRef = useRef(text.content);
   const prevContentRef = useRef(text.content);

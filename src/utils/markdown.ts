@@ -212,6 +212,19 @@ export interface TextRunStyle {
   color?: string;
   bold?: boolean;
   align?: 'left' | 'center' | 'right' | 'justify';
+  /** Optional list marker color applied to `<ul>`/`<ol>` (defaults to `color`). */
+  markerColor?: string;
+  /** Optional CSS `padding-left` preserved on `<ul>`/`<ol>` (e.g. `0.4em`). */
+  listPaddingLeft?: string;
+  /** Optional CSS `list-style-position` preserved on `<ul>`/`<ol>` (e.g. `outside`). */
+  listStylePosition?: string;
+  /** Optional CSS `margin` preserved on `<ul>`/`<ol>` (e.g. `0`). */
+  listMargin?: string;
+}
+
+export interface TextElementStyleDefaults {
+  defaultFontName?: string;
+  defaultColor?: string;
 }
 
 /** Blocks whose inline content receives the run span. */
@@ -219,6 +232,8 @@ const RUN_BLOCK_TAGS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
 const LIST_TAGS = new Set(['ul', 'ol']);
 /** `<li>` children that are blocks in their own right and must not be pulled into the item's run span. */
 const LI_BLOCK_CHILD_TAGS = new Set(['p', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre', 'table', 'blockquote']);
+const SKIP_EXTRACT_TAGS = new Set(['style', 'script']);
+const MATH_CONTAINER_TAGS = new Set(['eq', 'math']);
 
 type P5Node = DefaultTreeAdapterTypes.ChildNode;
 type P5Element = DefaultTreeAdapterTypes.Element;
@@ -240,6 +255,262 @@ function setAttr(el: P5Element, name: string, value: string): void {
 
 function createElement(tagName: string, style?: string): P5Element {
   return defaultTreeAdapter.createElement(tagName, html.NS.HTML, style ? [{ name: 'style', value: style }] : []);
+}
+
+function parseInlineStyle(styleAttr: string | undefined): Map<string, string> {
+  const result = new Map<string, string>();
+  if (!styleAttr) return result;
+  for (const rawDecl of styleAttr.split(';')) {
+    const colon = rawDecl.indexOf(':');
+    if (colon <= 0) continue;
+    const prop = rawDecl.slice(0, colon).trim().toLowerCase();
+    const val = rawDecl.slice(colon + 1).trim();
+    if (prop && val) result.set(prop, val);
+  }
+  return result;
+}
+
+function parseFontSizePx(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const pxMatch = /(?:calc\(var\(--text-fit-scale,\s*1\)\s*\*\s*)?([0-9]+(?:\.[0-9]+)?)px/i.exec(raw);
+  if (pxMatch) {
+    const n = Number(pxMatch[1]);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }
+  const ptMatch = /^([0-9]+(?:\.[0-9]+)?)pt$/i.exec(raw.trim());
+  if (ptMatch) {
+    const n = Number(ptMatch[1]) * (4 / 3);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }
+  return undefined;
+}
+
+function cleanFontName(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const first = raw.split(',')[0]?.trim().replace(/^["']|["']$/g, '').trim();
+  if (!first || /^(?:inherit|initial|unset)$/i.test(first)) return undefined;
+  return first;
+}
+
+function cleanCssColor(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed || /^(?:inherit|initial|unset|transparent|currentcolor)$/i.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+function parseFontWeightBold(raw: string | undefined): boolean | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim().toLowerCase();
+  if (trimmed === 'bold' || trimmed === 'bolder') return true;
+  if (trimmed === 'normal' || trimmed === 'lighter') return false;
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric)) return numeric >= 600;
+  return undefined;
+}
+
+function parseTextAlign(raw: string | undefined): TextRunStyle['align'] | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim().toLowerCase();
+  if (trimmed === 'left' || trimmed === 'center' || trimmed === 'right' || trimmed === 'justify') return trimmed;
+  if (trimmed === 'start') return 'left';
+  if (trimmed === 'end') return 'right';
+  return undefined;
+}
+
+function isMathElement(el: P5Element): boolean {
+  if (MATH_CONTAINER_TAGS.has(el.tagName)) return true;
+  const cls = getAttr(el, 'class') ?? '';
+  if (/\b(?:fika-math|ML__mathlive)\b/.test(cls)) return true;
+  return getAttr(el, 'data-latex') !== undefined || getAttr(el, 'data-math-latex') !== undefined || getAttr(el, 'data-fika-math') !== undefined;
+}
+
+function bumpWeight<K>(counter: Map<K, number>, key: K | undefined, weight: number): void {
+  if (key === undefined || weight <= 0) return;
+  counter.set(key, (counter.get(key) ?? 0) + weight);
+}
+
+function mostWeightedKey<K>(counter: Map<K, number>): K | undefined {
+  let best: K | undefined;
+  let bestWeight = 0;
+  for (const [key, weight] of counter) {
+    if (weight > bestWeight) {
+      best = key;
+      bestWeight = weight;
+    }
+  }
+  return best;
+}
+
+/**
+ * Extract the dominant existing typographic run style from an element's HTML
+ * content (and optional element defaults), including list container styling
+ * (`markerColor`, `listPaddingLeft`, `listStylePosition`, `listMargin`).
+ *
+ * Used by `text.setMarkdown` so replacing copy on an already-styled element
+ * preserves its font size, font family, color, alignment, whole-run boldness,
+ * and list marker styling when `payload.style` omits them.
+ */
+export function extractDominantTextRunStyle(
+  htmlText: string | undefined,
+  elementDefaults?: TextElementStyleDefaults,
+): TextRunStyle {
+  const fontSizeCounts = new Map<number, number>();
+  const fontNameCounts = new Map<string, number>();
+  const colorCounts = new Map<string, number>();
+  const alignCounts = new Map<NonNullable<TextRunStyle['align']>, number>();
+  let totalTextWeight = 0;
+  let boldTextWeight = 0;
+
+  let fallbackFontSize: number | undefined;
+  let fallbackFontName: string | undefined;
+  let fallbackColor: string | undefined;
+  let fallbackAlign: TextRunStyle['align'] | undefined;
+  let fallbackBold: boolean | undefined;
+
+  let listMarkerColor: string | undefined;
+  let listPaddingLeft: string | undefined;
+  let listStylePosition: string | undefined;
+  let listMargin: string | undefined;
+
+  interface WalkContext {
+    fontSize?: number;
+    fontName?: string;
+    color?: string;
+    bold?: boolean;
+    align?: TextRunStyle['align'];
+  }
+
+  const recordRun = (ctx: WalkContext, weight: number) => {
+    if (weight <= 0) return;
+    totalTextWeight += weight;
+    if (ctx.bold) boldTextWeight += weight;
+    bumpWeight(fontSizeCounts, ctx.fontSize, weight);
+    bumpWeight(fontNameCounts, ctx.fontName, weight);
+    bumpWeight(colorCounts, ctx.color, weight);
+    bumpWeight(alignCounts, ctx.align, weight);
+  };
+
+  const walk = (node: P5Node, ctx: WalkContext) => {
+    if (defaultTreeAdapter.isTextNode(node)) {
+      const weight = node.value.replace(/\s+/g, '').length;
+      recordRun(ctx, weight);
+      return;
+    }
+    if (!isElement(node)) return;
+    const tag = node.tagName;
+    if (SKIP_EXTRACT_TAGS.has(tag)) return;
+    if (isMathElement(node)) {
+      // Treat rendered math as an atomic inline token inheriting outer run styles
+      // so MathLive internal spans (e.g. KaTeX_Main) never pollute dominant style.
+      recordRun(ctx, 1);
+      return;
+    }
+
+    const css = parseInlineStyle(getAttr(node, 'style'));
+    const nextCtx: WalkContext = { ...ctx };
+
+    const fontSize = parseFontSizePx(css.get('font-size'));
+    if (fontSize !== undefined) {
+      nextCtx.fontSize = fontSize;
+      if (fallbackFontSize === undefined) fallbackFontSize = fontSize;
+    }
+
+    const fontName = cleanFontName(css.get('font-family'));
+    if (fontName !== undefined) {
+      nextCtx.fontName = fontName;
+      if (fallbackFontName === undefined) fallbackFontName = fontName;
+    }
+
+    const color = cleanCssColor(css.get('color'));
+    if (color !== undefined) {
+      nextCtx.color = color;
+      if (!LIST_TAGS.has(tag) && fallbackColor === undefined) fallbackColor = color;
+    }
+
+    const align = parseTextAlign(css.get('text-align'));
+    if (align !== undefined) {
+      nextCtx.align = align;
+      if (fallbackAlign === undefined) fallbackAlign = align;
+    }
+
+    if (tag === 'strong' || tag === 'b') {
+      nextCtx.bold = true;
+      if (fallbackBold === undefined) fallbackBold = true;
+    }
+    const weightBold = parseFontWeightBold(css.get('font-weight'));
+    if (weightBold !== undefined) {
+      nextCtx.bold = weightBold;
+      if (fallbackBold === undefined) fallbackBold = weightBold;
+    }
+
+    if (LIST_TAGS.has(tag)) {
+      if (listMarkerColor === undefined && color !== undefined) listMarkerColor = color;
+      if (listPaddingLeft === undefined) {
+        const paddingLeft = css.get('padding-left')?.trim();
+        if (paddingLeft) listPaddingLeft = paddingLeft;
+      }
+      if (listStylePosition === undefined) {
+        const position = css.get('list-style-position')?.trim();
+        if (position) listStylePosition = position;
+      }
+      if (listMargin === undefined) {
+        const margin = css.get('margin')?.trim();
+        if (margin) listMargin = margin;
+      }
+    }
+
+    for (const child of node.childNodes) walk(child, nextCtx);
+  };
+
+  if (htmlText?.trim()) {
+    const fragment = parseFragment(htmlText);
+    for (const child of fragment.childNodes) walk(child, {});
+  }
+
+  const fontSize = mostWeightedKey(fontSizeCounts) ?? fallbackFontSize;
+  const fontName = mostWeightedKey(fontNameCounts) ?? fallbackFontName ?? cleanFontName(elementDefaults?.defaultFontName);
+  const color = mostWeightedKey(colorCounts) ?? fallbackColor ?? listMarkerColor ?? cleanCssColor(elementDefaults?.defaultColor);
+  const align = mostWeightedKey(alignCounts) ?? fallbackAlign;
+  const bold = totalTextWeight > 0
+    ? (boldTextWeight === totalTextWeight ? true : undefined)
+    : (fallbackBold ? true : undefined);
+
+  const style: TextRunStyle = {};
+  if (fontSize !== undefined) style.fontSize = fontSize;
+  if (fontName !== undefined) style.fontName = fontName;
+  if (color !== undefined) style.color = color;
+  if (bold) style.bold = true;
+  if (align !== undefined) style.align = align;
+  if (listMarkerColor && (!color || listMarkerColor.toLowerCase() !== color.toLowerCase())) {
+    style.markerColor = listMarkerColor;
+  }
+  if (listPaddingLeft) style.listPaddingLeft = listPaddingLeft;
+  if (listStylePosition) style.listStylePosition = listStylePosition;
+  if (listMargin) style.listMargin = listMargin;
+
+  return style;
+}
+
+/** Merge an inherited run style with explicit caller overrides (explicit wins). */
+export function mergeTextRunStyles(
+  base: TextRunStyle | undefined,
+  override: TextRunStyle | undefined,
+): TextRunStyle | undefined {
+  const merged: TextRunStyle = {};
+  for (const source of [base, override]) {
+    if (!source) continue;
+    if (source.fontSize !== undefined) merged.fontSize = source.fontSize;
+    if (source.fontName !== undefined) merged.fontName = source.fontName;
+    if (source.color !== undefined) merged.color = source.color;
+    if (source.bold !== undefined) merged.bold = source.bold;
+    if (source.align !== undefined) merged.align = source.align;
+    if (source.markerColor !== undefined) merged.markerColor = source.markerColor;
+    if (source.listPaddingLeft !== undefined) merged.listPaddingLeft = source.listPaddingLeft;
+    if (source.listStylePosition !== undefined) merged.listStylePosition = source.listStylePosition;
+    if (source.listMargin !== undefined) merged.listMargin = source.listMargin;
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 /**
@@ -300,6 +571,15 @@ function applyRunStyleToTree(node: P5Node, declText: string, listDecl: string, s
     return;
   }
   if (tag === 'li') {
+    if (style.align && style.align !== 'left') {
+      const hasParagraphChild = children.some(child => isElement(child) && RUN_BLOCK_TAGS.has(child.tagName));
+      if (!hasParagraphChild) {
+        const existing = getAttr(node, 'style') ?? '';
+        if (!/text-align\s*:/i.test(existing)) {
+          setAttr(node, 'style', existing ? `text-align:${style.align};${existing}` : `text-align:${style.align}`);
+        }
+      }
+    }
     // Wrap the item's own inline runs; nested lists / paragraphs are handled
     // by their own visit below.
     let run: P5Node[] = [];
@@ -329,8 +609,8 @@ function applyRunStyleToTree(node: P5Node, declText: string, listDecl: string, s
  * so agents get styled copy from `text.create({ markdown, style })` without
  * hand-writing `<span style>` HTML. Parses the HTML with parse5, wraps each
  * block's inline content in a single styled span (the shape the editor and
- * the pptx importer produce) and mirrors size / color onto list containers so
- * bullet markers match.
+ * the pptx importer produce) and mirrors size / color / list styles onto list
+ * containers so bullet markers match.
  */
 export function applyTextRunStyle(htmlText: string, style: TextRunStyle | undefined): string {
   if (!style || !htmlText) return htmlText;
@@ -339,8 +619,15 @@ export function applyTextRunStyle(htmlText: string, style: TextRunStyle | undefi
   if (style.fontName?.trim()) decl.push(`font-family:${style.fontName.trim()}`);
   if (style.color?.trim()) decl.push(`color:${style.color.trim()}`);
   const declText = decl.join(';');
-  if (!declText && !style.bold && !style.align) return htmlText;
-  const listDecl = decl.filter(d => !d.startsWith('font-family')).join(';');
+  const listDeclParts: string[] = [];
+  if (typeof style.fontSize === 'number' && Number.isFinite(style.fontSize) && style.fontSize > 0) listDeclParts.push(`font-size:${Math.round(style.fontSize)}px`);
+  const listColor = style.markerColor?.trim() || style.color?.trim();
+  if (listColor) listDeclParts.push(`color:${listColor}`);
+  if (style.listStylePosition?.trim()) listDeclParts.push(`list-style-position:${style.listStylePosition.trim()}`);
+  if (style.listPaddingLeft?.trim()) listDeclParts.push(`padding-left:${style.listPaddingLeft.trim()}`);
+  if (style.listMargin?.trim()) listDeclParts.push(`margin:${style.listMargin.trim()}`);
+  const listDecl = listDeclParts.join(';');
+  if (!declText && !listDecl && !style.bold && !style.align) return htmlText;
   const fragment = parseFragment(htmlText);
   for (const child of fragment.childNodes.slice()) applyRunStyleToTree(child, declText, listDecl, style);
   return serialize(fragment);

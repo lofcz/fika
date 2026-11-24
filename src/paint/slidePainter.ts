@@ -35,7 +35,7 @@ import {
   resolveTableCellFill,
 } from '@/utils/textContrast'
 import { isUnfilledPlaceholder, placeholderAlignOf, placeholderPromptHtml } from '@/utils/placeholderPaint'
-import { placeholderPromptSizeOf, placeholderTypedSizeOf } from '@/configs/textPresets'
+import { placeholderPromptSizeOf, placeholderTypedSizeOf, placeholderWeightOf } from '@/configs/textPresets'
 import { MATH_CLASS } from '@/utils/inlineMathBox'
 import { containsMath, tokenizeMath } from '@/utils/markdown'
 import { escapeLatexAttr } from '@/utils/math'
@@ -476,6 +476,13 @@ const paintTextElement = (
       }))
     : painted!.html
   const layout = resolveTextBoxLayout(element, slide.type)
+  // Match TextElement's `textBoxJustify(layout)`: non-fixed-height boxes without
+  // flex centering or an empty slot render auto-height top-aligned in the DOM.
+  const effectiveVAlign = layout.flexCenterInLayoutBox
+    ? 'middle'
+    : (layout.fixedHeight || layout.emptyPlaceholder)
+      ? layout.vAlign
+      : 'top'
   paintRichText(ctx, {
     html,
     x: 0,
@@ -489,11 +496,13 @@ const paintTextElement = (
     defaultSize: showPrompt
       ? placeholderPromptSizeOf(element)
       : element.placeholder ? placeholderTypedSizeOf(element) : undefined,
+    defaultWeight: element.placeholder && !showPrompt ? placeholderWeightOf(element, false) : undefined,
+    defaultItalic: element.placeholder && !showPrompt ? !!element.placeholderItalic : undefined,
     lineHeight: element.lineHeight,
     letterSpacing: element.wordSpace,
     paragraphSpace: element.paragraphSpace,
     inset: element.inset,
-    vAlign: layout.vAlign,
+    vAlign: effectiveVAlign,
     align: element.placeholder ? placeholderAlignOf(element) : undefined,
     fit: elementLocksTextBox(element),
     minFontSize: element.minFontSize,

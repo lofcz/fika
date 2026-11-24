@@ -15,6 +15,7 @@
 
 import { decodeXML } from 'entities';
 import { APP_SHELL_ID, EMBED_ROOT_CLASS, getFikaPortalTarget, resolveOffscreenHost } from '@/utils/portal';
+import { notifyInlineMathReady, registerInlineMathMeasurer, subscribeTextFontChanges } from '@/utils/textFit';
 
 export { MATH_CLASS, estimateInlineMathBox, htmlHasFikaMath, isPlausibleInlineMathBox } from './inlineMathBox';
 import { estimateInlineMathBox, isPlausibleInlineMathBox, MATH_CLASS } from './inlineMathBox';
@@ -98,7 +99,15 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
     } catch {}
     mathlive = resolved;
     mathReady.value = true;
-    if (typeof document !== 'undefined') dockMathVirtualKeyboard();
+    inlineMathBoxCache.clear();
+    notifyInlineMathReady();
+    if (typeof document !== 'undefined') {
+      dockMathVirtualKeyboard();
+      document.fonts?.ready?.then(() => {
+        inlineMathBoxCache.clear();
+        notifyInlineMathReady();
+      }).catch(() => {});
+    }
     return resolved;
   }).catch(err => {
     mathlivePromise = null;
@@ -204,6 +213,9 @@ export function renderLatexElementHtml(latex: string): string {
 }
 
 const inlineMathBoxCache = new Map<string, { width: number; height: number }>()
+subscribeTextFontChanges(() => {
+  inlineMathBoxCache.clear()
+})
 
 const inlineMathBoxKey = (latex: string, fontSize: number, display: boolean) => (
   `${latex}\0${Math.round(fontSize * 100)}\0${display ? 1 : 0}`
@@ -250,6 +262,7 @@ export function measureInlineMathBox(latex: string, fontSize: number, display = 
   inlineMathBoxCache.set(key, box)
   return box
 }
+registerInlineMathMeasurer(measureInlineMathBox)
 
 /** Measured box when MathLive is ready, otherwise a conservative estimate. */
 export function inlineMathBox(latex: string, fontSize: number, display = false): {

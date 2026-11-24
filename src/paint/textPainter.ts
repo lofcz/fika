@@ -9,7 +9,6 @@ import { getInlineMathRaster } from '@/paint/rasterResources'
 import { latexFallbackText } from '@/utils/inlineMathBox'
 import { measureInlineMathBox } from '@/utils/math'
 import {
-  DEFAULT_LIST_PADDING_EM,
   DEFAULT_TEXT_FONT_FAMILY,
   DEFAULT_TEXT_FONT_SIZE,
   LIST_MARKER_GAP_EM,
@@ -18,7 +17,9 @@ import {
   extractFitBlocksFromHtml,
   blockLineBoxHeight,
   fixedLineMetrics,
+  listColumnInset,
   paragraphGap,
+  pickSpaceRun,
   richInlineFromRun,
   runVisualSize,
   textFitScaleForHtml,
@@ -35,6 +36,8 @@ export type CanvasTextPaintOptions = {
   defaultFontFamily: string
   defaultColor: string
   defaultSize?: number
+  defaultWeight?: number
+  defaultItalic?: boolean
   lineHeight?: number
   letterSpacing?: number
   paragraphSpace?: number
@@ -67,8 +70,42 @@ const quoteFamily = (family: string) => {
 
 const fontOf = (run: TextFitRun, fallbackFamily: string, scale: number) => {
   const style = run.italic ? 'italic' : 'normal'
-  const weight = run.bold ? '700' : '400'
+  const weight = run.bold ? '700' : String(run.fontWeight || 400)
   return `${style} ${weight} ${Math.max(0.1, run.size * scale)}px ${quoteFamily(run.fontFamily || fallbackFamily)}`
+}
+
+const requestedFonts = new Set<string>()
+
+/**
+ * Canvas2D measureText/fillText does not trigger lazy `@font-face` downloads
+ * for fonts only used on unvisited slides. Request unloaded faces proactively
+ * so thumbnails settle before the user clicks a slide.
+ */
+const ensurePaintFontLoaded = (
+  run: Pick<TextFitRun, 'italic' | 'bold' | 'fontWeight' | 'fontFamily'>,
+  fallbackFamily: string,
+  invalidate?: () => void,
+) => {
+  if (typeof document === 'undefined' || !document.fonts?.load) return
+  const style = run.italic ? 'italic' : 'normal'
+  const weight = run.bold ? '700' : String(run.fontWeight || 400)
+  const family = quoteFamily(run.fontFamily || fallbackFamily)
+  const faceKey = `${style} ${weight} 16px ${family}`
+  if (requestedFonts.has(faceKey)) return
+  try {
+    if (document.fonts.check(faceKey)) {
+      requestedFonts.add(faceKey)
+      return
+    }
+  }
+  catch {
+    requestedFonts.add(faceKey)
+    return
+  }
+  requestedFonts.add(faceKey)
+  void document.fonts.load(faceKey).then(faces => {
+    if (faces.length) invalidate?.()
+  }).catch(() => {})
 }
 
 const graphemeCount = (text: string) => {
@@ -76,31 +113,6 @@ const graphemeCount = (text: string) => {
   let count = 0
   for (const _part of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)) count++
   return count
-}
-
-const listInset = (block: TextFitBlock, size: number) => {
-  if (!block.listItem) return (block.paragraphIndent || 0) * size / block.size
-  const gutter = block.listIndentPx != null
-    ? block.listIndentPx
-    : block.listIndentEm != null
-      ? block.listIndentEm * size
-      : DEFAULT_LIST_PADDING_EM * size
-  return gutter + LIST_MARKER_GAP_EM * size
-}
-
-/**
- * The block's text font size (scaled) — the `em` the list gutter and marker
- * are sized in. Deliberately ignores math run heights: a tall fraction must not
- * push the bullet out or grow the indent.
- */
-const blockEm = (items: TextFitRun[], scale: number) => {
-  let size = 0
-  for (const run of items) {
-    if (run.mathLatex) continue
-    if (run.size > size) size = run.size
-  }
-  if (size <= 0) size = items[0]?.size || DEFAULT_TEXT_FONT_SIZE
-  return Math.max(1, size * scale)
 }
 
 const textRunOf = (items: TextFitRun[]) => items.find(run => !run.mathLatex) || items[0]
@@ -190,6 +202,7 @@ const prepareLines = (
           text: block.text,
           size: block.size || DEFAULT_TEXT_FONT_SIZE,
           bold: block.bold,
+          fontWeight: block.fontWeight,
           italic: block.italic,
           fontFamily: block.fontFamily,
         }]
@@ -202,8 +215,8 @@ const prepareLines = (
       richInlineFromRun(run, fontOf(run, family, scale), scale, letterSpacing || undefined)
     )), { whiteSpace: block.whiteSpace })
     const firstLine = lines.length
-    const lineWidth = Math.max(1, width - listInset(block, blockEm(items, scale)))
-    const spaceRun = items.find(run => !run.mathLatex) || items[0]
+    const lineWidth = Math.max(1, width - listColumnInset(block, scale))
+    const spaceRun = pickSpaceRun(items)
     walkEditorTextLines(prepared, lineWidth, fontOf(spaceRun, family, scale), range => {
       const line = materializeRichInlineLineRange(prepared, range)
       const lineRuns: TextFitRun[] = []
@@ -249,6 +262,8 @@ export const paintRichText = (
   const { blocks } = extractFitBlocksFromHtml(html, {
     defaultFontFamily: options.defaultFontFamily,
     defaultSize,
+    defaultWeight: options.defaultWeight,
+    defaultItalic: options.defaultItalic,
   })
   if (!blocks.length) return 0
   for (const block of blocks) {
@@ -262,7 +277,11 @@ export const paintRichText = (
       for (const run of block.runs) {
         run.color ||= options.defaultColor
         run.fontFamily ||= block.fontFamily
+        ensurePaintFontLoaded(run, options.defaultFontFamily, options.invalidate)
       }
+    }
+    else {
+      ensurePaintFontLoaded(block, options.defaultFontFamily, options.invalidate)
     }
   }
   applyMeasuredMathBoxes(blocks, measureInlineMathBox)
@@ -272,6 +291,8 @@ export const paintRichText = (
         innerHeight,
         defaultFontFamily: options.defaultFontFamily,
         defaultSize,
+        defaultWeight: options.defaultWeight,
+        defaultItalic: options.defaultItalic,
         lineHeight,
         letterSpacing,
         blockSpace: paragraphSpace,
@@ -316,7 +337,7 @@ export const paintRichText = (
   let previousBlock: TextFitBlock | undefined
   for (const line of lines) {
     if (previousBlock !== line.block) y += paragraphGap(previousBlock, line.block, paragraphSpace)
-    const indent = listInset(line.block, blockEm(line.items, fitScale))
+    const indent = listColumnInset(line.block, fitScale)
     const align = line.block.align || (line.block.listItem ? 'left' : options.align) || 'left'
     const available = innerWidth - indent
     let x = options.x + inset[3] + indent
@@ -326,14 +347,17 @@ export const paintRichText = (
     const baseline = lineBaseline(ctx, line, y, options.defaultFontFamily, fitScale)
 
     if (line.block.listMarker && previousBlock !== line.block) {
-      // Marker shares the text baseline of the line, so a tall inline math run
-      // (which only grows line.height) leaves the bullet where the words are.
-      const markerRun = textRunOf(line.items)
-      ctx.font = fontOf({ ...markerRun, italic: false }, options.defaultFontFamily, fitScale)
-      ctx.fillStyle = markerRun.color || options.defaultColor
+      // Match CSS `ul > li::marker / ol > li::marker`: sized in the list's own
+      // `1em`, regular weight, and `currentColor` from <li>/<ul> (not an inner span).
+      const markerEm = Math.max(1, (line.block.listFontSize ?? line.block.paragraphSize ?? DEFAULT_TEXT_FONT_SIZE) * fitScale)
+      const markerFamily = line.block.listOrdered
+        ? (line.block.fontFamily || options.defaultFontFamily)
+        : "Arial, 'Segoe UI', sans-serif"
+      ctx.font = `normal 400 ${markerEm}px ${quoteFamily(markerFamily)}`
+      ctx.fillStyle = line.block.listColor || options.defaultColor
       ctx.textAlign = 'right'
       ctx.textBaseline = 'alphabetic'
-      ctx.fillText(line.block.listMarker, options.x + inset[3] + Math.max(0, indent - LIST_MARKER_GAP_EM * blockEm(line.items, fitScale)), baseline)
+      ctx.fillText(line.block.listMarker, options.x + inset[3] + Math.max(0, indent - LIST_MARKER_GAP_EM * markerEm), baseline)
       ctx.textAlign = 'left'
     }
 

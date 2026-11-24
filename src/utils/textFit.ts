@@ -45,6 +45,7 @@ export interface TextFitRun {
   text: string;
   size: number;
   bold?: boolean;
+  fontWeight?: number;
   italic?: boolean;
   underline?: boolean;
   strikethrough?: boolean;
@@ -75,10 +76,19 @@ export interface TextFitBlock {
   marginTop?: number;
   marginBottom?: number;
   bold?: boolean;
+  fontWeight?: number;
   italic?: boolean;
   fontFamily: string;
   /** When true, a list marker indent is subtracted from the text column. */
   listItem?: boolean;
+  /** True for the first `<li>` in a list (CSS `ul, ol { margin: 0 }` has no gap above it). */
+  firstInList?: boolean;
+  /** Computed CSS font-size (px, unscaled) of `<li>`/`<ul>`/`<ol>` that governs `1em` list padding and `::marker`. */
+  listFontSize?: number;
+  /** Computed CSS `currentColor` on `<li>`/`<ul>`/`<ol>` used for `::marker`. */
+  listColor?: string;
+  /** True for `<ol>`, false for `<ul>`. */
+  listOrdered?: boolean;
   /** `ul`/`ol` padding-inline-start in px, when authored as px. */
   listIndentPx?: number;
   /** `ul`/`ol` padding-inline-start in em, when authored as em. */
@@ -212,13 +222,18 @@ function quoteFontFamily(family: string): string {
 }
 function canvasFont(block: TextFitBlock, size: number): string {
   const style = block.italic ? 'italic' : 'normal';
-  const weight = block.bold ? '700' : '400';
+  const weight = block.bold ? '700' : String(block.fontWeight || 400);
   return `${style} ${weight} ${size}px ${quoteFontFamily(block.fontFamily)}`;
 }
-function listColumnInset(block: TextFitBlock, size: number, fallbackIndent?: number): number {
-  if (!block.listItem) return (block.paragraphIndent || 0) * size / block.size;
-  const gutter = block.listIndentPx != null ? block.listIndentPx : block.listIndentEm != null ? block.listIndentEm * size : fallbackIndent ?? DEFAULT_LIST_PADDING_EM * size;
-  return gutter + LIST_MARKER_GAP_EM * size;
+export function listColumnInset(block: TextFitBlock, sizeScale = 1, fallbackIndent?: number): number {
+  if (!block.listItem) return (block.paragraphIndent || 0) * sizeScale;
+  const em = (block.listFontSize ?? block.paragraphSize ?? DEFAULT_TEXT_FONT_SIZE) * sizeScale;
+  const gutter = block.listIndentPx != null
+    ? block.listIndentPx
+    : block.listIndentEm != null
+      ? block.listIndentEm * em
+      : fallbackIndent ?? DEFAULT_LIST_PADDING_EM * em;
+  return gutter + LIST_MARKER_GAP_EM * em;
 }
 
 /**
@@ -228,11 +243,17 @@ function listColumnInset(block: TextFitBlock, size: number, fallbackIndent?: num
  * inter-block gap. Returns 0 for an empty input.
  */
 /** Canvas font for one run at a scaled size. */
-const runFont = (run: { bold?: boolean; italic?: boolean }, family: string, size: number): string => {
+const runFont = (run: { bold?: boolean; fontWeight?: number; italic?: boolean }, family: string, size: number): string => {
   const style = run.italic ? 'italic' : 'normal'
-  const weight = run.bold ? '700' : '400'
+  const weight = run.bold ? '700' : String(run.fontWeight || 400)
   return `${style} ${weight} ${size}px ${quoteFontFamily(family)}`
 }
+
+export const pickSpaceRun = (runs: TextFitRun[]): TextFitRun => (
+  runs.reduce((best, run) => (
+    !run.mathLatex && run.size > (best?.size ?? 0) ? run : best
+  ), runs.find(run => !run.mathLatex) || runs[0])
+)
 
 /** Line-box size for a run: math chips use the typeset height, not the font. */
 export const runVisualSize = (run: TextFitRun): number => (
@@ -302,8 +323,13 @@ export const blockLineBoxHeight = (block: TextFitBlock, runs: TextFitRun[], scal
     lineBoxHeight(runs, scale, block.lineHeight ?? fallback));
 }
 
-export const paragraphGap = (previous: TextFitBlock | undefined, block: TextFitBlock, fallback: number): number =>
-  previous ? Math.max(previous.marginBottom ?? 0, block.marginTop ?? fallback) : (block.marginTop ?? 0);
+export const paragraphGap = (previous: TextFitBlock | undefined, block: TextFitBlock, fallback: number): number => {
+  if (!previous) return block.marginTop ?? 0;
+  // CSS `ul, ol { margin: 0; li { margin: 0; } li + li { margin-top: var(--paragraphSpace); } }`
+  // adds no inter-block gap above the first <li> of a list.
+  const top = block.marginTop ?? (block.firstInList ? 0 : fallback);
+  return Math.max(previous.marginBottom ?? 0, top);
+}
 const placeholderWidthCache = new Map<string, number>()
 const spaceWidthCache = new Map<string, number>()
 let placeholderCtx: CanvasRenderingContext2D | null | undefined
@@ -407,7 +433,7 @@ const measureRunsHeight = (
 ): number => {
   const items = runs.map(run => richInlineFromRun(
     run,
-    runFont(run, family, run.size * sizeScale),
+    runFont(run, run.fontFamily || family, run.size * sizeScale),
     sizeScale,
     letterSpacing,
   ))
@@ -423,11 +449,9 @@ const measureRunsHeight = (
     }
     richInlineCache.set(key, prepared)
   }
-  const spaceRun = runs.reduce((best, run) => (
-    !run.mathLatex && run.size > (best?.size ?? 0) ? run : best
-  ), runs.find(run => !run.mathLatex) || runs[0])
+  const spaceRun = pickSpaceRun(runs)
   let height = 0
-  walkEditorTextLines(prepared, Math.max(1, width), runFont(spaceRun, family, spaceRun.size * sizeScale), line => {
+  walkEditorTextLines(prepared, Math.max(1, width), runFont(spaceRun, spaceRun.fontFamily || family, spaceRun.size * sizeScale), line => {
     const lineRuns: TextFitRun[] = []
     for (const fragment of line.fragments) {
       const run = runs[fragment.itemIndex]
@@ -467,7 +491,7 @@ export function measureTextBlocksHeight(blocks: TextFitBlock[], options: Measure
   for (const block of blocks) {
     total += paragraphGap(previous, block, options.blockSpace ?? 0);
     previous = block;
-    const width = Math.max(1, options.innerWidth - listColumnInset(block, block.size * sizeScale, options.bulletIndent));
+    const width = Math.max(1, options.innerWidth - listColumnInset(block, sizeScale, options.bulletIndent));
     if (block.runs?.length) {
       // Mixed-size paragraph: measure exactly — rich-inline breaks lines across
       // the per-run fonts and each line costs its own max run size.
@@ -532,10 +556,9 @@ export function fitFontScaleForBlocks(blocks: TextFitBlock[], options: FitFontSc
     let lo = minScale;
     let hi = 1;
     let best = minScale;
-    // 6 halvings ≈ 1.4% font precision (finer than PowerPoint's 1% autofit
-    // steps): fits the resize hot-path budget while the prepare cache covers
-    // repeated (text, font) pairs across frames.
-    for (let i = 0; i < 6; i++) {
+    // 10 halvings ≈ 0.1% font precision (matching useTextFit's DOM search),
+    // eliminating the ~1.4% quantization jump when clicking a slide.
+    for (let i = 0; i < 10 && hi - lo > 0.001; i++) {
       const mid = (lo + hi) / 2;
       if (fits(mid)) {
         best = mid;
@@ -644,7 +667,7 @@ export function measureSessionHeight(
   for (const item of session.items) {
     total += paragraphGap(previous, item.block, blockSpace)
     previous = item.block
-    const width = Math.max(1, innerWidth - listColumnInset(item.block, item.size, bulletIndent))
+    const width = Math.max(1, innerWidth - listColumnInset(item.block, 1, bulletIndent))
     if (item.block.runs?.length) {
       total += measureRunsHeight(
         item.block.runs,
@@ -690,20 +713,44 @@ export const stripFitScaleForProbe = stripFitScale
 const fitScaleMemo = new Map<string, number>()
 const FIT_SCALE_MEMO_MAX = 400
 
+type InlineMathMeasurer = (latex: string, fontSize: number, display: boolean) => { width: number; height: number } | null
+let inlineMathMeasurer: InlineMathMeasurer | null = null
+
+export function registerInlineMathMeasurer(measurer: InlineMathMeasurer) {
+  inlineMathMeasurer = measurer
+}
+
+export function notifyInlineMathReady() {
+  fontRevision++
+  blocksMemo.clear()
+  richInlineCache.clear()
+  fitScaleMemo.clear()
+  for (const listener of fontChangeListeners) listener()
+}
+
 /**
  * Extraction memo: a resize drag changes box geometry every frame but the
  * authored html rarely — DOMParser + the run walk must not run per frame.
  */
 const blocksMemo = new Map<string, TextFitBlock[]>()
 const BLOCKS_MEMO_MAX = 80
-const extractBlocksCached = (html: string, fontFamily: string, defaultSize: number) => {
-  const key = `${fontFamily}\0${defaultSize}\0${stripFitScale(html)}`
+const extractBlocksCached = (
+  html: string,
+  fontFamily: string,
+  defaultSize: number,
+  defaultWeight?: number,
+  defaultItalic?: boolean,
+) => {
+  const key = `${fontRevision}\0${fontFamily}\0${defaultSize}\0${defaultWeight ?? 400}\0${defaultItalic ? 1 : 0}\0${stripFitScale(html)}`
   let blocks = blocksMemo.get(key)
   if (!blocks) {
     blocks = extractFitBlocksFromHtml(stripFitScale(html), {
       defaultFontFamily: fontFamily,
       defaultSize,
+      defaultWeight,
+      defaultItalic,
     }).blocks
+    if (inlineMathMeasurer) applyMeasuredMathBoxes(blocks, inlineMathMeasurer)
     if (blocksMemo.size >= BLOCKS_MEMO_MAX) {
       const oldest = blocksMemo.keys().next().value
       if (oldest !== undefined) blocksMemo.delete(oldest)
@@ -718,6 +765,8 @@ type FitScaleOptions = {
   innerHeight: number
   defaultFontFamily?: string
   defaultSize?: number
+  defaultWeight?: number
+  defaultItalic?: boolean
   lineHeight: number
   letterSpacing?: number
   blockSpace?: number
@@ -728,11 +777,11 @@ type FitScaleOptions = {
 }
 
 const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
-  const fontFamily = options.defaultFontFamily || DEFAULT_FIT_FONT_FAMILY
+  const fontFamily = resolvePaintFontFamily(options.defaultFontFamily)
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
-  const { blocks } = extractBlocksCached(html, fontFamily, defaultSize)
+  const { blocks } = extractBlocksCached(html, fontFamily, defaultSize, options.defaultWeight, options.defaultItalic)
   // Color rewrites and rendered CSS spelling do not change text geometry.
-  const metrics = JSON.stringify(blocks, (key, value) => key === 'color' ? undefined : value)
+  const metrics = JSON.stringify(blocks, (key, value) => (key === 'color' || key === 'listColor') ? undefined : value)
   const key = fitSessionKey(
     metrics,
     fontFamily,
@@ -765,6 +814,7 @@ if (typeof document !== 'undefined') document.fonts?.addEventListener('loadingdo
   fontMetricsCache.clear()
   placeholderWidthCache.clear()
   spaceWidthCache.clear()
+  blocksMemo.clear()
   fitScaleMemo.clear()
   for (const listener of fontChangeListeners) listener()
 })
@@ -773,12 +823,41 @@ export function subscribeFitScaleChanges(listener: (elementId: string) => void) 
   return () => { fitScaleListeners.delete(listener) }
 }
 
+const FIT_SCALE_CHANGE_EPSILON = 0.0005
+
 export function rememberFitScale(html: string, options: FitScaleOptions, scale: number, elementId?: string) {
   if (!html) return
-  const { blocks } = extractBlocksCached(html, options.defaultFontFamily || DEFAULT_FIT_FONT_FAMILY, options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE)
+  const fontFamily = resolvePaintFontFamily(options.defaultFontFamily)
+  const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
+  const { blocks } = extractBlocksCached(
+    html,
+    fontFamily,
+    defaultSize,
+    options.defaultWeight,
+    options.defaultItalic,
+  )
   scale = Math.max(scale, minimumTextFitScale(blocks, options.minFontSize))
   const key = fitScaleMemoKey(html, options)
-  if (fitScaleMemo.get(key) === scale) return
+  const prev = fitScaleMemo.get(key)
+  if (prev !== undefined && Math.abs(prev - scale) < FIT_SCALE_CHANGE_EPSILON) return
+  // If DOM's binary search settled fractionally above a Pretext wrap cliff
+  // (e.g. +0.08% font size), adopting it would push Canvas textPainter onto an
+  // extra overflowing line. Keep Pretext's fitting scale when visually identical.
+  if (prev !== undefined && scale > prev && blocks.length) {
+    const maxFont = blocks.reduce((max, block) => Math.max(max, block.size), defaultSize)
+    if ((scale - prev) * maxFont < 0.1) {
+      const targetHeight = Math.max(1, Math.round(options.innerHeight)) + 0.49
+      const measureOpts = {
+        innerWidth: Math.max(1, options.innerWidth),
+        lineHeight: options.lineHeight,
+        blockSpace: options.blockSpace ?? 0,
+        letterSpacing: options.letterSpacing || undefined,
+      }
+      const nextHeight = measureTextBlocksHeight(blocks, { ...measureOpts, sizeScale: scale })
+      const prevHeight = measureTextBlocksHeight(blocks, { ...measureOpts, sizeScale: prev })
+      if (nextHeight > targetHeight && prevHeight <= targetHeight) return
+    }
+  }
   if (fitScaleMemo.size >= FIT_SCALE_MEMO_MAX) {
     const oldest = fitScaleMemo.keys().next().value
     if (oldest !== undefined) fitScaleMemo.delete(oldest)
@@ -796,7 +875,7 @@ export function textFitScaleForHtml(
   options: FitScaleOptions,
 ): number {
   if (!html || options.innerWidth <= 2 || options.innerHeight <= 2) return 1
-  const fontFamily = options.defaultFontFamily || DEFAULT_FIT_FONT_FAMILY
+  const fontFamily = resolvePaintFontFamily(options.defaultFontFamily)
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
   const letterSpacing = options.letterSpacing || 0
   const memoKey = fitScaleMemoKey(html, options)
@@ -804,20 +883,19 @@ export function textFitScaleForHtml(
   if (memoized !== undefined) return memoized
   const { blocks } = options.blocks
     ? { blocks: options.blocks }
-    : extractBlocksCached(html, fontFamily, defaultSize)
-  const maxFont = blocks.reduce((max, block) => Math.max(max, block.size), defaultSize)
-  // Re-wrap search: the largest font whose RE-WRAPPED height fits. Unlike a
-  // geometric zoom divide, smaller candidates wrap onto fewer lines and can
-  // fit at a much larger size (no wasted box space). Measured slightly narrow
-  // (0.5%) so canvas-vs-browser rounding drift errs toward fewer glyph px.
-  const measureWidth = Math.max(1, options.innerWidth * 0.995)
+    : extractBlocksCached(html, fontFamily, defaultSize, options.defaultWeight, options.defaultItalic)
+  // Re-wrap search against the exact inner box (`Math.round(innerHeight) + 0.49`
+  // matches browser integer `Math.round(layoutHeight) === scrollHeight <= height`,
+  // and full `innerWidth`) so unvisited thumbnails agree with the live editor.
+  const measureWidth = Math.max(1, options.innerWidth)
+  const measureHeight = Math.max(1, Math.round(options.innerHeight)) + 0.49
   const scale = !blocks.length
     ? 1
     : (() => {
       try {
         return fitFontScaleForBlocks(blocks, {
           innerWidth: measureWidth,
-          innerHeight: Math.max(1, options.innerHeight - fitClipPadding(maxFont, options.lineHeight)),
+          innerHeight: measureHeight,
           lineHeight: options.lineHeight,
           blockSpace: options.blockSpace ?? 0,
           letterSpacing: letterSpacing || undefined,
@@ -859,13 +937,18 @@ function parseFontSizePx(value: string | null | undefined): number {
   return cssLengthToPx(value, DEFAULT_TEXT_FONT_SIZE) ?? 0;
 }
 
-/** Largest inline px font size declared on `block` or any descendant. */
+/** Largest inline px font size declared on `block` or any descendant (skipping nested lists). */
 function blockFontSize(block: Element, defaultSize: number): number {
   let max = parseFontSizePx((block as HTMLElement).style?.fontSize);
-  block.querySelectorAll<HTMLElement>('[style]').forEach(el => {
-    const size = parseFontSizePx(el.style.fontSize);
-    if (size > max) max = size;
-  });
+  const walk = (el: Element) => {
+    for (const child of Array.from(el.children)) {
+      if (block.tagName === 'LI' && (child.tagName === 'UL' || child.tagName === 'OL')) continue;
+      const size = parseFontSizePx((child as HTMLElement).style?.fontSize);
+      if (size > max) max = size;
+      walk(child);
+    }
+  };
+  walk(block);
   return max || defaultSize;
 }
 
@@ -911,18 +994,62 @@ function cssLength(value: string | undefined | null): {
 } {
   return cssLengthParts(value, DEFAULT_TEXT_FONT_SIZE);
 }
-function listIndentFrom(el: Element): Pick<TextFitBlock, 'listIndentPx' | 'listIndentEm'> {
+/** Walk ancestor `<ul>`/`<ol>`/`<li>` elements to compute the inherited CSS font-size, color, and font-family of a list item. */
+function listInheritedStyle(el: Element, defaultSize: number, defaultFamily: string): {
+  listFontSize: number
+  listColor?: string
+  listFontFamily: string
+} {
+  let listFontSize = 0
+  let listColor: string | undefined
+  let listFontFamily: string | null = null
+  let cur: HTMLElement | null = el as HTMLElement
+  while (cur && (cur.tagName === 'LI' || cur.tagName === 'UL' || cur.tagName === 'OL')) {
+    if (!listFontSize) listFontSize = parseFontSizePx(cur.style?.fontSize)
+    if (!listColor && cur.style?.color) listColor = cur.style.color
+    if (!listFontFamily) listFontFamily = usableFamily(cur.style?.fontFamily)
+    cur = cur.parentElement
+  }
+  return {
+    listFontSize: listFontSize || defaultSize,
+    listColor,
+    listFontFamily: listFontFamily || defaultFamily,
+  }
+}
+
+function listIndentFrom(el: Element, listFontSize: number, defaultSize: number): Pick<TextFitBlock, 'listIndentPx' | 'listIndentEm'> {
   if (el.tagName !== 'LI') return {};
-  const list = el.closest('ul, ol') as HTMLElement | null;
-  if (!list) return {};
-  const pad = cssLength(list.style.paddingInlineStart || list.style.paddingLeft);
-  if (pad.px != null && pad.px > 0) return {
-    listIndentPx: pad.px
-  };
-  if (pad.em != null && pad.em > 0) return {
-    listIndentEm: pad.em
-  };
-  return {};
+  const chain: Array<{ list: HTMLElement; li: HTMLElement }> = []
+  let li: HTMLElement | null = el as HTMLElement
+  while (li && li.tagName === 'LI') {
+    const list = li.closest('ul, ol') as HTMLElement | null
+    if (!list) break
+    chain.push({ list, li })
+    li = list.parentElement?.closest('li') as HTMLElement | null
+  }
+  if (!chain.length) return {};
+  if (chain.length === 1) {
+    const pad = cssLength(chain[0].list.style.paddingInlineStart || chain[0].list.style.paddingLeft);
+    if (pad.px != null && pad.px > 0) return { listIndentPx: pad.px };
+    if (pad.em != null && pad.em > 0) return { listIndentEm: pad.em };
+    return {};
+  }
+  // Nested list: sum outer ul/ol + outer li paddings into the item's em units.
+  let totalEm = 0
+  for (let i = 0; i < chain.length; i++) {
+    const { list, li: item } = chain[i]
+    const ancestorEm = parseFontSizePx(list.style.fontSize) || defaultSize
+    const pad = cssLength(list.style.paddingInlineStart || list.style.paddingLeft)
+    const listPad = pad.px != null && pad.px > 0
+      ? pad.px / listFontSize
+      : (pad.em != null && pad.em > 0 ? pad.em : DEFAULT_LIST_PADDING_EM) * (ancestorEm / listFontSize)
+    totalEm += listPad
+    if (i > 0) {
+      const itemEm = parseFontSizePx(item.style.fontSize) || ancestorEm
+      totalEm += LIST_MARKER_GAP_EM * (itemEm / listFontSize)
+    }
+  }
+  return { listIndentEm: totalEm }
 }
 export interface ExtractedContent {
   blocks: TextFitBlock[];
@@ -930,6 +1057,8 @@ export interface ExtractedContent {
 export interface ExtractOptions {
   defaultFontFamily: string;
   defaultSize?: number;
+  defaultWeight?: number;
+  defaultItalic?: boolean;
 }
 const BLOCK_SELECTOR = 'li, p, blockquote';
 
@@ -943,6 +1072,12 @@ const runSizeProfile = (
   defaultSize: number,
   defaultFamily: string,
   preserveWhitespace: boolean,
+  inheritedBase?: {
+    color?: string
+    fontFamily?: string
+    fontWeight?: number
+    italic?: boolean
+  },
 ): NonNullable<TextFitBlock['runs']> => {
   const runs: NonNullable<TextFitBlock['runs']> = []
   const walk = (
@@ -950,6 +1085,7 @@ const runSizeProfile = (
     inherited: {
       size: number
       bold: boolean
+      fontWeight?: number
       italic: boolean
       underline: boolean
       strikethrough: boolean
@@ -962,10 +1098,19 @@ const runSizeProfile = (
     if (!(size > 0)) size = inherited.size
     const tag = el.tagName
     const decoration = htmlEl.style?.textDecoration || ''
+    const rawWeight = htmlEl.style?.fontWeight
+    const numericWeight = rawWeight ? Number(rawWeight) : NaN
+    const explicitNormal = rawWeight === 'normal' || numericWeight === 400
+    const nextWeight = Number.isFinite(numericWeight) && numericWeight > 0
+      ? numericWeight
+      : rawWeight === 'normal'
+        ? 400
+        : inherited.fontWeight
     const next = {
       size,
-      bold: inherited.bold || tag === 'STRONG' || tag === 'B' || htmlEl.style?.fontWeight === 'bold' || Number(htmlEl.style?.fontWeight) >= 600,
-      italic: inherited.italic || tag === 'EM' || tag === 'I' || htmlEl.style?.fontStyle === 'italic',
+      bold: explicitNormal ? false : (inherited.bold || tag === 'STRONG' || tag === 'B' || rawWeight === 'bold' || numericWeight >= 600),
+      ...(nextWeight && nextWeight !== 400 ? { fontWeight: nextWeight } : {}),
+      italic: htmlEl.style?.fontStyle === 'normal' ? false : (inherited.italic || tag === 'EM' || tag === 'I' || htmlEl.style?.fontStyle === 'italic'),
       underline: inherited.underline || tag === 'U' || decoration.includes('underline'),
       strikethrough: inherited.strikethrough || tag === 'S' || tag === 'STRIKE' || decoration.includes('line-through'),
       color: htmlEl.style?.color || inherited.color,
@@ -979,6 +1124,9 @@ const runSizeProfile = (
       }
       else if (node.nodeType === Node.ELEMENT_NODE) {
         const child = node as HTMLElement
+        if (block.tagName === 'LI' && (child.tagName === 'UL' || child.tagName === 'OL')) {
+          continue
+        }
         if (child.tagName === 'BR') {
           if (!child.classList.contains('ProseMirror-trailingBreak')) runs.push({ text: '\n', ...next })
           continue
@@ -1003,14 +1151,16 @@ const runSizeProfile = (
       }
     }
   }
+  const baseWeight = inheritedBase?.fontWeight
   walk(block, {
     size: defaultSize,
-    bold: false,
-    italic: false,
+    bold: baseWeight != null && baseWeight >= 600,
+    ...(baseWeight && baseWeight !== 400 ? { fontWeight: baseWeight } : {}),
+    italic: !!inheritedBase?.italic,
     underline: false,
     strikethrough: false,
-    color: (block as HTMLElement).style?.color || undefined,
-    fontFamily: blockFontFamily(block, defaultFamily),
+    color: (block as HTMLElement).style?.color || inheritedBase?.color || undefined,
+    fontFamily: blockFontFamily(block, inheritedBase?.fontFamily || defaultFamily),
   })
   return runs
 }
@@ -1034,25 +1184,47 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE;
   const defaultFamily = resolvePaintFontFamily(options.defaultFontFamily);
   const blockEls = Array.from(root.querySelectorAll(BLOCK_SELECTOR))
-  .filter(el => el.tagName === 'LI' || !el.closest('li'));
+    .filter(el => {
+      if (el.tagName === 'BLOCKQUOTE' && el.querySelector('p, li')) return false;
+      return el.tagName === 'LI' || !el.closest('li');
+    });
   const candidates = blockEls.length ? blockEls : Array.from(root.children);
   const blocks: TextFitBlock[] = [];
   for (const el of candidates) {
     const isList = el.tagName === 'LI';
+    const inBlockquote = el.tagName === 'BLOCKQUOTE' || !!el.closest('blockquote');
+    const listInfo = isList ? listInheritedStyle(el, defaultSize, defaultFamily) : null;
+    const blockBaseSize = listInfo ? listInfo.listFontSize : defaultSize;
+    const blockBaseFamily = listInfo ? listInfo.listFontFamily : defaultFamily;
     const preserveWhitespace = /^(pre|pre-wrap|break-spaces)$/.test((el as HTMLElement).style?.whiteSpace || '')
-    const runs = runSizeProfile(el, defaultSize, defaultFamily, preserveWhitespace)
+    const runs = runSizeProfile(el, blockBaseSize, blockBaseFamily, preserveWhitespace, {
+      color: listInfo?.listColor,
+      fontFamily: blockBaseFamily,
+      fontWeight: options.defaultWeight,
+      italic: options.defaultItalic || inBlockquote,
+    })
     const sourceText = runs.map(run => run.text).join('')
     const text = preserveWhitespace ? sourceText : sourceText.replace(/^ +| +$/g, '')
     const whiteSpace = preserveWhitespace || sourceText.includes('\n') ? 'pre-wrap' as const : undefined
-    const list = isList ? el.closest('ol, ul') : null
-    const listMarker = isList
-      ? (list?.tagName === 'OL'
-          ? `${Math.max(1, Array.from(list.children).indexOf(el) + 1)}.`
-          : '•')
-      : undefined
+    const list = isList ? el.closest('ol, ul') as HTMLElement | null : null
+    const listOrdered = list?.tagName === 'OL'
+    let listMarker: string | undefined
+    if (isList) {
+      if (listOrdered && list) {
+        const startAttr = Number(list.getAttribute('start'))
+        const start = Number.isFinite(startAttr) && startAttr > 0 ? startAttr : 1
+        const items = Array.from(list.children).filter(child => child.tagName === 'LI')
+        listMarker = `${start + Math.max(0, items.indexOf(el))}.`
+      }
+      else {
+        const styleType = list?.style?.listStyleType || ''
+        listMarker = styleType === 'circle' ? '◦' : styleType === 'square' ? '▪' : '•'
+      }
+    }
+    const firstInList = isList && !el.previousElementSibling
     const align = paragraphAlignOf(el)
-    const paragraph = (isList ? el.querySelector('p') ?? el : el) as HTMLElement
-    const paragraphSize = parseFontSizePx(paragraph.style.fontSize) || defaultSize
+    const paragraph = (isList ? el.querySelector(':scope > p') ?? el : el) as HTMLElement
+    const paragraphSize = parseFontSizePx(paragraph.style.fontSize) || blockBaseSize
     const leading = paragraph.style.lineHeight
     const leadingValue = Number(leading)
     const toPx = (value: string) => {
@@ -1063,19 +1235,24 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
     blocks.push({
       text,
       ...(whiteSpace ? { whiteSpace } : {}),
-      size: blockFontSize(el, defaultSize),
+      size: blockFontSize(el, blockBaseSize),
       paragraphSize,
       paragraphIndent: Math.max(0, Math.min(8, Number(paragraph.dataset.indent) || 0)) * paragraphSize,
       ...(leading && Number.isFinite(leadingValue) && leadingValue > 0 ? { lineHeight: leadingValue } : leading ? { lineHeightPx: toPx(leading) } : {}),
       ...(paragraph.style.marginTop ? { marginTop: toPx(paragraph.style.marginTop) } : {}),
       ...(paragraph.style.marginBottom ? { marginBottom: toPx(paragraph.style.marginBottom) } : {}),
-      bold: runs[0]?.bold || !!el.querySelector('strong, b'),
-      italic: runs[0]?.italic || !!el.querySelector('em, i'),
-      fontFamily: blockFontFamily(el, defaultFamily),
+      bold: runs[0]?.bold || (options.defaultWeight != null && options.defaultWeight >= 600) || !!el.querySelector('strong, b'),
+      ...(options.defaultWeight && options.defaultWeight !== 400 ? { fontWeight: options.defaultWeight } : {}),
+      italic: runs[0]?.italic || !!options.defaultItalic || inBlockquote || !!el.querySelector('em, i'),
+      fontFamily: blockFontFamily(el, blockBaseFamily),
       listItem: isList,
+      ...(firstInList ? { firstInList: true } : {}),
+      ...(listInfo ? { listFontSize: listInfo.listFontSize } : {}),
+      ...(listInfo?.listColor ? { listColor: listInfo.listColor } : {}),
+      ...(listOrdered ? { listOrdered: true } : {}),
       align,
       listMarker,
-      ...(isList ? listIndentFrom(el) : {}),
+      ...(isList ? listIndentFrom(el, listInfo!.listFontSize, defaultSize) : {}),
       // A single styled run still carries color, weight, and italic metadata.
       ...(runs.length ? { runs } : {})
     });
@@ -1087,6 +1264,8 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
       blocks.push({
         text,
         size: blockFontSize(root, defaultSize),
+        ...(options.defaultWeight && options.defaultWeight !== 400 ? { fontWeight: options.defaultWeight } : {}),
+        ...(options.defaultItalic ? { italic: true } : {}),
         fontFamily: blockFontFamily(root, defaultFamily)
       });
     }

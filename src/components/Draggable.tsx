@@ -193,7 +193,12 @@ export default function Draggable({
       onDragCancel={clearDrag}
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        <div ref={setRootRef} className={className} onContextMenu={onContextMenu}>
+        <div
+          ref={setRootRef}
+          className={className}
+          data-dragging={activeId ? 'true' : undefined}
+          onContextMenu={onContextMenu}
+        >
           {item ? (
             <div style={virtualItems ? { height: totalSize, position: 'relative' } : undefined}>
               {mounted.map(({ element, index, row }) => (

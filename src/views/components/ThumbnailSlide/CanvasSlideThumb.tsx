@@ -1,4 +1,4 @@
-import { subscribeFitScaleChanges } from '@/utils/textFit'
+import { subscribeFitScaleChanges, subscribeTextFontChanges } from '@/utils/textFit'
 import { recordRender } from '@/utils/renderMetrics'
 import { memo, useCallback, useEffect, useId, useRef } from 'react'
 
@@ -91,12 +91,12 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
     const repaint = () => schedule()
     window.addEventListener('resize', repaint, { passive: true })
     window.visualViewport?.addEventListener('resize', repaint, { passive: true })
-    document.fonts?.addEventListener?.('loadingdone', repaint)
+    const unsubscribeFonts = subscribeTextFontChanges(repaint)
     void document.fonts?.ready?.then(repaint).catch(() => {})
     return () => {
       window.removeEventListener('resize', repaint)
       window.visualViewport?.removeEventListener('resize', repaint)
-      document.fonts?.removeEventListener?.('loadingdone', repaint)
+      unsubscribeFonts()
     }
   }, [schedule])
 

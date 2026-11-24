@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, rs } from '@rstest/core'
 
 rs.mock('@/utils/font', () => ({ collectSlidesFonts: () => [], loadGoogleFonts: () => {} }))
@@ -273,5 +275,21 @@ describe('AI gap slide insertion contract and stable anchors', () => {
     expect(inserted.ok).toBe(true)
     expect(runtime.api.slides.list().map(s => s.id)).toEqual(['s1', inserted.data!.slides[0].id, 's2', 's3'])
     runtime.stop()
+  })
+
+  it('keeps gap controls contextual on hover/focus-within, dashed, zero-layout-inflation, and hidden during drag', () => {
+    const virtualizerSrc = readFileSync(resolve('src/views/Editor/Thumbnails/useThumbnailVirtualizer.ts'), 'utf8')
+    const scssSrc = readFileSync(resolve('src/views/Editor/Thumbnails/index.module.scss'), 'utf8')
+    const draggableSrc = readFileSync(resolve('src/components/Draggable.tsx'), 'utf8')
+
+    // Gap controls must not add permanent vertical height per slide in the virtualizer.
+    expect(virtualizerSrc).not.toContain('GAP_BAR_HEIGHT')
+    // Dashed hover/focus-within overlay bar hidden by default and completely disabled while dragging.
+    expect(scssSrc).toMatch(/\.gap-bar\s*\{[\s\S]*?position:\s*absolute/)
+    expect(scssSrc).toMatch(/border-top:\s*1px\s+dashed/)
+    expect(scssSrc).toMatch(/\.gap-actions\s*\{[\s\S]*?opacity:\s*0/)
+    expect(scssSrc).toMatch(/&:hover\s+\.gap-actions,\s*&:focus-within\s+\.gap-actions\s*\{\s*opacity:\s*1/)
+    expect(scssSrc).toMatch(/&\[data-dragging='true'\]\s*\{[\s\S]*?\.gap-bar[\s\S]*?opacity:\s*0[\s\S]*?pointer-events:\s*none/)
+    expect(draggableSrc).toContain("data-dragging={activeId ? 'true' : undefined}")
   })
 })

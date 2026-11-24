@@ -42,6 +42,7 @@ const BaseTextElement = memo((vrProps: IBaseTextElementProps) => {
   const isEmptyContent = isEmptyRichText(elementInfo.content);
   const showPlaceholderPreview = showPlaceholders && isEmptyContent && !!elementInfo.placeholder;
   const slideId = useContext(SlideIdContext);
+  const themeFontName = useSlidesStore(s => s.theme.fontName);
   const slideElements = selectSlideById(useSlidesStore.getState(), slideId || undefined)?.elements;
   const { ink: defaultInkColor, html: contrastedHtml } = resolveLiveTextPaint(
     elementInfo.defaultColor || themeFontColor || '#333',
@@ -112,7 +113,7 @@ const BaseTextElement = memo((vrProps: IBaseTextElementProps) => {
         lineHeight: elementInfo.lineHeight,
         letterSpacing: (elementInfo.wordSpace || 0) + 'px',
         color: defaultInkColor,
-        fontFamily: elementInfo.defaultFontName,
+        fontFamily: elementInfo.defaultFontName || themeFontName || undefined,
         ...placeholderTypography,
         writingMode: elementInfo.vertical ? 'vertical-rl' : 'horizontal-tb',
         padding: `${inset[0]}px ${inset[1]}px ${inset[2]}px ${inset[3]}px`,
