@@ -4344,6 +4344,36 @@ export type NamespaceEditorTranslation = {
 		 */
 		addSlide: string
 		/**
+		 * A​d​d​ ​s​l​i​d​e​ ​w​i​t​h​ ​A​I
+		 */
+		addWithAi: string
+		/**
+		 * A​d​d​ ​s​l​i​d​e​ ​w​i​t​h​ ​A​I​ ​b​e​f​o​r​e​ ​s​l​i​d​e​ ​1
+		 */
+		addWithAiBeforeFirst: string
+		/**
+		 * A​d​d​ ​s​l​i​d​e​ ​w​i​t​h​ ​A​I​ ​b​e​t​w​e​e​n​ ​s​l​i​d​e​s​ ​{​a​f​t​e​r​}​ ​a​n​d​ ​{​b​e​f​o​r​e​}
+		 * @param {number} after
+		 * @param {number} before
+		 */
+		addWithAiBetween: RequiredParams<'after' | 'before'>
+		/**
+		 * A​d​d​ ​s​l​i​d​e​ ​w​i​t​h​ ​A​I​ ​a​f​t​e​r​ ​t​h​e​ ​l​a​s​t​ ​s​l​i​d​e
+		 */
+		addWithAiAfterLast: string
+		/**
+		 * I​n​s​e​r​t​ ​b​l​a​n​k​ ​s​l​i​d​e​ ​h​e​r​e
+		 */
+		addBlankSlideHere: string
+		/**
+		 * G​e​n​e​r​a​t​i​n​g​ ​s​l​i​d​e​…
+		 */
+		generatingSlide: string
+		/**
+		 * C​a​n​c​e​l
+		 */
+		cancelAiSlide: string
+		/**
 		 * E​n​t​e​r​ ​s​e​c​t​i​o​n​ ​n​a​m​e
 		 */
 		sectionNamePlaceholder: string
@@ -4445,6 +4475,20 @@ export type NamespaceEditorTranslation = {
 			 */
 			presentFromCurrent: string
 		}
+	}
+	mediaSlot: {
+		/**
+		 * G​e​n​e​r​a​t​i​n​g​ ​i​m​a​g​e​…
+		 */
+		pending: string
+		/**
+		 * L​o​a​d​i​n​g​ ​i​m​a​g​e​…
+		 */
+		loading: string
+		/**
+		 * I​m​a​g​e​ ​u​n​a​v​a​i​l​a​b​l​e
+		 */
+		error: string
 	}
 	elementAnimation: {
 		/**
@@ -10384,6 +10428,34 @@ export type TranslationFunctions = {
 			 */
 			addSlide: () => LocalizedString
 			/**
+			 * Add slide with AI
+			 */
+			addWithAi: () => LocalizedString
+			/**
+			 * Add slide with AI before slide 1
+			 */
+			addWithAiBeforeFirst: () => LocalizedString
+			/**
+			 * Add slide with AI between slides {after} and {before}
+			 */
+			addWithAiBetween: (arg: { after: number, before: number }) => LocalizedString
+			/**
+			 * Add slide with AI after the last slide
+			 */
+			addWithAiAfterLast: () => LocalizedString
+			/**
+			 * Insert blank slide here
+			 */
+			addBlankSlideHere: () => LocalizedString
+			/**
+			 * Generating slide…
+			 */
+			generatingSlide: () => LocalizedString
+			/**
+			 * Cancel
+			 */
+			cancelAiSlide: () => LocalizedString
+			/**
 			 * Enter section name
 			 */
 			sectionNamePlaceholder: () => LocalizedString
@@ -10483,6 +10555,20 @@ export type TranslationFunctions = {
 				 */
 				presentFromCurrent: () => LocalizedString
 			}
+		}
+		mediaSlot: {
+			/**
+			 * Generating image…
+			 */
+			pending: () => LocalizedString
+			/**
+			 * Loading image…
+			 */
+			loading: () => LocalizedString
+			/**
+			 * Image unavailable
+			 */
+			error: () => LocalizedString
 		}
 		elementAnimation: {
 			/**

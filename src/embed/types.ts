@@ -1,4 +1,12 @@
 import type { FikaDesignTheme } from '@/configs/designThemes';
+import type {
+  FikaAiSlideInsertAnchor,
+  FikaAiSlideInsertCancelDetail,
+  FikaAiSlideInsertConfig,
+  FikaAiSlideInsertLabels,
+  FikaSlideGapPosition,
+  FikaSlideInsertAnchorInput,
+} from '@/configs/aiSlideInsert';
 import type { FikaExportTabsConfig } from '@/configs/exportTabs';
 import type { FikaExportMediaResolver } from '@/configs/exportMediaResolver';
 import type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver, FikaWatermarkSurface } from '@/configs/exportWatermark';
@@ -8,6 +16,14 @@ import type { Locales } from '@/i18n/locale';
 import type { Slide, SlideTheme, SlideTemplate } from '@/types/slides';
 import type { FikaAgentApi, FikaDeckViewport, FikaSlideReference } from './agentic/types';
 import type { FikaRevealOptions } from './reveal';
+export type {
+  FikaAiSlideInsertAnchor,
+  FikaAiSlideInsertCancelDetail,
+  FikaAiSlideInsertConfig,
+  FikaAiSlideInsertLabels,
+  FikaSlideGapPosition,
+  FikaSlideInsertAnchorInput,
+};
 export type { FikaExportMediaResolver };
 export type { FikaExportWatermark, FikaExportWatermarkPosition, FikaExportWatermarkResolver, FikaWatermarkSurface };
 export type { FikaExportMetadata, FikaExportMetadataContext, FikaExportMetadataResolver, FikaExportMetadataXmpNamespace };
@@ -164,6 +180,12 @@ export interface FikaMountOptions {
    */
   viewMode?: FikaViewMode;
   /**
+   * Host-driven "AI add slide here" controls rendered at the first, middle, and
+   * last gaps in the slide rail. Fika emits stable anchor payloads and never
+   * calls LLM providers directly. Update live via `controller.setAiSlideInsert`.
+   */
+  aiSlideInsert?: FikaAiSlideInsertConfig;
+  /**
    * Start in view-only mode: the user can browse slides but not select, edit,
    * insert, reorder or delete anything. Host and agent commands still apply.
    * Toggle later with `controller.setReadOnly`.
@@ -220,6 +242,8 @@ export interface FikaController extends FikaAgentApi {
   setLocale(locale: Locales): Promise<void>;
   /** Replace the visible design catalog without changing slide content. Undefined restores defaults. */
   setDesignThemes(themes?: readonly FikaDesignTheme[]): void;
+  /** Update or disable host-driven gap AI slide insertion controls without remounting. */
+  setAiSlideInsert(config?: FikaAiSlideInsertConfig | null): void;
   /**
    * Paint one slide offscreen (thumbnail painter, no DOM capture) and return
    * the encoded image. Defaults to the current slide.

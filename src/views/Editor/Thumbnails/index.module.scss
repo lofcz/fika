@@ -122,6 +122,149 @@
     }
   }
 }
+.thumbnail-container {
+  position: relative;
+}
+.gap-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 4px 0 24px;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 24px;
+    right: 4px;
+    top: 50%;
+    height: 1px;
+    background: $borderColor;
+    opacity: 0.45;
+    pointer-events: none;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+  }
+
+  &:hover::before,
+  &:focus-within::before {
+    opacity: 0.9;
+    background: $ring;
+  }
+
+  .gap-actions {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 auto;
+    padding: 0 4px;
+    background: var(--fika-rail-bg, #ffffff);
+    opacity: 0.72;
+    transition: opacity 0.15s ease;
+  }
+
+  &:hover .gap-actions,
+  &:focus-within .gap-actions {
+    opacity: 1;
+  }
+}
+
+.gap-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid $borderColor;
+  background: $surface;
+  color: $inkMuted;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: $surfaceHover;
+    border-color: $ring;
+    color: $ink;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $ring;
+    outline-offset: 2px;
+    opacity: 1;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &.gap-ai-btn {
+    color: $ink;
+  }
+
+  &.gap-blank-btn {
+    width: 20px;
+    padding: 0;
+  }
+}
+
+.gap-icon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.gap-btn-label {
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cancel-ai-btn {
+  position: absolute;
+  right: 8px;
+  top: 12px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 250, 252, 0.35);
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: rgba(15, 23, 42, 0.96);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $ring;
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gap-bar::before,
+  .gap-bar .gap-actions,
+  .gap-btn,
+  .cancel-ai-btn {
+    transition: none;
+  }
+}
 .label {
   font-size: 11px;
   font-weight: 500;

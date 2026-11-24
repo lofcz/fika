@@ -289,6 +289,13 @@ const pl_editor: NamespaceEditorTranslation = {
   },
   thumbnails: {
     addSlide: 'Dodaj slajd',
+    addWithAi: 'Dodaj slajd z AI',
+    addWithAiBeforeFirst: 'Dodaj slajd z AI przed slajdem 1',
+    addWithAiBetween: 'Dodaj slajd z AI między slajdami {after} a {before}',
+    addWithAiAfterLast: 'Dodaj slajd z AI po ostatnim slajdzie',
+    addBlankSlideHere: 'Wstaw tutaj pusty slajd',
+    generatingSlide: 'Generowanie slajdu…',
+    cancelAiSlide: 'Anuluj',
     sectionNamePlaceholder: 'Wpisz nazwę sekcji',
     untitledSection: 'Sekcja bez tytułu',
     defaultSection: 'Sekcja domyślna',
@@ -317,6 +324,11 @@ const pl_editor: NamespaceEditorTranslation = {
       addSection: 'Dodaj sekcję',
       presentFromCurrent: 'Pokaz od bieżącego slajdu',
     },
+  },
+  mediaSlot: {
+    pending: 'Generowanie obrazu…',
+    loading: 'Ładowanie obrazu…',
+    error: 'Obraz jest niedostępny',
   },
   elementAnimation: {
     addAnimation: 'Dodaj animację',

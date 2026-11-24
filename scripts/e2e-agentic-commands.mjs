@@ -57,7 +57,7 @@ const EXPECTED_COMMANDS = [
   'animations.list', 'animations.catalog', 'animations.sequence', 'animations.create',
   'animations.update', 'animations.setTrigger', 'animations.setDuration',
   'animations.delete', 'animations.reorder',
-  'media.resolveAsset', 'media.setImageSource', 'media.setVideoSource', 'media.setAudioSource',
+  'media.resolveAsset', 'media.setImageSource', 'media.setImageState', 'media.setVideoSource', 'media.setAudioSource',
   'tables.create', 'tables.update', 'tables.setCell', 'tables.setCellStyle',
   'tables.insertRow', 'tables.deleteRow', 'tables.insertColumn', 'tables.deleteColumn',
   'tables.mergeCells', 'tables.splitCell',
@@ -768,6 +768,11 @@ async function runSuite(page) {
     {
       const { result } = await agent('media.setImageSource', { elementId: IDS.image, slideId: IDS.slide, asset: PNG })
       rec('media.setImageSource accepts a raw data URL', result.ok && elById(IDS.image)?.src === PNG, { ok: result.ok })
+    }
+    {
+      const pending = await agent('media.setImageState', { elementId: IDS.image, slideId: IDS.slide, state: { status: 'pending', slotId: 'slot_e2e' } })
+      const cleared = await agent('media.setImageState', { elementId: IDS.image, slideId: IDS.slide, state: null })
+      rec('media.setImageState updates and clears async image slot state', pending.result.ok && cleared.result.ok && elById(IDS.image)?.mediaState === undefined, { pending: pending.result.ok, cleared: cleared.result.ok })
     }
     {
       const { result } = await agent('media.resolveAsset', { asset: { src: PNG, filename: 'dot.png' }, kind: 'image' })

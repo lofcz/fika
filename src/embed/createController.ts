@@ -1,5 +1,6 @@
 import { flushCommitQueue } from '@/utils/commitQueue'
 import { setFikaDesignThemes } from '@/configs/designThemes'
+import { setFikaAiSlideInsert } from '@/configs/aiSlideInsert'
 import { useSlidesStore } from '@/store/slides'
 import { useScreenStore } from '@/store/screen'
 import { useMainStore } from '@/store/main'
@@ -136,6 +137,9 @@ export function createController(
 
     setDesignThemes(themes) {
       if (!destroyed) setFikaDesignThemes(themes)
+    },
+    setAiSlideInsert(config) {
+      if (!destroyed) setFikaAiSlideInsert(config)
     },
     async setLocale(locale: Locales) {
       if (destroyed) return

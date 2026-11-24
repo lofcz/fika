@@ -8,36 +8,52 @@ import {
   syncImageBitmapsToSlides,
 } from '@/utils/imageBitmapCache'
 
+export type ImageBitmapLoadStatus = 'idle' | 'loading' | 'loaded' | 'error'
+
+export interface ImageBitmapLoadState {
+  bitmap: ImageBitmap | null
+  status: ImageBitmapLoadStatus
+}
+
 const cachedBitmap = (src: string) => (
   getCachedImageBitmap(src) ?? getCachedPreviewImageBitmap(src) ?? null
 )
 
-export const useImageBitmap = (src: string): ImageBitmap | null => {
-  const [bitmap, setBitmap] = useState<ImageBitmap | null>(() => (
-    src ? cachedBitmap(src) : null
-  ))
+export const useImageBitmapState = (src: string): ImageBitmapLoadState => {
+  const [state, setState] = useState<ImageBitmapLoadState>(() => {
+    if (!src) return { bitmap: null, status: 'idle' }
+    const hit = cachedBitmap(src)
+    return hit ? { bitmap: hit, status: 'loaded' } : { bitmap: null, status: 'loading' }
+  })
 
   useEffect(() => {
     if (!src) {
-      setBitmap(null)
+      setState({ bitmap: null, status: 'idle' })
       return
     }
     const full = getCachedImageBitmap(src)
     if (full) {
-      setBitmap(full)
+      setState({ bitmap: full, status: 'loaded' })
       return
     }
     const thumb = getCachedPreviewImageBitmap(src)
-    if (thumb) setBitmap(thumb)
-    else setBitmap(null)
+    if (thumb) setState({ bitmap: thumb, status: 'loaded' })
+    else setState({ bitmap: null, status: 'loading' })
 
     let cancelled = false
     const run = async () => {
       const preview = thumb ?? await loadPreviewImageBitmap(src)
       if (cancelled) return
-      if (preview && !getCachedImageBitmap(src)) setBitmap(preview)
+      if (preview && !getCachedImageBitmap(src)) {
+        setState({ bitmap: preview, status: 'loaded' })
+      }
       const next = await loadImageBitmap(src)
-      if (!cancelled && next) setBitmap(next)
+      if (cancelled) return
+      if (next) {
+        setState({ bitmap: next, status: 'loaded' })
+      } else if (!preview && !getCachedImageBitmap(src)) {
+        setState({ bitmap: null, status: 'error' })
+      }
     }
     void run()
     return () => {
@@ -45,8 +61,10 @@ export const useImageBitmap = (src: string): ImageBitmap | null => {
     }
   }, [src])
 
-  return bitmap
+  return state
 }
+
+export const useImageBitmap = (src: string): ImageBitmap | null => useImageBitmapState(src).bitmap
 
 export const useSyncImageBitmapCache = () => {
   const slides = useSlidesStore(s => s.slides)

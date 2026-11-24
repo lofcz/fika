@@ -50,6 +50,7 @@ import EditableElement from './EditableElement'
 import MouseSelection from './MouseSelection'
 import ViewportBackground from './ViewportBackground'
 import SlideSkeleton from '@/views/components/SlideSkeleton'
+import { emitFikaAiSlideInsertCancel, useAiSlideInsert } from '@/configs/aiSlideInsert'
 import AiRevealBadge from './AiRevealBadge'
 import ElementFloatLayer from './ElementFloatLayer/index'
 import AlignmentLine from './AlignmentLine'
@@ -160,7 +161,10 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
   const currentSlide = currentSnap
     ? selectCurrentSlide(useSlidesStore.getState())
     : undefined
+  const aiSlideInsertConfig = useAiSlideInsert(s => s.config)
   const skeletonSlide = useSlidesStore(s => !!selectCurrentSlide(s)?.skeleton)
+  const skeletonAiRequestId = useSlidesStore(s => selectCurrentSlide(s)?.aiRequestId)
+  const skeletonSlideId = useSlidesStore(s => selectCurrentSlide(s)?.id)
   const readOnly = useMainStore(s => s.readOnly)
   const spaceKeyState = useKeyboardStore(s => s.spaceKeyState)
   const ctrlKeyState = useKeyboardStore(s => s.ctrlKeyState)
@@ -769,7 +773,18 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
         >
           <ViewportBackground showGrid={!mynaView} />
           {mynaView && <MynaFrameTitles elements={elementList} scale={canvasScale} drag={dragElement} />}
-          {skeletonSlide ? <SlideSkeleton className={cx('skeleton')} shield /> : null}
+          {skeletonSlide ? (
+            <SlideSkeleton
+              className={cx('skeleton')}
+              shield
+              requestId={!readOnly ? skeletonAiRequestId : undefined}
+              generatingLabel={aiSlideInsertConfig?.labels?.generating || LL.editor.thumbnails.generatingSlide()}
+              cancelLabel={aiSlideInsertConfig?.labels?.cancel || LL.editor.thumbnails.cancelAiSlide()}
+              onCancel={skeletonAiRequestId
+                ? () => emitFikaAiSlideInsertCancel({ requestId: skeletonAiRequestId, slideId: skeletonSlideId })
+                : undefined}
+            />
+          ) : null}
           <div className={cx('operates')}>
             {displayAlignmentLines.map((line, index) => (
               <AlignmentLine

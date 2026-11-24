@@ -289,6 +289,13 @@ const sk_editor: NamespaceEditorTranslation = {
   },
   thumbnails: {
     addSlide: 'Pridať snímku',
+    addWithAi: 'Pridať snímku pomocou AI',
+    addWithAiBeforeFirst: 'Pridať snímku pomocou AI pred 1. snímku',
+    addWithAiBetween: 'Pridať snímku pomocou AI medzi snímky {after} a {before}',
+    addWithAiAfterLast: 'Pridať snímku pomocou AI za poslednú snímku',
+    addBlankSlideHere: 'Vložiť sem prázdnu snímku',
+    generatingSlide: 'Generujem snímku…',
+    cancelAiSlide: 'Zrušiť',
     sectionNamePlaceholder: 'Zadajte názov sekcie',
     untitledSection: 'Sekcia bez názvu',
     defaultSection: 'Predvolená sekcia',
@@ -317,6 +324,11 @@ const sk_editor: NamespaceEditorTranslation = {
       addSection: 'Pridať sekciu',
       presentFromCurrent: 'Prezentovať od aktuálnej snímky',
     },
+  },
+  mediaSlot: {
+    pending: 'Generujem obrázok…',
+    loading: 'Načítavam obrázok…',
+    error: 'Obrázok nie je k dispozícii',
   },
   elementAnimation: {
     addAnimation: 'Pridať animáciu',

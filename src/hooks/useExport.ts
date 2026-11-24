@@ -1326,7 +1326,9 @@ export function createPresentationExporter(
       if (slide.background?.type === 'image') collect(slide.background.image?.src);
       if (!slide.elements) continue;
       for (const el of slide.elements) {
-        if (el.type === 'image') collect(el.src);else if (el.type === 'shape' && el.pattern) collect(el.pattern);else if (el.type === 'video' || el.type === 'audio') {
+        if (el.type === 'image') {
+          if (el.mediaState?.status !== 'pending' && el.mediaState?.status !== 'error') collect(el.src);
+        } else if (el.type === 'shape' && el.pattern) collect(el.pattern);else if (el.type === 'video' || el.type === 'audio') {
           collect(el.src);
           if (el.type === 'video' && el.poster) collect(el.poster);
         }
@@ -1655,6 +1657,34 @@ export function createPresentationExporter(
               if (animation) options.animation = animation;
               pptxSlide.addText(textProps, options);
             } else if (el.type === 'image') {
+              const imgSrc = sources.get(el.src) ?? el.src;
+              const isUnresolvedSlot = !imgSrc || el.mediaState?.status === 'pending' || el.mediaState?.status === 'error';
+              if (isUnresolvedSlot) {
+                const isErrorSlot = el.mediaState?.status === 'error';
+                const placeholderOptions: pptxgen.ShapeProps = {
+                  x: el.left / ratioPx2Inch,
+                  y: el.top / ratioPx2Inch,
+                  w: el.width / ratioPx2Inch,
+                  h: el.height / ratioPx2Inch,
+                  fill: { color: isErrorSlot ? 'FDF2F4' : 'EEF2F6' },
+                  line: el.outline?.width
+                    ? getOutlineOption(el.outline)
+                    : { color: isErrorSlot ? 'F43F5E' : 'CBD5E1', width: 1, dashType: 'dash' }
+                };
+                if (el.rotate) placeholderOptions.rotate = el.rotate;
+                if (el.radius) placeholderOptions.rectRadius = outlineRadiusToPptxRectRadius(el.radius, el.width, el.height);
+                if (el.shadow) placeholderOptions.shadow = getShadowOption(el.shadow);
+                applyObjectMeta(placeholderOptions as Record<string, unknown>, el, hiddenIds);
+                pptxSlide.addShape(
+                  el.clip?.shape === 'ellipse'
+                    ? pptx.ShapeType.ellipse
+                    : el.radius
+                      ? pptx.ShapeType.roundRect
+                      : pptx.ShapeType.rect,
+                  placeholderOptions
+                );
+                continue;
+              }
               const options: pptxgen.ImageProps = {
                 x: el.left / ratioPx2Inch,
                 y: el.top / ratioPx2Inch,
@@ -1662,7 +1692,6 @@ export function createPresentationExporter(
                 h: el.height / ratioPx2Inch
               };
               if (el.altText !== undefined) options.altText = el.altText;
-              const imgSrc = sources.get(el.src) ?? el.src;
               if (isBase64Image(imgSrc)) options.data = imgSrc;else options.path = imgSrc;
               if (el.flipH) options.flipH = el.flipH;
               if (el.flipV) options.flipV = el.flipV;

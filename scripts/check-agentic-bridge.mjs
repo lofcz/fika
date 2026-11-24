@@ -156,6 +156,7 @@ const expectedCommands = [
   'animations.reorder',
   'media.resolveAsset',
   'media.setImageSource',
+  'media.setImageState',
   'media.setVideoSource',
   'media.setAudioSource',
   'tables.create',

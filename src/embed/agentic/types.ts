@@ -1,6 +1,7 @@
 import type { Locales } from '@/i18n/locale';
 import type { ShapeCategoryKey, ShapePoolItem } from '@/configs/shapes';
-import type { Broken2LineDirection, ChartData, ChartOptions, ChartType, Gradient, LinePoint, LineStyleType, Note, NoteReply, PPTAnimation, PPTAudioElement, PPTChartElement, PPTElement, PPTElementLink, PPTElementOutline, PPTElementShadow, PPTImageElement, PPTLatexElement, PPTLineElement, PPTShapeElement, PPTTableElement, PPTTextElement, PPTVideoElement, ShapeText, Slide, SlideBackground, SlideTemplate, SlideTheme, TableCell, TableCellStyle, TextAlign, TurningMode } from '@/types/slides';
+import type { Broken2LineDirection, ChartData, ChartOptions, ChartType, Gradient, ImageMediaFit, ImageMediaState, LinePoint, LineStyleType, Note, NoteReply, PPTAnimation, PPTAudioElement, PPTChartElement, PPTElement, PPTElementLink, PPTElementOutline, PPTElementShadow, PPTImageElement, PPTLatexElement, PPTLineElement, PPTShapeElement, PPTTableElement, PPTTextElement, PPTVideoElement, ShapeText, Slide, SlideBackground, SlideTemplate, SlideTheme, TableCell, TableCellStyle, TextAlign, TurningMode } from '@/types/slides';
+import type { FikaAiSlideInsertAnchor, FikaAiSlideInsertCancelDetail, FikaSlideInsertAnchorInput } from '@/configs/aiSlideInsert';
 import type { FikaDocument } from '../types';
 import type { FikaTemplateCatalogQuery, FikaTemplateSlidesCatalogResult, FikaTemplateSummary } from './templates';
 import type { FikaLayout, FikaLayoutBackgroundMode } from './layouts';
@@ -147,7 +148,7 @@ export interface FikaMediaAssetResolverResult {
   asset: FikaMediaAsset;
   warnings?: FikaCommandIssue[];
 }
-export type FikaBridgeEventType = 'documentChanged' | 'selectionChanged' | 'commandApplied' | 'commandFailed' | 'destroyed';
+export type FikaBridgeEventType = 'documentChanged' | 'selectionChanged' | 'commandApplied' | 'commandFailed' | 'aiSlideInsertRequested' | 'aiSlideInsertCancelled' | 'destroyed';
 export interface FikaBridgeEvent<TData = unknown> {
   type: FikaBridgeEventType;
   documentVersion: number;
@@ -171,10 +172,18 @@ export interface FikaCommandFailedEvent extends FikaBridgeEvent {
   command: FikaAgentCommand;
   result: FikaCommandResult;
 }
+export interface FikaAiSlideInsertRequestedEvent extends FikaBridgeEvent<FikaAiSlideInsertAnchor> {
+  type: 'aiSlideInsertRequested';
+  data: FikaAiSlideInsertAnchor;
+}
+export interface FikaAiSlideInsertCancelledEvent extends FikaBridgeEvent<FikaAiSlideInsertCancelDetail> {
+  type: 'aiSlideInsertCancelled';
+  data: FikaAiSlideInsertCancelDetail;
+}
 export interface FikaDestroyedEvent extends FikaBridgeEvent {
   type: 'destroyed';
 }
-export type FikaTypedBridgeEvent = FikaDocumentChangedEvent | FikaSelectionChangedEvent | FikaCommandAppliedEvent | FikaCommandFailedEvent | FikaDestroyedEvent;
+export type FikaTypedBridgeEvent = FikaDocumentChangedEvent | FikaSelectionChangedEvent | FikaCommandAppliedEvent | FikaCommandFailedEvent | FikaAiSlideInsertRequestedEvent | FikaAiSlideInsertCancelledEvent | FikaDestroyedEvent;
 export type FikaBridgeListener = (event: FikaBridgeEvent) => void;
 export type FikaUnsubscribe = () => void;
 export interface FikaBridgeState {
@@ -208,6 +217,8 @@ export interface FikaCreateSlideInput {
   slide?: Partial<Slide>;
   /** 1-based insert position; omit or pass slideCount+1 to append. */
   index?: number;
+  /** Stable neighbor anchor used to resolve the live 1-based insert position when `index` is omitted. */
+  anchor?: FikaSlideInsertAnchorInput;
   select?: boolean;
 }
 export interface FikaDeleteSlidesResult {
@@ -226,6 +237,8 @@ export interface FikaIdRemap {
 export interface FikaInsertSlidesInput {
   slides: Slide | Slide[];
   index?: number;
+  /** Stable neighbor anchor used to resolve the live 1-based insert position when `index` is omitted. */
+  anchor?: FikaSlideInsertAnchorInput;
   select?: boolean;
   preserveExternalSlideLinks?: boolean;
 }
@@ -631,6 +644,8 @@ export interface FikaAgentSlidesApi {
   get(slideIdOrIndex?: FikaSlideReference): Slide | null;
   current(): Slide | null;
   read(slideIdOrIndex?: FikaSlideReference, meta?: FikaCommandMeta): Promise<FikaCommandResult<Slide | null>>;
+  /** Resolve a stable 1-based insert index from a gap anchor against the live slide order. */
+  resolveInsertIndex(anchor: FikaSlideInsertAnchorInput): number;
   create(input?: FikaCreateSlideInput, meta?: FikaCommandMeta): Promise<FikaCommandResult<Slide>>;
   /** Build + insert a themed slide from a layout recipe (from `layouts.catalog`) using the active style preset. */
   createFromLayout(input: FikaCreateFromLayoutInput, meta?: FikaCommandMeta): Promise<FikaCommandResult<FikaCreateFromLayoutResult>>;
@@ -947,10 +962,39 @@ export interface FikaAgentImagesApi {
     slideId?: string;
   }): Promise<FikaCommandResult<Slide>>;
 }
+export interface FikaSetImageSourceOptions {
+  slideId?: string;
+  slotId?: string;
+  fit?: ImageMediaFit;
+  natural?: {
+    width: number;
+    height: number;
+  };
+  onlyIfPending?: boolean;
+}
+export interface FikaSetImageSourcePayload extends FikaSetImageSourceOptions {
+  elementId?: string;
+  asset?: FikaMediaAssetInput;
+  src?: string;
+  patch?: Partial<PPTImageElement>;
+}
+export interface FikaSetImageStatePayload {
+  elementId?: string;
+  slotId?: string;
+  slideId?: string;
+  state: ImageMediaState | null;
+  onlyIfPending?: boolean;
+}
 export interface FikaAgentMediaApi {
   resolveAsset(asset: FikaMediaAssetInput, kind?: FikaMediaAssetKind): FikaMediaAsset;
-  setImageSource(elementId: string, asset: FikaMediaAssetInput, patch?: Partial<PPTImageElement>, meta?: FikaCommandMeta & {
+  setImageSource(elementId: string, asset: FikaMediaAssetInput, patch?: Partial<PPTImageElement>, meta?: FikaCommandMeta & FikaSetImageSourceOptions): Promise<FikaCommandResult<PPTImageElement>>;
+  setImageState(target: string | {
+    elementId?: string;
+    slotId?: string;
     slideId?: string;
+  }, state: ImageMediaState | null, meta?: FikaCommandMeta & {
+    slideId?: string;
+    onlyIfPending?: boolean;
   }): Promise<FikaCommandResult<PPTImageElement>>;
   setVideoSource(elementId: string, asset: FikaMediaAssetInput, patch?: Partial<PPTVideoElement>, meta?: FikaCommandMeta & {
     slideId?: string;
@@ -1781,12 +1825,8 @@ export interface FikaCommandPayloadMap {
     asset: FikaMediaAssetInput;
     kind?: FikaMediaAssetKind;
   };
-  'media.setImageSource': {
-    elementId: string;
-    slideId?: string;
-    asset: FikaMediaAssetInput;
-    patch?: Partial<PPTImageElement>;
-  };
+  'media.setImageSource': FikaSetImageSourcePayload;
+  'media.setImageState': FikaSetImageStatePayload;
   'media.setVideoSource': {
     elementId: string;
     slideId?: string;
@@ -2084,6 +2124,7 @@ export interface FikaCommandResultDataMap {
   'images.setAsBackground': Slide;
   'media.resolveAsset': FikaMediaAsset;
   'media.setImageSource': PPTImageElement;
+  'media.setImageState': PPTImageElement;
   'media.setVideoSource': PPTVideoElement;
   'media.setAudioSource': PPTAudioElement;
   'videos.get': PPTVideoElement;

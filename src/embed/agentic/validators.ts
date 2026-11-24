@@ -130,6 +130,24 @@ function assertViewBox(value: unknown, path: string): void {
   assertPositiveNumber(value[0], `${path}[0]`);
   assertPositiveNumber(value[1], `${path}[1]`);
 }
+const IMAGE_MEDIA_STATUSES = new Set(['pending', 'ready', 'error']);
+const IMAGE_MEDIA_FITS = new Set(['cover', 'contain']);
+
+export function assertImageMediaState(value: unknown, path = 'element.mediaState'): void {
+  if (!isRecord(value)) throw new Error(`${path} must be an object`);
+  const status = value.status;
+  if (typeof status !== 'string' || !IMAGE_MEDIA_STATUSES.has(status)) {
+    throw new Error(`${path}.status must be one of: pending, ready, error`);
+  }
+  if (value.slotId !== undefined) assertString(value.slotId, `${path}.slotId`);
+  if (value.aspectRatio !== undefined) assertPositiveNumber(value.aspectRatio, `${path}.aspectRatio`);
+  if (value.fit !== undefined && (typeof value.fit !== 'string' || !IMAGE_MEDIA_FITS.has(value.fit))) {
+    throw new Error(`${path}.fit must be cover or contain`);
+  }
+  if (value.label !== undefined) assertString(value.label, `${path}.label`, true);
+  if (value.error !== undefined) assertString(value.error, `${path}.error`, true);
+}
+
 export function assertElementSubtypeRequirements(element: Partial<PPTElement> & {
   type?: unknown;
 }, path = 'element'): void {
@@ -138,7 +156,20 @@ export function assertElementSubtypeRequirements(element: Partial<PPTElement> & 
     assertString(requireValue((element as {
       content?: unknown;
     }).content, `${path}.content`), `${path}.content`, true);
-  } else if (type === 'image' || type === 'video' || type === 'audio') {
+  } else if (type === 'image') {
+    const image = element as { src?: unknown; mediaState?: unknown };
+    let allowEmptySrc = false;
+    if (image.mediaState !== undefined) {
+      assertImageMediaState(image.mediaState, `${path}.mediaState`);
+      const status = (image.mediaState as { status: string }).status;
+      allowEmptySrc = status === 'pending' || status === 'error';
+    }
+    if (allowEmptySrc) {
+      if (image.src !== undefined) assertString(image.src, `${path}.src`, true);
+    } else {
+      assertString(requireValue(image.src, `${path}.src`), `${path}.src`);
+    }
+  } else if (type === 'video' || type === 'audio') {
     assertString(requireValue((element as {
       src?: unknown;
     }).src, `${path}.src`), `${path}.src`);
@@ -191,6 +222,9 @@ export function assertElementCreateInput(element: Partial<PPTElement> & {
 export function assertElementPatch(patch: Partial<PPTElement>, current: PPTElement, path = 'patch'): void {
   if (patch.type !== undefined && patch.type !== current.type) {
     throw new Error(`${path}.type cannot change element type from ${current.type} to ${patch.type}`);
+  }
+  if (current.type === 'image' && 'mediaState' in patch && patch.mediaState !== undefined && patch.mediaState !== null) {
+    assertImageMediaState(patch.mediaState, `${path}.mediaState`);
   }
   assertElementDimensions(patch, path);
   assertColorFields(patch, path);

@@ -36,4 +36,68 @@
     animation: none;
     background: rgba(30, 41, 59, 0.09);
   }
+  .ai-cancel-btn {
+    transition: none;
+  }
+}
+
+.ai-status-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.86);
+  color: #f8fafc;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.22);
+  backdrop-filter: blur(8px);
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: auto;
+  cursor: default;
+  z-index: 2;
+}
+
+.ai-icon {
+  font-size: 13px;
+  color: #93c5fd;
+  flex-shrink: 0;
+}
+
+.ai-label {
+  white-space: nowrap;
+}
+
+.ai-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid rgba(248, 250, 252, 0.24);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.12);
+  color: #f8fafc;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: rgba(248, 250, 252, 0.22);
+    border-color: rgba(248, 250, 252, 0.42);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 2px;
+  }
+}
+
+.cancel-icon {
+  font-size: 11px;
 }

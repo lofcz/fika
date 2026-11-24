@@ -612,6 +612,13 @@ const en_editor: BaseTranslation = {
   },
   thumbnails: {
     addSlide: 'Add slide',
+    addWithAi: 'Add slide with AI',
+    addWithAiBeforeFirst: 'Add slide with AI before slide 1',
+    addWithAiBetween: 'Add slide with AI between slides {after:number} and {before:number}',
+    addWithAiAfterLast: 'Add slide with AI after the last slide',
+    addBlankSlideHere: 'Insert blank slide here',
+    generatingSlide: 'Generating slide…',
+    cancelAiSlide: 'Cancel',
     sectionNamePlaceholder: 'Enter section name',
     untitledSection: 'Untitled section',
     defaultSection: 'Default section',
@@ -640,6 +647,11 @@ const en_editor: BaseTranslation = {
       addSection: 'Add section',
       presentFromCurrent: 'Present from current slide',
     },
+  },
+  mediaSlot: {
+    pending: 'Generating image…',
+    loading: 'Loading image…',
+    error: 'Image unavailable',
   },
   elementAnimation: {
     addAnimation: 'Add animation',

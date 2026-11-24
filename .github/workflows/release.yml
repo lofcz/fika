@@ -112,7 +112,7 @@ jobs:
           git config --local user.name "${BOT_SLUG}[bot]"
           git config --local user.email "${BOT_ID}+${BOT_SLUG}[bot]@users.noreply.github.com"
           git add package.json bun.lock
-          git commit -m "chore: release v${{ steps.version.outputs.version }}"
+          git commit --author="$(git show -s --format='%an <%ae>' HEAD)" -m "chore: release v${{ steps.version.outputs.version }}"
           git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
 
       - name: Push release commit and tag

@@ -5,6 +5,7 @@ import type { RailSlideMeta } from '@/views/components/ThumbnailSlide/paintedSli
 
 const SECTION_HEIGHT = 26
 const ROW_CHROME = 16
+const GAP_BAR_HEIGHT = 24
 
 export type ThumbnailVirtualizerApi = {
   scrollRef: RefObject<HTMLDivElement | null>
@@ -23,6 +24,7 @@ const rowHasSection = (item: RailSlideMeta | undefined, index: number, hasSectio
 export const useThumbnailVirtualizer = (
   items: RailSlideMeta[],
   hasSection: boolean,
+  showGapControls = false,
 ): ThumbnailVirtualizerApi => {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const dest = usePreviewDestSize()
@@ -30,14 +32,16 @@ export const useThumbnailVirtualizer = (
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: index => thumbHeight + (rowHasSection(items[index], index, hasSection) ? SECTION_HEIGHT : 0),
+    estimateSize: index => thumbHeight
+      + (rowHasSection(items[index], index, hasSection) ? SECTION_HEIGHT : 0)
+      + (showGapControls ? GAP_BAR_HEIGHT + (index === 0 ? GAP_BAR_HEIGHT : 0) : 0),
     overscan: 1,
     getItemKey: index => items[index]?.id ?? index,
   })
 
   useEffect(() => {
     virtualizer.measure()
-  }, [virtualizer, dest.cssHeight, dest.cssWidth, hasSection, items])
+  }, [virtualizer, dest.cssHeight, dest.cssWidth, hasSection, showGapControls, items])
 
   const windowItems = virtualizer.getVirtualItems()
   const pinnedSlideIds: string[] = []

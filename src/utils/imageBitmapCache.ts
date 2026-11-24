@@ -286,7 +286,9 @@ export const collectSlidePreviewSrcs = (slide: Slide): string[] => {
     srcs.push(slide.background.image.src)
   }
   for (const element of slide.elements) {
-    if (element.type === 'image' && element.src) srcs.push(element.src)
+    if (element.type === 'image' && element.src && element.mediaState?.status !== 'pending' && element.mediaState?.status !== 'error') {
+      srcs.push(element.src)
+    }
     if ((element.type === 'video' || element.type === 'audio') && element.poster) {
       srcs.push(element.poster)
     }

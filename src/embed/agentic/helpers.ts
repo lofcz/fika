@@ -4,7 +4,7 @@ import { getChartDefaultData } from '@/configs/chart';
 import { DEFAULT_CODE_FONT_SIZE, DEFAULT_CODE_LANGUAGE, DEFAULT_CODE_THEME, measureCodeElementSize, resolveCodeLanguage, resolveCodeTheme } from '@/configs/code';
 import { MIME_MAP } from '@/configs/mime';
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes';
-import type { Broken2LineDirection, LinePoint, LineStyleType, ChartType, Note, NoteReply, PPTAnimation, PPTAudioElement, PPTChartElement, PPTCodeElement, PPTElement, PPTElementLink, PPTLatexElement, PPTLineElement, PPTShapeElement, PPTTableElement, PPTTextElement, Slide, SlideTheme, TableCell, TableCellStyle } from '@/types/slides';
+import type { Broken2LineDirection, LinePoint, LineStyleType, ChartType, Note, NoteReply, PPTAnimation, PPTAudioElement, PPTChartElement, PPTCodeElement, PPTElement, PPTElementLink, PPTImageElement, PPTLatexElement, PPTLineElement, PPTShapeElement, PPTTableElement, PPTTextElement, Slide, SlideTheme, TableCell, TableCellStyle } from '@/types/slides';
 import type { FikaAudioElementPatch, FikaCommandIssue, FikaCommandType, FikaCreateAudioInput, FikaElementTransformPatch, FikaLatexElementInput, FikaMediaAsset, FikaMediaAssetInput, FikaMediaAssetKind, FikaNoteInput, FikaNotePatch, FikaNoteReplyInput, FikaTableElementPatch } from './types';
 import { assertColorFields, assertElementCreateInput, assertElementDimensions, assertElementType, assertId, assertIdList, assertInsertIndex, assertOptionalId, assertPositiveNumber, assertString } from './validators';
 import { DEFAULT_THEME_COLORS } from '@/configs/theme';
@@ -452,6 +452,9 @@ export function normalizeSlide(slide: Partial<Slide> = {}): Slide {
     } : {}),
     ...(slide.skeleton ? {
       skeleton: true
+    } : {}),
+    ...(slide.aiRequestId ? {
+      aiRequestId: slide.aiRequestId
     } : {})
   };
 }
@@ -533,11 +536,16 @@ export function normalizeElement(element: Partial<PPTElement> & {
     rotate: number;
   }>;
   const textElement = element as Partial<PPTTextElement>;
+  const imageElementInput = element as Partial<PPTImageElement>;
   const elementWithDefaults = element.type === 'text' ? {
     ...element,
     content: textElement.content ?? '',
     defaultFontName: textElement.defaultFontName ?? theme?.fontName ?? '',
     defaultColor: textElement.defaultColor ?? theme?.fontColor ?? '#000000'
+  } : element.type === 'image' && imageElementInput.mediaState && (imageElementInput.mediaState.status === 'pending' || imageElementInput.mediaState.status === 'error') ? {
+    ...element,
+    src: imageElementInput.src ?? '',
+    fixedRatio: imageElementInput.fixedRatio ?? true
   } : element;
   const base = {
     id: element.id || createId('el'),

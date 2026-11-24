@@ -7,6 +7,7 @@ import { getHiddenTableCells } from '@/utils/tableHiddenCells';
 import { getSearchHtmlText, replaceSearchHtmlRanges } from '@/utils/searchText';
 import { updateTableCellTextAttrs } from '@/utils/prosemirror/table';
 import { listFikaDesignThemes, getFikaDesignTheme } from '@/configs/designThemes';
+import { resolveSlideGapInsertIndex, subscribeFikaAiSlideInsertEvents, type FikaSlideInsertAnchorInput } from '@/configs/aiSlideInsert';
 import { applyDesignTheme } from '@/utils/applyDesignTheme';
 import { getAttentionAnimations, getEnterAnimations, getExitAnimations, getSlideAnimations, SLIDE_ANIMATIONS } from '@/configs/animation';
 import { SHAPE_LIST, type ShapePoolItem } from '@/configs/shapes';
@@ -14,7 +15,7 @@ import { useMainStore } from '@/store/main';
 import { useScreenStore } from '@/store/screen';
 import { useSlidesStore } from '@/store/slides';
 import { createStores } from '@/store/accessors';
-import type { ChartData, ChartOptions, ChartType, Gradient, Note, NoteReply, PPTAnimation, PPTAudioElement, PPTChartElement, PPTElement, PPTElementOutline, PPTElementShadow, PPTImageElement, PPTLatexElement, PPTLineElement, PPTShapeElement, PPTTableElement, PPTTextElement, PPTVideoElement, Slide, SlideBackground, SlideTheme, SlideTemplate, ShapeText, TableCell, TableCellStyle, TurningMode } from '@/types/slides';
+import type { ChartData, ChartOptions, ChartType, Gradient, ImageMediaFit, ImageMediaState, Note, NoteReply, PPTAnimation, PPTAudioElement, PPTChartElement, PPTElement, PPTElementOutline, PPTElementShadow, PPTImageElement, PPTLatexElement, PPTLineElement, PPTShapeElement, PPTTableElement, PPTTextElement, PPTVideoElement, Slide, SlideBackground, SlideTheme, SlideTemplate, ShapeText, TableCell, TableCellStyle, TurningMode } from '@/types/slides';
 import { applyLocale } from '../localeBridge';
 import { inferViewportFromSlides } from '../inferViewport';
 import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern';
@@ -33,8 +34,8 @@ import { validateSlide } from './qa';
 import { DEFAULT_STYLE_ID, getStylePreset, listStylePresets, resolveStylePreset, styleThemePatch, type FikaStylePreset } from './styles';
 import { INHERITED_STYLE_ID, inferStylePresetFromDeck } from './inheritedStyle';
 import { AGENTIC_DOCS, describeAgenticCommand, listAgenticDomains } from './manifestDocs';
-import type { FikaAgentApi, FikaAgentCapability, FikaAgentCommand, FikaAudioElementPatch, FikaAudioSourceInput, FikaAudioTransformPatch, FikaAnimationCatalog, FikaAnimationSequenceStep, FikaBatchOptions, FikaBridgeEvent, FikaBridgeListener, FikaBridgeState, FikaChartElementPatch, FikaCommandIssue, FikaCommandMeta, FikaCommandResult, FikaCommandType, FikaCreateChartInput, FikaCreateAudioInput, FikaCreateLatexElementInput, FikaCreateShapeInput, FikaCreateTableInput, FikaCreateLineElementInput, FikaDeckDocument, FikaDeckInput, FikaDeckPatch, FikaDeckViewport, FikaApplyThemeOptions, FikaElementFlipInput, FikaInsertElementsInput, FikaInsertSlidesInput, FikaElementMoveInput, FikaElementResizeInput, FikaElementTransformPatch, FikaLatexElementPatch, FikaLineDirectionInput, FikaLineElementPatch, FikaLineStyleInput, FikaMediaAssetInput, FikaMediaAssetKind, FikaNoteInput, FikaNotePatch, FikaNoteReplyInput, FikaReplaceOptions, FikaSearchOptions, FikaSearchResult, FikaSearchResults, FikaSectionRange, FikaShapeFillInput, FikaShapePatch, FikaShapePreset, FikaSlideReference, FikaTableElementPatch, FikaSlideThemePatch, FikaRichTextElement, FikaRichTextParagraphAttrs, FikaRichTextStylePatch, FikaThemeExtractionOptions, FikaVideoPatch, FikaVideoPlaybackPatch, FikaVideoPositionPatch, FikaVideoSizePatch, FikaVideoSourcePatch } from './types';
-import { assertColorFields, assertElementPatch, assertIndexInRange, assertPositiveNumber, fromApiInsertSlideIndex, fromApiSlideIndex, toApiSlideIndex } from './validators';
+import type { FikaAgentApi, FikaAgentCapability, FikaAgentCommand, FikaAudioElementPatch, FikaAudioSourceInput, FikaAudioTransformPatch, FikaAnimationCatalog, FikaAnimationSequenceStep, FikaBatchOptions, FikaBridgeEvent, FikaBridgeListener, FikaBridgeState, FikaChartElementPatch, FikaCommandIssue, FikaCommandMeta, FikaCommandResult, FikaCommandType, FikaCreateChartInput, FikaCreateAudioInput, FikaCreateLatexElementInput, FikaCreateShapeInput, FikaCreateTableInput, FikaCreateLineElementInput, FikaDeckDocument, FikaDeckInput, FikaDeckPatch, FikaDeckViewport, FikaApplyThemeOptions, FikaElementFlipInput, FikaInsertElementsInput, FikaInsertSlidesInput, FikaElementMoveInput, FikaElementResizeInput, FikaElementTransformPatch, FikaLatexElementPatch, FikaLineDirectionInput, FikaLineElementPatch, FikaLineStyleInput, FikaMediaAssetInput, FikaMediaAssetKind, FikaNoteInput, FikaNotePatch, FikaNoteReplyInput, FikaReplaceOptions, FikaSearchOptions, FikaSearchResult, FikaSearchResults, FikaSectionRange, FikaSetImageSourcePayload, FikaSetImageStatePayload, FikaShapeFillInput, FikaShapePatch, FikaShapePreset, FikaSlideReference, FikaTableElementPatch, FikaSlideThemePatch, FikaRichTextElement, FikaRichTextParagraphAttrs, FikaRichTextStylePatch, FikaThemeExtractionOptions, FikaVideoPatch, FikaVideoPlaybackPatch, FikaVideoPositionPatch, FikaVideoSizePatch, FikaVideoSourcePatch } from './types';
+import { assertColorFields, assertElementPatch, assertImageMediaState, assertIndexInRange, assertPositiveNumber, fromApiInsertSlideIndex, fromApiSlideIndex, toApiSlideIndex } from './validators';
 import { beginScreening, exitScreening } from '@/utils/screening';
 import { repairDuplicateElementIds } from '@/utils/repairElementIds';
 import { instantiateTemplateSlides } from '@/utils/instantiateTemplateSlides';
@@ -1951,11 +1952,17 @@ export function createAgenticApi(options: {
   register('slides.create', (payload: {
     slide?: Partial<Slide>;
     index?: number;
+    anchor?: FikaSlideInsertAnchorInput;
     select?: boolean;
   } = {}) => {
     const slide = normalizeSlideForInsert(payload.slide);
     ensureSlideIdAvailable(stores.slides.slides, slide.id);
-    const index = fromApiInsertSlideIndex(payload.index, stores.slides.slides.length);
+    const apiIndex = payload.index !== undefined
+      ? payload.index
+      : payload.anchor
+        ? resolveSlideGapInsertIndex(stores.slides.slides, payload.anchor)
+        : undefined;
+    const index = fromApiInsertSlideIndex(apiIndex, stores.slides.slides.length);
     syncPlanOnInsert(index, 1);
     stores.slides.addSlide(slide, { index, select: false, keepSectionTag: true });
     if (payload.select !== false) applySlideSelection(stores, index);
@@ -2126,7 +2133,12 @@ export function createAgenticApi(options: {
     const cloned = cloneSlidesWithRemappedIds(sourceSlides, {
       preserveExternalSlideLinks: payload.preserveExternalSlideLinks
     });
-    const index = fromApiInsertSlideIndex(payload.index, stores.slides.slides.length);
+    const apiIndex = payload.index !== undefined
+      ? payload.index
+      : payload.anchor
+        ? resolveSlideGapInsertIndex(stores.slides.slides, payload.anchor)
+        : undefined;
+    const index = fromApiInsertSlideIndex(apiIndex, stores.slides.slides.length);
     syncPlanOnInsert(index, cloned.slides.length);
     stores.slides.addSlide(cloned.slides, { index, select: false, keepSectionTag: true });
     if (payload.select !== false) applySlideSelection(stores, index);
@@ -3636,16 +3648,146 @@ export function createAgenticApi(options: {
     const meta = asset.metadata?.sourceUrl;
     return typeof meta === 'string' && meta.trim() ? meta.trim() : undefined;
   };
-  const setImageSource = (payload: {
-    elementId: string;
+  const round2 = (value: number) => Math.round(value * 100) / 100;
+  const locateImageTarget = (payload: {
+    elementId?: string;
+    slotId?: string;
     slideId?: string;
-    asset?: Parameters<typeof resolveMediaAsset>[0];
-    src?: string;
-    patch?: Partial<PPTImageElement>;
   }) => {
-    const found = imageElement(stores, payload.elementId, payload.slideId);
+    const { elementId, slotId, slideId } = payload;
+    if (!elementId && !slotId) {
+      throw new AgenticCommandError('InvalidTarget', 'Either elementId or slotId is required', 'payload.elementId');
+    }
+    if (elementId) {
+      try {
+        const found = imageElement(stores, elementId, slideId);
+        if (!slotId || found.element.mediaState?.slotId === slotId) return found;
+      } catch (error) {
+        if (!slotId) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (/not found/i.test(message)) {
+            throw new AgenticCommandError('ElementNotFound', message, 'payload.elementId', true);
+          }
+          throw error;
+        }
+      }
+    }
+    if (slotId) {
+      const slides = stores.slides.slides;
+      for (let sIdx = 0; sIdx < slides.length; sIdx++) {
+        const slide = slides[sIdx];
+        if (slideId && slide.id !== slideId) continue;
+        const eIdx = slide.elements.findIndex(el => el.type === 'image' && el.mediaState?.slotId === slotId);
+        if (eIdx >= 0) {
+          return {
+            slideIndex: sIdx,
+            elementIndex: eIdx,
+            slide,
+            element: slide.elements[eIdx] as PPTImageElement,
+          };
+        }
+      }
+    }
+    throw new AgenticCommandError(
+      'ElementNotFound',
+      `Image slot not found: ${elementId || slotId}`,
+      elementId ? 'payload.elementId' : 'payload.slotId',
+      true,
+    );
+  };
+  const computeAspectFitPatch = (
+    element: PPTImageElement,
+    natural: { width: number; height: number } | undefined,
+    fit: ImageMediaFit,
+    explicitPatch?: Partial<PPTImageElement>,
+  ): { patch: Partial<PPTImageElement>; removeClip: boolean } => {
+    if (!natural || !Number.isFinite(natural.width) || !Number.isFinite(natural.height) || natural.width <= 0 || natural.height <= 0) {
+      return { patch: {}, removeClip: false };
+    }
+    const width = explicitPatch?.width ?? element.width;
+    const height = explicitPatch?.height ?? element.height;
+    const left = explicitPatch?.left ?? element.left;
+    const top = explicitPatch?.top ?? element.top;
+    if (width <= 0 || height <= 0) return { patch: {}, removeClip: false };
+    const boxRatio = width / height;
+    const imgRatio = natural.width / natural.height;
+    if (Math.abs(imgRatio - boxRatio) <= 0.005) {
+      const existingShape = element.clip?.shape;
+      return {
+        patch: {
+          fixedRatio: true,
+          ...(existingShape && existingShape !== 'rect' ? { clip: { shape: existingShape, range: fullImageRange } } : {}),
+        },
+        removeClip: !existingShape || existingShape === 'rect',
+      };
+    }
+    if (fit === 'contain') {
+      let nextLeft = left;
+      let nextTop = top;
+      let nextWidth = width;
+      let nextHeight = height;
+      if (imgRatio > boxRatio) {
+        const fitted = width / imgRatio;
+        nextTop += (height - fitted) / 2;
+        nextHeight = fitted;
+      } else {
+        const fitted = height * imgRatio;
+        nextLeft += (width - fitted) / 2;
+        nextWidth = fitted;
+      }
+      const existingShape = element.clip?.shape;
+      return {
+        patch: {
+          left: Math.round(nextLeft),
+          top: Math.round(nextTop),
+          width: Math.round(nextWidth),
+          height: Math.round(nextHeight),
+          fixedRatio: true,
+          ...(existingShape && existingShape !== 'rect' ? { clip: { shape: existingShape, range: fullImageRange } } : {}),
+        },
+        removeClip: !existingShape || existingShape === 'rect',
+      };
+    }
+    const shape = element.clip?.shape ?? 'rect';
+    if (imgRatio > boxRatio) {
+      const keep = boxRatio / imgRatio * 100;
+      const start = (100 - keep) / 2;
+      return {
+        patch: {
+          fixedRatio: true,
+          clip: { shape, range: [[round2(start), 0], [round2(start + keep), 100]] },
+        },
+        removeClip: false,
+      };
+    }
+    const keep = imgRatio / boxRatio * 100;
+    const start = (100 - keep) / 2;
+    return {
+      patch: {
+        fixedRatio: true,
+        clip: { shape, range: [[0, round2(start)], [100, round2(start + keep)]] },
+      },
+      removeClip: false,
+    };
+  };
+  const setImageSource = (payload: FikaSetImageSourcePayload) => {
+    const found = locateImageTarget(payload);
+    if (payload.onlyIfPending && found.element.mediaState?.status !== 'pending') {
+      return clonePlain(found.element);
+    }
     const asset = resolveMediaAsset(payload.asset ?? payload.src ?? '', 'image');
+    const natural = payload.natural ?? (
+      typeof asset.width === 'number' && typeof asset.height === 'number' && asset.width > 0 && asset.height > 0
+        ? { width: asset.width, height: asset.height }
+        : undefined
+    );
+    const fit: ImageMediaFit = payload.fit ?? found.element.mediaState?.fit ?? 'cover';
+    const hasExplicitClip = !!(payload.patch && 'clip' in payload.patch);
+    const fitResult = hasExplicitClip
+      ? { patch: {}, removeClip: false }
+      : computeAspectFitPatch(found.element, natural, fit, payload.patch);
     const patch: Partial<PPTImageElement> = {
+      ...fitResult.patch,
       ...payload.patch,
       src: asset.src
     };
@@ -3658,7 +3800,14 @@ export function createAgenticApi(options: {
         }, stores.slides.slides);
       }
     }
-    return updateImageElementAt(stores, found.slideIndex, found.elementIndex, patch);
+    const removeProps: Array<keyof PPTImageElement> = [];
+    if (fitResult.removeClip && !hasExplicitClip) removeProps.push('clip');
+    if (!payload.patch || !('mediaState' in payload.patch) || payload.patch.mediaState === undefined) {
+      removeProps.push('mediaState');
+    } else if (payload.patch.mediaState) {
+      assertImageMediaState(payload.patch.mediaState, 'payload.patch.mediaState');
+    }
+    return updateImageElementAt(stores, found.slideIndex, found.elementIndex, patch, removeProps);
   };
   register('images.update', (payload: {
     elementId: string;
@@ -3674,6 +3823,19 @@ export function createAgenticApi(options: {
     kind?: FikaMediaAssetKind;
   }) => resolveMediaAsset(payload.asset, payload.kind));
   register('media.setImageSource', setImageSource);
+  register('media.setImageState', (payload: FikaSetImageStatePayload) => {
+    const found = locateImageTarget(payload);
+    if (payload.onlyIfPending && found.element.mediaState?.status !== 'pending') {
+      return clonePlain(found.element);
+    }
+    if (payload.state === null) {
+      return updateImageElementAt(stores, found.slideIndex, found.elementIndex, {}, ['mediaState']);
+    }
+    assertImageMediaState(payload.state, 'payload.state');
+    return updateImageElementAt(stores, found.slideIndex, found.elementIndex, {
+      mediaState: clonePlain(payload.state),
+    });
+  });
   const setMediaSource = <TElement extends MediaElement,>(payload: {
     elementId: string;
     slideId?: string;
@@ -4808,6 +4970,7 @@ export function createAgenticApi(options: {
       read: (slideIdOrIndex, meta) => command('slides.read', {
         slideIdOrIndex
       }, meta),
+      resolveInsertIndex: anchor => resolveSlideGapInsertIndex(stores.slides.slides, anchor),
       create: (input, meta) => command('slides.create', input, meta),
       createFromLayout: (input, meta) => command('slides.createFromLayout', input, meta),
       insertFromTemplate: (input, meta) => command('slides.insertFromTemplate', input, meta),
@@ -5399,11 +5562,25 @@ export function createAgenticApi(options: {
     media: {
       resolveAsset: (asset, kind) => resolveMediaAsset(asset, kind),
       setImageSource: (elementId, asset, patch, meta) => command('media.setImageSource', {
-        elementId,
+        elementId: elementId || undefined,
+        slotId: meta?.slotId,
         slideId: meta?.slideId,
+        fit: meta?.fit,
+        natural: meta?.natural,
+        onlyIfPending: meta?.onlyIfPending,
         asset,
         patch
       }, meta),
+      setImageState: (target, state, meta) => {
+        const ref = typeof target === 'string' ? { elementId: target } : target;
+        return command('media.setImageState', {
+          elementId: ref.elementId,
+          slotId: ref.slotId,
+          slideId: ref.slideId ?? meta?.slideId,
+          state,
+          onlyIfPending: meta?.onlyIfPending
+        }, meta);
+      },
       setVideoSource: (elementId, asset, patch, meta) => command('media.setVideoSource', {
         elementId,
         slideId: meta?.slideId,
@@ -5645,7 +5822,18 @@ export function createAgenticApi(options: {
       data: getState(stores, documentVersion)
     });
   };
-  stopHandles.push(useMainStore.subscribe(emitSelectionChanged), useSlidesStore.subscribe(emitSelectionChanged), useScreenStore.subscribe(emitSelectionChanged));
+  stopHandles.push(
+    useMainStore.subscribe(emitSelectionChanged),
+    useSlidesStore.subscribe(emitSelectionChanged),
+    useScreenStore.subscribe(emitSelectionChanged),
+    subscribeFikaAiSlideInsertEvents(event => {
+      if (!listeners.size) return;
+      emit({
+        type: event.type,
+        data: event.data
+      });
+    }),
+  );
   return {
     api,
     stop() {

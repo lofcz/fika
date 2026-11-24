@@ -30,7 +30,8 @@ const ImageElement = memo((props: IImageElementProps) => {
   const clipingImageElementId = useMainStore(s => s.clipingImageElementId)
   const setClipingImageElementId = useMainStore(s => s.setClipingImageElementId)
   const updateElement = useSlidesStore(s => s.updateElement)
-  const isCliping = clipingImageElementId === props.elementInfo.id
+  const isMediaUnresolved = elementInfo.mediaState?.status === 'pending' || elementInfo.mediaState?.status === 'error' || !elementInfo.src
+  const isCliping = clipingImageElementId === props.elementInfo.id && !isMediaUnresolved
   const { addHistorySnapshot } = useHistorySnapshot()
   const { shadowStyle } = useElementShadow(props.elementInfo.shadow)
   const { flipStyle } = useElementFlip(props.elementInfo.flipH, props.elementInfo.flipV)
@@ -108,8 +109,10 @@ const ImageElement = memo((props: IImageElementProps) => {
             <ImageOutline elementInfo={elementInfo} />
             <div className={cx('image-content')} style={{ clipPath: clipShape.style }}>
               <ImageBitmapSurface
-                key={elementInfo.src}
+                key={`${elementInfo.src}:${elementInfo.mediaState?.status ?? ''}`}
                 src={elementInfo.src}
+                mediaState={elementInfo.mediaState}
+                altText={elementInfo.altText}
                 draggable={false}
                 style={{
                   top: imgPosition.top,

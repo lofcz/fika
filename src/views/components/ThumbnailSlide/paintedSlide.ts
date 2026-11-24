@@ -35,7 +35,7 @@ const elementAuthoredKey = (el: Slide['elements'][number]) => {
   if (el.type === 'text') return el.content || ''
   if (el.type === 'shape') return `${el.text?.content || ''}\x1f${el.pattern || ''}`
   if (el.type === 'chart') return `${el.chartType}:${el.themeColors?.join(',')}:${el.options?.stack ? 1 : 0}:${JSON.stringify(el.data)}`
-  if (el.type === 'image') return el.src || ''
+  if (el.type === 'image') return `${el.src || ''}\x1f${el.mediaState?.status || ''}\x1f${el.mediaState?.error || ''}`
   if (el.type === 'video' || el.type === 'audio') return el.poster || ''
   return ''
 }
@@ -45,7 +45,7 @@ const elementPaintKey = (el: Slide['elements'][number]) => {
   if (el.type === 'text') return `${el.content || ''}\x1f${el.fixedHeight ? 1 : 0}\x1f${box}`
   if (el.type === 'shape') return `${el.text?.content || ''}\x1f${el.pattern || ''}\x1f${el.text?.fixedHeight === false ? 0 : 1}\x1f${box}`
   if (el.type === 'chart') return `${el.chartType}\x1f${el.themeColors?.join(',')}\x1f${el.options?.stack ? 1 : 0}\x1f${JSON.stringify(el.data)}\x1f${box}`
-  if (el.type === 'image') return `${el.src || ''}\x1f${box}`
+  if (el.type === 'image') return `${el.src || ''}\x1f${el.mediaState?.status || ''}\x1f${el.mediaState?.error || ''}\x1f${box}`
   if (el.type === 'video' || el.type === 'audio') return `${el.poster || ''}\x1f${box}`
   return box
 }
@@ -84,6 +84,7 @@ export function arePaintedSlideIdentitiesEqual(a: PaintedSlide | undefined, b: P
     && a.background === b.background
     && a.type === b.type
     && (a.skeleton ?? false) === (b.skeleton ?? false)
+    && ((a as Slide).aiRequestId ?? '') === ((b as Slide).aiRequestId ?? '')
 }
 
 export function areRailItemSlidesEqual(a: Slide | undefined, b: Slide | undefined): boolean {

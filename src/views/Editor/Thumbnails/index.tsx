@@ -24,6 +24,15 @@ import Popover from '@/components/Popover'
 import Modal from '@/components/Modal'
 import Draggable, { slideDragOverlay } from '@/components/Draggable'
 import { useI18nContext } from '@/i18n/useI18nContext'
+import {
+  buildSlideGapAnchor,
+  emitFikaAiSlideInsertCancel,
+  emitFikaAiSlideInsertRequest,
+  isFikaAiSlideInsertEnabled,
+  useAiSlideInsert,
+  type FikaAiSlideInsertLabels,
+  type FikaSlideGapPosition,
+} from '@/configs/aiSlideInsert'
 
 type RailHandlers = {
   handleClickSlideThumbnail: (e: React.MouseEvent, index: number) => void
@@ -33,11 +42,113 @@ type RailHandlers = {
   editSection: (id: string) => void
   saveSection: (e: React.FocusEvent | React.KeyboardEvent) => void
   openNotesPanel: () => void
+  requestAiInsertAtGap: (spliceIndex: number) => void
+  insertBlankSlideAtGap: (spliceIndex: number) => void
+  cancelAiSlide: (requestId: string, slideId: string) => void
 }
+
+type GapLabels = {
+  addWithAi: string
+  addWithAiBeforeFirst: string
+  addWithAiBetween: (after: number, before: number) => string
+  addWithAiAfterLast: string
+  addBlankSlide: string
+  cancel: string
+}
+
+function formatBetweenLabel(template: string, after: number, before: number): string {
+  return template.replace(/\{after\}/g, String(after)).replace(/\{before\}/g, String(before))
+}
+
+function stopGapPointer(e: React.PointerEvent | React.MouseEvent) {
+  e.stopPropagation()
+}
+
+const SlideGapBar = memo(function SlideGapBar({
+  position,
+  spliceIndex,
+  afterSlideId,
+  beforeSlideId,
+  aiDisabled,
+  labels,
+  onRequestAi,
+  onInsertBlank,
+}: {
+  position: FikaSlideGapPosition
+  spliceIndex: number
+  afterSlideId: string | null
+  beforeSlideId: string | null
+  aiDisabled: boolean
+  labels: GapLabels
+  onRequestAi: (spliceIndex: number) => void
+  onInsertBlank: (spliceIndex: number) => void
+}) {
+  const aiAriaLabel = position === 'before-first'
+    ? labels.addWithAiBeforeFirst
+    : position === 'after-last'
+      ? labels.addWithAiAfterLast
+      : labels.addWithAiBetween(spliceIndex, spliceIndex + 1)
+
+  return (
+    <div
+      className={cx('gap-bar')}
+      data-fika-slide-gap={position}
+      data-after-slide-id={afterSlideId ?? ''}
+      data-before-slide-id={beforeSlideId ?? ''}
+      onPointerDown={stopGapPointer}
+      onMouseDown={stopGapPointer}
+    >
+      <div className={cx('gap-actions')}>
+        <button
+          type="button"
+          className={cx('gap-btn', 'gap-ai-btn')}
+          data-fika-gap-action="ai"
+          data-fika-slide-gap={position}
+          data-after-slide-id={afterSlideId ?? ''}
+          data-before-slide-id={beforeSlideId ?? ''}
+          aria-label={aiAriaLabel}
+          title={aiAriaLabel}
+          disabled={aiDisabled}
+          onPointerDown={stopGapPointer}
+          onMouseDown={stopGapPointer}
+          onClick={event => {
+            event.stopPropagation()
+            onRequestAi(spliceIndex)
+          }}
+        >
+          <Icon icon="sparkles" className={cx('gap-icon')} />
+          <span className={cx('gap-btn-label')}>{labels.addWithAi}</span>
+        </button>
+        <button
+          type="button"
+          className={cx('gap-btn', 'gap-blank-btn')}
+          data-fika-gap-action="blank"
+          data-fika-slide-gap={position}
+          data-after-slide-id={afterSlideId ?? ''}
+          data-before-slide-id={beforeSlideId ?? ''}
+          aria-label={labels.addBlankSlide}
+          title={labels.addBlankSlide}
+          onPointerDown={stopGapPointer}
+          onMouseDown={stopGapPointer}
+          onClick={event => {
+            event.stopPropagation()
+            onInsertBlank(spliceIndex)
+          }}
+        >
+          <Icon icon="plus" className={cx('gap-icon')} />
+        </button>
+      </div>
+    </div>
+  )
+})
+
+SlideGapBar.displayName = 'SlideGapBar'
 
 type ThumbnailRailItemProps = {
   slideId: string
+  nextSlideId: string | null
   index: number
+  totalSlides: number
   isActive: boolean
   isSelected: boolean
   hasSection: boolean
@@ -47,11 +158,17 @@ type ThumbnailRailItemProps = {
   untitledSection: string
   defaultSection: string
   thumbSize: number
+  showGapControls: boolean
+  aiDisabled: boolean
+  readOnly: boolean
+  gapLabels: GapLabels
 }
 
 function areThumbnailRailItemPropsEqual(prev: ThumbnailRailItemProps, next: ThumbnailRailItemProps) {
   return prev.slideId === next.slideId
+    && prev.nextSlideId === next.nextSlideId
     && prev.index === next.index
+    && prev.totalSlides === next.totalSlides
     && prev.isActive === next.isActive
     && prev.isSelected === next.isSelected
     && prev.hasSection === next.hasSection
@@ -61,11 +178,17 @@ function areThumbnailRailItemPropsEqual(prev: ThumbnailRailItemProps, next: Thum
     && prev.defaultSection === next.defaultSection
     && prev.handlersRef === next.handlersRef
     && prev.thumbSize === next.thumbSize
+    && prev.showGapControls === next.showGapControls
+    && prev.aiDisabled === next.aiDisabled
+    && prev.readOnly === next.readOnly
+    && prev.gapLabels === next.gapLabels
 }
 
 const ThumbnailRailItem = memo(function ThumbnailRailItem({
   slideId,
+  nextSlideId,
   index,
+  totalSlides,
   isActive,
   isSelected,
   hasSection,
@@ -75,15 +198,34 @@ const ThumbnailRailItem = memo(function ThumbnailRailItem({
   untitledSection,
   defaultSection,
   thumbSize,
+  showGapControls,
+  aiDisabled,
+  readOnly,
+  gapLabels,
 }: ThumbnailRailItemProps) {
   const slide = useRailItemSlide(slideId)
 
   const showSection = !!(slide?.sectionTag || (hasSection && index === 0))
   const sectionId = slide?.sectionTag?.id || ''
   const editingThisSection = editingSectionId === slide?.sectionTag?.id || (index === 0 && editingSectionId === 'default')
+  const isLast = index === totalSlides - 1
+  const requestAi = useCallback((spliceIndex: number) => handlersRef.current.requestAiInsertAtGap(spliceIndex), [handlersRef])
+  const insertBlank = useCallback((spliceIndex: number) => handlersRef.current.insertBlankSlideAtGap(spliceIndex), [handlersRef])
 
   return (
     <div className={cx('thumbnail-container')}>
+      {showGapControls && index === 0 ? (
+        <SlideGapBar
+          position="before-first"
+          spliceIndex={0}
+          afterSlideId={null}
+          beforeSlideId={slideId}
+          aiDisabled={aiDisabled}
+          labels={gapLabels}
+          onRequestAi={requestAi}
+          onInsertBlank={insertBlank}
+        />
+      ) : null}
       {showSection ? (
         <div
           className={cx('section-title')}
@@ -126,12 +268,55 @@ const ThumbnailRailItem = memo(function ThumbnailRailItem({
         {slide?.notes && slide.notes.length ? (
           <div className={cx('note-flag')} onClick={() => handlersRef.current.openNotesPanel()}>{slide.notes.length}</div>
         ) : null}
+        {!readOnly && slide?.skeleton && slide.aiRequestId ? (
+          <button
+            type="button"
+            className={cx('cancel-ai-btn')}
+            data-fika-ai-insert-cancel={slide.aiRequestId}
+            aria-label={gapLabels.cancel}
+            title={gapLabels.cancel}
+            onPointerDown={stopGapPointer}
+            onMouseDown={stopGapPointer}
+            onClick={event => {
+              event.stopPropagation()
+              handlersRef.current.cancelAiSlide(slide.aiRequestId!, slideId)
+            }}
+          >
+            <Icon icon="x" />
+          </button>
+        ) : null}
       </div>
+      {showGapControls ? (
+        <SlideGapBar
+          position={isLast ? 'after-last' : 'between'}
+          spliceIndex={index + 1}
+          afterSlideId={slideId}
+          beforeSlideId={isLast ? null : nextSlideId}
+          aiDisabled={aiDisabled}
+          labels={gapLabels}
+          onRequestAi={requestAi}
+          onInsertBlank={insertBlank}
+        />
+      ) : null}
     </div>
   )
 }, areThumbnailRailItemPropsEqual)
 
 ThumbnailRailItem.displayName = 'ThumbnailRailItem'
+
+function resolveGapLabels(hostLabels: FikaAiSlideInsertLabels | undefined, LL: ReturnType<typeof useI18nContext>['LL']): GapLabels {
+  const t = LL.editor.thumbnails
+  return {
+    addWithAi: hostLabels?.addWithAi || t.addWithAi(),
+    addWithAiBeforeFirst: hostLabels?.addWithAiBeforeFirst || t.addWithAiBeforeFirst(),
+    addWithAiBetween: (after, before) => hostLabels?.addWithAiBetween
+      ? formatBetweenLabel(hostLabels.addWithAiBetween, after, before)
+      : t.addWithAiBetween({ after, before }),
+    addWithAiAfterLast: hostLabels?.addWithAiAfterLast || t.addWithAiAfterLast(),
+    addBlankSlide: hostLabels?.addBlankSlide || t.addBlankSlideHere(),
+    cancel: hostLabels?.cancel || t.cancelAiSlide(),
+  }
+}
 
 const Thumbnails = memo(({ className, style }: { className?: string; style?: CSSProperties }) => {
   const { LL } = useI18nContext()
@@ -140,9 +325,13 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
   const currentSlideHasSection = useSlidesStore(s => !!s.slides[s.slideIndex]?.sectionTag)
   const _selectedSlidesIndex = useMainStore(s => s.selectedSlidesIndex)
   const readOnly = useMainStore(s => s.readOnly)
+  const aiSlideInsertConfig = useAiSlideInsert(s => s.config)
+  const showGapControls = !readOnly && isFikaAiSlideInsertEnabled(aiSlideInsertConfig)
+  const aiDisabled = !!aiSlideInsertConfig?.disabled
+  const gapLabels = useMemo(() => resolveGapLabels(aiSlideInsertConfig?.labels, LL), [aiSlideInsertConfig?.labels, LL])
   const selectedSlidesIndex = useMemo(() => [..._selectedSlidesIndex, slideIndex], [_selectedSlidesIndex, slideIndex])
   const hasSection = useMemo(() => slides.some(item => item.sectionTag), [slides])
-  const { scrollRef, virtualizer, virtualItems, dest } = useThumbnailVirtualizer(slides, hasSection)
+  const { scrollRef, virtualizer, virtualItems, dest } = useThumbnailVirtualizer(slides, hasSection, showGapControls)
 
   // Pane resize repaints canvases at their final backing-store dimensions.
   useEffect(() => {
@@ -327,7 +516,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
       return [{ text: menu.slideShow(), subText: 'F5', handler: enterScreeningFromStart }]
     }
     return [
-      { text: menu.newSlide(), subText: 'Enter', handler: createSlide },
+      { text: menu.newSlide(), subText: 'Enter', handler: () => createSlide() },
       { text: menu.paste(), subText: 'Ctrl + V', handler: pasteSlide },
       { text: menu.selectAll(), subText: 'Ctrl + A', handler: selectAllSlide },
       { text: menu.slideShow(), subText: 'F5', handler: enterScreeningFromStart },
@@ -345,7 +534,7 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
       { text: menu.paste(), subText: 'Ctrl + V', handler: pasteSlide },
       { text: menu.selectAll(), subText: 'Ctrl + A', handler: selectAllSlide },
       { divider: true },
-      { text: menu.newSlide(), subText: 'Enter', handler: createSlide },
+      { text: menu.newSlide(), subText: 'Enter', handler: () => createSlide() },
       { text: menu.duplicateSlide(), subText: 'Ctrl + D', handler: copyAndPasteSlide },
       { text: menu.deleteSlide(), subText: 'Delete', handler: () => deleteSlide() },
       { text: menu.addSection(), handler: createSection, disable: currentSlideHasSection },
@@ -353,6 +542,23 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
       { text: menu.presentFromCurrent(), subText: 'Shift + F5', handler: () => enterScreening() },
     ]
   }, [LL, cutSlide, copySlide, pasteSlide, selectAllSlide, createSlide, copyAndPasteSlide, deleteSlide, createSection, currentSlideHasSection, enterScreening])
+
+  const requestAiInsertAtGap = useCallback((spliceIndex: number) => {
+    if (useMainStore.getState().readOnly) return
+    const state = useSlidesStore.getState()
+    const currentSlideId = state.slides[state.slideIndex]?.id ?? null
+    const anchor = buildSlideGapAnchor(state.slides, spliceIndex, currentSlideId)
+    emitFikaAiSlideInsertRequest(anchor)
+  }, [])
+
+  const insertBlankSlideAtGap = useCallback((spliceIndex: number) => {
+    if (useMainStore.getState().readOnly) return
+    createSlide(spliceIndex)
+  }, [createSlide])
+
+  const cancelAiSlide = useCallback((requestId: string, slideId: string) => {
+    emitFikaAiSlideInsertCancel({ requestId, slideId })
+  }, [])
 
   railHandlersRef.current = {
     handleClickSlideThumbnail,
@@ -362,6 +568,9 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
     editSection,
     saveSection,
     openNotesPanel,
+    requestAiInsertAtGap,
+    insertBlankSlideAtGap,
+    cancelAiSlide,
   }
 
   return (
@@ -404,7 +613,9 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
         item={({ element, index }) => (
           <ThumbnailRailItem
             slideId={element.id}
+            nextSlideId={slides[index + 1]?.id ?? null}
             index={index}
+            totalSlides={slides.length}
             isActive={slideIndex === index}
             isSelected={selectedSlidesIndex.includes(index)}
             hasSection={hasSection}
@@ -414,9 +625,25 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
             untitledSection={LL.editor.thumbnails.untitledSection()}
             defaultSection={LL.editor.thumbnails.defaultSection()}
             thumbSize={dest.cssWidth}
+            showGapControls={showGapControls}
+            aiDisabled={aiDisabled}
+            readOnly={readOnly}
+            gapLabels={gapLabels}
           />
         )}
       />
+      {showGapControls && slides.length === 0 ? (
+        <SlideGapBar
+          position="before-first"
+          spliceIndex={0}
+          afterSlideId={null}
+          beforeSlideId={null}
+          aiDisabled={aiDisabled}
+          labels={gapLabels}
+          onRequestAi={requestAiInsertAtGap}
+          onInsertBlank={insertBlankSlideAtGap}
+        />
+      ) : null}
       <div className={cx('page-number')}>
         {LL.editor.thumbnails.slideCounter({ current: slideIndex + 1, total: slides.length })}
       </div>

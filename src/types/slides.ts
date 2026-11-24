@@ -264,6 +264,27 @@ export interface ImageElementClip {
   shape: string;
 }
 export type ImageType = 'pageFigure' | 'itemFigure' | 'background';
+export type ImageMediaStatus = 'pending' | 'ready' | 'error';
+export type ImageMediaFit = 'cover' | 'contain';
+
+/**
+ * Async/pending image slot metadata persisted on a native `PPTImageElement`.
+ * Omitted or `status: 'ready'` behaves as a normal resolved image.
+ */
+export interface ImageMediaState {
+  /** Stable slot/job identifier persisted across reload, reorder, and async media completion. */
+  slotId?: string;
+  /** Lifecycle status of async/pending media. */
+  status: ImageMediaStatus;
+  /** Optional target aspect ratio (`width / height`) preserved while pending and on resolution. */
+  aspectRatio?: number;
+  /** Fit policy used when resolving media (`'cover'` default, or `'contain'`). */
+  fit?: ImageMediaFit;
+  /** Optional host-localized accessible status label (e.g. "Generating image…"). */
+  label?: string;
+  /** Optional human-readable error message when `status === 'error'`. */
+  error?: string;
+}
 
 /**
  * Image element.
@@ -287,6 +308,8 @@ export interface PPTImageElement extends PPTBaseElement {
   qrCode?: { text: string; errorCorrection: 'L' | 'M' | 'Q' | 'H'; foreground: string; background: string };
   /** Editable photo-frame metadata; native image geometry/clip remain authoritative. */
   photoFrame?: { layout: string; cell: number; gutter: number; empty: boolean; sourceWidth?: number; sourceHeight?: number };
+  /** Async/pending image slot state; cleared automatically when resolved via `media.setImageSource`. */
+  mediaState?: ImageMediaState;
 }
 
 /**
@@ -665,6 +688,8 @@ export interface Slide {
   type?: SlideType;
   sourcePackageId?: string;
   skeleton?: boolean;
+  /** Optional host correlation id for a pending AI-generated skeleton slide (enables native cancel action). */
+  aiRequestId?: string;
 }
 
 /**

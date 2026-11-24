@@ -571,6 +571,12 @@
           "description": "1-based insert position; omit or pass slideCount+1 to append. First slide is 1."
         },
         {
+          "name": "anchor",
+          "type": "FikaSlideInsertAnchorInput",
+          "required": false,
+          "description": "Stable neighbor anchor ({ position, afterSlideId, beforeSlideId, fallbackIndex }) resolved against the live slide order when index is omitted."
+        },
+        {
           "name": "select",
           "type": "boolean",
           "required": false,
@@ -593,7 +599,27 @@
       ]
     },
     "slides.insert": {
-      "summary": "Insert a slide at a specific index (same payload as slides.create plus index).",
+      "summary": "Insert one or more slides at a specific 1-based index or stable neighbor anchor.",
+      "params": [
+        {
+          "name": "slides",
+          "type": "Slide | Slide[]",
+          "required": true,
+          "description": "Slide or slides to insert with remapped IDs."
+        },
+        {
+          "name": "index",
+          "type": "number",
+          "required": false,
+          "description": "1-based insert position; omit to resolve from anchor or append."
+        },
+        {
+          "name": "anchor",
+          "type": "FikaSlideInsertAnchorInput",
+          "required": false,
+          "description": "Stable neighbor anchor ({ position, afterSlideId, beforeSlideId, fallbackIndex }) resolved against live slide order when index is omitted."
+        }
+      ],
       "related": [
         "slides.create",
         "slides.move"
@@ -874,6 +900,84 @@
       "details": "Defaults to active page, 40 elements, 160 text characters. At most 100 elements and 500 text characters per item. Use nextOffset to paginate. Mutate with existing slides/elements/text/shapes commands; batch related edits into one undoable operation. slides.update accepts canvasName, canvasPosition, guides, and workspaceLabels; elements.update accepts parentFrameId, and shapes accept frame.clipContent.",
       "examples": [
         "{\"type\":\"canvas.get\",\"payload\":{\"limit\":30}}"
+      ]
+    },
+    "media.setImageSource": {
+      "summary": "Resolve or replace an image element's source by elementId or pending mediaState.slotId, preserving aspect ratio and user edits.",
+      "details": "Locates the target image across slides (surviving slide reorder). Computes centered cover crop or contain fit when natural dimensions are provided, clears mediaState on resolution, and skips stale async writes when onlyIfPending:true and the element is already resolved.",
+      "params": [
+        {
+          "name": "elementId",
+          "type": "string",
+          "required": false,
+          "description": "Target image element ID (optional when slotId is provided)."
+        },
+        {
+          "name": "slotId",
+          "type": "string",
+          "required": false,
+          "description": "Target pending image mediaState.slotId across the deck."
+        },
+        {
+          "name": "asset",
+          "type": "FikaMediaAssetInput",
+          "required": false,
+          "description": "Image URL, data URL, or FikaMediaAsset object (width/height used for aspect-preserving fit)."
+        },
+        {
+          "name": "fit",
+          "type": "'cover' | 'contain'",
+          "required": false,
+          "description": "Aspect-preserving fit mode when natural dimensions are supplied (defaults to mediaState.fit or 'cover')."
+        },
+        {
+          "name": "natural",
+          "type": "{ width: number; height: number }",
+          "required": false,
+          "description": "Natural pixel dimensions of the resolved image."
+        },
+        {
+          "name": "onlyIfPending",
+          "type": "boolean",
+          "required": false,
+          "description": "When true, avoids overwriting an image that is no longer pending."
+        }
+      ],
+      "related": [
+        "media.setImageState",
+        "images.setSource"
+      ]
+    },
+    "media.setImageState": {
+      "summary": "Update or clear a single native image element's async mediaState (pending, ready, error) without affecting sibling elements or slides.",
+      "params": [
+        {
+          "name": "elementId",
+          "type": "string",
+          "required": false,
+          "description": "Target image element ID (optional when slotId is provided)."
+        },
+        {
+          "name": "slotId",
+          "type": "string",
+          "required": false,
+          "description": "Target image mediaState.slotId across the deck."
+        },
+        {
+          "name": "state",
+          "type": "ImageMediaState | null",
+          "required": true,
+          "description": "New ImageMediaState ({ status, slotId?, aspectRatio?, fit?, label?, error? }) or null to clear."
+        },
+        {
+          "name": "onlyIfPending",
+          "type": "boolean",
+          "required": false,
+          "description": "When true, ignores stale state writes if the image is already ready with a non-empty src."
+        }
+      ],
+      "related": [
+        "media.setImageSource"
       ]
     },
     "canvas.apply": {

@@ -275,6 +275,74 @@ const imageFilter = (element: PPTImageElement) => {
   return Object.entries(element.filters).map(([key, value]) => `${key}(${value})`).join(' ')
 }
 
+const paintImageSlotPlaceholder = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  status: 'pending' | 'error',
+) => {
+  const isError = status === 'error'
+  ctx.fillStyle = isError ? '#fdf2f4' : '#eef2f6'
+  ctx.fillRect(0, 0, width, height)
+
+  if (!isError) {
+    const sheen = ctx.createLinearGradient(0, 0, width, height)
+    sheen.addColorStop(0, 'rgba(255, 255, 255, 0.42)')
+    sheen.addColorStop(0.5, 'rgba(148, 163, 184, 0.08)')
+    sheen.addColorStop(1, 'rgba(148, 163, 184, 0.16)')
+    ctx.fillStyle = sheen
+    ctx.fillRect(0, 0, width, height)
+  }
+
+  ctx.strokeStyle = isError ? 'rgba(225, 29, 72, 0.28)' : 'rgba(100, 116, 139, 0.24)'
+  ctx.lineWidth = Math.max(1, Math.min(width, height) * 0.008)
+  ctx.strokeRect(0.5, 0.5, Math.max(0, width - 1), Math.max(0, height - 1))
+
+  const minEdge = Math.min(width, height)
+  if (minEdge < 20) return
+  const badge = Math.max(14, Math.min(44, minEdge * 0.24))
+  const cx = width / 2
+  const cy = height / 2
+  const half = badge / 2
+  const radius = Math.max(3, badge * 0.2)
+
+  ctx.save()
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.72)'
+  ctx.strokeStyle = isError ? 'rgba(190, 18, 60, 0.55)' : 'rgba(71, 85, 105, 0.55)'
+  ctx.lineWidth = Math.max(1.2, badge * 0.065)
+  ctx.beginPath()
+  ctx.roundRect(cx - half, cy - half, badge, badge, radius)
+  ctx.fill()
+  ctx.stroke()
+
+  const inset = badge * 0.24
+  const ix = cx - half + inset
+  const iy = cy - half + inset
+  const iw = badge - inset * 2
+  const ih = badge - inset * 2
+
+  ctx.beginPath()
+  ctx.arc(ix + iw * 0.28, iy + ih * 0.3, Math.max(1.2, iw * 0.11), 0, Math.PI * 2)
+  ctx.fillStyle = isError ? 'rgba(190, 18, 60, 0.55)' : 'rgba(71, 85, 105, 0.55)'
+  ctx.fill()
+
+  ctx.beginPath()
+  ctx.moveTo(ix, iy + ih * 0.88)
+  ctx.lineTo(ix + iw * 0.42, iy + ih * 0.48)
+  ctx.lineTo(ix + iw * 0.66, iy + ih * 0.72)
+  ctx.lineTo(ix + iw * 0.82, iy + ih * 0.56)
+  ctx.lineTo(ix + iw, iy + ih * 0.88)
+  ctx.stroke()
+
+  if (isError) {
+    ctx.beginPath()
+    ctx.moveTo(cx - half + inset * 0.6, cy - half + inset * 0.6)
+    ctx.lineTo(cx + half - inset * 0.6, cy + half - inset * 0.6)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
 const paintImage = (
   ctx: CanvasRenderingContext2D,
   element: PPTImageElement,
@@ -285,23 +353,28 @@ const paintImage = (
   ctx.save()
   applyShadow(ctx, element.shadow)
   ctx.clip(clip)
-  const bitmap = bitmapFor(element.src, invalidate, imageBitmaps)
-  if (bitmap) {
-    ctx.filter = imageFilter(element)
-    if (element.clip) {
-      const [start, end] = element.clip.range
-      const sx = bitmap.width * start[0] / 100
-      const sy = bitmap.height * start[1] / 100
-      const sw = bitmap.width * (end[0] - start[0]) / 100
-      const sh = bitmap.height * (end[1] - start[1]) / 100
-      ctx.drawImage(bitmap, sx, sy, Math.max(1, sw), Math.max(1, sh), 0, 0, element.width, element.height)
-    }
-    else ctx.drawImage(bitmap, 0, 0, element.width, element.height)
-    ctx.filter = 'none'
+  const slotStatus = element.mediaState?.status
+  if (slotStatus === 'pending' || slotStatus === 'error' || !element.src) {
+    paintImageSlotPlaceholder(ctx, element.width, element.height, slotStatus === 'error' ? 'error' : 'pending')
   }
   else {
-    ctx.fillStyle = '#f4f4f5'
-    ctx.fillRect(0, 0, element.width, element.height)
+    const bitmap = bitmapFor(element.src, invalidate, imageBitmaps)
+    if (bitmap) {
+      ctx.filter = imageFilter(element)
+      if (element.clip) {
+        const [start, end] = element.clip.range
+        const sx = bitmap.width * start[0] / 100
+        const sy = bitmap.height * start[1] / 100
+        const sw = bitmap.width * (end[0] - start[0]) / 100
+        const sh = bitmap.height * (end[1] - start[1]) / 100
+        ctx.drawImage(bitmap, sx, sy, Math.max(1, sw), Math.max(1, sh), 0, 0, element.width, element.height)
+      }
+      else ctx.drawImage(bitmap, 0, 0, element.width, element.height)
+      ctx.filter = 'none'
+    }
+    else {
+      paintImageSlotPlaceholder(ctx, element.width, element.height, 'pending')
+    }
   }
   if (element.colorMask) {
     ctx.fillStyle = element.colorMask

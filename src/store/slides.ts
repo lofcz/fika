@@ -368,7 +368,10 @@ export const useSlidesStore = create<SlidesStore>()(
         const next = { ...old, ...props, ...(props.elements ? { elements: reconcileFrameTransforms(old.elements, props.elements) } : {}) }
         // A skeleton is a promise of content: any patch that brings elements
         // (or explicitly falsifies the flag) fulfils it.
-        if (props.skeleton === false || (props.elements && props.skeleton === undefined)) delete next.skeleton
+        if (props.skeleton === false || (props.elements && props.skeleton === undefined)) {
+          delete next.skeleton
+          if (props.aiRequestId === undefined) delete next.aiRequestId
+        }
         // Retinting default inks is for a background swapped under existing
         // text; a patch that brings its own elements is an authored slide
         // whose colours already agree with its background.

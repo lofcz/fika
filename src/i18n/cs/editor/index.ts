@@ -331,6 +331,13 @@ const cs_editor: NamespaceEditorTranslation = {
   },
   thumbnails: {
     addSlide: 'Přidat snímek',
+    addWithAi: 'Přidat snímek pomocí AI',
+    addWithAiBeforeFirst: 'Přidat snímek pomocí AI před 1. snímek',
+    addWithAiBetween: 'Přidat snímek pomocí AI mezi snímky {after} a {before}',
+    addWithAiAfterLast: 'Přidat snímek pomocí AI za poslední snímek',
+    addBlankSlideHere: 'Vložit sem prázdný snímek',
+    generatingSlide: 'Generuji snímek…',
+    cancelAiSlide: 'Zrušit',
     sectionNamePlaceholder: 'Zadejte název sekce',
     untitledSection: 'Sekce bez názvu',
     defaultSection: 'Výchozí sekce',
@@ -359,6 +366,11 @@ const cs_editor: NamespaceEditorTranslation = {
       addSection: 'Přidat sekci',
       presentFromCurrent: 'Prezentovat od aktuálního snímku',
     },
+  },
+  mediaSlot: {
+    pending: 'Generuji obrázek…',
+    loading: 'Načítám obrázek…',
+    error: 'Obrázek není k dispozici',
   },
   elementAnimation: {
     addAnimation: 'Přidat animaci',

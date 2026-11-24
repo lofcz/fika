@@ -26,6 +26,7 @@ import { setFikaExportMetadata } from '@/configs/exportMetadata'
 import { setFikaExportLanguage } from '@/configs/exportLanguage'
 import { setFikaMediaConfig } from '@/configs/mediaUpload'
 import { setFikaHeaderMenuItems } from '@/configs/headerMenu'
+import { setFikaAiSlideInsert } from '@/configs/aiSlideInsert'
 import { setFikaLocaleSwitcherEnabled } from '@/configs/localeSwitcher'
 import { registerTemplateLoaders } from './agentic/templates'
 import { applyLocale } from './localeBridge'
@@ -126,6 +127,7 @@ export async function mountFika(
     setFikaExportLanguage(options.exportLanguage)
     setFikaMediaConfig(options.media)
     setFikaHeaderMenuItems(options.headerMenuItems)
+    setFikaAiSlideInsert(options.aiSlideInsert)
     setFikaLocaleSwitcherEnabled(options.showLocaleSwitcher)
     registerTemplateLoaders(options.templateLoaders)
     useSlidesStore.getState().setTemplates(options.templates ?? [])
@@ -194,6 +196,7 @@ export async function mountFika(
       setFikaMediaConfig(null)
       setFikaDesignThemes()
       setFikaHeaderMenuItems()
+      setFikaAiSlideInsert(null)
       setFikaLocaleSwitcherEnabled()
       clearFikaPortalTarget(portalRoot)
       el.classList.remove('fika-embed-root')

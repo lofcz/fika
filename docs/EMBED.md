@@ -167,6 +167,45 @@ await controller.slides.update(item.id, { elements, background, remark })
 controller.goToSlide(item.id)
 ```
 
+### Generating a slide at a chosen position
+
+Set `aiSlideInsert` on mount or call `controller.setAiSlideInsert(config)` to expose an AI action in the gaps before, between, and after slide thumbnails. Each action supports keyboard focus and activation. Use `labels` for host-specific wording.
+
+`onRequest(anchor)` supplies a request ID and the slide IDs on either side of the gap. The host collects the prompt, runs generation, and inserts the resulting slide. Keep the anchor until the request finishes so edits and reordering during generation carry through to placement. For example, a host receiving a completed slide can apply it in one undoable edit.
+
+```ts
+const result = await controller.slides.insert({
+  slides: generatedSlide,
+  anchor: {
+    position: request.position,
+    afterSlideId: request.afterSlideId,
+    beforeSlideId: request.beforeSlideId,
+    fallbackIndex: request.insertIndex,
+  },
+  select: true,
+})
+```
+
+The controller also emits `aiSlideInsertRequested` with the same request ID. Use one request handler per editor. A host that exposes a cancellable skeleton slide can correlate cancellation with `onCancel` and discard an outstanding result.
+
+### Images that finish after slide text
+
+Give each pending image its final position and dimensions, an empty `src`, and a `mediaState` containing `{ status: 'pending', slotId, fit: 'cover' }`. Use a fresh slot ID for each replacement request. The editor can display and edit subsequent slides while the host obtains the image. Settle the specific slot with its slide ID and slot ID.
+
+```ts
+const result = await controller.execute({
+  type: 'media.setImageSource',
+  payload: {
+    slideId,
+    slotId,
+    asset: { src: imageUrl, width: imageWidth, height: imageHeight },
+    onlyIfPending: true,
+  },
+})
+```
+
+Inspect `result.ok` before persisting. A deleted slot returns a recoverable lookup error. For a failed request, use `media.setImageState` with the same target and an error state. Keep the current editor document as the source of truth when saving late media.
+
 ### Bridge subscriptions
 
 Subscribe once when the controller is mounted, then unsubscribe before replacing or destroying it. `documentChanged` is the best signal for persistence, while `commandFailed` is the best signal for agent telemetry:

@@ -91,7 +91,7 @@ export default () => {
     }).catch(err => message.warning(err))
   }
 
-  const createSlide = () => {
+  const createSlide = (insertAtIndex?: number) => {
     const { theme } = useSlidesStore.getState()
     const emptySlide = buildContentSlide(getLL(), {
       backgroundColor: theme.backgroundColor,
@@ -99,7 +99,12 @@ export default () => {
       fontName: theme.fontName,
     })
     useMainStore.getState().setActiveElementIdList([])
-    useSlidesStore.getState().addSlide(emptySlide)
+    useSlidesStore.getState().addSlide(
+      emptySlide,
+      typeof insertAtIndex === 'number' && Number.isFinite(insertAtIndex)
+        ? { index: Math.trunc(insertAtIndex) }
+        : undefined,
+    )
     addHistorySnapshot()
   }
 

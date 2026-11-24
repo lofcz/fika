@@ -46,8 +46,10 @@ const BaseImageElement = memo((props: IBaseImageElementProps) => {
           <ImageOutline elementInfo={elementInfo} />
           <div className={cx('image-content')} style={{ clipPath: clipShape.style }}>
             <ImageBitmapSurface
-              key={elementInfo.src}
+              key={`${elementInfo.src}:${elementInfo.mediaState?.status ?? ''}`}
               src={elementInfo.src}
+              mediaState={elementInfo.mediaState}
+              altText={elementInfo.altText}
               draggable={false}
               style={{
                 top: imgPosition.top,

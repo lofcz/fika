@@ -249,9 +249,12 @@ export const e2eScripts = [
   'scripts/e2e-embed-persistence.mjs',
   'scripts/e2e-thumb-snapshot.mjs',
   'scripts/e2e-agentic-commands.mjs',
+  'scripts/e2e-gap-insert-and-media-slot.mjs',
 ]
 
 export const rstestFiles = [
+  'tests/ai-slide-insert.test.ts',
+  'tests/pending-image-slot.test.ts',
   'tests/speaker-notes.test.ts',
   'tests/pptx-source-package.test.ts',
   'tests/slides-empty-deck.test.ts',
