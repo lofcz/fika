@@ -11,6 +11,7 @@ import type { Gradient, ImageElementFilters, LinePoint, PPTAnimation, PPTElement
 import { outlineRadiusToPptxRectRadius, resolveShapePaintPath } from '@/utils/elementOutline';
 import { getElementRange, getLineElementPath, getTableThemeColors } from '@/utils/element';
 import { type AST, toAST } from '@/utils/htmlParser';
+import { typesetImportedTex } from '@/utils/importedTex';
 import { type SvgPoints, toPoints } from '@/utils/svgPathParser';
 import { LATEX_ELEMENT_FONT_SIZE, MATH_CLASS } from '@/utils/math';
 import { latexPaintScale } from '@/utils/latex';
@@ -707,7 +708,7 @@ export function createPresentationExporter(
     fontSizePt?: number;
     minFontSizePt?: number;
   }) => {
-    const ast = toAST(html);
+    const ast = toAST(typesetImportedTex(html));
     let bulletFlag = false;
     let indent = 0;
     const slices: pptxgen.TextProps[] = [];

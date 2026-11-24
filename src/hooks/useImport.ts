@@ -15,7 +15,7 @@ import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
 import { getSvgPathRange, toPoints } from '@/utils/svgPathParser';
 import { loadGoogleFonts } from '@/utils/font';
-import { containsTexSource } from '@/utils/markdown';
+import { mayContainTexSource } from '@/utils/markdown';
 import { convertBareLatexBlocks, convertOmmlMathSpans } from '@/utils/importedTex';
 import { ensureMathliveReady, normalizeImportedLatex } from '@/utils/math';
 import { importOutlineFromPptx, pptxBorderColorToString, type PptxBorderColor } from '@/utils/elementOutline';
@@ -113,14 +113,14 @@ const elementsContainBareLatex = (elements?: Element[]): boolean => {
   if (!elements) return false;
   for (const el of elements) {
     if (el.type === 'group' && elementsContainBareLatex(el.elements)) return true;
-    if ('content' in el && typeof el.content === 'string' && containsTexSource(el.content)) return true;
+    if ('content' in el && typeof el.content === 'string' && mayContainTexSource(el.content)) return true;
   }
   return false;
 };
 const finalizeImportedHtml = (html: string) => {
   const hasList = /<(ul|ol)\b/i.test(html) && (/font-size\s*:/i.test(html) || /color\s*:/i.test(html));
   const hasOmmlMath = html.includes('omml-math');
-  const hasBareLatex = containsTexSource(html);
+  const hasBareLatex = mayContainTexSource(html);
   if (!hasList && !hasOmmlMath && !hasBareLatex) return html;
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');

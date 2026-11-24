@@ -1,6 +1,7 @@
 import MarkdownItCtor from 'markdown-it';
 import type { MarkdownIt } from 'markdown-it';
 import { markdownMathSegments, normalizeGeneratedMarkdown } from '../text/index';
+import { inlineDollarEnd } from '../text/inlineDollar';
 import { ensureMathliveReady, texmathEngine } from './math';
 import { defaultTreeAdapter, html, parseFragment, serialize, type DefaultTreeAdapterTypes } from 'parse5';
 
@@ -32,6 +33,15 @@ function createBaseParser() {
     linkify: true,
     typographer: true
   });
+  // Markdown removes the backslash. Retain the literal delimiter across the
+  // subsequent rich-text parse and editor save/reload, with no visible style.
+  parser.inline.ruler.before('escape', 'literal_dollar', (state, silent) => {
+    if (!state.src.startsWith('\\$', state.pos)) return false;
+    if (!silent) state.push('literal_dollar', 'span', 0);
+    state.pos += 2;
+    return true;
+  });
+  parser.renderer.rules.literal_dollar = () => '<span data-literal-dollar>$</span>';
   const defaultLinkOpen = parser.renderer.rules.link_open;
   parser.renderer.rules.link_open = (tokens, idx, options, env, self) => {
     const token = tokens[idx];
@@ -47,25 +57,26 @@ let mathMarkdownParser: MarkdownIt | null = null;
 
 /** True when a string carries math delimiters the math parser should handle. */
 export function containsMath(source: string): boolean {
-  return MATH_RE.test(source);
+  return MATH_RE.test(source) && markdownMathSegments(source).some(segment => segment.type === 'math');
 }
 
 /** A TeX control word (`\frac`, `\sqrt`, `\sum`, …), not a symbol allowlist. */
 const TEX_CONTROL_RE = /\\[a-zA-Z]/;
 
-/** Delimited math or any TeX control sequence in the source. */
+/** Cheap prefilter for HTML. Delimiter boundaries are resolved on individual text nodes. */
+export function mayContainTexSource(source: string): boolean {
+  return !!source && (MATH_RE.test(source) || TEX_CONTROL_RE.test(source));
+}
+
 export function containsTexSource(source: string): boolean {
-  return !!source && (containsMath(source) || TEX_CONTROL_RE.test(source));
+  return !!source && (TEX_CONTROL_RE.test(source) || containsMath(source));
 }
 
 /** The whole string is a TeX formula MathLive can typeset as-is. */
-export function isTexFormulaSource(source: string): boolean {
-  const text = source.trim();
-  if (!text) return false;
-  if (containsMath(text)) {
-    return tokenizeMath(text).every((segment) => segment.type === 'math' || !segment.value.trim());
-  }
-  return /^\\[a-zA-Z]/.test(text);
+export function isTexFormulaSource(source: string, segments = tokenizeMath(source)): boolean {
+  return segments.some(segment => segment.type === 'math')
+    ? segments.every(segment => segment.type === 'math' || !segment.value.trim())
+    : /^\s*\\[a-zA-Z]/.test(source);
 }
 
 
@@ -114,14 +125,30 @@ function loadMathMarkdownParser(): Promise<MarkdownIt> {
   mathMarkdownParserPromise = Promise.all([import('markdown-it-texmath'), ensureMathliveReady()]).then(([texmathModule]) => {
     const parser = createBaseParser();
     const texmath = (texmathModule.default ?? texmathModule) as TexMathPlugin;
-    parser.use(texmath, {
+    const options = {
       engine: texmathEngine,
-      delimiters: [...MATH_DELIMITERS],
       katexOptions: {
         strict: false,
         throwOnError: false
       }
+    };
+    // Both the dollars and brackets plugins register a rule named math_inline.
+    // Replace only the dollar rule, before registering the bracket rule.
+    parser.use(texmath, { ...options, delimiters: ['dollars'] });
+    parser.inline.ruler.at('math_inline', (state, silent) => {
+      if (state.src[state.pos] !== '$') return false;
+      const end = inlineDollarEnd(state.src, state.pos);
+      if (end < 0 || end > state.posMax) return false;
+      if (!silent) {
+        const token = state.push('math_inline', 'math', 0);
+        token.content = state.src.slice(state.pos + 1, end - 1);
+        token.markup = '$';
+      }
+      state.pos = end;
+      return true;
     });
+    parser.use(texmath, { ...options, delimiters: ['brackets', 'beg_end'] });
+    parser.renderer.rules.math_inline = (tokens, i) => '<eq>' + texmathEngine.renderToString(tokens[i].content) + '</eq>';
     mathMarkdownParser = parser;
     return parser;
   });

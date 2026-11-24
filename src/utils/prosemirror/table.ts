@@ -46,6 +46,7 @@ export const tableSchema = new Schema({
     fontsize: { ...marks.fontsize, toDOM: mark => ['span', { style: `font-size: ${mark.attrs.fontsize}` }, 0] },
     fontname: marks.fontname,
     code: marks.code,
+    literalDollar: marks.literalDollar,
     subscript: { ...marks.subscript, excludes: 'superscript' },
     superscript: { ...marks.superscript, excludes: 'subscript' },
     link: { ...marks.link, toDOM: mark => ['a', { ...mark.attrs, rel: 'noopener noreferrer' }, 0] },
@@ -63,7 +64,7 @@ export type TableTextAttrs = Pick<TableCellStyle, keyof typeof markNames | 'alig
 export function typesetTableMath(tr: Transaction) {
   const replacements: { pos: number; size: number; nodes: PMNode[] }[] = []
   tr.doc.descendants((node, pos) => {
-    if (!node.isText || node.marks.some(mark => mark.type.name === 'code')) return
+    if (!node.isText || node.marks.some(mark => mark.type.name === 'code' || mark.type.name === 'literalDollar')) return
     const segments = markdownMathSegments(node.text || '')
     if (!segments.some(segment => segment.type === 'math')) return
     replacements.push({ pos, size: node.nodeSize, nodes: segments.filter(segment => segment.raw).map(segment =>

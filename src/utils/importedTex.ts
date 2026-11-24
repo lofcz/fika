@@ -1,4 +1,4 @@
-import { containsTexSource, isTexFormulaSource, tokenizeMath } from '@/utils/markdown';
+import { isTexFormulaSource, mayContainTexSource, tokenizeMath } from '@/utils/markdown';
 import { normalizeImportedLatex, renderMathToHtml } from '@/utils/math';
 
 const escapeImportedText = (text: string) =>
@@ -36,31 +36,33 @@ export const convertOmmlMathSpans = (doc: Document) => {
 
 /** Typeset leftover TeX source with MathLive — any control word, not a command list. */
 export const convertBareLatexBlocks = (doc: Document) => {
-  for (const el of Array.from(doc.body.querySelectorAll('p, span, div'))) {
-    if (el.closest('.fika-math, .omml-math') || el.querySelector('.fika-math, .omml-math')) continue;
-    if (
-      !Array.from(el.childNodes).every(
-        node => node.nodeType === Node.TEXT_NODE || (node as HTMLElement).tagName === 'BR'
-      )
-    ) {
-      continue;
-    }
-    const raw = (el.textContent || '').trim();
-    if (!raw || !containsTexSource(raw)) continue;
-    const template = document.createElement('template');
-    if (isTexFormulaSource(raw)) {
-      template.innerHTML = renderMathToHtml(raw);
-    } else {
-      template.innerHTML = tokenizeMath(raw)
+  // Parse runs in place so a literal price cannot erase <br> or edge spaces.
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+  let changed = false;
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    const text = node;
+    node = walker.nextNode() as Text | null;
+    const raw = text.data;
+    if (!mayContainTexSource(raw) || text.parentElement?.closest('.fika-math, .omml-math, [data-literal-dollar], eq, eqn, math, code, pre, script, style')) continue;
+    const segments = tokenizeMath(raw);
+    const template = doc.createElement('template');
+    if (segments.some(segment => segment.type === 'math')) {
+      template.innerHTML = segments
         .map(segment =>
           segment.type === 'math'
             ? renderMathToHtml(segment.value, segment.display)
             : escapeImportedText(segment.value)
         )
         .join('');
-    }
-    el.replaceChildren(template.content);
+    } else if (isTexFormulaSource(raw, segments)) {
+      const formula = raw.trim();
+      template.innerHTML = raw.replace(formula, () => renderMathToHtml(formula));
+    } else continue;
+    text.replaceWith(template.content);
+    changed = true;
   }
+  return changed;
 };
 
 /** Re-typeset stored fika-math whose data-latex still has XML entities or `\<`. */
@@ -79,13 +81,13 @@ const repairFikaMathSpans = (doc: Document) => {
 export function typesetImportedTex(html: string): string {
   if (!html) return html;
   const hasOmmlMath = html.includes('omml-math');
-  const hasBareLatex = containsTexSource(html);
-  const hasBrokenOp = html.includes('\\<') || html.includes('\\>') || html.includes('&lt;') || html.includes('&gt;');
+  const hasBareLatex = mayContainTexSource(html);
+  const hasBrokenOp = html.includes('fika-math') && (html.includes('\\<') || html.includes('\\>') || html.includes('&lt;') || html.includes('&gt;'));
   if (!hasOmmlMath && !hasBareLatex && !hasBrokenOp) return html;
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
   if (hasOmmlMath) convertOmmlMathSpans(doc);
-  if (hasBareLatex) convertBareLatexBlocks(doc);
+  const converted = hasBareLatex && convertBareLatexBlocks(doc);
   if (hasBrokenOp) repairFikaMathSpans(doc);
-  return doc.body.innerHTML;
+  return converted || hasOmmlMath || hasBrokenOp ? doc.body.innerHTML : html;
 }

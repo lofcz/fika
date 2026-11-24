@@ -12,7 +12,7 @@ const shape = (left: number, top: number, width: number, height: number): PPTSha
   fill: '#f4dfd2', path: 'M0 0 L100 0 L100 100 L0 100 Z', viewBox: [100, 100], fixedRatio: false,
 })
 const deck = (...elements: PPTShapeElement[]): Slide[] => [
-  { id: 'cover', elements },
+  { id: 'cover', elements: elements.map((element, index) => ({ ...element, id: `cover-decoration-${index + 1}` })) },
   { id: 'content', elements: [shape(44, 80, 1192, 600)] },
 ]
 

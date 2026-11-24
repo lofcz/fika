@@ -5,8 +5,12 @@ import { decodeHTML } from 'entities';
 import MarkdownIt from 'markdown-it';
 import texmath from 'markdown-it-texmath';
 import type { Root, RootContent } from 'mdast';
+import type { Construct } from 'micromark-util-types';
+import { inlineDollarEnd } from './inlineDollar.js';
 
-const parseOptions = { extensions: [math()], mdastExtensions: [mathFromMarkdown()] };
+const mathSyntax = math();
+const dollar = mathSyntax.text![36] as Construct;
+const mdastExtensions = [mathFromMarkdown()];
 // Preserve the existing Fika support for bare TeX environments. This parser is
 // only used for that uncommon syntax; CommonMark code fences still take priority.
 const environmentParser = new MarkdownIt({ html: false }).use(texmath, {
@@ -28,7 +32,18 @@ function parserInput(source: string): string {
   }
   return out.join('');
 }
-const parseGeneratedMarkdown = (source: string): Root => fromMarkdown(parserInput(source), parseOptions);
+function parseGeneratedMarkdown(source: string): Root {
+  const singleOrDisplay: Construct = {
+    ...dollar,
+    tokenize(effects, ok, nok) {
+      const start = this.now().offset;
+      if (source[start + 1] !== '$' && inlineDollarEnd(source, start) < 0) return nok;
+      return dollar.tokenize.call(this, effects, ok, nok);
+    },
+  };
+  const extension = { ...mathSyntax, text: { ...mathSyntax.text, 36: singleOrDisplay } };
+  return fromMarkdown(parserInput(source), { extensions: [extension], mdastExtensions });
+}
 
 interface Span { start: number; end: number; value: string; display: boolean }
 function environmentSpans(source: string): Span[] {

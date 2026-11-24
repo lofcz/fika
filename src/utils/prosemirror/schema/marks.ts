@@ -239,6 +239,11 @@ const {
 export default {
   em,
   strong,
+  literalDollar: {
+    inclusive: false,
+    parseDOM: [{ tag: 'span[data-literal-dollar]' }],
+    toDOM: () => ['span', { 'data-literal-dollar': '' }, 0],
+  } satisfies MarkSpec,
   fontsize,
   fontname,
   code,
