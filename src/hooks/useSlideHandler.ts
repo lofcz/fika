@@ -1,5 +1,6 @@
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 import type { Slide } from '@/types/slides'
+import { instantiateTemplateSlides } from '@/utils/instantiateTemplateSlides'
 import { copyText, readClipboard } from '@/utils/clipboard'
 import { encrypt } from '@/utils/crypto'
 import { KEYS } from '@/configs/hotkey'
@@ -104,7 +105,8 @@ export default () => {
 
   const createSlideByTemplate = (slide: Slide) => {
     useMainStore.getState().setActiveElementIdList([])
-    addSlidesFromData([slide])
+    useSlidesStore.getState().addSlide(instantiateTemplateSlides([slide]))
+    addHistorySnapshot()
   }
 
   const copyAndPasteSlide = () => {

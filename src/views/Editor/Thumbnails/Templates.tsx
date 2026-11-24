@@ -12,6 +12,7 @@ import { parseThemeFileContent } from '@/utils/themeFile'
 import message from '@/utils/message'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { loadConfiguredTemplate, normalizeTemplatePayload, type TemplatePayload } from '@/configs/templates'
+import { instantiateTemplateSlides } from '@/utils/instantiateTemplateSlides'
 import ThumbnailSlide from '@/views/components/ThumbnailSlide/index'
 import Button from '@/components/Button'
 import FileInput from '@/components/FileInput'
@@ -145,7 +146,7 @@ const Templates = memo((props: ITemplatesProps) => {
 
   const cloneSlides = (slides: Slide[]) => JSON.parse(JSON.stringify(slides)) as Slide[]
   const prepareSlidesForInsert = (slides: Slide[]) => {
-    const clonedSlides = cloneSlides(slides)
+    const clonedSlides = instantiateTemplateSlides(slides)
     for (const slide of clonedSlides) delete slide.type
     return clonedSlides
   }

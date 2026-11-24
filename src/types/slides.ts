@@ -270,6 +270,8 @@ export type ImageType = 'pageFigure' | 'itemFigure' | 'background';
  */
 export interface PPTImageElement extends PPTBaseElement {
   type: 'image';
+  /** A description of the picture for assistive technology and PowerPoint export. */
+  altText?: string;
   fixedRatio: boolean;
   src: string;
   outline?: PPTElementOutline;
@@ -669,6 +671,8 @@ export interface Slide {
  * Slide theme (background, accent colors, default font).
  */
 export interface SlideTheme {
+  /** Display face used for the PowerPoint theme's major Latin font. Defaults to fontName. */
+  headingFontName?: string;
   /** Optional ink for title and item-title text when generating more slides. */
   headingFontColor?: string;
   backgroundColor: string;

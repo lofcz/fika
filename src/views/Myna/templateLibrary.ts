@@ -1,4 +1,4 @@
-import { nanoid } from 'nanoid'
+import { instantiateTemplateSlides } from '@/utils/instantiateTemplateSlides'
 import type { Slide, SlideTheme } from '@/types/slides'
 import { resizeDeckSlides } from '@/utils/resizeDeck'
 import { persistableMediaSrc, getInternedBlob } from '@/utils/mediaIntern'
@@ -69,36 +69,15 @@ export async function portableTemplateSlides(slides: readonly Slide[]): Promise<
 
 /** Clone every identity and reference. Never re-use IDs from a stored design. */
 export function instantiateTemplate(template: PersonalTemplate, width: number, height: number): Slide[] {
-  const slides: Slide[] = JSON.parse(JSON.stringify(template.slides))
-  const pageIds = new Map(slides.map(slide => [slide.id, nanoid(12)]))
-  const sections = new Map<string, string>()
+  const slides = instantiateTemplateSlides(template.slides, { preserveExternalSlideLinks: false })
   for (const slide of slides) {
-    const elementIds = new Map(slide.elements.map(element => [element.id, nanoid(12)]))
-    const groups = new Map<string, string>()
-    slide.id = pageIds.get(slide.id)!
     delete slide.sourcePackageId
     delete slide.skeleton
     // Templates contain artwork; old comments and speaker notes must not leak into new projects.
     delete slide.notes
     delete slide.remark
-    if (slide.sectionTag) {
-      if (!sections.has(slide.sectionTag.id)) sections.set(slide.sectionTag.id, nanoid(12))
-      slide.sectionTag.id = sections.get(slide.sectionTag.id)!
-    }
-    for (const guide of slide.guides ?? []) guide.id = nanoid(12)
     for (const element of slide.elements) {
-      element.id = elementIds.get(element.id)!
       delete element.source
-      if (element.type === 'table') for (const row of element.data) for (const cell of row) cell.id = nanoid(12)
-      if (element.groupId) {
-        if (!groups.has(element.groupId)) groups.set(element.groupId, nanoid(12))
-        element.groupId = groups.get(element.groupId)!
-      }
-      if (element.link?.type === 'slide') {
-        const target = pageIds.get(element.link.target)
-        if (target) element.link.target = target
-        else delete element.link
-      }
       // Resolve implicit theme defaults so inserted artwork retains its appearance.
       if (element.type === 'text') {
         element.defaultFontName ||= template.theme.fontName
@@ -106,7 +85,6 @@ export function instantiateTemplate(template: PersonalTemplate, width: number, h
       }
     }
     slide.background ??= { type: 'solid', color: template.theme.backgroundColor }
-    slide.animations = slide.animations?.filter(animation => elementIds.has(animation.elId)).map(animation => ({ ...animation, id: nanoid(12), elId: elementIds.get(animation.elId)! }))
   }
   return resizeDeckSlides(slides, { width: template.width, height: template.height }, { width, height })
 }

@@ -501,7 +501,7 @@ export const uniqAlignLines = (lines: AlignLine[]) => {
  * @param slides Slide list
  */
 export const createSlideIdMap = (slides: Slide[]) => {
-  const slideIdMap: IdMap = {};
+  const slideIdMap: IdMap = Object.create(null);
   for (const slide of slides) {
     slideIdMap[slide.id] = nanoid(10);
   }
@@ -514,8 +514,8 @@ export const createSlideIdMap = (slides: Slide[]) => {
    * @param elements Element list
    */
 export const createElementIdMap = (elements: PPTElement[]) => {
-  const groupIdMap: IdMap = {};
-  const elIdMap: IdMap = {};
+  const groupIdMap: IdMap = Object.create(null);
+  const elIdMap: IdMap = Object.create(null);
   for (const element of elements) {
     const groupId = element.groupId;
     if (groupId && !groupIdMap[groupId]) {

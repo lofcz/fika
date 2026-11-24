@@ -34,6 +34,35 @@ describe('personal template library', () => {
     expect(rankTemplates([wide, template], 1000, 1000).map(item => item.id)).toEqual(['template', 'wide'])
     expect(rankTemplates([template, wide], 1000, 1000, 'recent')[0].id).toBe('wide')
   })
+  it('keeps frame ownership local to each page and workspace membership local to each copy', () => {
+    const template = source()
+    const frame = { id: 'constructor', type: 'shape', frame: { clipContent: true }, left: 0, top: 0,
+      width: 200, height: 100, rotate: 0, path: 'M0 0H200V100H0Z', viewBox: [200, 100], fixedRatio: false, fill: '#fff' } as const
+    const src = 'https://example.test/shared-image.png'
+    for (const page of template.slides) {
+      // Older templates can reuse local element IDs on separate pages.
+      page.elements = [{ ...frame, viewBox: [200, 100] }, {
+        id: 'photo', type: 'image', parentFrameId: frame.id, link: { type: 'web', target: src },
+        src, fixedRatio: true, left: 5, top: 5, width: 80, height: 80, rotate: 0,
+      }]
+    }
+    template.slides[0].workspaceLabels = [{ id: 'label', text: 'Section', x: 0, y: 0, fontSize: 16,
+      kind: 'section', pageIds: ['first', 'second'] }]
+    const seen = new Set(['first', 'second', 'constructor', 'photo', 'label'])
+    for (let i = 0; i < 2; i++) {
+      const pages = instantiateTemplate(template, 1000, 1000)
+      const label = pages[0].workspaceLabels![0]
+      expect(label.pageIds).toEqual(pages.map(page => page.id))
+      for (const id of [label.id, ...pages.flatMap(page => [page.id, ...page.elements.map(el => el.id)])]) {
+        expect(seen.has(id)).toBe(false)
+        seen.add(id)
+      }
+      for (const page of pages) {
+        expect(page.elements[1]).toMatchObject({ parentFrameId: page.elements[0].id, src, link: { type: 'web', target: src } })
+      }
+    }
+    expect(template.slides[0].workspaceLabels[0].pageIds).toEqual(['first', 'second'])
+  })
   it('round-trips versioned storage and refuses invalid or oversized replacement without losing originals', () => {
     const values = new Map<string, string>()
     const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value) } }

@@ -187,8 +187,9 @@ export function createPresentationExporter(
 
   const applyPPTXTheme = (pptx: pptxgen) => {
     const slots = themeColorSlots();
+    const headingFontName = typeof theme.headingFontName === 'string' ? theme.headingFontName.trim() : '';
     pptx.theme = {
-      headFontFace: theme.fontName || 'Calibri Light',
+      headFontFace: headingFontName || theme.fontName || 'Calibri Light',
       bodyFontFace: theme.fontName || 'Calibri',
       themeColors: slots.map(slot => slot.hex)
     };
@@ -1659,6 +1660,7 @@ export function createPresentationExporter(
                 w: el.width / ratioPx2Inch,
                 h: el.height / ratioPx2Inch
               };
+              if (el.altText !== undefined) options.altText = el.altText;
               const imgSrc = sources.get(el.src) ?? el.src;
               if (isBase64Image(imgSrc)) options.data = imgSrc;else options.path = imgSrc;
               if (el.flipH) options.flipH = el.flipH;

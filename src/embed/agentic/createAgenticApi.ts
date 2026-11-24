@@ -37,6 +37,7 @@ import type { FikaAgentApi, FikaAgentCapability, FikaAgentCommand, FikaAudioElem
 import { assertColorFields, assertElementPatch, assertIndexInRange, assertPositiveNumber, fromApiInsertSlideIndex, fromApiSlideIndex, toApiSlideIndex } from './validators';
 import { beginScreening, exitScreening } from '@/utils/screening';
 import { repairDuplicateElementIds } from '@/utils/repairElementIds';
+import { instantiateTemplateSlides } from '@/utils/instantiateTemplateSlides';
 type Stores = ReturnType<typeof createStores>;
 type Handler = (payload: unknown, command: FikaAgentCommand) => unknown | Promise<unknown>;
 type ElementOrderCommand = 'forward' | 'backward' | 'front' | 'back';
@@ -412,10 +413,14 @@ function normalizeDocumentSlides(value: unknown, path: string): Slide[] {
     optionalDocumentArray(slide.notes, `${slidePath}.notes`);
     optionalDocumentArray(slide.animations, `${slidePath}.animations`);
     const elements = (optionalDocumentArray(slide.elements, `${slidePath}.elements`) || []).map((element, elementIndex) => normalizeDocumentElement(element, `${slidePath}.elements[${elementIndex}]`));
-    return normalizeSlide({
-      ...slide,
-      elements
-    } as Partial<Slide>);
+    const normalized = normalizeSlide({ ...slide, elements } as Partial<Slide>);
+    const authored = slide as Partial<Slide>;
+    if (Array.isArray(authored.guides)) normalized.guides = clonePlain(authored.guides);
+    if (Array.isArray(authored.workspaceLabels)) normalized.workspaceLabels = clonePlain(authored.workspaceLabels);
+    if (authored.canvasPosition) normalized.canvasPosition = clonePlain(authored.canvasPosition);
+    if (typeof authored.canvasName === 'string') normalized.canvasName = authored.canvasName;
+    if (typeof authored.sourcePackageId === 'string') normalized.sourcePackageId = authored.sourcePackageId;
+    return normalized;
   }));
 }
 function normalizeDocumentTheme(value: unknown, path: string): FikaSlideThemePatch | undefined {
@@ -2098,7 +2103,7 @@ export function createAgenticApi(options: {
     const {
       slide: sourceSlide
     } = resolveTemplateSlide(data, payload.slug);
-    const slide = normalizeSlideForInsert(sourceSlide);
+    const [slide] = instantiateTemplateSlides(normalizeDocumentSlides([sourceSlide], 'template.slides'));
     const index = fromApiInsertSlideIndex(payload.index, stores.slides.slides.length);
     syncPlanOnInsert(index, 1);
     stores.slides.addSlide(slide, { index, select: false, keepSectionTag: true });

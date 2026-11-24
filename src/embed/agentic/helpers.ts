@@ -793,6 +793,9 @@ export function normalizeLineElement(element: Partial<PPTLineElement> & {
     points: cloneLinePoints(element.points)
   };
   if (element.lock !== undefined) line.lock = element.lock;
+  if (element.parentFrameId !== undefined) line.parentFrameId = element.parentFrameId;
+  if (element.effects !== undefined) line.effects = clonePlain(element.effects);
+  if (element.source !== undefined) line.source = clonePlain(element.source);
   if (element.groupId !== undefined) line.groupId = element.groupId;
   if (element.link !== undefined) line.link = clonePlain(element.link);
   if (element.name !== undefined) line.name = element.name;
@@ -954,7 +957,7 @@ export function normalizeTableElement(element: Partial<PPTTableElement> = {}, th
   const providedColCount = element.colWidths?.length || 0;
   const providedDataColCount = Math.max(...(element.data?.map(row => row.length) || [0]));
   const rowCount = Math.max(element.data?.length || DEFAULT_TABLE_ROW_COUNT, 1);
-  const colCount = Math.max(providedColCount, providedDataColCount, DEFAULT_TABLE_COL_COUNT, 1);
+  const colCount = Math.max(providedColCount, providedDataColCount) || DEFAULT_TABLE_COL_COUNT;
   const cellMinHeight = element.cellMinHeight ?? DEFAULT_TABLE_CELL_MIN_HEIGHT;
   const width = element.width ?? colCount * DEFAULT_TABLE_CELL_WIDTH;
   const defaultCellStyle: TableCellStyle = {
@@ -970,6 +973,9 @@ export function normalizeTableElement(element: Partial<PPTTableElement> = {}, th
     height: element.height ?? rowCount * cellMinHeight,
     rotate: element.rotate ?? 0,
     lock: element.lock,
+    parentFrameId: element.parentFrameId,
+    effects: element.effects,
+    source: element.source,
     groupId: element.groupId,
     name: element.name,
     link: element.link ? clonePlain(element.link) : undefined,
