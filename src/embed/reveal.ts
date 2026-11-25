@@ -95,24 +95,29 @@ export async function revealSlide(slideId: string, patch: Partial<Slide>, option
   const totalMs = plan.staggerMs + plan.typingMs
   const label = options.label ?? ''
   const signal = options.signal
-  const animate = options.animate !== false && totalMs > 0 && !signal?.aborted && typeof document !== 'undefined' && document.visibilityState !== 'hidden'
+  const alreadyPopulated = !current.skeleton && (current.elements?.length ?? 0) > 0
+  const animate = !alreadyPopulated && options.animate !== false && totalMs > 0 && !signal?.aborted && typeof document !== 'undefined' && document.visibilityState !== 'hidden'
 
   if (animate) {
     deps.mute()
     try {
       const started = performance.now()
+      // Frame 0 keeps non-text structural elements visible immediately (never
+      // flashing an empty `elements: []` canvas), then types text/tables smoothly.
+      const baseElapsed = plan.staggerMs
+      const instantIds = new Set(plan.instant.map(el => el.id))
+      const frame0Elements = finalElements.filter(el => instantIds.has(el.id))
       let elapsed = 0
-      // First frame: the skeleton gives way to the bare background at once.
-      useSlidesStore.getState().updateSlide({ ...rest, elements: [] }, slideId)
+      useSlidesStore.getState().updateSlide({ ...rest, elements: frame0Elements }, slideId)
       if (label) useMainStore.getState().setAiReveal({ slideId, elementId: null, label })
       let lastRevealedId: string | null = null
-      while (elapsed < totalMs) {
+      while (baseElapsed + elapsed < totalMs) {
         await nextRevealFrame(FRAME_MS, signal)
         if (signal?.aborted || deps.isDestroyed() || document.visibilityState === 'hidden') break
         const store = useSlidesStore.getState()
         if (!store.slides.some(slide => slide.id === slideId)) break
         elapsed = performance.now() - started
-        const frame = frameElements(plan, finalElements, Math.min(elapsed, totalMs))
+        const frame = frameElements(plan, finalElements, Math.min(baseElapsed + elapsed, totalMs))
         store.updateSlide({ elements: frame.elements }, slideId)
         if (label || frame.activeId !== lastRevealedId) {
           lastRevealedId = frame.activeId

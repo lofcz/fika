@@ -437,11 +437,14 @@ const measureMathAtFontSize = (
   probe.style.fontSize = `${Math.max(1, fontSize)}px`
   probe.innerHTML = renderHtml(latex, display)
   const rect = probe.getBoundingClientRect()
+  const childRect = probe.firstElementChild?.getBoundingClientRect?.()
+  const measuredW = Math.max(rect.width || 0, probe.scrollWidth || 0, childRect?.width || 0)
+  const measuredH = Math.max(rect.height || 0, probe.scrollHeight || 0, childRect?.height || 0)
   probe.innerHTML = ''
-  if (!(rect.width > 0) || !(rect.height > 0)) return null
+  if (!(measuredW > 0) || !(measuredH > 0)) return null
   return {
-    width: rect.width,
-    height: Math.max(rect.height, fontSize),
+    width: measuredW,
+    height: Math.max(measuredH, fontSize),
   }
 }
 

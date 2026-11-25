@@ -978,18 +978,25 @@ export const getInlineMathRaster = (
     booth.appendChild(host)
     try {
       void host.offsetWidth
-      const width = Math.ceil(host.offsetWidth)
-      const height = Math.ceil(host.offsetHeight)
+      const rect = host.getBoundingClientRect()
+      const childRect = host.firstElementChild?.getBoundingClientRect?.()
+      const rawWidth = Math.ceil(Math.max(host.offsetWidth || 0, host.scrollWidth || 0, rect.width || 0, childRect?.width || 0))
+      const rawHeight = Math.ceil(Math.max(host.offsetHeight || 0, host.scrollHeight || 0, rect.height || 0, childRect?.height || 0))
       const trimmed = latex.trim()
-      if (!(width > 0) || !(height > 0)) {
-        recordRejection('rejectEmptyDimensions', latex, { width, height, size })
+      if (!(rawWidth > 0) || !(rawHeight > 0)) {
+        recordRejection('rejectEmptyDimensions', latex, { width: rawWidth, height: rawHeight, size })
         return null
       }
       // Reject unstyled collapsed slivers while permitting narrow symbols (`1`, `i`, `|`) and tall display formulas.
-      if ((trimmed.length > 2 && width < size * 0.2) || height > size * 8) {
-        recordRejection('rejectBounds', latex, { width, height, size })
+      if ((trimmed.length > 2 && rawWidth < size * 0.2) || rawHeight > size * 8) {
+        recordRejection('rejectBounds', latex, { width: rawWidth, height: rawHeight, size })
         return null
       }
+      // Add right-edge breathing room so italic overhangs and `\text{...}` glyphs
+      // inside SVG `<foreignObject>` never clip at the strict SVG viewport edge.
+      const padX = Math.max(4, Math.ceil(size * 0.2))
+      const width = rawWidth + padX
+      const height = rawHeight + 2
       const direct = await captureMathHostDirectSvg(host, width, height, 2)
       if (direct && canvasHasInk(direct)) {
         rasterDiagnostics.directSvgHits++
