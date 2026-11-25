@@ -5,7 +5,7 @@ import MynaPageCanvas, { useMynaPageOrigin } from '@/views/Myna/MynaPageCanvas'
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { useRef, useCallback, memo, useState, useEffect, useMemo, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react'
+import { useRef, useCallback, memo, useState, useEffect, useMemo, useSyncExternalStore, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react'
 
 import { openContextmenu } from '@/utils/openContextmenu'
 import { useMainStore, useSlidesStore, useKeyboardStore, selectCurrentSlide, selectCtrlOrShiftKeyActive } from '@/store'
@@ -18,6 +18,7 @@ import { SlideScaleContext } from '@/types/injectKey'
 import { isElementSelectable, removeAllRanges } from '@/utils/selection'
 import { clientToCanvas } from '@/utils/canvasPointer'
 import { clicksToEditText, collectVisualHitPlan, elementVisualHitRect, focusElementEditor, hasInteractiveSurface, hitTestOperateTarget, hitTestVisualRects, pointInAnyVisualHitRect, pointInVisualHitRect, resizeHandleDirectionsFor, retryPendingCaret, type ClientCoords, type VisualHitRect } from '@/utils/canvasHitTest'
+import { setPendingCaret } from '@/utils/prosemirror/caret'
 import { layerStackAtPoint, nextSelectableLayer, type LayerStackEntry } from '@/utils/layerStack'
 import { drainCommitQueue, registerAfterCommitDrain } from '@/utils/commitQueue'
 import { richTextAttrsFromElement } from '@/utils/prosemirror/richTextAttrsFromElement'
@@ -62,6 +63,7 @@ import ElementCreateSelection from './ElementCreateSelection'
 import ShapeCreateCanvas from './ShapeCreateCanvas'
 import MultiSelectOperate from './Operate/MultiSelectOperate'
 import Operate from './Operate/index'
+import ContextMenuBridge, { type ElementContextmenus } from './Operate/ContextMenuBridge'
 import HitLayer from './HitLayer'
 import LayerStackPanel from './LayerStackPanel'
 import LinkDialog from './LinkDialog'
@@ -120,8 +122,91 @@ const isSelectionToggleSurface = (target: EventTarget | null) => (
 )
 
 const HIDDEN_STYLE: CSSProperties = { display: 'none' }
+const EMPTY_ELEMENTS: PPTElement[] = []
+const EMPTY_ALIGNMENT_LINES: AlignmentLineProps[] = []
 
-const cloneElements = (elements: PPTElement[]): PPTElement[] => elements.slice()
+type AlignmentLinesStore = {
+  get: () => AlignmentLineProps[]
+  set: (next: AlignmentLineProps[]) => void
+  subscribe: (listener: () => void) => () => void
+}
+
+function createAlignmentLinesStore(): AlignmentLinesStore {
+  let lines: AlignmentLineProps[] = EMPTY_ALIGNMENT_LINES
+  const listeners = new Set<() => void>()
+  return {
+    get: () => lines,
+    set: next => {
+      lines = next
+      for (const listener of listeners) listener()
+    },
+    subscribe: listener => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+  }
+}
+
+/**
+ * Isolated subscriber for drag snap-guides and Ctrl distance measures so
+ * pointermove guide updates never re-render Canvas or its element trees.
+ */
+const AlignmentLinesLayer = memo(({
+  store,
+  elementList,
+  activeElementIdList,
+  canvasScale,
+  viewportSize,
+  viewportRatio,
+}: {
+  store: AlignmentLinesStore
+  elementList: PPTElement[]
+  activeElementIdList: string[]
+  canvasScale: number
+  viewportSize: number
+  viewportRatio: number
+}) => {
+  const alignmentLines = useSyncExternalStore(store.subscribe, store.get, store.get)
+  const ctrlKeyState = useKeyboardStore(s => s.ctrlKeyState)
+  const gesturingState = useMainStore(s => s.isGesturing)
+
+  const displayAlignmentLines = useMemo(() => {
+    if (gesturingState) return alignmentLines
+    const snapGuides = alignmentLines.filter(line => line.kind !== 'measure')
+    if (!ctrlKeyState || !activeElementIdList.length) return snapGuides
+    const selected = new Set(activeElementIdList)
+    const moving = unionBoxes(elementList.filter(el => selected.has(el.id)).map(getElementRange))
+    if (!moving) return snapGuides
+    const others = elementList.filter(el => !selected.has(el.id)).map(getElementRange)
+    const nearby = others.length ? boxesNear(buildSnapIndex(others), moving, snapQueryPad()) : []
+    const measures = collectCtrlMeasures(
+      moving,
+      nearby,
+      { width: viewportSize, height: viewportSize * viewportRatio },
+      snapGuides,
+    )
+    return measures.length ? [...snapGuides, ...measures] : snapGuides
+  }, [ctrlKeyState, gesturingState, activeElementIdList, alignmentLines, elementList, viewportSize, viewportRatio])
+
+  if (!displayAlignmentLines.length) return null
+  return (
+    <>
+      {displayAlignmentLines.map((line, index) => (
+        <AlignmentLine
+          key={index}
+          type={line.type}
+          axis={line.axis}
+          length={line.length}
+          kind={line.kind}
+          marks={line.marks}
+          label={line.label}
+          canvasScale={canvasScale}
+        />
+      ))}
+    </>
+  )
+})
+AlignmentLinesLayer.displayName = 'AlignmentLinesLayer'
 
 type LayerStackState = {
   /** Canvas-root-relative anchor of the probed point, in px. */
@@ -168,14 +253,22 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
   const skeletonSlideId = useSlidesStore(s => selectCurrentSlide(s)?.id)
   const readOnly = useMainStore(s => s.readOnly)
   const spaceKeyState = useKeyboardStore(s => s.spaceKeyState)
-  const ctrlKeyState = useKeyboardStore(s => s.ctrlKeyState)
-  const gesturingState = useMainStore(s => s.isGesturing)
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const viewportSize = useSlidesStore(s => s.viewportSize)
   const { operateLineColor, operateLineHalo } = useOperateChrome()
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
-  const [alignmentLines, setAlignmentLines] = useState<AlignmentLineProps[]>([])
+  const alignmentStoreRef = useRef<AlignmentLinesStore | null>(null)
+  if (!alignmentStoreRef.current) alignmentStoreRef.current = createAlignmentLinesStore()
+  const alignmentStore = alignmentStoreRef.current
+  const setAlignmentLines = useCallback((lines: AlignmentLineProps[]) => {
+    alignmentStore.set(lines)
+  }, [alignmentStore])
+  const elementContextmenusRef = useRef<ElementContextmenus | null>(null)
+  const getElementContextmenus = useCallback<ElementContextmenus>(
+    (element, isMultiSelect) => elementContextmenusRef.current?.(element, isMultiSelect) ?? null,
+    [],
+  )
 
   const beginEdit = useCallback((elementId: string, caret?: ClientCoords) => {
     const main = useMainStore.getState()
@@ -184,6 +277,9 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
       return
     }
     if (main.editingElementId && main.editingElementId !== elementId) drainCommitQueue()
+    // Record pending caret BEFORE mounting lazy ProseMirror so the freshly
+    // mounted editor places the caret at exact click coords in the same frame.
+    if (caret) setPendingCaret(elementId, caret)
     const slide = selectCurrentSlide(useSlidesStore.getState())
     const el = slide?.elements.find(item => item.id === elementId)
     const attrs = el ? richTextAttrsFromElement(el) : null
@@ -215,24 +311,43 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
     useMainStore.getState().setActiveGroupElementId('')
   }, [handleElementId])
 
-  const [elementList, setElementList] = useState<PPTElement[]>(() => (
-    currentSlide ? cloneElements(currentSlide.elements) : []
-  ))
+  const [localListState, setLocalListState] = useState<{ snap: typeof currentSnap; list: PPTElement[] } | null>(null)
   const prevSlideRef = useRef(currentSnap)
+  const currentSnapRef = useRef(currentSnap)
+  currentSnapRef.current = currentSnap
+  const lastListRef = useRef<PPTElement[]>(currentSlide ? currentSlide.elements : EMPTY_ELEMENTS)
+
+  const setElementList = useCallback((next: PPTElement[] | ((prev: PPTElement[]) => PPTElement[])) => {
+    setLocalListState(prev => {
+      const base = (prev && prev.snap === currentSnapRef.current) ? prev.list : lastListRef.current
+      const resolved = typeof next === 'function' ? next(base) : next
+      lastListRef.current = resolved
+      return { snap: currentSnapRef.current, list: resolved }
+    })
+  }, [])
 
   const syncElementListFromStore = useCallback(() => {
     const storeSlide = selectCurrentSlide(useSlidesStore.getState())
-    prevSlideRef.current = snapSlideElements(storeSlide)
-    setElementList(storeSlide ? cloneElements(storeSlide.elements) : [])
+    const nextSnap = snapSlideElements(storeSlide)
+    prevSlideRef.current = nextSnap
+    currentSnapRef.current = nextSnap
+    const nextList = storeSlide ? storeSlide.elements : EMPTY_ELEMENTS
+    lastListRef.current = nextList
+    setLocalListState({ snap: nextSnap, list: nextList })
   }, [])
 
   useEffect(() => registerAfterCommitDrain(syncElementListFromStore), [syncElementListFromStore])
 
+  let elementList: PPTElement[]
   const liveSnap = currentSnap
   const prevSnap = prevSlideRef.current
-  if (prevSnap?.id !== liveSnap?.id) {
+  if (localListState && localListState.snap === liveSnap) {
+    elementList = localListState.list
     prevSlideRef.current = liveSnap
-    setElementList(currentSlide ? cloneElements(currentSlide.elements) : [])
+  }
+  else if (prevSnap?.id !== liveSnap?.id) {
+    prevSlideRef.current = liveSnap
+    elementList = currentSlide ? currentSlide.elements : EMPTY_ELEMENTS
   }
   else if (prevSnap?.elements !== liveSnap?.elements) {
     const liveSlide = currentSlide
@@ -243,13 +358,20 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
     const liveEditingId = useMainStore.getState().editingElementId
     const action = classifyElementListSync(prevSlide, liveSlide, liveEditingId)
     if (action === 'replace') {
-      setElementList(liveSlide ? cloneElements(liveSlide.elements) : [])
+      elementList = liveSlide ? liveSlide.elements : EMPTY_ELEMENTS
     }
     else if (action === 'patch-chrome' && liveSlide && liveEditingId) {
       const storeEl = liveSlide.elements.find(el => el.id === liveEditingId)
-      if (storeEl) setElementList(list => patchEditingElementChrome(list, storeEl))
+      elementList = storeEl ? patchEditingElementChrome(lastListRef.current, storeEl) : lastListRef.current
+    }
+    else {
+      elementList = lastListRef.current
     }
   }
+  else {
+    elementList = lastListRef.current
+  }
+  lastListRef.current = elementList
 
   useEffect(() => {
     if (editingElementId && !activeElementIdList.includes(editingElementId)) {
@@ -303,7 +425,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
   })
 
   const { mouseSelection, mouseSelectionVisible, updateMouseSelection } = useMouseSelection(elementList, viewportRef)
-  const { dragElement } = useDragElement(elementList, setElementList, alignmentLines, setAlignmentLines, canvasScale, mynaView)
+  const { dragElement } = useDragElement(elementList, setElementList, EMPTY_ALIGNMENT_LINES, setAlignmentLines, canvasScale, mynaView)
   const { dragLineElement } = useDragLineElement(elementList, setElementList)
   const { selectElement } = useSelectAndMoveElement(elementList, dragElement)
   const { scaleElement, scaleMultiElement } = useScaleElement(elementList, setElementList, canvasScale)
@@ -724,26 +846,12 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
     ]
   }, [LL, mynaView, pasteElement, selectAllElements, toggleRuler, deleteAllElements, toggleBubbleMenu, toggleOpenPanelOnTextSelection, enterScreeningFromStart])
 
-  const displayAlignmentLines = useMemo(() => {
-    if (gesturingState) return alignmentLines
-    const snapGuides = alignmentLines.filter(line => line.kind !== 'measure')
-    if (!ctrlKeyState || !activeElementIdList.length) return snapGuides
-    const selected = new Set(activeElementIdList)
-    const moving = unionBoxes(elementList.filter(el => selected.has(el.id)).map(getElementRange))
-    if (!moving) return snapGuides
-    const others = elementList.filter(el => !selected.has(el.id)).map(getElementRange)
-    const nearby = others.length ? boxesNear(buildSnapIndex(others), moving, snapQueryPad()) : []
-    const measures = collectCtrlMeasures(
-      moving,
-      nearby,
-      { width: viewportSize, height: viewportSize * viewportRatio },
-      snapGuides,
-    )
-    return measures.length ? [...snapGuides, ...measures] : snapGuides
-  }, [ctrlKeyState, gesturingState, activeElementIdList, alignmentLines, elementList, viewportSize, viewportRatio])
+  const activeIdSet = useMemo(() => (activeElementIdList.length ? new Set(activeElementIdList) : null), [activeElementIdList])
+  const hiddenIdSet = useMemo(() => (hiddenElementIdList.length ? new Set(hiddenElementIdList) : null), [hiddenElementIdList])
 
   return (
     <SlideScaleContext.Provider value={canvasScale}>
+      <ContextMenuBridge openLinkDialog={openLinkDialog} menuRef={elementContextmenusRef} />
       <div
         className={[cx('canvas'), className].filter(Boolean).join(' ')}
         ref={canvasRef}
@@ -811,18 +919,14 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
             />
           ) : null}
           <div className={cx('operates')}>
-            {displayAlignmentLines.map((line, index) => (
-              <AlignmentLine
-                key={index}
-                type={line.type}
-                axis={line.axis}
-                length={line.length}
-                kind={line.kind}
-                marks={line.marks}
-                label={line.label}
-                canvasScale={canvasScale}
-              />
-            ))}
+            <AlignmentLinesLayer
+              store={alignmentStore}
+              elementList={elementList}
+              activeElementIdList={activeElementIdList}
+              canvasScale={canvasScale}
+              viewportSize={viewportSize}
+              viewportRatio={viewportRatio}
+            />
             {activeElementIdList.length > 1 ? (
               <MultiSelectOperate
                 elementList={elementList}
@@ -832,25 +936,30 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
                 openLinkDialog={openLinkDialog}
               />
             ) : null}
-            {elementList.map(element => (
-              <Operate
-                key={element.id}
-                elementInfo={element}
-                isSelected={activeElementIdList.includes(element.id)}
-                isActive={handleElementId === element.id}
-                isActiveGroupElement={activeGroupElementId === element.id}
-                isMultiSelect={activeElementIdList.length > 1}
-                isEditing={editingElementId === element.id || clipingImageElementId === element.id}
-                rotateElement={rotateElement}
-                scaleElement={scaleElement}
-                dragLineElement={dragLineElement}
-                moveShapeKeypoint={moveShapeKeypoint}
-                dragElement={dragElement}
-                beginEdit={beginEdit}
-                openLinkDialog={openLinkDialog}
-                style={hiddenElementIdList.includes(element.id) ? HIDDEN_STYLE : undefined}
-              />
-            ))}
+            {elementList.map(element => {
+              const isSelected = !!activeIdSet?.has(element.id)
+              const isMedia = element.type === 'video' || element.type === 'audio'
+              if (!isSelected && !isMedia) return null
+              return (
+                <Operate
+                  key={element.id}
+                  elementInfo={element}
+                  isSelected={isSelected}
+                  isActive={handleElementId === element.id}
+                  isActiveGroupElement={activeGroupElementId === element.id}
+                  isMultiSelect={activeElementIdList.length > 1}
+                  isEditing={editingElementId === element.id || clipingImageElementId === element.id}
+                  rotateElement={rotateElement}
+                  scaleElement={scaleElement}
+                  dragLineElement={dragLineElement}
+                  moveShapeKeypoint={moveShapeKeypoint}
+                  dragElement={dragElement}
+                  beginEdit={beginEdit}
+                  getContextmenus={getElementContextmenus}
+                  style={hiddenIdSet?.has(element.id) ? HIDDEN_STYLE : undefined}
+                />
+              )
+            })}
             <ElementFloatLayer
               elementList={elementList}
               canvasRef={canvasRef}
@@ -869,8 +978,8 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
                   isMultiSelect={activeElementIdList.length > 1}
                   isEditing={editingElementId === element.id || clipingImageElementId === element.id}
                   selectElement={selectElement}
-                  openLinkDialog={openLinkDialog}
-                  style={hiddenElementIdList.includes(element.id) ? HIDDEN_STYLE : frameDomClip(element, elementList)}
+                  getContextmenus={getElementContextmenus}
+                  style={hiddenIdSet?.has(element.id) ? HIDDEN_STYLE : frameDomClip(element, elementList)}
                 />
               ))}
             </div>
@@ -885,7 +994,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
             disabled={!!creatingElement || !!creatingCustomShape || skeletonSlide || readOnly}
             selectElement={selectElement}
             beginEdit={beginEdit}
-            openLinkDialog={openLinkDialog}
+            getContextmenus={getElementContextmenus}
           />
           {mouseSelectionVisible ? (
             <MouseSelection

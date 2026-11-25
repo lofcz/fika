@@ -1,9 +1,9 @@
 import { richTableCellExportText, tableCellExportFill, tableCellExportText } from '@/utils/tableExport';
 import { speakerNotesToText } from '@/utils/speakerNotes';
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { saveAs } from 'file-saver';
-import pptxgen from 'pptxgenjs-plus';
+import type pptxgen from 'pptxgenjs-plus';
 import tinycolor from 'tinycolor2';
 import { useMainStore, useSlidesStore } from '@/store';
 import { captureToJpegDataUrl, captureToPngDataUrl } from '@/utils/snapdomCapture';
@@ -236,8 +236,9 @@ export function createPresentationExporter(
   const exportImagePPTX = (domRefs: NodeListOf<Element>) => {
     if (exportJob.running.value) return;
     const gen = exportJob.start(0);
-    setTimeout(() => {
-      const pptx = new pptxgen();
+    setTimeout(async () => {
+      const { default: PptxGenJS } = await import('pptxgenjs-plus');
+      const pptx = new PptxGenJS();
       applyPresentationMeta(pptx);
       setPPTXLayout(pptx);
       const config: ExportImageConfig = {
@@ -2190,21 +2191,35 @@ export function createPresentationExporter(
   };
 };
 
+function readLiveExportState(): PresentationExportState {
+  const { slides, theme, viewportRatio, title, viewportSize, viewportWidthInches } = useSlidesStore.getState();
+  return { slides, theme, viewportRatio, title, viewportSize, viewportWidthInches };
+}
+
+function createLiveExporter() {
+  return createPresentationExporter(
+    readLiveExportState(),
+    { preserveSourcePackage: true, hiddenElementIds: useMainStore.getState().hiddenElementIdList },
+    exportJob,
+  );
+}
+
 export default function useExport() {
   const [, setTick] = useState(0);
   useEffect(() => exportJob.subscribe(() => setTick(n => n + 1)), []);
-  const slides = useSlidesStore(s => s.slides);
-  const theme = useSlidesStore(s => s.theme);
-  const viewportRatio = useSlidesStore(s => s.viewportRatio);
-  const title = useSlidesStore(s => s.title);
-  const viewportSize = useSlidesStore(s => s.viewportSize);
-  const viewportWidthInches = useSlidesStore(s => s.viewportWidthInches);
-  const state = { slides, theme, viewportRatio, title, viewportSize, viewportWidthInches };
-  const exporter = createPresentationExporter(state, { preserveSourcePackage: true, hiddenElementIds: useMainStore.getState().hiddenElementIdList }, exportJob);
-  return {
-    ...exporter,
+
+  const actions = useMemo(() => ({
+    exportImage: (domRef: HTMLElement, format: string, quality: number, ignoreWebfont = true) => (
+      createLiveExporter().exportImage(domRef, format, quality, ignoreWebfont)
+    ),
+    exportImagePPTX: (domRefs: NodeListOf<Element>) => (
+      createLiveExporter().exportImagePPTX(domRefs)
+    ),
+    exportJSON: () => createLiveExporter().exportJSON(),
+    exportSpecificFile: (_slides: Slide[]) => createLiveExporter().exportSpecificFile(_slides),
     exportPDF: async () => {
       if (exportJob.running.value) return;
+      const state = readLiveExportState();
       const deck = structuredClone({ title: state.title, slides: state.slides, theme: state.theme, viewport: { size: state.viewportSize, ratio: state.viewportRatio, widthInches: state.viewportWidthInches } });
       const gen = exportJob.start(deck.slides.length);
       try {
@@ -2220,6 +2235,8 @@ export default function useExport() {
     },
     exportPPTX: async (slides: Slide[], masterOverwrite = true, ignoreMedia = true) => {
       try {
+        const state = readLiveExportState();
+        const exporter = createPresentationExporter(state, { preserveSourcePackage: true, hiddenElementIds: useMainStore.getState().hiddenElementIdList }, exportJob);
         const blob = await exporter.exportPPTX(structuredClone(slides), masterOverwrite, ignoreMedia);
         saveAs(blob, `${state.title}.pptx`);
       } catch (error) {
@@ -2227,5 +2244,13 @@ export default function useExport() {
         message.error(getLL().export.exportFailed());
       }
     },
+  }), []);
+
+  return {
+    exporting: exportJob.running.value,
+    exportProgress: exportJob.progress.value,
+    exportSlide: exportJob.current.value,
+    exportSlideTotal: exportJob.total.value,
+    ...actions,
   };
 }

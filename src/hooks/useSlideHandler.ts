@@ -1,5 +1,6 @@
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 import type { Slide } from '@/types/slides'
+import { clonePlain } from '@/utils/clonePlain'
 import { instantiateTemplateSlides } from '@/utils/instantiateTemplateSlides'
 import { copyText, readClipboard } from '@/utils/clipboard'
 import { encrypt } from '@/utils/crypto'
@@ -116,7 +117,7 @@ export default () => {
 
   const copyAndPasteSlide = () => {
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
-    const slide = JSON.parse(JSON.stringify(currentSlide))
+    const slide = clonePlain(currentSlide)
     // A duplicate gets its own free canvas slot, rather than covering its source.
     delete slide.canvasPosition
     delete slide.workspaceLabels
@@ -149,8 +150,6 @@ export default () => {
     useSlidesStore.getState().reorderSlides(oldIndex, newIndex)
   }
 
-  const isEmptySlide = getIsEmptySlide()
-
   return {
     resetSlides,
     updateSlideIndex,
@@ -163,6 +162,8 @@ export default () => {
     cutSlide,
     selectAllSlide,
     sortSlides,
-    isEmptySlide,
+    get isEmptySlide() {
+      return getIsEmptySlide()
+    },
   }
 }

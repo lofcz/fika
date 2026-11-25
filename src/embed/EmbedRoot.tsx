@@ -71,9 +71,9 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
         useMainStore.getState().setOpenPanelOnTextSelection(openPanelOnTextSelection)
       }
       await resolveInitialDocument()
-      await deleteDiscardedDB()
-      initSnapshotDatabase()
       if (presentationOnly && useSlidesStore.getState().slides.length) setScreening(true)
+      void initSnapshotDatabase({ defer: true })
+      void deleteDiscardedDB()
     })()
     if (typeof requestIdleCallback === 'function') {
       const idle = requestIdleCallback(() => prefetchScreen(), { timeout: 1500 })

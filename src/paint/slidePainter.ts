@@ -38,7 +38,7 @@ import { isUnfilledPlaceholder, placeholderAlignOf, placeholderPromptHtml } from
 import { placeholderPromptSizeOf, placeholderTypedSizeOf, placeholderWeightOf } from '@/configs/textPresets'
 import { latexFallbackText, MATH_CLASS } from '@/utils/inlineMathBox'
 import { containsMath, tokenizeMath } from '@/utils/markdown'
-import { escapeLatexAttr } from '@/utils/math'
+import { escapeLatexAttr, getMathReadyVersion } from '@/utils/math'
 import { SLIDE_SKELETON_BLOCKS, SLIDE_SKELETON_FILL, SLIDE_SKELETON_RADIUS } from '@/configs/slideSkeleton'
 import { paintRichText } from './textPainter'
 import { parseTableText, serializeTableText } from '@/utils/prosemirror/table'
@@ -663,8 +663,26 @@ const tableCellInnerHtml = (text: string) => {
     .join('')
 }
 
+const TABLE_HTML_CACHE_MAX = 400
+const tableHtmlCache = new Map<string, string>()
+
 export const tableTextHtml = (text: string, style: TableCellStyle | undefined, fallback: string, textFormat?: 'html') => {
-  if (textFormat === 'html') return serializeTableText(parseTableText({ text, textFormat }))
+  if (textFormat === 'html') {
+    const key = `${getMathReadyVersion()}\0${text}`
+    const cached = tableHtmlCache.get(key)
+    if (cached !== undefined) {
+      tableHtmlCache.delete(key)
+      tableHtmlCache.set(key, cached)
+      return cached
+    }
+    const serialized = serializeTableText(parseTableText({ text, textFormat }))
+    if (tableHtmlCache.size >= TABLE_HTML_CACHE_MAX) {
+      const oldest = tableHtmlCache.keys().next().value
+      if (oldest !== undefined) tableHtmlCache.delete(oldest)
+    }
+    tableHtmlCache.set(key, serialized)
+    return serialized
+  }
   const decorations = [style?.underline ? 'underline' : '', style?.strikethrough ? 'line-through' : ''].filter(Boolean).join(' ')
   const css = [
     `font-size:${style?.fontsize || '14px'}`,

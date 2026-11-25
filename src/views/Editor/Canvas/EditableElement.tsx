@@ -4,7 +4,7 @@ const cx = bindStyles(styles)
 import { useCallback, memo, lazy, Suspense, createElement, type CSSProperties, type ComponentType } from 'react'
 
 import { ElementTypes, type PPTElement } from '@/types/slides'
-import useElementContextmenu from '@/hooks/useElementContextmenu'
+import type { ElementContextmenus } from './Operate/ContextMenuBridge'
 import ImageElement from '@/views/components/element/ImageElement/index'
 import TextElement from '@/views/components/element/TextElement/index'
 import ShapeElement from '@/views/components/element/ShapeElement/index'
@@ -40,15 +40,14 @@ export type IEditableElementProps = {
   isMultiSelect: boolean
   isEditing?: boolean
   selectElement: (e: MouseEvent | TouchEvent, element: PPTElement, canMove?: boolean) => void
-  openLinkDialog: () => void
+  getContextmenus: ElementContextmenus
   style?: CSSProperties
 }
 
 const EditableElement = memo((props: IEditableElementProps) => {
-  const { elementInfo, elementIndex, isMultiSelect, isEditing, selectElement, openLinkDialog, style } = props
+  const { elementInfo, elementIndex, isMultiSelect, isEditing, selectElement, getContextmenus, style } = props
   const currentElementComponent = elementTypeMap[elementInfo.type] || null
-  const { contextmenus: contextmenusFor } = useElementContextmenu(openLinkDialog)
-  const contextmenus = useCallback(() => contextmenusFor(elementInfo, isMultiSelect), [contextmenusFor, elementInfo, isMultiSelect])
+  const contextmenus = useCallback(() => getContextmenus(elementInfo, isMultiSelect), [getContextmenus, elementInfo, isMultiSelect])
 
   return (
     <div className={cx('editable-element', { 'is-editing': isEditing })} id={`editable-element-${elementInfo.id}`} data-element-type={elementInfo.type} style={{ zIndex: elementIndex, ...style }}>

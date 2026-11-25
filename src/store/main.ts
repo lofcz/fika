@@ -139,10 +139,40 @@ const writeOpenPanelOnTextSelection = (on: boolean) => {
 
 const EMPTY_ELEMENTS: PPTElement[] = []
 
+let activeElementListCache: {
+  elements: PPTElement[]
+  activeIds: string[]
+  result: PPTElement[]
+} | null = null
+
+function sameElementRefs(a: PPTElement[], b: PPTElement[]) {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
 export const selectActiveElementList = (state: MainState) => {
   const currentSlide = selectCurrentSlide(useSlidesStore.getState())
-  if (!currentSlide?.elements) return EMPTY_ELEMENTS
-  return currentSlide.elements.filter(element => state.activeElementIdList.includes(element.id))
+  const elements = currentSlide?.elements
+  const activeIds = state.activeElementIdList
+  if (!elements?.length || !activeIds.length) return EMPTY_ELEMENTS
+  const cache = activeElementListCache
+  if (cache && cache.elements === elements && cache.activeIds === activeIds) {
+    return cache.result
+  }
+  const activeSet = activeIds.length > 4 ? new Set(activeIds) : null
+  const filtered = activeSet
+    ? elements.filter(element => activeSet.has(element.id))
+    : elements.filter(element => activeIds.includes(element.id))
+  const result = filtered.length === 0
+    ? EMPTY_ELEMENTS
+    : cache && sameElementRefs(cache.result, filtered)
+      ? cache.result
+      : filtered
+  activeElementListCache = { elements, activeIds, result }
+  return result
 }
 
 export const selectHandleElement = (state: MainState) => {
@@ -229,21 +259,27 @@ export const useMainStore = create<MainStore>()((set, get) => ({
     set({ handleElementId, selectedTableCells: [] })
   },
   setActiveGroupElementId(activeGroupElementId) {
+    if (get().activeGroupElementId === activeGroupElementId) return
     set({ activeGroupElementId })
   },
   setHiddenElementIdList(hiddenElementIdList) {
+    if (sameIdList(get().hiddenElementIdList, hiddenElementIdList)) return
     set({ hiddenElementIdList })
   },
   setCanvasPercentage(percentage) {
+    if (get().canvasPercentage === percentage) return
     set({ canvasPercentage: percentage })
   },
   setCanvasScale(scale) {
+    if (get().canvasScale === scale) return
     set({ canvasScale: scale })
   },
   setCanvasDragged(isDragged) {
+    if (get().canvasDragged === isDragged) return
     set({ canvasDragged: isDragged })
   },
   setThumbnailsFocus(isFocus) {
+    if (get().thumbnailsFocus === isFocus) return
     set({ thumbnailsFocus: isFocus })
   },
   setEditorareaFocus(isFocus) {
@@ -343,8 +379,10 @@ export const useMainStore = create<MainStore>()((set, get) => ({
     set({ showMarkupPanel: show })
   },
   setRightPanelCollapsed(collapsed, pin) {
-    set({ rightPanelCollapsed: collapsed })
-    if (pin) set({ rightPanelPinned: collapsed ? 'closed' : 'open' })
+    const prev = get()
+    const nextPinned = pin ? (collapsed ? 'closed' : 'open') : prev.rightPanelPinned
+    if (prev.rightPanelCollapsed === collapsed && prev.rightPanelPinned === nextPinned) return
+    set({ rightPanelCollapsed: collapsed, rightPanelPinned: nextPinned })
   },
   toggleRightPanel() {
     const rightPanelCollapsed = !get().rightPanelCollapsed
@@ -363,11 +401,9 @@ export const useMainStore = create<MainStore>()((set, get) => ({
     set({ rightPanelCollapsed: false, rightPanelPinned: 'open' })
   },
   applyRightPanelAuto(width, narrowPx) {
-    const { rightPanelPinned } = get()
-    if (rightPanelPinned) {
-      set({ rightPanelCollapsed: rightPanelPinned === 'closed' })
-      return
-    }
-    set({ rightPanelCollapsed: width <= narrowPx })
+    const { rightPanelPinned, rightPanelCollapsed } = get()
+    const nextCollapsed = rightPanelPinned ? rightPanelPinned === 'closed' : width <= narrowPx
+    if (rightPanelCollapsed === nextCollapsed) return
+    set({ rightPanelCollapsed: nextCollapsed })
   },
 }))

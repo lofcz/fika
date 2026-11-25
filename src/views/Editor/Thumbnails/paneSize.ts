@@ -21,8 +21,17 @@ let paneWidth = PREVIEW_DEFAULT_PANE
 let viewportRatio = 9 / 16
 let workingSlideWidth = 1
 const listeners = new Set<() => void>()
+const dprListeners = new Set<(dpr: number) => void>()
 
 const readDpr = () => (typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1)
+let lastNotifiedDpr = readDpr()
+
+export const getCurrentDpr = () => readDpr()
+
+export const subscribeDprChange = (listener: (dpr: number) => void) => {
+  dprListeners.add(listener)
+  return () => { dprListeners.delete(listener) }
+}
 
 const destCssWidth = () => Math.max(1, paneWidth - PREVIEW_THUMB_INSET)
 
@@ -156,6 +165,11 @@ export const usePreviewDestSize = (): PreviewDestSize => (
 if (typeof window !== 'undefined') {
   let media: MediaQueryList | undefined
   const syncDevicePixelRatio = () => {
+    const nextDpr = readDpr()
+    if (nextDpr !== lastNotifiedDpr) {
+      lastNotifiedDpr = nextDpr
+      for (const listener of dprListeners) listener(nextDpr)
+    }
     publish()
     const next = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`)
     if (next === media) return

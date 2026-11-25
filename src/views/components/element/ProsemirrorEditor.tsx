@@ -188,6 +188,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       hideLinkTooltip();
       return false;
     }
+    setLinkTooltipPortal(prev => prev ?? resolveFikaPortalTarget(editorViewRef.current));
     setLinkTooltip(hyperlinkTooltipFromAnchor(anchor));
     return false;
   }, [hideLinkTooltip]);
@@ -202,6 +203,48 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     // Deferring this notification exposes the unfitted document for a paint.
     if (editorView.current) callbacksRef.current.onDocChange?.(editorView.current.dom.innerHTML);
   }, [callbacksRef]);
+
+  const pendingLiveCommitRef = useRef<{ rafId: number; slideId?: string; elementId: string } | null>(null);
+  const cancelLiveStoreCommit = useCallback(() => {
+    const pending = pendingLiveCommitRef.current;
+    if (!pending) return;
+    if (pending.rafId && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(pending.rafId);
+    }
+    pendingLiveCommitRef.current = null;
+  }, []);
+  const flushLiveStoreCommit = useCallback((history = false) => {
+    const pending = pendingLiveCommitRef.current;
+    if (pending) {
+      if (pending.rafId && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(pending.rafId);
+      }
+      pendingLiveCommitRef.current = null;
+      if (editorView.current) {
+        commitLiveEditorToStore(pending.elementId, { history, slideId: pending.slideId });
+      }
+      return true;
+    }
+    return false;
+  }, []);
+  const scheduleLiveStoreCommit = useCallback(() => {
+    if (!editorView.current) return;
+    if (pendingLiveCommitRef.current) return;
+    const targetElementId = elementIdRef.current;
+    const targetSlideId = selectCurrentSlide(useSlidesStore.getState())?.id;
+    if (typeof requestAnimationFrame !== 'function') {
+      commitLiveEditorToStore(targetElementId, { history: false, slideId: targetSlideId });
+      return;
+    }
+    const rafId = requestAnimationFrame(() => {
+      const pending = pendingLiveCommitRef.current;
+      pendingLiveCommitRef.current = null;
+      if (pending && editorView.current) {
+        commitLiveEditorToStore(pending.elementId, { history: false, slideId: pending.slideId });
+      }
+    });
+    pendingLiveCommitRef.current = { rafId, slideId: targetSlideId, elementId: targetElementId };
+  }, []);
 
   const handleInput = useMemo(() => debounce(function (isHanldeHistory = false) {
     if (!editorView.current) return;
@@ -261,6 +304,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
       && richTextHtmlLooksEmpty(editorView.current.dom.innerHTML)
     ) {
       handleInput.cancel();
+      cancelLiveStoreCommit();
       if (wrapEmptyAsRef.current === 'bullet') {
         wrapEmptyInBulletList(editorView.current);
       }
@@ -278,11 +322,13 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
         ignore: true
       });
     } else {
+      flushLiveStoreCommit(false);
       handleInput.flush();
+      commitLiveEditorToStore(elementIdRef.current, { history: false });
     }
     emitEmptyState();
     callbacksRef.current.onBlur?.();
-  }, [callbacksRef, hideLinkTooltip, handleInput, emitEmptyState]);
+  }, [callbacksRef, hideLinkTooltip, handleInput, cancelLiveStoreCommit, flushLiveStoreCommit, emitEmptyState]);
   const handleClick = useMemo(() => debounce(function () {
     syncRichTextAttrsFromView();
   }, 30, {
@@ -316,9 +362,12 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     pendingMathRetypesetRef.current = false;
     syncMathReadyInEditorView(view, valueRef.current, {
       editing: false,
-      onBeforeDispatch: () => handleInput.cancel(),
+      onBeforeDispatch: () => {
+        handleInput.cancel();
+        cancelLiveStoreCommit();
+      },
     });
-  }, [handleInput]);
+  }, [handleInput, cancelLiveStoreCommit]);
   useEffect(() => {
     if (!editable && pendingMathRetypesetRef.current && mathReady.value) {
       retypesetMathInView();
@@ -383,6 +432,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     // The incoming value may contain display-only contrast colors. Updating
     // the view must not commit that paint back as an authored edit.
     handleInput.cancel();
+    cancelLiveStoreCommit();
     editorView.current.dispatch(next.setMeta('fikaSyncValue', true).setMeta('addToHistory', false));
     if (keepStored && isEmptyEditorDoc(editorView.current) && storedMarks) {
       editorView.current.dispatch(editorView.current.state.tr.setStoredMarks(storedMarks));
@@ -746,9 +796,14 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
   syncRichTextAttrsRef.current = syncRichTextAttrsFromView;
   const handleInputRef = useRef(handleInput);
   handleInputRef.current = handleInput;
+  const scheduleLiveStoreCommitRef = useRef(scheduleLiveStoreCommit);
+  scheduleLiveStoreCommitRef.current = scheduleLiveStoreCommit;
+  const flushLiveStoreCommitRef = useRef(flushLiveStoreCommit);
+  flushLiveStoreCommitRef.current = flushLiveStoreCommit;
   const persistLiveEditor = () => {
+    const flushedPending = flushLiveStoreCommitRef.current(true);
     handleInputRef.current.flush();
-    if (editorView.current) commitLiveEditorToStore(elementIdRef.current);
+    if (!flushedPending && editorView.current) commitLiveEditorToStore(elementIdRef.current);
   };
   const hideLinkTooltipStableRef = useRef(hideLinkTooltip);
   hideLinkTooltipStableRef.current = hideLinkTooltip;
@@ -825,7 +880,7 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
         if (tr.docChanged) {
           emitDocChangeRef.current();
           if (!externalSync) {
-            commitLiveEditorToStore(elementIdRef.current, { history: false });
+            scheduleLiveStoreCommitRef.current();
             handleInputRef.current();
           }
         }
@@ -839,7 +894,6 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     (view.dom as HTMLElement & { __pmView?: EditorView }).__pmView = view;
     registerEditorView(elementIdRef.current, view);
     rememberEditorSource(view, elementIdRef.current);
-    setLinkTooltipPortal(resolveFikaPortalTarget(mountEl));
     if (wrapEmptyAsRef.current === 'bullet' && view.state.doc.textContent.trim().length === 0) {
       wrapEmptyInBulletList(view);
     }
@@ -854,7 +908,17 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
     }
     emitEmptyStateRef.current();
     const unreg = registerCommitFlusher(persistLiveEditor);
+    const onPageHide = () => persistLiveEditor();
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        persistLiveEditor();
+      }
+    };
+    if (typeof window !== 'undefined') window.addEventListener('pagehide', onPageHide);
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
+      if (typeof window !== 'undefined') window.removeEventListener('pagehide', onPageHide);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibilityChange);
       const current = editorView.current;
       persistLiveEditor();
       unreg();

@@ -42,7 +42,7 @@ MEDIA_EXT_TO_MIME.mp3 = 'audio/mpeg';
 MEDIA_EXT_TO_MIME.ogg = 'audio/ogg';
 MEDIA_EXT_TO_MIME.svg = 'image/svg+xml';
 export function clonePlain<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+  return structuredClone(value);
 }
 export function clonePatch<T extends object>(patch: T): T {
   const source = patch as Record<string, unknown>;
@@ -423,12 +423,13 @@ export function cloneSlidesWithRemappedIds(slides: Slide[], options: {
     animations: clonedSlides.flatMap(slide => slide.animations || [])
   };
 }
-export function normalizeSlide(slide: Partial<Slide> = {}): Slide {
+export function normalizeSlide(slide: Partial<Slide> = {}, options?: { cloneElements?: boolean }): Slide {
   if (slide.id !== undefined) assertId(slide.id, 'slide.id');
   assertColorFields(slide, 'slide');
+  const elements = slide.elements || [];
   return {
     id: slide.id || createId('slide'),
-    elements: clonePlain(slide.elements || []),
+    elements: options?.cloneElements === false ? elements : clonePlain(elements),
     ...(slide.notes ? {
       notes: clonePlain(slide.notes)
     } : {}),
@@ -640,26 +641,36 @@ export function mergeShapeElement(base: PPTShapeElement, patch: Partial<PPTShape
     type: 'shape'
   };
   if ('outline' in patch) {
-    nextElement.outline = patch.outline ? {
-      ...(base.outline || {}),
-      ...clonePlain(patch.outline)
-    } : undefined;
+    if (patch.outline) {
+      nextElement.outline = {
+        ...(base.outline || {}),
+        ...clonePlain(patch.outline)
+      };
+    } else {
+      delete nextElement.outline;
+    }
   }
   if ('text' in patch) {
-    nextElement.text = patch.text ? {
-      ...(base.text || {}),
-      ...clonePlain(patch.text)
-    } as PPTShapeElement['text'] : undefined;
+    if (patch.text) {
+      nextElement.text = {
+        ...(base.text || {}),
+        ...clonePlain(patch.text)
+      } as PPTShapeElement['text'];
+    } else {
+      delete nextElement.text;
+    }
   }
   if ('gradient' in patch) {
-    nextElement.gradient = patch.gradient ? clonePlain(patch.gradient) : undefined;
+    if (patch.gradient) nextElement.gradient = clonePlain(patch.gradient);
+    else delete nextElement.gradient;
   }
   if ('pattern' in patch) {
-    nextElement.pattern = patch.pattern;
+    if (patch.pattern !== undefined) nextElement.pattern = patch.pattern;
+    else delete nextElement.pattern;
   }
   if ('path' in patch && !('pathFormula' in patch)) {
-    nextElement.pathFormula = undefined;
-    nextElement.keypoints = undefined;
+    delete nextElement.pathFormula;
+    delete nextElement.keypoints;
   }
   if (nextElement.pathFormula && ('pathFormula' in patch || 'keypoints' in patch || 'width' in patch || 'height' in patch)) {
     return resolveShapeFormula(nextElement);

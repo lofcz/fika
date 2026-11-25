@@ -17,12 +17,15 @@ type CacheEntry = {
   complete: boolean
   /** Optional expiry timestamp (ms) for provisional pre-async frames; complete frames never expire. */
   expiresAt: number
+  /** Optional `(slideId, pixelSize)` slot key so edited slides evict their superseded bitmap. */
+  slideSizeKey?: string
 }
 
 /** 32 MB byte budget for cached thumbnail surfaces (~120–180 retina thumbnails). */
 export const THUMB_BITMAP_CACHE_MAX_BYTES = 32 * 1024 * 1024
 
 const cache = new Map<string, CacheEntry>()
+const lastKeyBySlideAndSize = new Map<string, string>()
 const evictionListeners = new Set<(key: string) => void>()
 let totalBytes = 0
 let cacheHits = 0
@@ -136,16 +139,22 @@ const releaseSurface = (surface: ThumbSurface) => {
   }
 }
 
+const deleteEntryQuietly = (key: string) => {
+  const existing = cache.get(key)
+  if (!existing) return
+  cache.delete(key)
+  if (existing.slideSizeKey && lastKeyBySlideAndSize.get(existing.slideSizeKey) === key) {
+    lastKeyBySlideAndSize.delete(existing.slideSizeKey)
+  }
+  totalBytes = Math.max(0, totalBytes - existing.bytes)
+  releaseSurface(existing.surface)
+}
+
 const evictOldestUntilFit = (incomingBytes: number, maxBytes: number) => {
   while (cache.size > 0 && totalBytes + incomingBytes > maxBytes) {
     const oldestKey = cache.keys().next().value
     if (oldestKey === undefined) break
-    const oldest = cache.get(oldestKey)
-    cache.delete(oldestKey)
-    if (oldest) {
-      totalBytes = Math.max(0, totalBytes - oldest.bytes)
-      releaseSurface(oldest.surface)
-    }
+    deleteEntryQuietly(oldestKey)
   }
 }
 
@@ -216,6 +225,7 @@ export const putCachedThumbSurface = (
   surface: ThumbSurface,
   maxBytes = THUMB_BITMAP_CACHE_MAX_BYTES,
   ttlMs = 0,
+  slideId?: string,
 ): boolean => {
   const width = surface.width
   const height = surface.height
@@ -225,6 +235,13 @@ export const putCachedThumbSurface = (
     releaseSurface(surface)
     return false
   }
+  const slideSizeKey = slideId ? `${slideId}\0${width}x${height}` : undefined
+  if (slideSizeKey) {
+    const supersededKey = lastKeyBySlideAndSize.get(slideSizeKey)
+    if (supersededKey && supersededKey !== key) {
+      deleteEntryQuietly(supersededKey)
+    }
+  }
   const existing = cache.get(key)
   if (existing) {
     cache.delete(key)
@@ -233,7 +250,8 @@ export const putCachedThumbSurface = (
   }
   evictOldestUntilFit(bytes, maxBytes)
   const expiresAt = ttlMs > 0 ? performance.now() + ttlMs : 0
-  cache.set(key, { key, surface, bytes, complete: ttlMs === 0, expiresAt })
+  cache.set(key, { key, surface, bytes, complete: ttlMs === 0, expiresAt, slideSizeKey })
+  if (slideSizeKey) lastKeyBySlideAndSize.set(slideSizeKey, key)
   totalBytes += bytes
   return true
 }
@@ -244,7 +262,12 @@ export const putCachedThumbSurface = (
  * then upgrades to an `ImageBitmap` on idle when supported. Incomplete frames
  * pass a short `ttlMs` so an errored async resource can never stay cached.
  */
-export const putCachedThumbFromCanvas = (key: string, source: HTMLCanvasElement, ttlMs = 0): void => {
+export const putCachedThumbFromCanvas = (
+  key: string,
+  source: HTMLCanvasElement,
+  ttlMs = 0,
+  slideId?: string,
+): void => {
   const width = source.width
   const height = source.height
   if (!(width > 0) || !(height > 0)) return
@@ -256,7 +279,7 @@ export const putCachedThumbFromCanvas = (key: string, source: HTMLCanvasElement,
   const ctx = copy.getContext('2d')
   if (!ctx) return
   ctx.drawImage(source, 0, 0)
-  if (!putCachedThumbSurface(key, copy, THUMB_BITMAP_CACHE_MAX_BYTES, ttlMs)) return
+  if (!putCachedThumbSurface(key, copy, THUMB_BITMAP_CACHE_MAX_BYTES, ttlMs, slideId)) return
   if (ttlMs === 0 && typeof createImageBitmap === 'function') {
     const upgrade = () => {
       const current = cache.get(key)
@@ -272,8 +295,8 @@ export const putCachedThumbFromCanvas = (key: string, source: HTMLCanvasElement,
         copy.height = 0
       }).catch(() => {})
     }
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(upgrade, { timeout: 400 })
-    else setTimeout(upgrade, 50)
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(upgrade, { timeout: 150 })
+    else setTimeout(upgrade, 32)
   }
 }
 
@@ -294,18 +317,14 @@ export const blitCachedThumb = (
 }
 
 export const evictCachedThumb = (key: string): void => {
-  const existing = cache.get(key)
-  if (existing) {
-    cache.delete(key)
-    totalBytes = Math.max(0, totalBytes - existing.bytes)
-    releaseSurface(existing.surface)
-  }
+  deleteEntryQuietly(key)
   for (const listener of evictionListeners) listener(key)
 }
 
 export const clearThumbBitmapCache = (): void => {
   for (const entry of cache.values()) releaseSurface(entry.surface)
   cache.clear()
+  lastKeyBySlideAndSize.clear()
   totalBytes = 0
   cacheHits = 0
   cacheMisses = 0

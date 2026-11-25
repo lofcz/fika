@@ -267,7 +267,7 @@ export default () => {
 
   const applyThemeToAllSlides = (applyAll = false) => {
     const { slides, theme, setSlides } = useSlidesStore.getState();
-    const newSlides: Slide[] = JSON.parse(JSON.stringify(slides));
+    const newSlides: Slide[] = structuredClone(slides);
     const _theme: PresetTheme = {
       background: theme.backgroundColor,
       fontColor: theme.fontColor,
@@ -284,7 +284,7 @@ export default () => {
 
   const applyFontToAllSlides = (fontname: string) => {
     const { slides, setSlides } = useSlidesStore.getState();
-    const newSlides: Slide[] = JSON.parse(JSON.stringify(slides));
+    const newSlides: Slide[] = structuredClone(slides);
     for (const slide of newSlides) {
       for (const el of slide.elements) {
         if (el.type === 'shape') {

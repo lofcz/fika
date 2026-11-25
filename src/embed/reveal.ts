@@ -37,14 +37,49 @@ export interface RevealDeps {
 }
 
 const FRAME_MS = 40
-const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>(resolve => {
-  const timer = setTimeout(done, ms)
+
+/**
+ * Wait for the next vsync-aligned animation frame once at least `minMs` has
+ * elapsed, falling back to `setTimeout` outside browser runtimes.
+ */
+const nextRevealFrame = (minMs: number, signal?: AbortSignal) => new Promise<void>(resolve => {
+  if (signal?.aborted) {
+    resolve()
+    return
+  }
+  const deadline = performance.now() + minMs
+  let rafId: number | null = null
+  let timerId: ReturnType<typeof setTimeout> | null = null
+
   function done() {
     signal?.removeEventListener('abort', done)
-    clearTimeout(timer)
+    if (rafId !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(rafId)
+      rafId = null
+    }
+    if (timerId !== null) {
+      clearTimeout(timerId)
+      timerId = null
+    }
     resolve()
   }
+
   signal?.addEventListener('abort', done, { once: true })
+
+  if (typeof requestAnimationFrame === 'function') {
+    const step = (now: number) => {
+      rafId = null
+      if (now >= deadline) {
+        done()
+        return
+      }
+      rafId = requestAnimationFrame(step)
+    }
+    rafId = requestAnimationFrame(step)
+  }
+  else {
+    timerId = setTimeout(done, minMs)
+  }
 })
 
 export async function revealSlide(slideId: string, patch: Partial<Slide>, options: FikaRevealOptions, deps: RevealDeps): Promise<void> {
@@ -69,16 +104,20 @@ export async function revealSlide(slideId: string, patch: Partial<Slide>, option
       let elapsed = 0
       // First frame: the skeleton gives way to the bare background at once.
       useSlidesStore.getState().updateSlide({ ...rest, elements: [] }, slideId)
-      useMainStore.getState().setAiReveal({ slideId, elementId: null, label })
+      if (label) useMainStore.getState().setAiReveal({ slideId, elementId: null, label })
+      let lastRevealedId: string | null = null
       while (elapsed < totalMs) {
-        await sleep(FRAME_MS, signal)
+        await nextRevealFrame(FRAME_MS, signal)
         if (signal?.aborted || deps.isDestroyed() || document.visibilityState === 'hidden') break
         const store = useSlidesStore.getState()
         if (!store.slides.some(slide => slide.id === slideId)) break
         elapsed = performance.now() - started
         const frame = frameElements(plan, finalElements, Math.min(elapsed, totalMs))
         store.updateSlide({ elements: frame.elements }, slideId)
-        useMainStore.getState().setAiReveal({ slideId, elementId: frame.activeId, label })
+        if (label || frame.activeId !== lastRevealedId) {
+          lastRevealedId = frame.activeId
+          useMainStore.getState().setAiReveal({ slideId, elementId: frame.activeId, label })
+        }
       }
     }
     finally {

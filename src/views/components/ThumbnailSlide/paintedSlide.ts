@@ -1,5 +1,5 @@
 import { useSlidesStore } from '@/store'
-import type { Slide } from '@/types/slides'
+import type { Slide, SlideTheme } from '@/types/slides'
 import { diffPaintedSlide, type PaintedSlide, type PaintedSlideDiff } from '@/utils/diffPaintedSlide'
 
 export type { PaintedSlide, PaintedSlideDiff }
@@ -12,6 +12,20 @@ export type RailSlideMeta = {
 
 let cachedSlides: Slide[] | null = null
 let railMetas: RailSlideMeta[] = []
+const slideIndexCache = new WeakMap<Slide[], Map<string, Slide>>()
+
+function slideMapFor(slides: Slide[]): Map<string, Slide> {
+  let map = slideIndexCache.get(slides)
+  if (!map) {
+    map = new Map()
+    for (let i = 0; i < slides.length; i++) {
+      const slide = slides[i]
+      if (slide) map.set(slide.id, slide)
+    }
+    slideIndexCache.set(slides, map)
+  }
+  return map
+}
 
 function syncRailMetas(slides: Slide[]) {
   if (cachedSlides === slides) return
@@ -24,7 +38,7 @@ function syncRailMetas(slides: Slide[]) {
 }
 
 export function selectPaintedSlide<T extends { slides: Slide[] }>(state: T, slideId: string): Slide | undefined {
-  return state.slides.find(slide => slide.id === slideId)
+  return slideMapFor(state.slides).get(slideId)
 }
 
 const backgroundMediaKey = (slide: Slide) => (
@@ -132,4 +146,34 @@ export function useRailSlideMetas(): RailSlideMeta[] {
 
 export function useRailSlides(): Slide[] {
   return useSlidesStore(state => state.slides)
+}
+
+export type ThumbViewportTheme = {
+  viewportSize: number
+  viewportRatio: number
+  theme: SlideTheme
+}
+
+let cachedViewportTheme: ThumbViewportTheme | null = null
+
+const selectThumbViewportTheme = (state: { viewportSize: number; viewportRatio: number; theme: SlideTheme }): ThumbViewportTheme => {
+  if (
+    cachedViewportTheme
+    && cachedViewportTheme.viewportSize === state.viewportSize
+    && cachedViewportTheme.viewportRatio === state.viewportRatio
+    && cachedViewportTheme.theme === state.theme
+  ) {
+    return cachedViewportTheme
+  }
+  cachedViewportTheme = {
+    viewportSize: state.viewportSize,
+    viewportRatio: state.viewportRatio,
+    theme: state.theme,
+  }
+  return cachedViewportTheme
+}
+
+/** Single memoized store subscription for viewport geometry + theme (replaces 3 hooks per thumb). */
+export function useThumbViewportTheme(): ThumbViewportTheme {
+  return useSlidesStore(selectThumbViewportTheme)
 }

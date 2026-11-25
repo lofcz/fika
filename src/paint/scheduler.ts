@@ -32,9 +32,17 @@ const drain = () => {
   frame = 0
   const started = performance.now()
   while (jobs.size) {
-    const next = [...jobs.values()].sort((a, b) => (
-      a.priority - b.priority || a.enqueuedAt - b.enqueuedAt
-    ))[0]
+    let next: PaintJob | undefined
+    for (const candidate of jobs.values()) {
+      if (
+        !next
+        || candidate.priority < next.priority
+        || (candidate.priority === next.priority && candidate.enqueuedAt < next.enqueuedAt)
+      ) {
+        next = candidate
+      }
+    }
+    if (!next) break
     jobs.delete(next.key)
     const paintStarted = performance.now()
     try {

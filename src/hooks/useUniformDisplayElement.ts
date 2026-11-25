@@ -50,8 +50,8 @@ export default () => {
       minX,
       maxX
     } = getElementListRange(activeElementList);
-    const copyOfActiveElementList: PPTElement[] = JSON.parse(JSON.stringify(activeElementList));
-    const newElementList: PPTElement[] = JSON.parse(JSON.stringify(currentSlide.elements));
+    const copyOfActiveElementList: PPTElement[] = structuredClone(activeElementList);
+    const newElementList: PPTElement[] = structuredClone(currentSlide.elements);
 
     const singleElemetList: ElementItem[] = [];
     let groupList: GroupItem[] = [];
@@ -171,8 +171,8 @@ export default () => {
       minY,
       maxY
     } = getElementListRange(activeElementList);
-    const copyOfActiveElementList: PPTElement[] = JSON.parse(JSON.stringify(activeElementList));
-    const newElementList: PPTElement[] = JSON.parse(JSON.stringify(currentSlide.elements));
+    const copyOfActiveElementList: PPTElement[] = structuredClone(activeElementList);
+    const newElementList: PPTElement[] = structuredClone(currentSlide.elements);
     const singleElemetList: ElementItem[] = [];
     let groupList: GroupItem[] = [];
     for (const el of copyOfActiveElementList) {

@@ -9,7 +9,7 @@ import { useSlidesStore } from '@/store'
 import { usePreviewDestSize } from '@/views/Editor/Thumbnails/paneSize'
 import SlideSkeleton from '@/views/components/SlideSkeleton'
 import CanvasSlideThumb from './CanvasSlideThumb'
-import { arePaintedSlideIdentitiesEqual } from './paintedSlide'
+import { arePaintedSlideIdentitiesEqual, selectPaintedSlide } from './paintedSlide'
 
 export type IThumbnailSlideProps = {
   slide: Slide | { id: string }
@@ -34,33 +34,129 @@ export function areThumbnailSlidePropsEqual(prev: IThumbnailSlideProps, next: IT
     )
 }
 
+const ThumbnailSlideFrame = memo(({
+  slide,
+  slideId,
+  width,
+  visible,
+  showPlaceholders,
+  className,
+}: {
+  slide: Slide | undefined
+  slideId: string
+  width: number
+  visible: boolean
+  showPlaceholders: boolean
+  className?: string
+}) => {
+  const viewportRatio = useSlidesStore(s => s.viewportRatio)
+  const resolvedId = slide?.id ?? slideId
+  return (
+    <div
+      className={cx('thumbnail-slide', className)}
+      data-thumbnail-slide={resolvedId}
+      style={{ width: width + 'px', height: width * viewportRatio + 'px' }}
+    >
+      {visible && slide ? <CanvasSlideThumb slide={slide} width={width} showPlaceholders={showPlaceholders} /> : null}
+      {visible && slide?.skeleton ? <SlideSkeleton /> : null}
+    </div>
+  )
+})
+
+const ThumbnailSlideById = memo(({
+  slideId,
+  size,
+  visible,
+  showPlaceholders,
+  className,
+}: {
+  slideId: string
+  size: number
+  visible: boolean
+  showPlaceholders: boolean
+  className?: string
+}) => {
+  const selectSlide = useMemo(() => {
+    let painted: Slide | undefined
+    return (state: { slides: Slide[] }) => {
+      const next = selectPaintedSlide(state, slideId)
+      if (!arePaintedSlideIdentitiesEqual(painted, next)) painted = next
+      return painted
+    }
+  }, [slideId])
+  const storeSlide = useSlidesStore(selectSlide)
+  const dest = usePreviewDestSize()
+  const width = size || dest.cssWidth
+  return (
+    <ThumbnailSlideFrame
+      slide={storeSlide}
+      slideId={slideId}
+      width={width}
+      visible={visible}
+      showPlaceholders={showPlaceholders}
+      className={className}
+    />
+  )
+})
+
+const ThumbnailSlideDynamicSize = memo(({
+  slide,
+  visible,
+  showPlaceholders,
+  className,
+}: {
+  slide: Slide
+  visible: boolean
+  showPlaceholders: boolean
+  className?: string
+}) => {
+  const dest = usePreviewDestSize()
+  return (
+    <ThumbnailSlideFrame
+      slide={slide}
+      slideId={slide.id}
+      width={dest.cssWidth}
+      visible={visible}
+      showPlaceholders={showPlaceholders}
+      className={className}
+    />
+  )
+})
+
 /** Model-driven slide thumbnail painted directly at the final device DPR. */
 const ThumbnailSlide = memo((props: IThumbnailSlideProps) => {
   recordRender('ThumbnailSlide')
   const { slide, size, visible = true, showPlaceholders = false, className } = props
-  const viewportRatio = useSlidesStore(s => s.viewportRatio)
-  const selectSlide = useMemo(() => {
-    let painted: Slide | undefined
-    return (state: { slides: Slide[] }) => {
-      const next = state.slides.find(item => item.id === slide.id)
-      if (!arePaintedSlideIdentitiesEqual(painted, next)) painted = next
-      return painted
-    }
-  }, [slide.id])
-  const storeSlide = useSlidesStore(selectSlide)
-  const full = storeSlide ?? ('elements' in slide ? slide : undefined)
-  const dest = usePreviewDestSize()
-  const width = size || dest.cssWidth
-
+  if (!('elements' in slide)) {
+    return (
+      <ThumbnailSlideById
+        slideId={slide.id}
+        size={size}
+        visible={visible}
+        showPlaceholders={showPlaceholders}
+        className={className}
+      />
+    )
+  }
+  if (!size) {
+    return (
+      <ThumbnailSlideDynamicSize
+        slide={slide}
+        visible={visible}
+        showPlaceholders={showPlaceholders}
+        className={className}
+      />
+    )
+  }
   return (
-    <div
-      className={cx('thumbnail-slide', className)}
-      data-thumbnail-slide={slide.id}
-      style={{ width: width + 'px', height: width * viewportRatio + 'px' }}
-    >
-      {visible && full ? <CanvasSlideThumb slide={full} width={width} showPlaceholders={showPlaceholders} /> : null}
-      {visible && full?.skeleton ? <SlideSkeleton /> : null}
-    </div>
+    <ThumbnailSlideFrame
+      slide={slide}
+      slideId={slide.id}
+      width={size}
+      visible={visible}
+      showPlaceholders={showPlaceholders}
+      className={className}
+    />
   )
 }, areThumbnailSlidePropsEqual)
 

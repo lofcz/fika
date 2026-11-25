@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { useMemo, useCallback, memo, useEffect, type CSSProperties, type ComponentType } from 'react'
+import { Activity, useMemo, useCallback, memo, useEffect, type CSSProperties, type ComponentType } from 'react'
 import { useMainStore } from '@/store'
 import { useHasActiveGroupElement } from './common/handleElement'
 import { resolveToolbarPanelState, useKeepAlive } from './common/panelSwitch'
@@ -79,9 +79,12 @@ const Toolbar = memo(({ className, style }: { className?: string; style?: CSSPro
       <div className={cx('content')}>
         {mountedPanels.map(state => {
           const Panel = PANEL_MAP[state]
+          const visible = state === activePanel
           return (
-            <div key={state} className={cx('panel-slot')} hidden={state !== activePanel}>
-              <Panel />
+            <div key={state} className={cx('panel-slot')} hidden={!visible}>
+              <Activity mode={visible ? 'visible' : 'hidden'}>
+                <Panel />
+              </Activity>
             </div>
           )
         })}

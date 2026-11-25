@@ -1,4 +1,5 @@
 import { drainCommitQueue } from '@/utils/commitQueue'
+import { clonePlain } from '@/utils/clonePlain'
 import { reconcileFrameTransforms, frameDescendantIds } from '@/utils/nestedFrames'
 import { transferPageElements } from '@/utils/transferPageElements'
 import { create } from 'zustand'
@@ -41,8 +42,16 @@ interface UpdateElementData {
   slideId?: string
 }
 
-function clonePlain<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
+export interface ApplyDocumentInput {
+  title?: string
+  slides: Slide[]
+  theme?: Partial<SlideTheme>
+  viewportSize?: number
+  viewportRatio?: number
+  viewportWidthInches?: number
+  hasViewportWidthInches?: boolean
+  templates?: SlideTemplate[]
+  slideIndex?: number
 }
 
 function readProp<T extends object>(obj: T, key: string): unknown {
@@ -75,6 +84,7 @@ export interface SlidesActions {
   setViewportRatio: (viewportRatio: number) => void
   setViewportWidthInches: (width: number | undefined) => void
   setSlides: (slides: Slide[], themeProps?: Partial<SlideTheme>, options?: { clone?: boolean }) => void
+  applyDocument: (document: ApplyDocumentInput, options?: { clone?: boolean }) => void
   setTemplates: (templates: SlideTemplate[]) => void
   addImportedTemplate: (template: ImportedSlideTemplate) => void
   replaceSlide: (slide: Slide, slideId?: string) => void
@@ -98,6 +108,21 @@ export type SlidesStore = SlidesState & SlidesActions
 
 export const selectCurrentSlide = (state: SlidesState) => state.slides[state.slideIndex]
 
+const slideIndexCache = new WeakMap<Slide[], Map<string, Slide>>()
+
+function getSlideMap(slides: Slide[]): Map<string, Slide> {
+  let map = slideIndexCache.get(slides)
+  if (!map) {
+    map = new Map()
+    for (let i = 0; i < slides.length; i++) {
+      const slide = slides[i]
+      if (!map.has(slide.id)) map.set(slide.id, slide)
+    }
+    slideIndexCache.set(slides, map)
+  }
+  return map
+}
+
 /**
  * Slide by id — the owning slide for a rendered slide tree. Contrast and
  * placeholder painting must resolve against THIS slide, not the editor's
@@ -105,7 +130,7 @@ export const selectCurrentSlide = (state: SlidesState) => state.slides[state.sli
  * inherit the wrong background/elements.
  */
 export const selectSlideById = (state: SlidesState, slideId: string | undefined) => (
-  slideId ? state.slides.find(slide => slide.id === slideId) : undefined
+  slideId ? getSlideMap(state.slides).get(slideId) : undefined
 )
 
 export const selectIsEmptySlide = (state: SlidesState) => {
@@ -221,7 +246,7 @@ export const selectElementWaitsForInAnimation = (
   return groups[groupIndex].animations.find(animation => animation.elId === elementId)?.type === 'in'
 }
 
-setAutoFreeze(false)
+setAutoFreeze(process.env.NODE_ENV !== 'production')
 
 export const useSlidesStore = create<SlidesStore>()(
   immer((set, get) => ({
@@ -274,14 +299,55 @@ export const useSlidesStore = create<SlidesStore>()(
 
     setSlides(slides, themeProps, options) {
       const prevIndex = get().slideIndex
+      const shouldClone = options?.clone !== false
       set((state) => {
-        state.slides = options?.clone === false ? slides : clonePlain(slides)
+        state.slides = shouldClone ? clonePlain(slides) : slides
         state.slideIndex = slides.length === 0 ? 0 : Math.min(prevIndex, slides.length - 1)
+        if (themeProps) {
+          state.theme = { ...state.theme, ...(shouldClone ? clonePlain(themeProps) : themeProps) }
+        }
       })
-      if (themeProps) get().setTheme(themeProps)
       if (!slides.every(slide => !!slide.sourcePackageId)) markSourcePackageDirty()
       const deckFonts = collectSlidesFonts(slides)
       const themeFont = themeProps?.fontName ?? get().theme.fontName
+      if (themeFont) deckFonts.push(themeFont)
+      loadGoogleFonts(deckFonts)
+    },
+
+    applyDocument(document, options) {
+      if (document.hasViewportWidthInches || document.viewportWidthInches !== undefined) {
+        const width = document.viewportWidthInches
+        if (width !== undefined && (!Number.isFinite(width) || width <= 0)) {
+          throw new Error('Page width must be finite and positive')
+        }
+      }
+      const prevIndex = get().slideIndex
+      const shouldClone = options?.clone !== false
+      const nextSlides = shouldClone ? clonePlain(document.slides) : document.slides
+      const nextIndex = document.slideIndex !== undefined
+        ? (nextSlides.length === 0 ? 0 : Math.max(0, Math.min(Math.trunc(document.slideIndex), nextSlides.length - 1)))
+        : (nextSlides.length === 0 ? 0 : Math.min(prevIndex, nextSlides.length - 1))
+      set((state) => {
+        if (document.title !== undefined) {
+          state.title = document.title || getLL().editor.presentation.untitled()
+        }
+        state.slides = nextSlides
+        state.slideIndex = nextIndex
+        if (document.theme) {
+          state.theme = { ...state.theme, ...(shouldClone ? clonePlain(document.theme) : document.theme) }
+        }
+        if (document.viewportSize !== undefined) state.viewportSize = document.viewportSize
+        if (document.viewportRatio !== undefined) state.viewportRatio = document.viewportRatio
+        if (document.hasViewportWidthInches || document.viewportWidthInches !== undefined) {
+          state.viewportWidthInches = document.viewportWidthInches
+        }
+        if (document.templates !== undefined) {
+          state.templates = shouldClone ? clonePlain(document.templates) : document.templates
+        }
+      })
+      if (!nextSlides.every(slide => !!slide.sourcePackageId)) markSourcePackageDirty()
+      const deckFonts = collectSlidesFonts(nextSlides)
+      const themeFont = document.theme?.fontName ?? get().theme.fontName
       if (themeFont) deckFonts.push(themeFont)
       loadGoogleFonts(deckFonts)
     },

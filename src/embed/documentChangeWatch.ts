@@ -1,6 +1,7 @@
 import type { SlidesState } from '@/store/slides'
+import { clonePlain } from '@/utils/clonePlain'
 import { debounce } from '@/utils/debounce'
-import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern'
+import { cloneSlidesForPersistence } from '@/utils/mediaIntern'
 import type { FikaDocument } from './types'
 
 /**
@@ -32,10 +33,8 @@ export function buildPersistedDocument(
     title: state.title,
     // Never hand session-scoped blob: URLs to the host: they die with
     // the session and persisting them loses the media permanently.
-    slides: rewritePersistableMediaSrcs(
-      JSON.parse(JSON.stringify(state.slides)) as FikaDocument['slides'],
-    ),
-    theme: { ...state.theme },
+    slides: cloneSlidesForPersistence(state.slides),
+    theme: clonePlain(state.theme),
     viewport: {
       size: state.viewportSize,
       ratio: state.viewportRatio,

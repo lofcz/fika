@@ -1,20 +1,18 @@
-import { subscribeFitScaleChanges, subscribeTextFontChanges } from '@/utils/textFit'
 import { recordRender } from '@/utils/renderMetrics'
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useRef } from 'react'
 
-import { useSlidesStore } from '@/store'
 import type { Slide } from '@/types/slides'
 import { paintSlideToCanvas } from '@/paint/slidePainter'
 import {
   hasPendingRastersForOwner,
   isThumbnailScrolling,
   releaseRasterOwner,
-  subscribeThumbnailScrollIdle,
   updateRasterOwnerPriority,
   withRasterRequestContext,
 } from '@/paint/rasterResources'
 import { scheduleSlidePaint, type PaintPriority } from '@/paint/scheduler'
-import { arePaintedSlideIdentitiesEqual, type PaintedSlide } from './paintedSlide'
+import { getCurrentDpr, isPaneDragging } from '@/views/Editor/Thumbnails/paneSize'
+import { arePaintedSlideIdentitiesEqual, useThumbViewportTheme, type PaintedSlide } from './paintedSlide'
 import {
   blitCachedThumb,
   buildThumbPaintKey,
@@ -22,8 +20,8 @@ import {
   getCachedThumbEntry,
   putCachedThumbFromCanvas,
   slideAffectedByFontChanges,
-  subscribeThumbCacheEviction,
 } from './thumbBitmapCache'
+import { observeThumbVisibility, registerThumbRuntimeListener } from './thumbRailRuntime'
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 
@@ -51,15 +49,13 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const paintKey = useId()
-  const viewportSize = useSlidesStore(s => s.viewportSize)
-  const viewportRatio = useSlidesStore(s => s.viewportRatio)
-  const theme = useSlidesStore(s => s.theme)
+  const { viewportSize, viewportRatio, theme } = useThumbViewportTheme()
   const latest = useRef({ slide, width, showPlaceholders, viewportSize, viewportRatio, theme })
   const priority = useRef<PaintPriority>('visible')
   const mounted = useRef(true)
   const lastPaintedSigRef = useRef('')
   const paintedCompleteRef = useRef(false)
-  const lastDprRef = useRef(typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1)
+  const lastDprRef = useRef(getCurrentDpr())
   const cancelScheduledRef = useRef<(() => void) | null>(null)
   const asyncInvalidateTimerRef = useRef(0)
   const asyncInvalidateFirstRef = useRef(0)
@@ -109,6 +105,11 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
   const schedule = useCallback((force = false) => {
     const target = computePaintTarget()
     const canvas = canvasRef.current
+    // During pane-gutter drag, CSS scales the already-painted bitmap cleanly;
+    // skip repainting and avoid polluting the LRU with intermediate sizes.
+    if (isPaneDragging() && canvas?.dataset.canvasPainted === target.value.slide.id) {
+      return () => {}
+    }
     if (
       !force
       && lastPaintedSigRef.current === target.sig
@@ -184,8 +185,8 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
       // Complete paints are cached until invalidated/evicted; provisional frames
       // waiting on paused/in-flight async rasters get a short TTL (and evict
       // immediately when invalidate fires) so errored resources never stick.
-      if (!invalidated) {
-        putCachedThumbFromCanvas(capturedSig, liveCanvas, result.complete ? 0 : INCOMPLETE_THUMB_TTL_MS)
+      if (!invalidated && !isPaneDragging()) {
+        putCachedThumbFromCanvas(capturedSig, liveCanvas, result.complete ? 0 : INCOMPLETE_THUMB_TTL_MS, live.value.slide.id)
       }
     }, priority.current)
     cancelScheduledRef.current = cancel
@@ -241,93 +242,81 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
 
   useEffect(() => {
     let overscanTimer = 0
-    const unsub = subscribeThumbnailScrollIdle(() => {
-      // Settle any mounted thumb that blitted/painted a provisional frame while
-      // scrolling so fast flings never leave visible slides on fallback text.
-      // Wake visible thumbs immediately and stagger overscan thumbs slightly so
-      // visible slides claim priority first.
-      if (!mounted.current || paintedCompleteRef.current) return
-      if (priority.current === 'visible') {
-        scheduleRef.current(true)
-        return
-      }
-      if (overscanTimer) window.clearTimeout(overscanTimer)
-      overscanTimer = window.setTimeout(() => {
-        overscanTimer = 0
-        if (mounted.current && !paintedCompleteRef.current && !isThumbnailScrolling()) {
+    const unsubRuntime = registerThumbRuntimeListener({
+      onDprChange: nextDpr => {
+        if (nextDpr === lastDprRef.current) return
+        lastDprRef.current = nextDpr
+        scheduleRef.current()
+      },
+      onPaneDragEnd: () => {
+        if (mounted.current) scheduleRef.current()
+      },
+      onScrollIdle: () => {
+        // Settle any mounted thumb that blitted/painted a provisional frame while
+        // scrolling so fast flings never leave visible slides on fallback text.
+        // Wake visible thumbs immediately and stagger overscan thumbs slightly so
+        // visible slides claim priority first.
+        if (!mounted.current || paintedCompleteRef.current) return
+        if (priority.current === 'visible') {
           scheduleRef.current(true)
+          return
         }
-      }, 120)
+        if (overscanTimer) window.clearTimeout(overscanTimer)
+        overscanTimer = window.setTimeout(() => {
+          overscanTimer = 0
+          if (mounted.current && !paintedCompleteRef.current && !isThumbnailScrolling()) {
+            scheduleRef.current(true)
+          }
+        }, 120)
+      },
+      onCacheEviction: evictedKey => {
+        // If an older unmounted instance's async raster finished after this thumb
+        // remounted and blitted the provisional frame, wake this instance to paint
+        // the settled pixels.
+        if (lastPaintedSigRef.current === evictedKey) {
+          lastPaintedSigRef.current = ''
+          paintedCompleteRef.current = false
+          scheduleAsyncRepaint()
+        }
+      },
+      onFitScaleChange: elementId => {
+        if (latest.current.slide.elements.some(element => element.id === elementId)) {
+          scheduleRef.current()
+        }
+      },
+      onFontChanges: families => {
+        if (slideAffectedByFontChanges(latest.current.slide, latest.current.theme.fontName, families)) {
+          scheduleRef.current()
+        }
+      },
     })
-    return () => {
-      unsub()
-      if (overscanTimer) window.clearTimeout(overscanTimer)
-    }
-  }, [])
-
-  useEffect(() => subscribeThumbCacheEviction(evictedKey => {
-    // If an older unmounted instance's async raster finished after this thumb
-    // remounted and blitted the provisional frame, wake this instance to paint
-    // the settled pixels.
-    if (lastPaintedSigRef.current === evictedKey) {
-      lastPaintedSigRef.current = ''
-      paintedCompleteRef.current = false
-      scheduleAsyncRepaint()
-    }
-  }), [scheduleAsyncRepaint])
-
-  useEffect(() => subscribeFitScaleChanges(elementId => {
-    if (latest.current.slide.elements.some(element => element.id === elementId)) {
-      schedule()
-    }
-  }), [schedule])
-
-  useEffect(() => {
     const host = hostRef.current
-    if (!host || typeof IntersectionObserver === 'undefined') return
-    const observer = new IntersectionObserver(entries => {
-      const visible = !!entries[0]?.isIntersecting
-      priority.current = visible ? 'visible' : 'background'
-      updateRasterOwnerPriority(paintKey, visible ? 'visible' : 'overscan')
-      if (!visible) return
-      const target = computePaintTarget()
-      if (
-        lastPaintedSigRef.current !== target.sig
-        || canvasRef.current?.dataset.canvasPainted !== target.value.slide.id
-        || (!paintedCompleteRef.current && !isThumbnailScrolling())
-      ) {
-        schedule(!paintedCompleteRef.current && lastPaintedSigRef.current === target.sig)
-      }
-    }, { rootMargin: '240px' })
-    observer.observe(host)
-    return () => observer.disconnect()
-  }, [computePaintTarget, paintKey, schedule])
-
-  useEffect(() => {
-    const onResize = () => {
-      const nextDpr = window.devicePixelRatio || 1
-      if (nextDpr === lastDprRef.current) return
-      lastDprRef.current = nextDpr
-      schedule()
-    }
-    window.addEventListener('resize', onResize, { passive: true })
-    window.visualViewport?.addEventListener('resize', onResize, { passive: true })
-    const unsubscribeFonts = subscribeTextFontChanges(families => {
-      if (slideAffectedByFontChanges(latest.current.slide, latest.current.theme.fontName, families)) {
-        schedule()
-      }
-    })
+    const unsubVisibility = host
+      ? observeThumbVisibility(host, visible => {
+          priority.current = visible ? 'visible' : 'background'
+          updateRasterOwnerPriority(paintKey, visible ? 'visible' : 'overscan')
+          if (!visible) return
+          const target = computePaintTarget()
+          if (
+            lastPaintedSigRef.current !== target.sig
+            || canvasRef.current?.dataset.canvasPainted !== target.value.slide.id
+            || (!paintedCompleteRef.current && !isThumbnailScrolling())
+          ) {
+            scheduleRef.current(!paintedCompleteRef.current && lastPaintedSigRef.current === target.sig)
+          }
+        })
+      : () => {}
     if (document.fonts?.status === 'loading') {
       void document.fonts.ready.then(() => {
-        if (mounted.current) schedule()
+        if (mounted.current) scheduleRef.current()
       }).catch(() => {})
     }
     return () => {
-      window.removeEventListener('resize', onResize)
-      window.visualViewport?.removeEventListener('resize', onResize)
-      unsubscribeFonts()
+      unsubRuntime()
+      unsubVisibility()
+      if (overscanTimer) window.clearTimeout(overscanTimer)
     }
-  }, [schedule])
+  }, [computePaintTarget, paintKey, scheduleAsyncRepaint])
 
   return (
     <div

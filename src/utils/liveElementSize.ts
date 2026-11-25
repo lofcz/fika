@@ -275,7 +275,10 @@ export const applyLiveSize = (
     operate.style.top = `${top * canvasScale}px`
     operate.style.width = `${scaleWidth}px`
     if (!autoHeight) operate.style.height = `${scaleHeight}px`
-    const chromeHeight = autoHeight ? operate.offsetHeight : scaleHeight
+    // Avoid reading `operate.offsetHeight` right after style writes (which
+    // forces synchronous layout on every resize frame); inline px height is
+    // kept current by React / applyAutoHeightChrome.
+    const chromeHeight = autoHeight ? (parsePx(operate.style.height) || scaleHeight) : scaleHeight
     operate.style.transformOrigin = `${scaleWidth / 2}px ${chromeHeight / 2}px`
   }
   notifyLiveBox(id, width, height)

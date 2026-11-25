@@ -183,8 +183,13 @@ const cmdPoint = (cmd: {
   };
 };
 
+const PATH_RINGS_CACHE_MAX = 500
+const pathRingsCache = new Map<string, Point[][]>();
+
 /** Flatten an SVG path into closed rings in path/viewBox coordinates. */
 const pathToRings = (d: string): Point[][] => {
+  const cached = pathRingsCache.get(d);
+  if (cached) return cached;
   try {
     const cmds = toPoints(d);
     const rings: Point[][] = [];
@@ -225,6 +230,11 @@ const pathToRings = (d: string): Point[][] => {
       }
     }
     if (ring.length > 2) rings.push(ring);
+    if (pathRingsCache.size >= PATH_RINGS_CACHE_MAX) {
+      const oldest = pathRingsCache.keys().next().value;
+      if (oldest !== undefined) pathRingsCache.delete(oldest);
+    }
+    pathRingsCache.set(d, rings);
     return rings;
   } catch {
     return [];
@@ -729,34 +739,82 @@ export const resolveTextPaintSurfaces = (
   return resolveSlideSurfaceColors(options.background, options.fallbackSurface);
 };
 
+type LiveTextPaintResult = { ink: string; html: string; defaultInk?: string };
+const contrastObjIds = new WeakMap<object, number>();
+let nextContrastObjId = 1;
+const contrastObjId = (obj: object | undefined): number => {
+  if (!obj) return 0;
+  let id = contrastObjIds.get(obj);
+  if (!id) {
+    id = nextContrastObjId++;
+    contrastObjIds.set(obj, id);
+  }
+  return id;
+};
+const liveTextPaintCache = new WeakMap<object, Map<string, LiveTextPaintResult>>();
+const LIVE_PAINT_PER_EL_MAX = 8;
+
 /**
  * Single paint-time contrast pass for the live editor and the preview raster.
  * Surfaces match {@link fixSlideTextContrast}: overlay labels on a chip use
  * the chip, not the slide paper. Default inks rewrite to the same hex.
+ * Memoized via WeakMap anchored on `options.element` so Canvas & thumbnails
+ * share one computation with zero redundant SVG ray-casting or tinycolor work.
  */
 export const resolveLiveTextPaint = (
   preferred: string | undefined,
   html: string,
   options: LiveTextPaintOptions = {},
-): { ink: string; html: string; defaultInk?: string } => {
+): LiveTextPaintResult => {
   const el = options.element;
-  if (el && ownBackgroundPaint(el)?.kind === 'unknown') {
-    return { ink: preferred || options.themeFontColor || '#333', html };
+  let cacheBucket: Map<string, LiveTextPaintResult> | undefined;
+  let cacheKey = '';
+  if (el) {
+    const own = ownBackgroundPaint(el);
+    if (own?.kind === 'unknown') {
+      return { ink: preferred || options.themeFontColor || '#333', html };
+    }
+    const opaqueOwn = own?.kind === 'color' && (own.alpha === undefined || own.alpha >= OPAQUE);
+    cacheKey = [
+      preferred ?? '',
+      options.themeFontColor ?? '',
+      options.fallbackSurface ?? '',
+      options.fill ?? '',
+      opaqueOwn ? 0 : contrastObjId(options.elements),
+      opaqueOwn ? 0 : contrastObjId(options.background),
+      html,
+    ].join('\0');
+    cacheBucket = liveTextPaintCache.get(el);
+    const hit = cacheBucket?.get(cacheKey);
+    if (hit) return hit;
   }
   const surfaces = resolveTextPaintSurfaces(el, options);
-  if (!surfaces.length) {
-    return { ink: preferred || options.themeFontColor || '#333', html };
+  const result: LiveTextPaintResult = !surfaces.length
+    ? { ink: preferred || options.themeFontColor || '#333', html }
+    : (() => {
+        const base = preferred || options.themeFontColor || '#333';
+        // The element fallback is not an explicit rich-text color choice. Imported
+        // decks often retain a tinted theme fallback after their background changes.
+        // Never use that unreadable fallback to repaint already legible body runs.
+        const ink = fixColorForBackgrounds(base, surfaces) || resolveDefaultFontColor(base, surfaces);
+        return {
+          ink,
+          html: rewriteDefaultInksInHtml(html, ink),
+          defaultInk: ink,
+        };
+      })();
+  if (el) {
+    if (!cacheBucket) {
+      cacheBucket = new Map();
+      liveTextPaintCache.set(el, cacheBucket);
+    }
+    if (cacheBucket.size >= LIVE_PAINT_PER_EL_MAX) {
+      const oldest = cacheBucket.keys().next().value;
+      if (oldest !== undefined) cacheBucket.delete(oldest);
+    }
+    cacheBucket.set(cacheKey, result);
   }
-  const base = preferred || options.themeFontColor || '#333';
-  // The element fallback is not an explicit rich-text color choice. Imported
-  // decks often retain a tinted theme fallback after their background changes.
-  // Never use that unreadable fallback to repaint already legible body runs.
-  const ink = fixColorForBackgrounds(base, surfaces) || resolveDefaultFontColor(base, surfaces);
-  return {
-    ink,
-    html: rewriteDefaultInksInHtml(html, ink),
-    defaultInk: ink,
-  };
+  return result;
 };
 
 /**
@@ -1221,12 +1279,25 @@ const slideRetintSurfaces = (el: PPTTextElement | PPTShapeElement, slideSurfaces
   }
   return slideSurfaces;
 };
+const REWRITE_DEFAULT_INK_CACHE_MAX = 600;
+const rewriteDefaultInkCache = new Map<string, string>();
+
 export const rewriteDefaultInksInHtml = (html: string, ink: string): string => {
+  if (!html) return html;
   const next = tinycolor(ink).toHexString();
-  return rewriteHtmlTextColors(html, color => {
+  const key = `${next}\0${html}`;
+  const cached = rewriteDefaultInkCache.get(key);
+  if (cached !== undefined) return cached;
+  const rewritten = rewriteHtmlTextColors(html, color => {
     if (!isDefaultInk(color)) return null;
     return tinycolor(color).toHexString() === next ? null : next;
   });
+  if (rewriteDefaultInkCache.size >= REWRITE_DEFAULT_INK_CACHE_MAX) {
+    const oldest = rewriteDefaultInkCache.keys().next().value;
+    if (oldest !== undefined) rewriteDefaultInkCache.delete(oldest);
+  }
+  rewriteDefaultInkCache.set(key, rewritten);
+  return rewritten;
 };
 
 /**

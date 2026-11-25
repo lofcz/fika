@@ -13,15 +13,20 @@ import type { ContextmenuItem } from '@/components/Contextmenu/types';
 import useElementShadow from '@/views/components/element/hooks/useElementShadow';
 import useTextFit from '@/views/components/element/hooks/useTextFit';
 import { useOutlineRadiusCss } from '@/views/components/element/hooks/useElementOutline';
+import { useLiveTextPaint } from '@/views/components/element/hooks/useLiveTextPaint';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
-import { resolveElementDefaultFontColor, resolveElementSurfaces, resolveLiveTextPaint, resolvePlaceholderColor } from '@/utils/textContrast';
+import { resolveElementDefaultFontColor, resolvePlaceholderColor } from '@/utils/textContrast';
 import { computePlaceholderSlotHeight, resolveTextBoxLayout, textBoxAutoHeight, textBoxFlexColumn, textBoxJustify, textBoxLiveMode, textBoxPaintSize, type TextBoxLiveMode } from '@/utils/placeholderLayout';
 import { measureAutoTextHeight } from '@/utils/liveElementSize';
 import { isPlaceholderPromptFontSize } from '@/configs/textPresets';
 import { isEmptyRichText, isListPlaceholder, placeholderBoxVars, placeholderPhase, placeholderSeed, repairFilledPlaceholderHtml } from '@/utils/placeholderPaint';
 import type { EmptyPlaceholderStylePatch } from '@/utils/prosemirror/commands/applyPlaceholderStyles';
+import { serializeRichTextHtml } from '@/utils/prosemirror';
+import { ensureMathliveReady, htmlContainsMath } from '@/utils/math';
+import { useMathReadyVersion } from '@/hooks/useMathReadyVersion';
 import ElementOutline from '@/views/components/element/ElementOutline';
 import ProsemirrorEditor from '@/views/components/element/ProsemirrorEditor';
+import { deepEqualIgnore } from '@/views/Editor/Canvas/Operate/operateCompare';
 export type ITextElementProps = {
   elementInfo: PPTTextElement;
   selectElement: (e: MouseEvent | TouchEvent, element: PPTTextElement, canMove?: boolean) => void;
@@ -30,6 +35,14 @@ export type ITextElementProps = {
   className?: string;
   style?: CSSProperties;
 };
+const NO_IGNORE_KEYS = new Set<string>();
+const areTextElementPropsEqual = (prev: ITextElementProps, next: ITextElementProps) => (
+  !!prev.isEditing === !!next.isEditing
+  && prev.className === next.className
+  && prev.style?.display === next.style?.display
+  && prev.style?.clipPath === next.style?.clipPath
+  && deepEqualIgnore(prev.elementInfo, next.elementInfo, NO_IGNORE_KEYS)
+);
 const readSlideTheme = () => {
   const state = useSlidesStore.getState();
   return {
@@ -53,25 +66,15 @@ const TextElement = memo((props: ITextElementProps) => {
   const { elementInfo, contextmenus, isEditing, className, style } = props;
   const elementId = elementInfo.id;
   const isHandleElement = useMainStore(s => s.handleElementId === elementId);
+  const isSelected = useMainStore(s => s.activeElementIdList.includes(elementId));
   const isScaling = useMainStore(s => s.handleElementId === elementId && s.isScaling);
+  const isGesturing = useMainStore(s => s.handleElementId === elementId && s.isGesturing);
   const { addHistorySnapshot } = useHistorySnapshot();
-  const currentSlide = useSlidesStore(selectCurrentSlide);
-  const theme = useSlidesStore(s => s.theme);
-  const painted = resolveLiveTextPaint(elementInfo.defaultColor || theme?.fontColor || '#333', elementInfo.content, {
-    element: elementInfo,
-    elements: currentSlide?.elements,
-    fill: elementInfo.fill,
-    background: currentSlide?.background,
-    fallbackSurface: theme?.backgroundColor,
-    themeFontColor: theme?.fontColor,
-  });
-  const elementSurfaces = resolveElementSurfaces({
-    fill: elementInfo.fill,
-    background: currentSlide?.background,
-    fallbackSurface: theme?.backgroundColor
-  });
+  const slideType = useSlidesStore(s => selectCurrentSlide(s)?.type);
+  const themeFontName = useSlidesStore(s => s.theme?.fontName || '');
+  const { painted, elementSurfaces } = useLiveTextPaint(elementInfo, elementInfo.defaultColor, elementInfo.content);
   const defaultInkColor = painted.ink;
-  const resolvedFontName = elementInfo.defaultFontName || theme?.fontName || '';
+  const resolvedFontName = elementInfo.defaultFontName || themeFontName;
   const elementRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const prosemirrorEditorRef = useRef<ElementRef<typeof ProsemirrorEditor> | null>(null);
@@ -85,7 +88,7 @@ const TextElement = memo((props: ITextElementProps) => {
   const outlineBorderRadius = useOutlineRadiusCss(elementInfo.outline, elementInfo.width, elementInfo.height);
   const [liveHtml, setLiveHtml] = useState(elementInfo.content);
   const editorEmpty = isEmptyRichText(liveHtml);
-  const textBoxLayout = resolveTextBoxLayout(elementInfo, currentSlide?.type, editorEmpty);
+  const textBoxLayout = resolveTextBoxLayout(elementInfo, slideType, editorEmpty);
   const paintSize = textBoxPaintSize(elementInfo, textBoxLayout);
   const contentBoxJustify = textBoxJustify(textBoxLayout);
   const useFlexColumn = textBoxFlexColumn(textBoxLayout);
@@ -110,6 +113,22 @@ const TextElement = memo((props: ITextElementProps) => {
   const editingActive = !!(isEditing || placeholderTextEditing);
   const isEditingEmpty = isEmptyPlaceholder && editingActive;
   const showPlaceholder = isEmptyPlaceholder && !editingActive;
+  const mountEditor = editingActive || isHandleElement || isSelected || (!!elementInfo.placeholder && isEmptyRichText(elementInfo.content));
+  const prevMountEditorRef = useRef(mountEditor);
+  useLayoutEffect(() => {
+    if (prevMountEditorRef.current === mountEditor) return;
+    prevMountEditorRef.current = mountEditor;
+    resyncTextFit();
+  }, [mountEditor, resyncTextFit]);
+  const hasStaticMath = !mountEditor && htmlContainsMath(painted.html);
+  const mathVersion = useMathReadyVersion(hasStaticMath);
+  useEffect(() => {
+    if (hasStaticMath) void ensureMathliveReady().catch(() => {});
+  }, [hasStaticMath]);
+  const staticHtml = useMemo(
+    () => (mountEditor ? '' : serializeRichTextHtml(painted.html, mathVersion)),
+    [mountEditor, painted.html, mathVersion],
+  );
   const seedPlaceholder = (info: PPTTextElement, empty: boolean) => {
     const phase = placeholderPhase(empty);
     if (phase === 'empty' && (!isEmptyRichText(info.content) || !editorEmptyRef.current)) return;
@@ -238,8 +257,7 @@ const TextElement = memo((props: ITextElementProps) => {
   // and freeze the box: the ResizeObserver then measures the stale box instead
   // of the text. Restore the authored auto paint once the gesture is over.
   useLayoutEffect(() => {
-    const main = useMainStore.getState();
-    if (main.isGesturing || main.isScaling) return;
+    if (isGesturing || isScaling) return;
     const content = elementRef.current;
     const root = rootRef.current;
     if (paintSize.height === 'auto') {
@@ -250,7 +268,7 @@ const TextElement = memo((props: ITextElementProps) => {
       if (root && root.style.width !== 'auto') root.style.width = 'auto';
       if (content && content.style.width !== 'auto') content.style.width = 'auto';
     }
-  });
+  }, [isGesturing, isScaling, paintSize.height, paintSize.width]);
   useLayoutEffect(() => {
     const prev = prevLiveModeRef.current;
     prevLiveModeRef.current = liveMode;
@@ -313,12 +331,19 @@ const TextElement = memo((props: ITextElementProps) => {
     }
   }, [isScaling, isHandleElement]);
   const insetKey = inset.join(',');
+  const didInsetMountRef = useRef(false);
   useEffect(() => {
+    if (!didInsetMountRef.current) {
+      didInsetMountRef.current = true;
+      return;
+    }
+    if (textBoxLayoutRef.current.fixedHeight) return;
     Promise.resolve().then(() => {
       if (useMainStore.getState().isGesturing) return;
       if (!elementRef.current) return;
       const info = elementInfoRef.current;
       const layout = textBoxLayoutRef.current;
+      if (layout.fixedHeight) return;
       if (!info.vertical) {
         const ins = info.inset || [10, 10, 10, 10];
         const measured = layout.slotFlooredAuto
@@ -343,18 +368,18 @@ const TextElement = memo((props: ITextElementProps) => {
     });
   }, [insetKey]);
   const updateTextElementHeight = useCallback((_entries: ResizeObserverEntry[]) => {
+    const layout = textBoxLayoutRef.current;
+    if (layout.fixedHeight) return;
     const node = elementRef.current;
     if (!node) return;
-    const info = elementInfoRef.current;
-    const realHeight = Math.ceil(node.offsetHeight);
-    const realWidth = Math.ceil(node.offsetWidth);
-    const layout = textBoxLayoutRef.current;
     const main = useMainStore.getState();
     // While a resize drag is active the drag loop owns the live height (it
     // measures and paints per frame) — reacting here would fight it.
     if (main.isGesturing) return;
+    const info = elementInfoRef.current;
     const scaling = main.isScaling;
     if (!info.vertical) {
+      const realHeight = Math.ceil(node.offsetHeight);
       // Min-height-floored boxes clamp offsetHeight at the floor — measure
       // the TEXT so shrinks below the floor still register.
       const ins = info.inset || [10, 10, 10, 10];
@@ -362,7 +387,7 @@ const TextElement = memo((props: ITextElementProps) => {
         ? (measureAutoTextHeight(info.id, ins[0] + ins[2]) ?? realHeight)
         : realHeight;
       const next = textBoxAutoHeight(info, layout, measured);
-      if (next != null) {
+      if (next != null && Math.abs(info.height - next) >= 0.5) {
         applyAutoHeightChrome(info.id, next);
         if (!scaling) {
           useSlidesStore.getState().updateElement({
@@ -372,13 +397,16 @@ const TextElement = memo((props: ITextElementProps) => {
         } else realHeightCache.current = next;
       }
     }
-    if (!layout.fixedHeight && info.vertical && info.width !== realWidth) {
-      if (!scaling) {
-        useSlidesStore.getState().updateElement({
-          id: info.id,
-          props: { width: realWidth }
-        });
-      } else realWidthCache.current = realWidth;
+    else {
+      const realWidth = Math.ceil(node.offsetWidth);
+      if (info.width !== realWidth) {
+        if (!scaling) {
+          useSlidesStore.getState().updateElement({
+            id: info.id,
+            props: { width: realWidth }
+          });
+        } else realWidthCache.current = realWidth;
+      }
     }
   }, []);
   const updateTextElementHeightRef = useRef(updateTextElementHeight);
@@ -386,22 +414,31 @@ const TextElement = memo((props: ITextElementProps) => {
   // Store-driven content changes (undo/redo, AI replace) carry no live
   // doc-change — re-run the height rule after the editor has synced the doc.
   const contentKey = elementInfo.content;
+  const didContentMountRef = useRef(false);
   useEffect(() => {
+    if (!didContentMountRef.current) {
+      didContentMountRef.current = true;
+      return;
+    }
+    if (textBoxLayoutRef.current.fixedHeight) return;
     const raf = requestAnimationFrame(() => updateTextElementHeightRef.current([]));
     return () => cancelAnimationFrame(raf);
   }, [contentKey]);
+  const isFixedHeight = textBoxLayout.fixedHeight;
   useEffect(() => {
-    const el = elementRef.current;
-    const resizeObserver = new ResizeObserver(entries => updateTextElementHeightRef.current(entries));
-    if (el) resizeObserver.observe(el);
     const info = elementInfoRef.current;
     if (info.placeholder && isEmptyRichText(info.content)) {
       applyPlaceholderPreset();
     }
+    if (isFixedHeight) return;
+    const el = elementRef.current;
+    if (!el) return;
+    const resizeObserver = new ResizeObserver(entries => updateTextElementHeightRef.current(entries));
+    resizeObserver.observe(el);
     return () => {
-      if (el) resizeObserver.unobserve(el);
+      resizeObserver.disconnect();
     };
-  }, []);
+  }, [isFixedHeight]);
   const updateContent = useCallback((content: string, ignore = false) => {
     const info = elementInfoRef.current;
     const nextContent = info.placeholder ? repairFilledPlaceholderHtml(info, content) : content;
@@ -491,6 +528,6 @@ const TextElement = memo((props: ITextElementProps) => {
           return;
         }
         handleSelectElement($event, !(isEditing || placeholderTextEditing));
-      }} onDoubleClick={(event) => { event.stopPropagation(); startEdit(); }}><ElementOutline width={elementInfo.width} height={elementInfo.height} outline={elementInfo.outline} /><div className={cx('paint-clip')} style={{ overflow: textBoxLayout.lockPaintHeight || outlineBorderRadius ? 'hidden' : undefined, borderRadius: outlineBorderRadius, display: useFlexColumn ? 'flex' : undefined, flexDirection: useFlexColumn ? 'column' : undefined, justifyContent: contentBoxJustify }}><div className={cx('text-fit-host')} ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}><div className={cx('text')}><ProsemirrorEditor elementId={elementId} defaultColor={defaultInkColor} paintDefaultInk={painted.defaultInk} defaultFontName={resolvedFontName} defaultFontSize={placeholderEditorDefaults.defaultFontSize} defaultAlign={placeholderEditorDefaults.defaultAlign} editable={!elementInfo.lock && !!(isEditing || placeholderTextEditing)} wrapEmptyAs={listPlaceholder ? 'bullet' : undefined} value={(isEditing || placeholderTextEditing || editorFocused) ? elementInfo.content : painted.html} autoFocus={!!(isEditing || placeholderTextEditing)} ref={prosemirrorEditorRef} onUpdate={handleUpdate} onMouseDown={handleEditorMouseDown} onFocus={handleEditorFocus} onBlur={handleEditorBlur} onEmptyChange={handleEmptyChange} onPlaceholderFill={() => seedPlaceholder(elementInfoRef.current, false)} placeholderFillStyles={elementInfo.placeholder ? placeholderSeed(elementInfo, 'filled', defaultInkColor) : undefined} onDocChange={handleDocChange} onPlaceholderStyle={handlePlaceholderStyle} /></div></div></div>{}<div className={cx('drag-handler', 'top')} /><div className={cx('drag-handler', 'bottom')} /></div></div></div>;
-});
+      }} onDoubleClick={(event) => { event.stopPropagation(); startEdit(); }}><ElementOutline width={elementInfo.width} height={elementInfo.height} outline={elementInfo.outline} /><div className={cx('paint-clip')} style={{ overflow: textBoxLayout.lockPaintHeight || outlineBorderRadius ? 'hidden' : undefined, borderRadius: outlineBorderRadius, display: useFlexColumn ? 'flex' : undefined, flexDirection: useFlexColumn ? 'column' : undefined, justifyContent: contentBoxJustify }}><div className={cx('text-fit-host')} ref={textFitHostRef} data-text-fit-host style={textFitPaintStyle}><div className={cx('text')}>{mountEditor ? <ProsemirrorEditor elementId={elementId} defaultColor={defaultInkColor} paintDefaultInk={painted.defaultInk} defaultFontName={resolvedFontName} defaultFontSize={placeholderEditorDefaults.defaultFontSize} defaultAlign={placeholderEditorDefaults.defaultAlign} editable={!elementInfo.lock && !!(isEditing || placeholderTextEditing)} wrapEmptyAs={listPlaceholder ? 'bullet' : undefined} value={(isEditing || placeholderTextEditing || editorFocused) ? elementInfo.content : painted.html} autoFocus={!!(isEditing || placeholderTextEditing)} ref={prosemirrorEditorRef} onUpdate={handleUpdate} onMouseDown={handleEditorMouseDown} onFocus={handleEditorFocus} onBlur={handleEditorBlur} onEmptyChange={handleEmptyChange} onPlaceholderFill={() => seedPlaceholder(elementInfoRef.current, false)} placeholderFillStyles={elementInfo.placeholder ? placeholderSeed(elementInfo, 'filled', defaultInkColor) : undefined} onDocChange={handleDocChange} onPlaceholderStyle={handlePlaceholderStyle} /> : <div className={cx('prosemirror-editor')} data-paint-default-ink={painted.defaultInk ? '' : undefined} style={painted.defaultInk ? ({ '--text-default-ink': painted.defaultInk } as CSSProperties) : undefined}><div className={cx('ProseMirror', 'ProseMirror-static')} dangerouslySetInnerHTML={{ __html: staticHtml }} /></div>}</div></div></div>{}<div className={cx('drag-handler', 'top')} /><div className={cx('drag-handler', 'bottom')} /></div></div></div>;
+}, areTextElementPropsEqual);
 export default TextElement;

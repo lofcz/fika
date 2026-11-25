@@ -11,8 +11,9 @@ import useElementOutline from '@/views/components/element/hooks/useElementOutlin
 import useElementShadow from '@/views/components/element/hooks/useElementShadow';
 import useElementFlip from '@/views/components/element/hooks/useElementFlip';
 import useElementFill from '@/views/components/element/hooks/useElementFill';
+import { useLiveTextPaint } from '@/views/components/element/hooks/useLiveTextPaint';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
-import { resolveElementDefaultFontColor, resolveLiveTextPaint } from '@/utils/textContrast';
+import { resolveElementDefaultFontColor } from '@/utils/textContrast';
 import { resolveShapePaintPath } from '@/utils/elementOutline'
 import { serializeRichTextHtml } from '@/utils/prosemirror';
 import { ensureMathliveReady, htmlContainsMath } from '@/utils/math';
@@ -51,9 +52,11 @@ const defaultShapeText = (elementInfo: PPTShapeElement, theme: { fontName: strin
 
 const ShapeElement = memo((props: IShapeElementProps) => {
   const { elementInfo, contextmenus, isEditing } = props;
-  const theme = useSlidesStore(s => s.theme);
-  const handleElementId = useMainStore(s => s.handleElementId);
-  const shapeFormatPainter = useMainStore(s => s.shapeFormatPainter);
+  const elementId = elementInfo.id;
+  const themeFontName = useSlidesStore(s => s.theme.fontName);
+  const isHandleElement = useMainStore(s => s.handleElementId === elementId);
+  const isSelected = useMainStore(s => s.activeElementIdList.includes(elementId));
+  const shapeFormatPainter = useMainStore(s => !!s.shapeFormatPainter);
   const { addHistorySnapshot } = useHistorySnapshot();
   const [editable, setEditable] = useState(false);
   const elementInfoRef = useRef(elementInfo);
@@ -91,28 +94,16 @@ const ShapeElement = memo((props: IShapeElementProps) => {
     if (editableRef.current) setEditable(false);
   }, []);
   useEffect(() => {
-    if (handleElementId !== elementInfo.id) stopEdit();
-  }, [handleElementId, elementInfo.id, stopEdit]);
-  const slide = useSlidesStore(selectCurrentSlide);
-  const painted = resolveLiveTextPaint(
-    (elementInfo.text?.defaultColor || theme.fontColor),
-    (elementInfo.text?.content || ''),
-    {
-      element: elementInfo,
-      elements: slide?.elements,
-      fill: elementInfo.fill,
-      background: slide?.background,
-      fallbackSurface: theme.backgroundColor,
-      themeFontColor: theme.fontColor,
-    },
-  );
+    if (!isHandleElement) stopEdit();
+  }, [isHandleElement, stopEdit]);
+  const { painted } = useLiveTextPaint(elementInfo, elementInfo.text?.defaultColor, elementInfo.text?.content || '');
   const text: ShapeText = elementInfo.text
     ? {
         ...elementInfo.text,
-        defaultFontName: elementInfo.text.defaultFontName || theme.fontName,
+        defaultFontName: elementInfo.text.defaultFontName || themeFontName,
         defaultColor: painted.ink,
       }
-    : defaultShapeText(elementInfo, theme);
+    : defaultShapeText(elementInfo, useSlidesStore.getState().theme);
   const liveContentRef = useRef(text.content);
   const prevContentRef = useRef(text.content);
   if (!editable && text.content !== prevContentRef.current) {
@@ -121,19 +112,19 @@ const ShapeElement = memo((props: IShapeElementProps) => {
   prevContentRef.current = text.content;
   const editorValueRef = useRef(text.content);
   if (!editable) editorValueRef.current = liveContentRef.current || text.content;
-  const hasMath = htmlContainsMath(painted.html);
+  // Selected shapes host a live (non-editable) editor so panel style commands
+  // (font size, presets, bold...) land — same contract as text elements.
+  const mountEditor = editable || ((isHandleElement || isSelected) && !!text.content);
+  const hasMath = !mountEditor && !!text.content && htmlContainsMath(painted.html);
   const mathVersion = useMathReadyVersion(hasMath);
   useEffect(() => {
     if (hasMath) void ensureMathliveReady().catch(() => {});
   }, [hasMath]);
-  const staticContent = serializeRichTextHtml(painted.html, mathVersion);
+  const staticContent = (!mountEditor && text.content) ? serializeRichTextHtml(painted.html, mathVersion) : '';
   const inset = text.inset || [10, 10, 10, 10];
   const lockedText = shapeTextLocksSize(text);
   const textFitHostRef = useRef<HTMLDivElement | null>(null);
   const textHostRef = useAutoShapeTextHeight(!lockedText, elementInfo.id, inset, textFitHostRef);
-  // Selected shapes host a live (non-editable) editor so panel style commands
-  // (font size, presets, bold...) land — same contract as text elements.
-  const mountEditor = editable || (!!handleElementId && handleElementId === elementInfo.id && !!text.content);
   const svgRef = useRef<SVGSVGElement | null>(null);
   useLayoutEffect(() => {
     const svg = svgRef.current;

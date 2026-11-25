@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
-import type { PPTElement, PPTLineElement, PPTShapeElement, PPTTextElement } from '@/types/slides'
+import type { PPTElement, PPTLineElement, PPTShapeElement } from '@/types/slides'
+import { deepEqualIgnore } from './Operate/operateCompare'
 
 export type EditableElementCompareProps = {
   elementInfo: PPTElement
@@ -9,10 +10,19 @@ export type EditableElementCompareProps = {
   style?: CSSProperties
 }
 
+const NO_IGNORE_KEYS = new Set<string>()
+const TEXT_CONTENT_IGNORE_KEYS = new Set<string>(['content'])
+
 const samePair = (a?: [number, number], b?: [number, number]) => {
   if (a === b) return true
   if (!a || !b) return a === b
   return a[0] === b[0] && a[1] === b[1]
+}
+
+const sameCubic = (a?: [[number, number], [number, number]], b?: [[number, number], [number, number]]) => {
+  if (a === b) return true
+  if (!a || !b) return a === b
+  return samePair(a[0], b[0]) && samePair(a[1], b[1])
 }
 
 export const sameEditableGeometry = (a: PPTElement, b: PPTElement): boolean => {
@@ -32,32 +42,34 @@ export const sameEditableGeometry = (a: PPTElement, b: PPTElement): boolean => {
       samePair(la.broken, lb.broken) &&
       samePair(la.broken2, lb.broken2) &&
       samePair(la.curve, lb.curve) &&
-      JSON.stringify(la.cubic) === JSON.stringify(lb.cubic)
+      sameCubic(la.cubic, lb.cubic)
     )
   }
   return true
 }
 
-const snapshotForCompare = (el: PPTElement, skipOwnedContent: boolean): string => {
-  if (!skipOwnedContent) return JSON.stringify(el)
-  if (el.type === 'text') {
-    const { content: _content, ...rest } = el as PPTTextElement
-    return JSON.stringify(rest)
+const elementsEqualForEditable = (a: PPTElement, b: PPTElement, skipOwnedContent: boolean): boolean => {
+  if (!skipOwnedContent) return deepEqualIgnore(a, b, NO_IGNORE_KEYS)
+  if (a.type === 'text' && b.type === 'text') {
+    return deepEqualIgnore(a, b, TEXT_CONTENT_IGNORE_KEYS)
   }
-  if (el.type === 'shape') {
-    const shape = el as PPTShapeElement
-    if (!shape.text) return JSON.stringify(el)
-    const { content: _content, ...textRest } = shape.text
-    return JSON.stringify({ ...shape, text: textRest })
+  if (a.type === 'shape' && b.type === 'shape') {
+    const sa = a as PPTShapeElement
+    const sb = b as PPTShapeElement
+    if (!sa.text && !sb.text) return deepEqualIgnore(sa, sb, NO_IGNORE_KEYS)
+    if (!deepEqualIgnore(sa, sb, new Set(['text']))) return false
+    if (sa.text === sb.text) return true
+    if (!sa.text || !sb.text) return false
+    return deepEqualIgnore(sa.text, sb.text, TEXT_CONTENT_IGNORE_KEYS)
   }
-  return JSON.stringify(el)
+  return deepEqualIgnore(a, b, NO_IGNORE_KEYS)
 }
 
 /**
  * EditableElement is a per-element instance: sibling content cannot invalidate
- * this wrapper. Canvas JSON-clones the whole list on every store write, so
- * compare identity / geometry / lock / edit flags — not object identity, and
- * not ProseMirror-owned content while this element is editing.
+ * this wrapper. Canvas clones the list on store writes, so compare identity /
+ * geometry / lock / edit flags structurally — not object identity, and not
+ * ProseMirror-owned content while this element is editing.
  */
 export const areEditableElementPropsEqual = (
   prev: EditableElementCompareProps,
@@ -76,5 +88,5 @@ export const areEditableElementPropsEqual = (
   if (!sameEditableGeometry(a, b)) return false
 
   const skipOwnedContent = !!(prev.isEditing || next.isEditing)
-  return snapshotForCompare(a, skipOwnedContent) === snapshotForCompare(b, skipOwnedContent)
+  return elementsEqualForEditable(a, b, skipOwnedContent)
 }

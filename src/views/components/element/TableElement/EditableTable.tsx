@@ -197,12 +197,26 @@ const EditableTable = memo((props: IEditableTableProps) => {
   // tallest one rule. Skipped mid-drag: the live box owns the height then.
   const cellMinHeightRef = useRef(cellMinHeight);
   cellMinHeightRef.current = cellMinHeight;
+  const paintRowHeightRef = useRef(paintRowHeight);
+  paintRowHeightRef.current = paintRowHeight;
   const measureRows = useCallback(() => {
     const table = tableRef.current;
     if (!table || liveRowHeightRef.current !== null || useMainStore.getState().isScaling) return;
     const rows = Array.from(table.tBodies[0]?.rows ?? []);
     if (rows.length === 0) return;
     const floor = cellMinHeightRef.current;
+    // Fast path: when rows are already painted at `floor`, HTML `tr` height is
+    // already a min-height, so reading `row.offsetHeight` directly avoids
+    // mutating inline styles (which would force 2 extra style recalcs/table).
+    if (Math.abs(paintRowHeightRef.current - floor) < 0.5) {
+      let tallest = floor;
+      for (const row of rows) tallest = Math.max(tallest, row.offsetHeight);
+      setContentRowHeight(current => {
+        if (current === null && Math.abs(tallest - floor) < 0.5) return current;
+        return current !== null && Math.abs(current - tallest) < 0.5 ? current : tallest;
+      });
+      return;
+    }
     // The wrapper's explicit height would stretch the table (host CSS may give
     // tables a percentage height); release it for the measurement.
     const wrapper = table.parentElement;
@@ -317,10 +331,11 @@ const EditableTable = memo((props: IEditableTableProps) => {
   const handleMouseupRef = useRef(handleMouseup);
   handleMouseupRef.current = handleMouseup;
   useEffect(() => {
+    if (!editable) return;
     const onUp = () => handleMouseupRef.current();
     document.addEventListener('mouseup', onUp);
     return () => document.removeEventListener('mouseup', onUp);
-  }, []);
+  }, [editable]);
 
   const isHideCell = (rowIndex: number, colIndex: number) => hideCells.includes(`${rowIndex}_${colIndex}`);
 
@@ -546,10 +561,11 @@ const EditableTable = memo((props: IEditableTableProps) => {
   const keydownListenerRef = useRef(keydownListener);
   keydownListenerRef.current = keydownListener;
   useEffect(() => {
+    if (!editable) return;
     const onKey = (e: KeyboardEvent) => keydownListenerRef.current(e);
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [editable]);
 
   const handleInput = useCallback((value: string, rowIndex: number, colIndex: number, cellId: string, ignoreHistory = false) => {
     const pos = locateTableCell(dataRef.current, { cellId, row: rowIndex, col: colIndex });

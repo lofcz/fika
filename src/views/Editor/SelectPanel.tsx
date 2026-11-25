@@ -2,7 +2,7 @@ import { bindStyles } from '@/utils/cssm'
 import { Icon, type IconName } from '@/components/Icon'
 import styles from './SelectPanel.module.scss'
 const cx = bindStyles(styles)
-import { useCallback, memo, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useMemo, memo, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import { useMainStore, useSlidesStore, selectCurrentSlide, selectHandleElement } from '@/store';
 import type { PPTElement } from '@/types/slides';
@@ -30,8 +30,6 @@ const SelectPanel = memo(() => {
   const {
     LL
   } = useI18nContext();
-  const slidesStore = useSlidesStore();
-  const mainStore = useMainStore();
   const currentSlide = useSlidesStore(selectCurrentSlide);
   const handleElement = useMainStore(selectHandleElement);
   const handleElementId = useMainStore(s => s.handleElementId);
@@ -86,7 +84,7 @@ const SelectPanel = memo(() => {
     elements: PPTElement[];
   }
   type ElementItem = PPTElement | GroupElements;
-  const elements = (() => {
+  const elements = useMemo(() => {
     const _elements: ElementItem[] = [];
     for (const el of currentSlide?.elements || []) {
       if (el.groupId) {
@@ -101,28 +99,29 @@ const SelectPanel = memo(() => {
       } else _elements.push(el);
     }
     return _elements;
-  })();
+  }, [currentSlide?.elements]);
   const selectGroupEl = useCallback((item: GroupElements, id: string) => {
     if (handleElementId === id) return;
     if (hiddenElementIdList.includes(id)) return;
     const idList = item.elements.filter(item => !item.lock).map(el => el.id);
     if (idList.length) {
+      const mainStore = useMainStore.getState();
       mainStore.setActiveElementIdList(idList);
       mainStore.setHandleElementId(id);
-      Promise.resolve().then(() => mainStore.setActiveGroupElementId(id));
+      Promise.resolve().then(() => useMainStore.getState().setActiveGroupElementId(id));
     }
-  }, [handleElementId, hiddenElementIdList, mainStore]);
+  }, [handleElementId, hiddenElementIdList]);
   const [editingElId, setEditingElId] = useState('');
   const saveElementName = useCallback((e: ReactFocusEvent<HTMLInputElement> | ReactKeyboardEvent<HTMLInputElement>, id: string) => {
     const name = (e.target as HTMLInputElement).value;
-    slidesStore.updateElement({
+    useSlidesStore.getState().updateElement({
       id,
       props: {
         name
       }
     });
     setEditingElId('');
-  }, [slidesStore]);
+  }, []);
   const enterEdit = useCallback((id: string) => {
     setEditingElId(id);
     Promise.resolve().then(() => {
@@ -131,8 +130,8 @@ const SelectPanel = memo(() => {
     });
   }, []);
   const close = useCallback(() => {
-    mainStore.setSelectPanelState(false);
-  }, [mainStore]);
+    useMainStore.getState().setSelectPanelState(false);
+  }, []);
   const renderItem = (item: PPTElement, onClick: () => void) => (
     <div className={cx('item', itemClass(item))} key={item.id} onClick={onClick} onDoubleClick={() => enterEdit(item.id)}>
       <Icon icon={typeIcon(item.type)} className={cx("type-icon")} />

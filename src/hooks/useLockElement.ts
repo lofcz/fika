@@ -1,5 +1,6 @@
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 import type { PPTElement } from '@/types/slides'
+import { clonePlain } from '@/utils/clonePlain'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
 export default () => {
@@ -10,7 +11,7 @@ export default () => {
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
     if (!currentSlide) return
     const targetIds = activeGroupElementId ? [activeGroupElementId] : activeElementIdList
-    const newElementList: PPTElement[] = JSON.parse(JSON.stringify(currentSlide.elements))
+    const newElementList: PPTElement[] = clonePlain(currentSlide.elements)
     for (const element of newElementList) {
       if (targetIds.includes(element.id)) element.lock = true
     }
@@ -22,7 +23,7 @@ export default () => {
   const unlockElement = (handleElement: PPTElement) => {
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
     if (!currentSlide) return
-    const newElementList: PPTElement[] = JSON.parse(JSON.stringify(currentSlide.elements))
+    const newElementList: PPTElement[] = clonePlain(currentSlide.elements)
     if (handleElement.groupId) {
       const groupElementIdList = []
       for (const element of newElementList) {

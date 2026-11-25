@@ -31,12 +31,12 @@ export type IImageElementProps = {
 const ImageElement = memo((props: IImageElementProps) => {
   const { elementInfo, contextmenus } = props
   const { LL } = useI18nContext()
-  const clipingImageElementId = useMainStore(s => s.clipingImageElementId)
+  const isClipingTarget = useMainStore(s => s.clipingImageElementId === props.elementInfo.id)
   const setClipingImageElementId = useMainStore(s => s.setClipingImageElementId)
   const readOnly = useMainStore(s => s.readOnly)
   const updateElement = useSlidesStore(s => s.updateElement)
   const isMediaUnresolved = elementInfo.mediaState?.status === 'pending' || elementInfo.mediaState?.status === 'error' || !elementInfo.src
-  const isCliping = clipingImageElementId === props.elementInfo.id && !isMediaUnresolved
+  const isCliping = isClipingTarget && !isMediaUnresolved
   const { addHistorySnapshot } = useHistorySnapshot()
   const { shadowStyle } = useElementShadow(props.elementInfo.shadow)
   const { flipStyle } = useElementFlip(props.elementInfo.flipH, props.elementInfo.flipV)

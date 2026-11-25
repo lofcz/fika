@@ -1,4 +1,4 @@
-import { memo, type ComponentType } from 'react'
+import { Activity, memo, type ComponentType } from 'react'
 
 import { ElementTypes } from '@/types/slides'
 import { useHandleElementType } from '../common/handleElement'
@@ -36,9 +36,12 @@ const ElementStylePanel = memo(() => {
       {mountedTypes.map(type => {
         const Panel = panelMap[type]
         if (!Panel) return null
+        const visible = type === handleElementType
         return (
-          <div key={type} hidden={type !== handleElementType}>
-            <Panel />
+          <div key={type} hidden={!visible}>
+            <Activity mode={visible ? 'visible' : 'hidden'}>
+              <Panel />
+            </Activity>
           </div>
         )
       })}

@@ -14,7 +14,9 @@ import {
 import {
   canvasHasInk,
   clearSlideRasterResources,
+  hasLatexColorCommand,
   isThumbnailScrolling,
+  mathSizeBucket,
   notifyThumbnailScrollActivity,
   quantizeMathFontSize,
   readRasterDiagnostics,
@@ -24,6 +26,11 @@ import {
   subscribeThumbnailScrollIdle,
   withRasterRequestContext,
 } from '@/paint/rasterResources'
+import { extractReferencedKatexFamilies } from '@/paint/mathSvgRaster'
+import { measureInlineMathBoxWithRenderer, resetInlineMathProbeForTest } from '@/utils/math'
+import { EMBED_ROOT_CLASS, MATH_PROBE_ATTR, resolveOffscreenHost } from '@/utils/portal'
+import { getThumbRuntimeActiveCount, registerThumbRuntimeListener } from '@/views/components/ThumbnailSlide/thumbRailRuntime'
+import { resolveLiveTextPaint } from '@/utils/textContrast'
 import { createDocumentChangeWatcher, DOCUMENT_STORE_FIELDS, hasDocumentStateChanged } from '@/embed/documentChangeWatch'
 import type { SlidesState } from '@/store/slides'
 import { MATH_FONT_CHANGE_TOKEN } from '@/utils/textFit'
@@ -174,6 +181,23 @@ describe('math raster helpers', () => {
 
     const empty = new Uint8ClampedArray(4 * 4 * 4)
     expect(canvasHasInk(makeCanvas(empty))).toBe(false)
+
+    // Safari/WebKit SecurityError on tainted <foreignObject> canvas must not throw:
+    // direct-SVG defaults to false (clean fallback to SnapDOM), while SnapDOM fallback
+    // passes { onTainted: true } so WebKit never drops a rendered formula.
+    const taintedCanvas = {
+      width: 24,
+      height: 16,
+      getContext: () => ({
+        getImageData: () => {
+          const err = new Error('The canvas has been tainted by cross-origin data.')
+          err.name = 'SecurityError'
+          throw err
+        },
+      }),
+    } as unknown as HTMLCanvasElement
+    expect(canvasHasInk(taintedCanvas)).toBe(false)
+    expect(canvasHasInk(taintedCanvas, { onTainted: true })).toBe(true)
   })
 
   it('quantizes math font sizes into 0.5px buckets', () => {
@@ -280,6 +304,165 @@ describe('math raster helpers', () => {
     expect(syncMathReadyInEditorView(editingUnfocusedView, '<p>Hello $\\frac{1}{2}$ world</p>', { editing: true })).toBe(false)
     expect(dispatched).toBe(0)
     expect(currentState.selection.from).toBe(caretPos)
+  })
+
+  it('extracts only referenced KaTeX font families for direct SVG math rasterization', () => {
+    expect(extractReferencedKatexFamilies('<span class="ML__cmr">3</span>')).toEqual(['katex_main', 'katex_math'])
+    const sumHtml = '<span class="ML__op-symbol ML__large-op">∑</span><span class="ML__delim-size1">(</span><span class="ML__ams">ℝ</span>'
+    const families = extractReferencedKatexFamilies(sumHtml)
+    expect(families).toContain('katex_main')
+    expect(families).toContain('katex_math')
+    expect(families).toContain('katex_size2')
+    expect(families).toContain('katex_size1')
+    expect(families).toContain('katex_ams')
+    expect(families).not.toContain('katex_fraktur')
+  })
+
+  it('manages shared thumb rail runtime listeners cleanly across mounts and unmounts', () => {
+    const noop = () => {}
+    expect(getThumbRuntimeActiveCount()).toBe(0)
+    const u1 = registerThumbRuntimeListener({ onDprChange: noop, onPaneDragEnd: noop, onScrollIdle: noop, onCacheEviction: noop, onFitScaleChange: noop, onFontChanges: noop })
+    const u2 = registerThumbRuntimeListener({ onDprChange: noop, onPaneDragEnd: noop, onScrollIdle: noop, onCacheEviction: noop, onFitScaleChange: noop, onFontChanges: noop })
+    expect(getThumbRuntimeActiveCount()).toBe(2)
+    u1()
+    expect(getThumbRuntimeActiveCount()).toBe(1)
+    u2()
+    expect(getThumbRuntimeActiveCount()).toBe(0)
+  })
+
+  it('buckets interactive math sizes on a 1.25x ceiling ladder and detects LaTeX color commands', () => {
+    expect(mathSizeBucket(10)).toBe(10)
+    expect(mathSizeBucket(11)).toBe(12.5)
+    expect(mathSizeBucket(16)).toBe(19.5)
+    expect(mathSizeBucket(18)).toBe(19.5)
+    expect(mathSizeBucket(19.5)).toBe(19.5)
+    expect(mathSizeBucket(20)).toBe(24.5)
+    expect(mathSizeBucket(18)).toBeGreaterThanOrEqual(18)
+
+    expect(hasLatexColorCommand('\\frac{1}{2}')).toBe(false)
+    expect(hasLatexColorCommand('\\textcolor{red}{x}')).toBe(true)
+    expect(hasLatexColorCommand('\\color{blue} y')).toBe(true)
+    expect(hasLatexColorCommand('\\colorbox{yellow}{z}')).toBe(true)
+    expect(hasLatexColorCommand('\\bbox[yellow]{x}')).toBe(true)
+    expect(hasLatexColorCommand('\\emph{y}')).toBe(true)
+  })
+
+  it('keeps fika-embed-root on the math probe without polluting resolveOffscreenHost and never caches zero-size measurements', () => {
+    resetInlineMathProbeForTest()
+    const origDocument = globalThis.document
+    let rectResult = { width: 0, height: 0 }
+    let measureCalls = 0
+    const bodyChildren: Array<{
+      className: string
+      attrs: Map<string, string>
+      parentNode: unknown
+      style: Record<string, string>
+      innerHTML: string
+      setAttribute: (k: string, v: string) => void
+      getAttribute: (k: string) => string | null
+      contains: (node: unknown) => boolean
+      getBoundingClientRect: () => { width: number; height: number }
+    }> = []
+    const fakeBody = {
+      appendChild(node: (typeof bodyChildren)[number]) {
+        node.parentNode = fakeBody
+        if (!bodyChildren.includes(node)) bodyChildren.push(node)
+        return node
+      },
+    }
+    const fakeDocument = {
+      body: fakeBody,
+      createElement() {
+        const attrs = new Map<string, string>()
+        const el = {
+          className: '',
+          attrs,
+          parentNode: null as unknown,
+          style: {} as Record<string, string>,
+          innerHTML: '',
+          setAttribute(k: string, v: string) { attrs.set(k, v) },
+          getAttribute(k: string) { return attrs.get(k) ?? null },
+          contains(node: unknown) { return node === el },
+          getBoundingClientRect() {
+            measureCalls++
+            return rectResult
+          },
+        }
+        return el
+      },
+      querySelector(selector: string) {
+        if (selector === `.${EMBED_ROOT_CLASS}:not([${MATH_PROBE_ATTR}])`) {
+          return bodyChildren.find(el => (
+            el.className.split(/\s+/).includes(EMBED_ROOT_CLASS) && !el.attrs.has(MATH_PROBE_ATTR)
+          )) ?? null
+        }
+        if (selector === `.${EMBED_ROOT_CLASS}`) {
+          return bodyChildren.find(el => el.className.split(/\s+/).includes(EMBED_ROOT_CLASS)) ?? null
+        }
+        return null
+      },
+    }
+    ;(globalThis as unknown as { document: unknown }).document = fakeDocument
+    try {
+      // Hidden display:none host returns 0x0 — must return null AND NOT poison failedMathBoxCache.
+      expect(measureInlineMathBoxWithRenderer('\\frac{1}{2}', 18, false, l => l)).toBeNull()
+      expect(bodyChildren).toHaveLength(1)
+      expect(bodyChildren[0].className).toBe(EMBED_ROOT_CLASS)
+      expect(bodyChildren[0].getAttribute(MATH_PROBE_ATTR)).toBe('true')
+      // resolveOffscreenHost must skip the marked math probe and return document.body.
+      expect(resolveOffscreenHost()).toBe(fakeBody as unknown as HTMLElement)
+
+      // Once visible, re-measuring the same formula succeeds and then serves from cache.
+      rectResult = { width: 22, height: 24 }
+      expect(measureInlineMathBoxWithRenderer('\\frac{1}{2}', 18, false, l => l)).toEqual({ width: 22, height: 24 })
+      const callsAfterVisible = measureCalls
+      expect(measureInlineMathBoxWithRenderer('\\frac{1}{2}', 18, false, l => l)).toEqual({ width: 22, height: 24 })
+      expect(measureCalls).toBe(callsAfterVisible)
+    }
+    finally {
+      resetInlineMathProbeForTest()
+      if (origDocument === undefined) {
+        delete (globalThis as unknown as { document?: unknown }).document
+      }
+      else {
+        ;(globalThis as unknown as { document: unknown }).document = origDocument
+      }
+    }
+  })
+
+  it('evicts stale edited-slide bitmaps per (slideId, pixelSize) without evicting other sizes', () => {
+    clearThumbBitmapCache()
+    const v1Small = fakeSurface(120, 68)
+    const v1Large = fakeSurface(240, 135)
+    const v2Small = fakeSurface(120, 68)
+
+    expect(putCachedThumbSurface('s1-v1-small', v1Small.surface, 10_000_000, 0, 'slide-1')).toBe(true)
+    expect(putCachedThumbSurface('s1-v1-large', v1Large.surface, 10_000_000, 0, 'slide-1')).toBe(true)
+    expect(putCachedThumbSurface('s1-v2-small', v2Small.surface, 10_000_000, 0, 'slide-1')).toBe(true)
+
+    expect(getCachedThumbSurface('s1-v1-small')).toBeUndefined()
+    expect(v1Small.wasClosed()).toBe(true)
+    expect(getCachedThumbSurface('s1-v1-large')).toBe(v1Large.surface)
+    expect(getCachedThumbSurface('s1-v2-small')).toBe(v2Small.surface)
+  })
+
+  it('memoizes resolveLiveTextPaint cleanly for unchanged element/background inputs', () => {
+    const slide = makeSlide('contrast-1', '<p><span style="color:#333333">Hello</span></p>')
+    const el = slide.elements[0] as Extract<Slide['elements'][number], { type: 'text' }>
+    const r1 = resolveLiveTextPaint('#333333', el.content, {
+      element: el,
+      elements: slide.elements,
+      background: slide.background,
+      themeFontColor: '#333333',
+    })
+    const r2 = resolveLiveTextPaint('#333333', el.content, {
+      element: el,
+      elements: slide.elements,
+      background: slide.background,
+      themeFontColor: '#333333',
+    })
+    expect(r1).toBe(r2)
+    expect(r1.ink).toBe('#ffffff')
   })
 })
 

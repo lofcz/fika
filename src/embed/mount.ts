@@ -149,17 +149,24 @@ export async function mountFika(
       })
       return () => menuRoot.unmount()
     })
-    bindTooltips(el)
+    const unbindTooltips = bindTooltips(el)
 
     // The document must be in the stores before the controller is handed out:
     // hosts issue commands right after `await mountFika(...)`, and a later
     // effect-time apply would overwrite them. The same goes for the starter
     // deck: it is the initial state, not something to load after the fact.
-    if (options.document) applyDocumentToStores(options.document)
-    else if (!options.loadDocument && options.loadMockOnEmpty !== true) {
-      applyDocumentToStores(options.viewMode === 'canva' || options.viewMode === 'myna'
-        ? createMynaDocument(getLL(locale).myna)
-        : buildStarterPresentation(getLL(locale), options.starterPresentation))
+    try {
+      if (options.document) applyDocumentToStores(options.document)
+      else if (!options.loadDocument && options.loadMockOnEmpty !== true) {
+        applyDocumentToStores(options.viewMode === 'canva' || options.viewMode === 'myna'
+          ? createMynaDocument(getLL(locale).myna)
+          : buildStarterPresentation(getLL(locale), options.starterPresentation))
+      }
+    }
+    catch (error) {
+      unbindTooltips()
+      unmount()
+      throw error
     }
     useMainStore.getState().setReadOnly(options.readOnly === true)
 
@@ -182,6 +189,7 @@ export async function mountFika(
     controller.destroy = () => {
       if (destroyed) return
       destroyed = true
+      unbindTooltips()
       originalDestroy()
       unmount()
       useMainStore.getState().setReadOnly(false)

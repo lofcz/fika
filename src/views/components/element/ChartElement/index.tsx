@@ -23,10 +23,10 @@ export type IChartElementProps = {
 
 const ChartElement = memo((props: IChartElementProps) => {
   const { elementInfo, contextmenus } = props;
-  const currentSlide = useSlidesStore(selectCurrentSlide);
+  const slideBackground = useSlidesStore(s => selectCurrentSlide(s)?.background);
   const theme = useSlidesStore(s => s.theme);
   const labelColor = resolveChartLabelColor(props.elementInfo, {
-    background: currentSlide?.background,
+    background: slideBackground,
     fallbackSurface: theme?.backgroundColor,
     fontColor: theme?.fontColor
   });
@@ -84,7 +84,7 @@ const ChartElement = memo((props: IChartElementProps) => {
             type={elementInfo.chartType}
             data={elementInfo.data}
             themeColors={resolveChartElementSeriesColors(elementInfo, {
-              background: currentSlide?.background,
+              background: slideBackground,
               fallbackSurface: theme?.backgroundColor,
             })}
             textColor={labelColor}

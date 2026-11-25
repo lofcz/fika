@@ -6,9 +6,9 @@ import type { PPTElement, ShapeText } from '@/types/slides'
 import { repairFilledPlaceholderHtml } from '@/utils/placeholderPaint'
 import { getEditorView } from './caret'
 import { normalizeFittedFontSizes } from './index'
-import { editorHtmlLooksEmpty, shouldWriteEditorHtml } from './commitPolicy'
+import { editorHtmlLooksEmpty, findElementInSlides, shouldWriteEditorHtml } from './commitPolicy'
 
-export { editorHtmlLooksEmpty, shouldWriteEditorHtml } from './commitPolicy'
+export { editorHtmlLooksEmpty, findElementInSlides, shouldWriteEditorHtml } from './commitPolicy'
 
 /** Exclude transient node-selection decorations from persisted rich text. */
 export function cleanEditorHtml(dom: HTMLElement): string {
@@ -46,27 +46,18 @@ export const resolveEditorMountHtml = (elementId: string, value: string): string
   return editorHtmlLooksEmpty(storeHtml) ? value : storeHtml
 }
 
-const findElementInPresentation = (elementId: string): { slideId: string; el: PPTElement } | null => {
-  // Live editors are mounted on the visible slide; resolve there first so a
-  // deck with ids repeated across slides never commits into another slide.
+const findElementInPresentation = (elementId: string, preferredSlideId?: string): { slideId: string; el: PPTElement } | null => {
   const state = useSlidesStore.getState()
-  const current = selectCurrentSlide(state)
-  const own = current?.elements.find(item => item.id === elementId)
-  if (current && own) return { slideId: current.id, el: own }
-  for (const slide of state.slides) {
-    const el = slide.elements.find(item => item.id === elementId)
-    if (el) return { slideId: slide.id, el }
-  }
-  return null
+  return findElementInSlides(state.slides, state.slideIndex, elementId, preferredSlideId)
 }
 
 /** Persist the live ProseMirror HTML. History is for explicit flushes, not every key. */
-export function commitLiveEditorToStore(elementId: string, options?: { history?: boolean }) {
+export function commitLiveEditorToStore(elementId: string, options?: { history?: boolean; slideId?: string }) {
   const view = getEditorView(elementId)
   if (!view) return
   const empty = view.state.doc.textContent.trim().length === 0 && richTextHtmlLooksEmpty(view.dom.innerHTML)
   const html = empty ? '' : normalizeFittedFontSizes(cleanEditorHtml(view.dom))
-  const found = findElementInPresentation(elementId)
+  const found = findElementInPresentation(elementId, options?.slideId)
   if (!found) return
   const { slideId, el } = found
   const isAuthoritative = view.hasFocus() || useMainStore.getState().editingElementId === elementId

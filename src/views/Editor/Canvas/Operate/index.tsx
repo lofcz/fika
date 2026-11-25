@@ -15,7 +15,7 @@ import LineElementOperate from './LineElementOperate'
 import TableElementOperate from './TableElementOperate'
 import CommonElementOperate from './CommonElementOperate'
 import MediaElementOperate from './MediaElementOperate'
-import ContextMenuBridge, { type ElementContextmenus } from './ContextMenuBridge'
+import type { ElementContextmenus } from './ContextMenuBridge'
 import { boxGeometryChanged } from './operateCompare'
 import { operateMemoEqual } from './operateMemo'
 
@@ -32,7 +32,7 @@ export type IOperateProps = {
   moveShapeKeypoint: (e: MouseEvent, element: PPTShapeElement, index: number) => void
   dragElement: (e: MouseEvent | TouchEvent, element: PPTElement) => void
   beginEdit: (elementId: string, caret?: { left: number; top: number }) => void
-  openLinkDialog: () => void
+  getContextmenus: ElementContextmenus
   className?: string
   style?: CSSProperties
 }
@@ -51,14 +51,13 @@ const elementTypeMap = {
   [ElementTypes.AUDIO]: MediaElementOperate,
 }
 
-type OperateChromeProps = IOperateProps & {
+type OperateChromeProps = Omit<IOperateProps, 'getContextmenus'> & {
   rotateElement: IOperateProps['rotateElement']
   scaleElement: IOperateProps['scaleElement']
   dragLineElement: IOperateProps['dragLineElement']
   moveShapeKeypoint: IOperateProps['moveShapeKeypoint']
   dragElement: IOperateProps['dragElement']
   beginEdit: IOperateProps['beginEdit']
-  openLinkDialog: IOperateProps['openLinkDialog']
   onContext: (e: React.MouseEvent) => void
 }
 
@@ -191,7 +190,6 @@ const Operate = memo((props: IOperateProps) => {
   const id = props.elementInfo.id
   latestOperateProps.set(id, props)
   useEffect(() => () => { latestOperateProps.delete(id) }, [id])
-  const contextmenusRef = useRef<ElementContextmenus | null>(null)
 
   const rotateElement = useCallback<IOperateProps['rotateElement']>((e, element) => {
     const latest = readOperate(id)
@@ -221,33 +219,32 @@ const Operate = memo((props: IOperateProps) => {
   const beginEdit = useCallback<IOperateProps['beginEdit']>((elementId, caret) => {
     readOperate(id)?.beginEdit(elementId, caret)
   }, [id])
-  const openLinkDialog = useCallback(() => {
-    readOperate(id)?.openLinkDialog()
-  }, [id])
   const onContext = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
-    const menus = contextmenusRef.current
     const latest = readOperate(id)
-    if (!menus || !latest) return
-    openContextmenu(e, () => menus(latest.elementInfo, latest.isMultiSelect))
+    if (!latest) return
+    openContextmenu(e, () => latest.getContextmenus(latest.elementInfo, latest.isMultiSelect))
   }, [id])
 
   return (
-    <>
-      <ContextMenuBridge openLinkDialog={openLinkDialog} menuRef={contextmenusRef} />
-      <OperateChrome
-        {...props}
-        rotateElement={rotateElement}
-        scaleElement={scaleElement}
-        dragLineElement={dragLineElement}
-        moveShapeKeypoint={moveShapeKeypoint}
-        dragElement={dragElement}
-        beginEdit={beginEdit}
-        openLinkDialog={openLinkDialog}
-        onContext={onContext}
-      />
-    </>
+    <OperateChrome
+      elementInfo={props.elementInfo}
+      isSelected={props.isSelected}
+      isActive={props.isActive}
+      isActiveGroupElement={props.isActiveGroupElement}
+      isMultiSelect={props.isMultiSelect}
+      isEditing={props.isEditing}
+      className={props.className}
+      style={props.style}
+      rotateElement={rotateElement}
+      scaleElement={scaleElement}
+      dragLineElement={dragLineElement}
+      moveShapeKeypoint={moveShapeKeypoint}
+      dragElement={dragElement}
+      beginEdit={beginEdit}
+      onContext={onContext}
+    />
   )
 }, operateLatestEqual)
 

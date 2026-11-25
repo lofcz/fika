@@ -1,6 +1,7 @@
 export const APP_SHELL_ID = 'fika-shell'
 export const APP_PORTALS_ID = 'fika-portals'
 export const EMBED_ROOT_CLASS = 'fika-embed-root'
+export const MATH_PROBE_ATTR = 'data-fika-math-probe'
 
 let portalTarget: HTMLElement | null = null
 
@@ -33,10 +34,10 @@ export function ensureAppPortalRoot(): HTMLElement {
  */
 export function resolveOffscreenHost(): HTMLElement {
   if (portalTarget?.isConnected) {
-    const root = portalTarget.closest<HTMLElement>(`.${EMBED_ROOT_CLASS}`)
+    const root = portalTarget.closest<HTMLElement>(`.${EMBED_ROOT_CLASS}:not([${MATH_PROBE_ATTR}])`)
     if (root) return root
   }
-  const root = document.querySelector<HTMLElement>(`.${EMBED_ROOT_CLASS}`)
+  const root = document.querySelector<HTMLElement>(`.${EMBED_ROOT_CLASS}:not([${MATH_PROBE_ATTR}])`)
   return root ?? document.body
 }
 
@@ -120,7 +121,8 @@ const isDocumentLevelTarget = (target: EventTarget | null): boolean => (
 )
 
 const isAppMounted = (): boolean => (
-  !!document.getElementById(APP_SHELL_ID) || !!document.querySelector(`.${EMBED_ROOT_CLASS}`)
+  !!document.getElementById(APP_SHELL_ID)
+  || !!document.querySelector(`.${EMBED_ROOT_CLASS}:not([${MATH_PROBE_ATTR}])`)
 )
 
 /**

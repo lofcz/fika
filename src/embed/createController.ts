@@ -1,4 +1,5 @@
 import { flushCommitQueue } from '@/utils/commitQueue'
+import { clonePlain } from '@/utils/clonePlain'
 import { setFikaDesignThemes } from '@/configs/designThemes'
 import { setFikaAiSlideInsert } from '@/configs/aiSlideInsert'
 import { useSlidesStore } from '@/store/slides'
@@ -195,7 +196,7 @@ export function createController(
     revealSlide(slideId: string, patch: Partial<Slide>, options: FikaRevealOptions = {}) {
       if (destroyed) return Promise.resolve()
       const run = async () => {
-        revealing = { slideId, patch: JSON.parse(JSON.stringify(patch)) }
+        revealing = { slideId, patch: clonePlain(patch) }
         try {
           await revealSlide(slideId, patch, options, {
             mute() {

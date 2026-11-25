@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
 import { useMainStore, useSlidesStore, selectActiveElementList, selectCurrentSlide } from '@/store'
 import type { PPTElement } from '@/types/slides'
+import { clonePlain } from '@/utils/clonePlain'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 
 export const getCanCombine = () => {
@@ -21,7 +22,7 @@ export default () => {
     const activeElementList = selectActiveElementList(useMainStore.getState())
     if (!activeElementList.length || !currentSlide) return
 
-    let newElementList: PPTElement[] = JSON.parse(JSON.stringify(currentSlide.elements))
+    let newElementList: PPTElement[] = clonePlain(currentSlide.elements)
     const groupId = nanoid(10)
     const combineElementList: PPTElement[] = []
     for (const element of newElementList) {
@@ -47,7 +48,7 @@ export default () => {
     if (!activeElementList.length || !currentSlide) return
     const hasElementInGroup = activeElementList.some(item => item.groupId)
     if (!hasElementInGroup) return
-    const newElementList: PPTElement[] = JSON.parse(JSON.stringify(currentSlide.elements))
+    const newElementList: PPTElement[] = clonePlain(currentSlide.elements)
     for (const element of newElementList) {
       if (activeElementIdList.includes(element.id) && element.groupId) delete element.groupId
     }

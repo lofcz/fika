@@ -782,6 +782,8 @@ export function notifyInlineMathReady() {
 type BlocksMemoEntry = {
   blocks: TextFitBlock[]
   metricKey: string
+  /** True when `inlineMathMeasurer` ran on these cached blocks. */
+  mathMeasured: boolean
 }
 const blocksMemo = new Map<string, BlocksMemoEntry>()
 const BLOCKS_MEMO_MAX = 400
@@ -806,8 +808,9 @@ export const extractBlocksCached = (
       defaultWeight,
       defaultItalic,
     }).blocks
+    const mathMeasured = !!inlineMathMeasurer
     if (inlineMathMeasurer) applyMeasuredMathBoxes(blocks, inlineMathMeasurer)
-    entry = { blocks, metricKey: computeBlocksMetricKey(blocks) }
+    entry = { blocks, metricKey: computeBlocksMetricKey(blocks), mathMeasured }
     if (blocksMemo.size >= BLOCKS_MEMO_MAX) {
       const oldest = blocksMemo.keys().next().value
       if (oldest !== undefined) blocksMemo.delete(oldest)
@@ -821,7 +824,7 @@ export const extractBlocksCached = (
   return entry
 }
 
-type FitScaleOptions = {
+export type FitScaleOptions = {
   innerWidth: number
   innerHeight: number
   defaultFontFamily?: string
@@ -1177,10 +1180,25 @@ export interface ExtractOptions {
 }
 const BLOCK_SELECTOR = 'li, p, blockquote';
 
+let sharedDomParser: DOMParser | null = null
+const parseHtmlDocument = (html: string): Document => {
+  if (!sharedDomParser) sharedDomParser = new DOMParser()
+  return sharedDomParser.parseFromString(html, 'text/html')
+}
+
+type RunProfileResult = {
+  runs: NonNullable<TextFitBlock['runs']>
+  maxSize: number
+  hasBoldTag: boolean
+  hasItalicTag: boolean
+  firstFamily: string | null
+}
+
 /**
  * Inline run profile of a block: one entry per styled run with its text,
  * size, and bold/italic ancestry (closest styled ancestor wins; unmarked
- * text uses the default size). Feeds pretext's rich-inline measurement.
+ * text uses the default size). Also collects block-level maxSize, bold/italic
+ * tag presence, and first declared font-family in the same single DOM walk.
  */
 const runSizeProfile = (
   block: Element,
@@ -1193,8 +1211,13 @@ const runSizeProfile = (
     fontWeight?: number
     italic?: boolean
   },
-): NonNullable<TextFitBlock['runs']> => {
+): RunProfileResult => {
   const runs: NonNullable<TextFitBlock['runs']> = []
+  let maxSize = parseFontSizePx((block as HTMLElement).style?.fontSize)
+  let hasBoldTag = false
+  let hasItalicTag = false
+  let firstFamily = usableFamily((block as HTMLElement).style?.fontFamily)
+  const initialFamily = firstFamily || inheritedBase?.fontFamily || defaultFamily
   const walk = (
     el: Element,
     inherited: {
@@ -1209,9 +1232,16 @@ const runSizeProfile = (
     },
   ) => {
     const htmlEl = el as HTMLElement
-    let size = parseFontSizePx(htmlEl.style?.fontSize)
-    if (!(size > 0)) size = inherited.size
+    const ownSize = parseFontSizePx(htmlEl.style?.fontSize)
+    if (ownSize > maxSize) maxSize = ownSize
+    const size = ownSize > 0 ? ownSize : inherited.size
     const tag = el.tagName
+    if (el !== block) {
+      if (tag === 'STRONG' || tag === 'B') hasBoldTag = true
+      if (tag === 'EM' || tag === 'I') hasItalicTag = true
+    }
+    const ownFamily = usableFamily(htmlEl.style?.fontFamily)
+    if (!firstFamily && ownFamily) firstFamily = ownFamily
     const decoration = htmlEl.style?.textDecoration || ''
     const rawWeight = htmlEl.style?.fontWeight
     const numericWeight = rawWeight ? Number(rawWeight) : NaN
@@ -1229,7 +1259,7 @@ const runSizeProfile = (
       underline: inherited.underline || tag === 'U' || decoration.includes('underline'),
       strikethrough: inherited.strikethrough || tag === 'S' || tag === 'STRIKE' || decoration.includes('line-through'),
       color: htmlEl.style?.color || inherited.color,
-      fontFamily: usableFamily(htmlEl.style?.fontFamily) || inherited.fontFamily,
+      fontFamily: ownFamily || inherited.fontFamily,
     }
     for (const node of el.childNodes) {
       if (node.nodeType === Node.TEXT_NODE) {
@@ -1275,9 +1305,9 @@ const runSizeProfile = (
     underline: false,
     strikethrough: false,
     color: (block as HTMLElement).style?.color || inheritedBase?.color || undefined,
-    fontFamily: blockFontFamily(block, inheritedBase?.fontFamily || defaultFamily),
+    fontFamily: initialFamily,
   })
-  return runs
+  return { runs, maxSize: maxSize || defaultSize, hasBoldTag, hasItalicTag, firstFamily }
 }
 
 /**
@@ -1293,7 +1323,7 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
     blocks: []
   };
   if (!html || typeof DOMParser === 'undefined') return empty;
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = parseHtmlDocument(html);
   const root = doc.body;
   if (!root) return empty;
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE;
@@ -1312,7 +1342,7 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
     const blockBaseSize = listInfo ? listInfo.listFontSize : defaultSize;
     const blockBaseFamily = listInfo ? listInfo.listFontFamily : defaultFamily;
     const preserveWhitespace = /^(pre|pre-wrap|break-spaces)$/.test((el as HTMLElement).style?.whiteSpace || '')
-    const runs = runSizeProfile(el, blockBaseSize, blockBaseFamily, preserveWhitespace, {
+    const { runs, maxSize, hasBoldTag, hasItalicTag, firstFamily } = runSizeProfile(el, blockBaseSize, blockBaseFamily, preserveWhitespace, {
       color: listInfo?.listColor,
       fontFamily: blockBaseFamily,
       fontWeight: options.defaultWeight,
@@ -1350,16 +1380,16 @@ export function extractFitBlocksFromHtml(html: string, options: ExtractOptions):
     blocks.push({
       text,
       ...(whiteSpace ? { whiteSpace } : {}),
-      size: blockFontSize(el, blockBaseSize),
+      size: maxSize,
       paragraphSize,
       paragraphIndent: Math.max(0, Math.min(8, Number(paragraph.dataset.indent) || 0)) * paragraphSize,
       ...(leading && Number.isFinite(leadingValue) && leadingValue > 0 ? { lineHeight: leadingValue } : leading ? { lineHeightPx: toPx(leading) } : {}),
       ...(paragraph.style.marginTop ? { marginTop: toPx(paragraph.style.marginTop) } : {}),
       ...(paragraph.style.marginBottom ? { marginBottom: toPx(paragraph.style.marginBottom) } : {}),
-      bold: runs[0]?.bold || (options.defaultWeight != null && options.defaultWeight >= 600) || !!el.querySelector('strong, b'),
+      bold: runs[0]?.bold || (options.defaultWeight != null && options.defaultWeight >= 600) || hasBoldTag,
       ...(options.defaultWeight && options.defaultWeight !== 400 ? { fontWeight: options.defaultWeight } : {}),
-      italic: runs[0]?.italic || !!options.defaultItalic || inBlockquote || !!el.querySelector('em, i'),
-      fontFamily: blockFontFamily(el, blockBaseFamily),
+      italic: runs[0]?.italic || !!options.defaultItalic || inBlockquote || hasItalicTag,
+      fontFamily: firstFamily || blockBaseFamily,
       listItem: isList,
       ...(firstInList ? { firstInList: true } : {}),
       ...(listInfo ? { listFontSize: listInfo.listFontSize } : {}),

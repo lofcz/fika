@@ -242,11 +242,19 @@ export async function renderSlideImage(target: RenderTarget, options: FikaRender
 
 function resolveAtlasSlides(slides: Slide[], wanted: Array<string | number> | undefined): Array<{ slide: Slide; index: number }> {
   if (!wanted?.length) return slides.map((slide, i) => ({ slide, index: i + 1 }))
+  const indexById = new Map<string, number>()
+  for (let i = 0; i < slides.length; i++) {
+    if (!indexById.has(slides[i].id)) indexById.set(slides[i].id, i)
+  }
+  const seenIds = new Set<string>()
   const picked: Array<{ slide: Slide; index: number }> = []
   for (const ref of wanted) {
-    const i = typeof ref === 'number' ? ref - 1 : slides.findIndex(s => s.id === ref)
+    const i = typeof ref === 'number' ? ref - 1 : (indexById.get(ref) ?? -1)
     const slide = slides[i]
-    if (slide && !picked.some(p => p.slide.id === slide.id)) picked.push({ slide, index: i + 1 })
+    if (slide && !seenIds.has(slide.id)) {
+      seenIds.add(slide.id)
+      picked.push({ slide, index: i + 1 })
+    }
   }
   return picked
 }

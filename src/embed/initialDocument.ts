@@ -17,10 +17,14 @@ export type FikaInitialDocument = FikaDocument & { viewport?: Partial<FikaDeckVi
  */
 export function applyDocumentToStores(document: FikaInitialDocument): void {
   const store = useSlidesStore.getState()
-  store.setTitle(document.title)
-  store.setSlides(repairDuplicateElementIds(document.slides), document.theme)
   const viewport = inferViewportFromSlides(document.slides, document.viewport) ?? document.viewport
-  if (viewport?.size) store.setViewportSize(viewport.size)
-  if (viewport?.ratio) store.setViewportRatio(viewport.ratio)
-  store.setViewportWidthInches(document.viewport?.widthInches)
+  store.applyDocument({
+    title: document.title,
+    slides: repairDuplicateElementIds(document.slides),
+    theme: document.theme,
+    viewportSize: viewport?.size,
+    viewportRatio: viewport?.ratio,
+    viewportWidthInches: document.viewport?.widthInches,
+    hasViewportWidthInches: true,
+  })
 }

@@ -21,7 +21,7 @@ const SearchPanel = memo(() => {
   const {
     LL
   } = useI18nContext();
-  const mainStore = useMainStore();
+  const readOnly = useMainStore(s => s.readOnly);
   const {
     canReplace,
     searchWord,
@@ -46,8 +46,8 @@ const SearchPanel = memo(() => {
     label: LL.editor.search.tabReplace()
   }];
   const close = useCallback(() => {
-    mainStore.setSearchPanelState(false);
-  }, [mainStore]);
+    useMainStore.getState().setSearchPanelState(false);
+  }, []);
   const searchInpRef = useRef<ElementRef<typeof Input> | null>(null);
   useEffect(() => {
     searchInpRef.current!.focus();
@@ -85,7 +85,7 @@ const SearchPanel = memo(() => {
           replace();
         }} /> : null}{type === 'replace' ? <div className={cx("footer")}><Button disabled={!searchWord || !canReplace} onClick={() => {
             replace();
-          }}>{LL.editor.search.replace()}</Button><Button disabled={!searchWord || mainStore.readOnly} type='primary' onClick={() => {
+          }}>{LL.editor.search.replace()}</Button><Button disabled={!searchWord || readOnly} type='primary' onClick={() => {
             replaceAll();
           }}>{LL.editor.search.replaceAll()}</Button></div> : null}</div></MoveablePanel></>;
 });

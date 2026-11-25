@@ -14,7 +14,7 @@
  */
 
 import { decodeXML } from 'entities';
-import { APP_SHELL_ID, EMBED_ROOT_CLASS, getFikaPortalTarget, resolveOffscreenHost } from '@/utils/portal';
+import { APP_SHELL_ID, EMBED_ROOT_CLASS, getFikaPortalTarget, MATH_PROBE_ATTR, resolveOffscreenHost } from '@/utils/portal';
 import { MATH_FONT_CHANGE_TOKEN, notifyInlineMathReady, registerInlineMathMeasurer, subscribeTextFontChanges } from '@/utils/textFit';
 
 export { MATH_CLASS, estimateInlineMathBox, htmlHasFikaMath, isPlausibleInlineMathBox } from './inlineMathBox';
@@ -116,7 +116,7 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
     mathlive = resolved;
     mathReady.value = true;
     mathReadyVersion++;
-    inlineMathBoxCache.clear();
+    clearInlineMathBoxCaches();
     notifyInlineMathReady();
     for (const listener of Array.from(mathReadyListeners)) listener();
     if (typeof document !== 'undefined') {
@@ -134,7 +134,7 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
       }
       if (document.fonts?.status === 'loading') {
         document.fonts.ready.then(() => {
-          inlineMathBoxCache.clear();
+          clearInlineMathBoxCaches();
           notifyInlineMathReady();
         }).catch(() => {});
       }
@@ -244,14 +244,28 @@ export function renderLatexElementHtml(latex: string): string {
 }
 
 const inlineMathBoxCache = new Map<string, { width: number; height: number }>()
+const failedMathBoxCache = new Set<string>()
+let reusableMathProbe: HTMLDivElement | null = null
+
+const clearInlineMathBoxCaches = () => {
+  inlineMathBoxCache.clear()
+  failedMathBoxCache.clear()
+}
+
+/** @internal Exposed for unit tests to reset cached probe/boxes between runs. */
+export const resetInlineMathProbeForTest = () => {
+  clearInlineMathBoxCaches()
+  reusableMathProbe = null
+}
+
 subscribeTextFontChanges(families => {
   if (!families || families.has(MATH_FONT_CHANGE_TOKEN)) {
-    inlineMathBoxCache.clear()
+    clearInlineMathBoxCaches()
     return
   }
   for (const family of families) {
     if (family.includes('katex')) {
-      inlineMathBoxCache.clear()
+      clearInlineMathBoxCaches()
       return
     }
   }
@@ -261,46 +275,92 @@ const inlineMathBoxKey = (latex: string, fontSize: number, display: boolean) => 
   `${latex}\0${Math.round(fontSize * 100)}\0${display ? 1 : 0}`
 )
 
+const ensureReusableMathProbe = (): HTMLDivElement => {
+  const host = resolveOffscreenHost()
+  if (!reusableMathProbe) {
+    const probe = document.createElement('div')
+    probe.className = EMBED_ROOT_CLASS
+    probe.setAttribute('aria-hidden', 'true')
+    probe.setAttribute(MATH_PROBE_ATTR, 'true')
+    probe.style.cssText = [
+      'position:absolute',
+      'left:-99999px',
+      'top:0',
+      'line-height:normal',
+      'width:max-content',
+      'white-space:nowrap',
+      'pointer-events:none',
+      'contain:layout style',
+    ].join(';')
+    reusableMathProbe = probe
+  }
+  if (reusableMathProbe.parentNode !== host && !reusableMathProbe.contains(host)) {
+    host.appendChild(reusableMathProbe)
+  }
+  return reusableMathProbe
+}
+
+const measureMathAtFontSize = (
+  latex: string,
+  fontSize: number,
+  display: boolean,
+  renderHtml: (latex: string, display: boolean) => string = renderMathToHtml,
+): {
+  width: number
+  height: number
+} | null => {
+  const probe = ensureReusableMathProbe()
+  probe.style.fontSize = `${Math.max(1, fontSize)}px`
+  probe.innerHTML = renderHtml(latex, display)
+  const rect = probe.getBoundingClientRect()
+  probe.innerHTML = ''
+  if (!(rect.width > 0) || !(rect.height > 0)) return null
+  return {
+    width: rect.width,
+    height: Math.max(rect.height, fontSize),
+  }
+}
+
+/** @internal Shared probe + cache pipeline (testable without loading MathLive). */
+export function measureInlineMathBoxWithRenderer(
+  latex: string,
+  fontSize: number,
+  display: boolean,
+  renderHtml: (latex: string, display: boolean) => string,
+): {
+  width: number
+  height: number
+} | null {
+  if (typeof document === 'undefined') return null
+  const key = inlineMathBoxKey(latex, fontSize, display)
+  const cached = inlineMathBoxCache.get(key)
+  if (cached) return cached
+  if (failedMathBoxCache.has(key)) return null
+
+  const exact = measureMathAtFontSize(latex, fontSize, display, renderHtml)
+  if (!exact) return null
+  if (!isPlausibleInlineMathBox(exact, fontSize, estimateInlineMathBox(latex, fontSize, display))) {
+    failedMathBoxCache.add(key)
+    return null
+  }
+  inlineMathBoxCache.set(key, exact)
+  return exact
+}
+
 /**
- * Sync natural box of inline/display math at `fontSize`. Returns null until
- * MathLive can typeset; callers should fall back to {@link estimateInlineMathBox}.
+ * Sync natural box of inline/display math at exact `fontSize` using a single
+ * reused, layout-contained offscreen probe (`contain: layout style`), with
+ * cached results and per-revision failure memoization. Exact-size probing
+ * avoids >0.5px font-hinting width drift seen with linear 24px scaling.
+ * Zero-size measurements (e.g. inside a temporarily hidden `display:none`
+ * embed) are never cached as failures so visibility recovery re-measures.
  */
 export function measureInlineMathBox(latex: string, fontSize: number, display = false): {
   width: number
   height: number
 } | null {
   if (!mathlive || typeof document === 'undefined') return null
-  const key = inlineMathBoxKey(latex, fontSize, display)
-  const cached = inlineMathBoxCache.get(key)
-  if (cached) return cached
-  const probe = document.createElement('div')
-  probe.className = EMBED_ROOT_CLASS
-  probe.style.cssText = [
-    'position:absolute',
-    'left:-99999px',
-    'top:0',
-    `font-size:${Math.max(1, fontSize)}px`,
-    'line-height:normal',
-    'width:max-content',
-    'white-space:nowrap',
-    'pointer-events:none',
-  ].join(';')
-  probe.innerHTML = renderMathToHtml(latex, display)
-  const host = resolveOffscreenHost()
-  host.appendChild(probe)
-  void probe.offsetWidth
-  const rect = probe.getBoundingClientRect()
-  host.removeChild(probe)
-  if (!(rect.width > 0) || !(rect.height > 0)) return null
-  const box = {
-    width: rect.width,
-    height: Math.max(rect.height, fontSize),
-  }
-  if (!isPlausibleInlineMathBox(box, fontSize, estimateInlineMathBox(latex, fontSize, display))) {
-    return null
-  }
-  inlineMathBoxCache.set(key, box)
-  return box
+  return measureInlineMathBoxWithRenderer(latex, fontSize, display, renderMathToHtml)
 }
 registerInlineMathMeasurer(measureInlineMathBox)
 

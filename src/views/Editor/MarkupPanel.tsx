@@ -12,11 +12,9 @@ const MarkupPanel = memo(() => {
   const {
     LL
   } = useI18nContext();
-  const slidesStore = useSlidesStore();
-  const mainStore = useMainStore();
-  const currentSlide = useSlidesStore(selectCurrentSlide);;
+  const currentSlide = useSlidesStore(selectCurrentSlide);
   const handleElement = useMainStore(selectHandleElement);
-  const handleElementId = useMainStore(s => s.handleElementId);;
+  const handleElementId = useMainStore(s => s.handleElementId);
   const slideTypeOptions = [{
     label: LL.editor.markup.unmarked(),
     value: '' as const
@@ -96,17 +94,19 @@ const MarkupPanel = memo(() => {
     return '';
   })();
   const updateSlide = useCallback((type: SlideType | '') => {
+    const slidesStore = useSlidesStore.getState();
     if (type) slidesStore.updateSlide({
       type
-    });else {
+    });else if (currentSlide) {
       slidesStore.removeSlideProps({
         id: currentSlide.id,
         propName: 'type'
       });
     }
-  }, [slidesStore, currentSlide?.id]);
+  }, [currentSlide?.id]);
   const updateElement = useCallback((type: TextType | ImageType | '') => {
     if (!handleElement) return;
+    const slidesStore = useSlidesStore.getState();
     if (handleElement.type === 'image') {
       if (type) {
         slidesStore.updateElement({
@@ -151,19 +151,20 @@ const MarkupPanel = memo(() => {
           }
         });
       } else {
-        delete text.type;
+        const nextText = { ...text };
+        delete nextText.type;
         slidesStore.updateElement({
           id: handleElementId,
           props: {
-            text
+            text: nextText
           }
         });
       }
     }
-  }, [handleElement, handleElement?.type, slidesStore, handleElementId, handleElement?.type === 'shape' ? handleElement.text : undefined]);
+  }, [handleElement, handleElementId]);
   const close = useCallback(() => {
-    mainStore.setMarkupPanelState(false);
-  }, [mainStore]);
+    useMainStore.getState().setMarkupPanelState(false);
+  }, []);
   return <><MoveablePanel className={cx("notes-panel")} width={300} height={130} title={LL.editor.markup.title()} left={-270} top={90} onClose={() => {
       close();
     }}><div className={cx("container")}><div className={cx("row")}><div style={{

@@ -9,9 +9,7 @@ import { normalizeFittedFontSizes } from '@/utils/richTextFontSize'
 import { serializeRichTextHtml } from '@/utils/prosemirror'
 import {
   contentBoxOfHost,
-  createFitMeasureSession,
   extractBlocksCached,
-  fitSessionKey,
   innerBoxFromLiveStyles,
   MATH_FONT_CHANGE_TOKEN,
   minimumTextFitScale,
@@ -20,9 +18,17 @@ import {
   resolvePaintFontFamily,
   subscribeTextFontChanges,
   textFitScaleForHtml,
-  type FitMeasureSession,
+  type FitScaleOptions,
 } from '@/utils/textFit'
 import { htmlContainsMath } from '@/utils/math'
+import {
+  cancelVerifyJobForHost,
+  enqueueVerifyJob,
+  readVerifiedFit,
+  runVerifyBatch,
+  verifiedFitKey,
+  type PendingVerifyJob,
+} from './textFitBatcher'
 
 const DEFAULT_INSET: TextInset = [10, 10, 10, 10]
 const DEFAULT_LINE_HEIGHT = 1.5
@@ -77,8 +83,10 @@ function readLive(live: LiveContentInput): string | null | undefined {
  * its content never overflows.
  *
  * Pretext supplies a cached estimate during resize. Settled geometry is
- * refined against browser layout before paint, and the verified font scale
- * is shared with the thumbnail painter. Authored font sizes stay unchanged.
+ * refined against browser layout before paint (batched across mounting boxes
+ * via FastDOM read/write phases and cached in a verified-DOM LRU), and the
+ * verified font scale is shared with the thumbnail painter. Authored font
+ * sizes stay unchanged.
  */
 export default (
   elementInfo: FitSource,
@@ -91,9 +99,11 @@ export default (
   const themeFontNameRef = useRef(themeFontName)
   themeFontNameRef.current = themeFontName
   const fitScaleRef = useRef(1)
-  const sessionRef = useRef<FitMeasureSession | null>(null)
   const lastInnerRef = useRef({ width: 0, height: 0 })
+  const lastAppliedKeyRef = useRef('')
+  const lastFittedRawRef = useRef<string | null>(null)
   const rafRef = useRef(0)
+  const mountedRef = useRef(true)
   const elementInfoRef = useRef(elementInfo)
   elementInfoRef.current = elementInfo
   const localeRef = useRef(locale)
@@ -104,72 +114,42 @@ export default (
   hostElRef.current = hostEl
   const observeResize = options?.observeResize !== false
   const scheduleRef = useRef<() => void>(() => {})
-  const applyScaleRef = useRef<() => void>(() => {})
+  const applyScaleRef = useRef<(opts?: { batch?: boolean; liveEdit?: boolean }) => void>(() => {})
 
   const measuredContent = () => {
     const live = readLive(liveContentRef.current)
-    return normalizeFittedFontSizes(serializeRichTextHtml(live !== null && live !== undefined ? live : fitContentOf(elementInfoRef.current)))
+    const raw = live !== null && live !== undefined ? live : fitContentOf(elementInfoRef.current)
+    if (!raw) return ''
+    return normalizeFittedFontSizes(serializeRichTextHtml(raw))
   }
 
   const authoredSize = () => fitAuthoredSizeOf(elementInfoRef.current)
-
-  const enabledNow = () => {
-    const el = elementInfoRef.current
-    return elementLocksTextBox(el) && !!measuredContent()
-  }
-
-  const paintStyleFor = (scale: number): CSSProperties | undefined => {
-    if (!enabledNow() || scale === 1) return undefined
-    // Font scaling (not zoom): spans render `calc(var(--text-fit-scale,1) * Npx)`
-    // so the text RE-WRAPS at the smaller size — no over-shrink, and the raster
-    // booth paints the identical CSS.
-    return {
-      '--text-fit-scale': String(scale),
-      '--text-fit-base-size': `${Math.round(authoredSize() * scale * 100) / 100}px`,
-    } as CSSProperties
-  }
 
   const commitScale = (next: number) => {
     fitScaleRef.current = next
     const host = hostElRef.current?.current
     if (!host) return
     if (next === 1) {
-      host.style.removeProperty('--text-fit-scale')
-      host.style.removeProperty('--text-fit-base-size')
+      if (host.style.getPropertyValue('--text-fit-scale')) host.style.removeProperty('--text-fit-scale')
+      if (host.style.getPropertyValue('--text-fit-base-size')) host.style.removeProperty('--text-fit-base-size')
       return
     }
     host.style.setProperty('--text-fit-scale', String(next))
     host.style.setProperty('--text-fit-base-size', `${Math.round(authoredSize() * next * 100) / 100}px`)
   }
 
-  const ensureSession = () => {
+  const applyScale = (opts?: { batch?: boolean; liveEdit?: boolean }) => {
     const el = elementInfoRef.current
-    const content = measuredContent()
-    if (!elementLocksTextBox(el) || !content) {
-      sessionRef.current = null
-      return null
-    }
-    const fontFamily = fitFontNameOf(el, themeFontNameRef.current)
-    const lineHeight = fitLineHeightOf(el)
-    const letterSpacing = fitWordSpaceOf(el)
-    const defaultSize = authoredSize()
-    const key = fitSessionKey(content, fontFamily, lineHeight, letterSpacing, localeRef.current, defaultSize)
-    if (sessionRef.current?.key === key) return sessionRef.current
-    // Follow the page language rather than overriding it with the UI locale.
-    sessionRef.current = createFitMeasureSession(content, {
-      key,
-      defaultFontFamily: fontFamily,
-      defaultSize,
-      lineHeight,
-      letterSpacing: letterSpacing || undefined,
-    })
-    return sessionRef.current
-  }
-
-  const applyScale = () => {
-    const el = elementInfoRef.current
-    if (!elementLocksTextBox(el) || !measuredContent()) {
+    if (!elementLocksTextBox(el)) {
       lastInnerRef.current = { width: 0, height: 0 }
+      lastAppliedKeyRef.current = ''
+      commitScale(1)
+      return
+    }
+    const contentHtml = measuredContent()
+    if (!contentHtml) {
+      lastInnerRef.current = { width: 0, height: 0 }
+      lastAppliedKeyRef.current = ''
       commitScale(1)
       return
     }
@@ -180,26 +160,10 @@ export default (
       height: el.height,
       inset: fitInsetOf(el),
     })
-    const width = Math.round(innerWidth)
+    const widthQ = Math.round(innerWidth * 4)
+    const heightQ = Math.round(innerHeight * 4)
     const height = Math.round(innerHeight)
-    const session = ensureSession()
-    if (
-      host
-      && lastInnerRef.current.width === width
-      && lastInnerRef.current.height === height
-      && sessionRef.current?.key === session?.key
-    ) {
-      // Restore the fit variables if React reapplied the host style.
-      commitScale(fitScaleRef.current)
-      return
-    }
-    if (!session || !session.items.length) {
-      if (host) lastInnerRef.current = { width, height }
-      commitScale(1)
-      return
-    }
-    if (host) lastInnerRef.current = { width, height }
-    const params = {
+    const params: FitScaleOptions = {
       innerWidth,
       innerHeight,
       defaultFontFamily: fitFontNameOf(el, themeFontNameRef.current),
@@ -211,71 +175,101 @@ export default (
       blockSpace: fitParagraphSpaceOf(el),
       minFontSize: fitMinimumOf(el),
     }
-    const contentHtml = measuredContent()
-    const floor = Math.max(
-      0.01,
-      minimumTextFitScale(
-        extractBlocksCached(
-          contentHtml,
-          params.defaultFontFamily,
-          params.defaultSize,
-          params.defaultWeight,
-          params.defaultItalic,
-        ).blocks,
-        params.minFontSize,
-      ),
+    const cacheKey = verifiedFitKey(contentHtml, widthQ, heightQ, params, el.type === 'text' && !!el.vertical)
+
+    if (
+      !opts?.liveEdit
+      && host
+      && lastInnerRef.current.width === widthQ
+      && lastInnerRef.current.height === heightQ
+      && lastAppliedKeyRef.current === cacheKey
+    ) {
+      commitScale(fitScaleRef.current)
+      return
+    }
+
+    if (host) {
+      lastInnerRef.current = { width: widthQ, height: heightQ }
+      lastAppliedKeyRef.current = cacheKey
+      lastFittedRawRef.current = contentHtml
+    }
+
+    const isScaling = useMainStore.getState().isScaling
+
+    // O(1) verified-DOM-fit cache hit (skipped during live typing because
+    // ProseMirror's live DOM can carry trailing break-spaces that HTML
+    // normalization collapses).
+    if (!isScaling && !opts?.liveEdit) {
+      const cached = readVerifiedFit(cacheKey)
+      if (cached) {
+        commitScale(cached.scale)
+        if (host) {
+          if (cached.paragraphSpace) host.style.setProperty('--paragraphSpace', cached.paragraphSpace)
+          else if (host.style.getPropertyValue('--paragraphSpace')) host.style.removeProperty('--paragraphSpace')
+        }
+        rememberFitScale(contentHtml, params, cached.scale, el.id)
+        return
+      }
+    }
+
+    const extracted = extractBlocksCached(
+      contentHtml,
+      params.defaultFontFamily,
+      params.defaultSize,
+      params.defaultWeight,
+      params.defaultItalic,
     )
-    // Pretext estimate first (fast, usually close), then converge on the REAL
-    // rendered height: pretext and the browser disagree on wrap points (narrow
-    // boxes compound the drift over many lines), and a one-shot correction
-    // under-shrinks when wraps change at the corrected scale. Refining both
-    // directions on the live DOM ends on the largest scale that truly fits —
-    // no clipping (only fitting scales are kept) and no wasted space.
+    if (!extracted.blocks.length) {
+      commitScale(1)
+      return
+    }
+
+    const floor = Math.max(0.01, minimumTextFitScale(extracted.blocks, params.minFontSize))
     const estimate = textFitScaleForHtml(contentHtml, params)
     commitScale(estimate)
-    if (host) {
-      host.style.removeProperty('--paragraphSpace')
-      const content = host.querySelector('.ProseMirror, .ProseMirror-static, .prosemirror-editor') as HTMLElement | null
-      if (content && height > 2) {
-        if (useMainStore.getState().isScaling) {
-          // Drag hot path: one down-correction only (never clips mid-drag);
-          // the tightness refine runs on drop when frames are not scarce.
-          commitScale(estimate)
-          const rendered = content.scrollHeight
-          if (rendered > height + 1) {
-            commitScale(Math.max(floor, estimate * (height / Math.max(1, rendered)) * 0.995))
-          }
-        }
-        else {
-          // Search a bounded interval: proportional retries can alternate
-          // across a wrapping threshold and settle at a different size on
-          // every keystroke, even when the text only gets longer.
-          let low = floor
-          let high = Math.max(1, floor)
-          commitScale(high)
-          if (content.scrollHeight <= height) low = high
-          else {
-            for (let i = 0; i < 10 && high - low > 0.001; i++) {
-              const candidate = (low + high) / 2
-              commitScale(candidate)
-              if (content.scrollHeight <= height) low = candidate
-              else high = candidate
-            }
-          }
-          const settled = low
-          commitScale(settled)
-          rememberFitScale(contentHtml, params, settled, el.id)
-        }
-        if (content.scrollHeight > height + 1 && box) {
-          // Paragraph gaps are fixed px and do not scale with the font — in a
-          // box shorter than the gaps no font factor can fit. Scale the gap
-          // var for this subtree so the never-clip guarantee still holds.
-          const gap = parseFloat(getComputedStyle(box).getPropertyValue('--paragraphSpace')) || 0
-          if (gap > 0) {
-            host.style.setProperty('--paragraphSpace', `${Math.max(0, Math.floor(gap * (height / Math.max(1, content.scrollHeight)) * 100) / 100)}px`)
-          }
-        }
+    if (!host) return
+
+    if (host.style.getPropertyValue('--paragraphSpace')) host.style.removeProperty('--paragraphSpace')
+    const content = host.querySelector('.ProseMirror, .ProseMirror-static, .prosemirror-editor') as HTMLElement | null
+    if (!content || height <= 2) return
+
+    if (isScaling) {
+      // Drag hot path: one down-correction only (never clips mid-drag);
+      // the tightness refine runs on drop when frames are not scarce.
+      const rendered = content.scrollHeight
+      if (rendered > height + 1) {
+        commitScale(Math.max(floor, estimate * (height / Math.max(1, rendered)) * 0.995))
       }
+      return
+    }
+
+    const job: PendingVerifyJob = {
+      host,
+      content,
+      box,
+      elementId: el.id,
+      height,
+      floor,
+      estimate,
+      params,
+      contentHtml,
+      cacheKey,
+      commitScale,
+      isAlive: () => mountedRef.current && hostElRef.current?.current === host,
+      low: floor,
+      high: Math.max(1, floor),
+      probe: estimate,
+      lastCommitted: estimate,
+      hasUpperBound: false,
+      skipCacheWrite: !!opts?.liveEdit,
+    }
+
+    if (opts?.batch && typeof queueMicrotask === 'function') {
+      enqueueVerifyJob(job)
+    }
+    else {
+      cancelVerifyJobForHost(host)
+      runVerifyBatch([job])
     }
   }
 
@@ -283,13 +277,13 @@ export default (
 
   const schedule = () => {
     if (typeof requestAnimationFrame === 'undefined') {
-      applyScale()
+      applyScale({ batch: false })
       return
     }
     if (rafRef.current) return
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = 0
-      applyScale()
+      applyScale({ batch: true })
     })
   }
   scheduleRef.current = schedule
@@ -298,53 +292,82 @@ export default (
     const passed = liveContentRef.current
     if (isLiveRef(passed)) passed.current = html
     lastInnerRef.current = { width: 0, height: 0 }
-    applyScaleRef.current()
+    lastAppliedKeyRef.current = ''
+    applyScaleRef.current({ batch: false, liveEdit: true })
   }, [])
 
   const resync = useCallback(() => {
     lastInnerRef.current = { width: 0, height: 0 }
-    applyScale()
+    lastAppliedKeyRef.current = ''
+    applyScaleRef.current({ batch: false })
   }, [])
 
   const liveValue = isLiveRef(liveContent) ? undefined : liveContent
   const lockMode = elementLocksTextBox(elementInfo)
 
   useLayoutEffect(() => {
+    mountedRef.current = true
     lastInnerRef.current = { width: 0, height: 0 }
-    applyScale()
-  }, [lockMode])
+    lastAppliedKeyRef.current = ''
+    const capturedHost = hostEl?.current
+    applyScaleRef.current({ batch: true })
+    return () => {
+      mountedRef.current = false
+      cancelVerifyJobForHost(capturedHost)
+    }
+  }, [lockMode, hostEl])
 
   const didInitialPropsSyncRef = useRef(false)
-  useEffect(() => {
-    // useLayoutEffect already synchronously applied the initial mount scale.
-    if (!didInitialPropsSyncRef.current) {
-      didInitialPropsSyncRef.current = true
-      return
-    }
-    lastInnerRef.current = { width: 0, height: 0 }
-    scheduleRef.current()
-  }, [
-    fitContentOf(elementInfo),
-    liveValue,
+  const prevDepsExceptContentRef = useRef('')
+  const inset = fitInsetOf(elementInfo)
+  const insetKey = `${inset[0]},${inset[1]},${inset[2]},${inset[3]}`
+  const nonContentKey = [
     elementInfo.width,
     elementInfo.height,
     fitLineHeightOf(elementInfo),
     fitParagraphSpaceOf(elementInfo),
     fitFontNameOf(elementInfo, themeFontName),
-    elementInfo.type === 'text' ? elementInfo.placeholderFontSize : undefined,
-    elementInfo.type === 'text' ? elementInfo.placeholder : undefined,
-    elementInfo.type === 'text' ? elementInfo.placeholderBold : undefined,
-    elementInfo.type === 'text' ? elementInfo.placeholderItalic : undefined,
+    elementInfo.type === 'text' ? elementInfo.placeholderFontSize : '',
+    elementInfo.type === 'text' ? elementInfo.placeholder : '',
+    elementInfo.type === 'text' ? elementInfo.placeholderBold : '',
+    elementInfo.type === 'text' ? elementInfo.placeholderItalic : '',
+    elementInfo.type === 'text' ? !!elementInfo.vertical : false,
     fitWordSpaceOf(elementInfo),
     fitMinimumOf(elementInfo),
-    fitInsetOf(elementInfo),
-    hostEl,
+    insetKey,
     locale,
+  ].join('|')
+  const storeContent = fitContentOf(elementInfo)
+  useEffect(() => {
+    if (!didInitialPropsSyncRef.current) {
+      didInitialPropsSyncRef.current = true
+      prevDepsExceptContentRef.current = nonContentKey
+      return
+    }
+    if (
+      prevDepsExceptContentRef.current === nonContentKey
+      && liveValue === undefined
+      && lastFittedRawRef.current !== null
+      && storeContent
+      && normalizeFittedFontSizes(serializeRichTextHtml(storeContent)) === lastFittedRawRef.current
+    ) {
+      return
+    }
+    prevDepsExceptContentRef.current = nonContentKey
+    lastInnerRef.current = { width: 0, height: 0 }
+    lastAppliedKeyRef.current = ''
+    scheduleRef.current()
+  }, [
+    storeContent,
+    liveValue,
+    nonContentKey,
+    hostEl,
   ])
 
   useEffect(() => subscribeLiveBox((id) => {
     if (id !== elementInfoRef.current.id) return
     lastInnerRef.current = { width: 0, height: 0 }
+    lastAppliedKeyRef.current = ''
     scheduleRef.current()
   }), [])
 
@@ -374,8 +397,8 @@ export default (
         }
         if (!matches) return
       }
-      sessionRef.current = null
       lastInnerRef.current = { width: 0, height: 0 }
+      lastAppliedKeyRef.current = ''
       scheduleRef.current()
     }
     const unsubscribeFonts = subscribeTextFontChanges(refreshFonts)
@@ -390,22 +413,39 @@ export default (
   }, [])
 
   useEffect(() => {
-    if (!observeResize || typeof ResizeObserver === 'undefined' || !hostEl) return
+    if (!observeResize || !lockMode || typeof ResizeObserver === 'undefined' || !hostEl) return
     const host = hostEl.current
     const box = contentBoxOfHost(host) ?? host
     if (!box) return
-    const observer = new ResizeObserver(() => scheduleRef.current())
+    const observer = new ResizeObserver(() => {
+      const el = elementInfoRef.current
+      const { innerWidth, innerHeight } = innerBoxFromLiveStyles(contentBoxOfHost(hostElRef.current?.current), {
+        width: el.width,
+        height: el.height,
+        inset: fitInsetOf(el),
+      })
+      if (
+        Math.round(innerWidth * 4) === lastInnerRef.current.width
+        && Math.round(innerHeight * 4) === lastInnerRef.current.height
+      ) return
+      scheduleRef.current()
+    })
     observer.observe(box)
     return () => observer.disconnect()
-  }, [hostEl, observeResize, elementInfo.id])
+  }, [hostEl, observeResize, lockMode, elementInfo.id])
 
   const fitScale = fitScaleRef.current
+  const textFitPaintStyle: CSSProperties | undefined = (lockMode && fitScale !== 1)
+    ? ({
+        '--text-fit-scale': String(fitScale),
+        '--text-fit-base-size': `${Math.round(authoredSize() * fitScale * 100) / 100}px`,
+      } as CSSProperties)
+    : undefined
 
   return {
     fitScale,
-    fittedContent: measuredContent(),
     fitVars: {},
-    textFitPaintStyle: paintStyleFor(fitScale),
+    textFitPaintStyle,
     setLiveContent,
     resync,
   }

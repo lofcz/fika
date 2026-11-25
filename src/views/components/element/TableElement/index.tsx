@@ -26,7 +26,7 @@ const TableElement = memo((props: ITableElementProps) => {
   const { elementInfo, contextmenus, isEditing } = props;
   const { LL } = useI18nContext();
   const canvasScale = useMainStore(s => s.canvasScale);
-  const handleElementId = useMainStore(s => s.handleElementId);
+  const isHandleElement = useMainStore(s => s.handleElementId === props.elementInfo.id);
   const elementRef = useRef<HTMLDivElement | null>(null);
   const { addHistorySnapshot } = useHistorySnapshot();
   const selectElementRef = useRef(props.selectElement);
@@ -44,9 +44,9 @@ const TableElement = memo((props: ITableElementProps) => {
 
   const editable = !!(isEditing && !elementInfo.lock);
   useEffect(() => {
-    if (handleElementId === props.elementInfo.id) return
+    if (isHandleElement) return
     if (useMainStore.getState().editingElementId === props.elementInfo.id) drainCommitQueue()
-  }, [handleElementId, props.elementInfo.id]);
+  }, [isHandleElement, props.elementInfo.id]);
   useEffect(() => {
     useMainStore.getState().setDisableHotkeysState(editable);
   }, [editable]);
@@ -118,8 +118,13 @@ const TableElement = memo((props: ITableElementProps) => {
   }, [syncHeightToTable]);
   // A store write that the content overrules (a smaller `height`, a lower
   // `cellMinHeight`) leaves the wrapper's size unchanged, so the observer
-  // stays silent — reconcile explicitly.
+  // stays silent — reconcile explicitly (skip initial mount, which ResizeObserver handles).
+  const didSyncMountRef = useRef(false);
   useEffect(() => {
+    if (!didSyncMountRef.current) {
+      didSyncMountRef.current = true;
+      return;
+    }
     syncHeightToTable();
   }, [syncHeightToTable, elementInfo.height, elementInfo.cellMinHeight, elementInfo.data]);
 
@@ -188,7 +193,7 @@ const TableElement = memo((props: ITableElementProps) => {
           onMouseDown={handleSelectElement}
           onTouchStart={handleSelectElement}
         >
-          {handleElementId === elementInfo.id ? <div className={cx('mask-tip')} style={{ transform: `scale(${1 / canvasScale})` }}>{LL.canvas.table.doubleClickToEdit()}</div> : null}
+          {isHandleElement ? <div className={cx('mask-tip')} style={{ transform: `scale(${1 / canvasScale})` }}>{LL.canvas.table.doubleClickToEdit()}</div> : null}
         </div> : null}
       </div>
     </div>

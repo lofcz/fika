@@ -14,11 +14,13 @@ import { SHAPE_LIST, type ShapePoolItem } from '@/configs/shapes';
 import { useMainStore } from '@/store/main';
 import { useScreenStore } from '@/store/screen';
 import { useSlidesStore } from '@/store/slides';
+import { selectCanRedo, selectCanUndo, useSnapshotStore } from '@/store/snapshot';
 import { createStores } from '@/store/accessors';
 import type { ChartData, ChartOptions, ChartType, Gradient, ImageMediaFit, ImageMediaState, Note, NoteReply, PPTAnimation, PPTAudioElement, PPTChartElement, PPTElement, PPTElementOutline, PPTElementShadow, PPTImageElement, PPTLatexElement, PPTLineElement, PPTShapeElement, PPTTableElement, PPTTextElement, PPTVideoElement, Slide, SlideBackground, SlideTheme, SlideTemplate, ShapeText, TableCell, TableCellStyle, TurningMode } from '@/types/slides';
 import { applyLocale } from '../localeBridge';
 import { inferViewportFromSlides } from '../inferViewport';
-import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern';
+import { hasInternedBlobs, rewritePersistableMediaSrcs } from '@/utils/mediaIntern';
+import { flushCommitQueue } from '@/utils/commitQueue';
 import { computeImageAspectFitPatch, findManuallyReplacedElementIdForSlot, isManualImageReplacementProtected } from '@/utils/imageReplace';
 import { clampIndex, cloneElementsWithRemappedIds, clonePatch, clonePlain, cloneSlidesWithRemappedIds, createId, createIssue, createTableCell, ensureElementOnSlide, ensureSlide, findElement, findSlideLinkReferences, insertIndex, isCanonicalCommandType, mergeShapeElement, mergeTheme, normalizeAnimation, normalizeAudioElement, normalizeAudioPatch, deriveLatexGeometry, normalizeElement, normalizeElementLink, normalizeLatexElement, normalizeLineElement, normalizeNote, normalizeNotePatch, normalizeReply, normalizeShapeElement, normalizeSlide, normalizeTableElementPatch, resolveMediaAsset, toIdList, updateLineElement } from './helpers';
 import { stripThemeInlineStyles } from './themeFormatting';
@@ -258,24 +260,31 @@ function applyViewport(stores: Stores, viewport?: Partial<FikaDeckViewport>) {
   if ('widthInches' in viewport) stores.slides.setViewportWidthInches(viewport.widthInches);
 }
 function documentFromStores(stores: Stores): FikaDeckDocument {
+  const clonedSlides = clonePlain(stores.slides.slides);
   return {
     title: stores.slides.title,
     // Session-scoped blob: aliases must never leave the editor: map any back
     // to their durable data URLs before the host persists the document.
-    slides: rewritePersistableMediaSrcs(clonePlain(stores.slides.slides)),
+    slides: hasInternedBlobs() ? rewritePersistableMediaSrcs(clonedSlides) : clonedSlides,
     theme: clonePlain(stores.slides.theme),
     viewport: viewportFromStores(stores),
     templates: clonePlain(stores.slides.templates)
   };
 }
-function restoreDocument(stores: Stores, document: FikaDeckInput, slideIndex = 0) {
-  const nextDocument = clonePlain(document);
-  stores.slides.setTitle(nextDocument.title);
-  stores.slides.setSlides(clonePlain(nextDocument.slides), mergeDeckTheme(stores.slides.theme, nextDocument.theme));
-  applyViewport(stores, inferViewportFromSlides(nextDocument.slides, nextDocument.viewport) ?? nextDocument.viewport);
-  stores.slides.setViewportWidthInches(nextDocument.viewport?.widthInches);
-  if (nextDocument.templates) stores.slides.setTemplates(clonePlain(nextDocument.templates));
-  stores.slides.updateSlideIndex(clampIndex(slideIndex, stores.slides.slides.length));
+function restoreDocument(stores: Stores, document: FikaDeckInput, slideIndex = 0, options?: { alreadyCloned?: boolean }) {
+  const nextDocument = options?.alreadyCloned ? document : clonePlain(document);
+  const viewport = inferViewportFromSlides(nextDocument.slides, nextDocument.viewport) ?? nextDocument.viewport;
+  stores.slides.applyDocument({
+    title: nextDocument.title,
+    slides: nextDocument.slides,
+    theme: mergeDeckTheme(stores.slides.theme, nextDocument.theme),
+    viewportSize: viewport?.size,
+    viewportRatio: viewport?.ratio,
+    viewportWidthInches: nextDocument.viewport?.widthInches,
+    hasViewportWidthInches: true,
+    templates: nextDocument.templates,
+    slideIndex: clampIndex(slideIndex, nextDocument.slides.length),
+  }, { clone: false });
   stores.main.setActiveElementIdList([]);
   stores.main.setActiveGroupElementId('');
 }
@@ -301,14 +310,58 @@ function captureRuntimeState(stores: Stores): RuntimeState {
     snapshotLength: stores.snapshot.snapshotLength
   };
 }
+function samePrimitiveArray<T>(a: readonly T[], b: readonly T[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+function hasRuntimeStateChanged(before: RuntimeState, after: RuntimeState): boolean {
+  if (
+    before.title !== after.title
+    || before.viewportSize !== after.viewportSize
+    || before.viewportRatio !== after.viewportRatio
+    || before.viewportWidthInches !== after.viewportWidthInches
+    || before.slideIndex !== after.slideIndex
+    || before.handleElementId !== after.handleElementId
+    || before.activeGroupElementId !== after.activeGroupElementId
+    || before.canvasScale !== after.canvasScale
+    || before.canvasPercentage !== after.canvasPercentage
+    || before.screening !== after.screening
+    || before.snapshotCursor !== after.snapshotCursor
+    || before.snapshotLength !== after.snapshotLength
+    || !samePrimitiveArray(before.activeElementIdList, after.activeElementIdList)
+    || !samePrimitiveArray(before.hiddenElementIdList, after.hiddenElementIdList)
+    || !samePrimitiveArray(before.selectedSlidesIndex, after.selectedSlidesIndex)
+  ) {
+    return true;
+  }
+  if (before.slides !== after.slides) {
+    if (before.slides.length !== after.slides.length) return true;
+    for (let i = 0; i < before.slides.length; i++) {
+      if (before.slides[i] !== after.slides[i] && !deepEqual(before.slides[i], after.slides[i])) {
+        return true;
+      }
+    }
+  }
+  if (before.theme !== after.theme && !deepEqual(before.theme, after.theme)) return true;
+  if (before.templates !== after.templates && !deepEqual(before.templates, after.templates)) return true;
+  return false;
+}
 function restoreRuntimeState(stores: Stores, state: RuntimeState) {
-  stores.slides.setTitle(state.title);
-  stores.slides.setSlides(state.slides, state.theme, { clone: false });
-  stores.slides.setTemplates(state.templates);
-  stores.slides.setViewportSize(state.viewportSize);
-  stores.slides.setViewportRatio(state.viewportRatio);
-  stores.slides.setViewportWidthInches(state.viewportWidthInches);
-  stores.slides.updateSlideIndex(state.slideIndex);
+  stores.slides.applyDocument({
+    title: state.title,
+    slides: state.slides,
+    theme: state.theme,
+    templates: state.templates,
+    viewportSize: state.viewportSize,
+    viewportRatio: state.viewportRatio,
+    viewportWidthInches: state.viewportWidthInches,
+    hasViewportWidthInches: true,
+    slideIndex: state.slideIndex,
+  }, { clone: false });
   stores.main.updateSelectedSlidesIndex([...state.selectedSlidesIndex]);
   stores.main.setActiveElementIdList([...state.activeElementIdList]);
   stores.main.setHandleElementId(state.handleElementId);
@@ -326,7 +379,7 @@ function changedSlideIds(before: Slide[], after: Slide[]): string[] {
   const changed: string[] = [];
   after.forEach((slide, index) => {
     const old = previous.get(slide.id);
-    if (!old || old.index !== index || !deepEqual(old.slide, slide)) changed.push(slide.id);
+    if (!old || old.index !== index || (old.slide !== slide && !deepEqual(old.slide, slide))) changed.push(slide.id);
     previous.delete(slide.id);
   });
   return [...changed, ...previous.keys()];
@@ -415,7 +468,7 @@ function normalizeDocumentSlides(value: unknown, path: string): Slide[] {
     optionalDocumentArray(slide.notes, `${slidePath}.notes`);
     optionalDocumentArray(slide.animations, `${slidePath}.animations`);
     const elements = (optionalDocumentArray(slide.elements, `${slidePath}.elements`) || []).map((element, elementIndex) => normalizeDocumentElement(element, `${slidePath}.elements[${elementIndex}]`));
-    const normalized = normalizeSlide({ ...slide, elements } as Partial<Slide>);
+    const normalized = normalizeSlide({ ...slide, elements } as Partial<Slide>, { cloneElements: false });
     const authored = slide as Partial<Slide>;
     if (Array.isArray(authored.guides)) normalized.guides = clonePlain(authored.guides);
     if (Array.isArray(authored.workspaceLabels)) normalized.workspaceLabels = clonePlain(authored.workspaceLabels);
@@ -552,11 +605,12 @@ function contrastTheme(stores: Stores) {
     fontColor: stores.slides.theme.fontColor
   };
 }
-function updateSlideAt(stores: Stores, slideIndex: number, patch: Partial<Slide>): Slide {
+type UpdateSlideAtOptions = { clone?: boolean };
+function updateSlideAt(stores: Stores, slideIndex: number, patch: Partial<Slide>, options?: UpdateSlideAtOptions): Slide {
   const slide = stores.slides.slides[slideIndex];
   if (!slide) throw new Error(`Slide index not found: ${slideIndex}`);
   assertColorFields(patch, 'slide');
-  stores.slides.updateSlide(clonePlain(patch), slide.id);
+  stores.slides.updateSlide(options?.clone === false ? patch : clonePlain(patch), slide.id);
   return clonePlain(stores.slides.slides[slideIndex]);
 }
 function updateElementAt(stores: Stores, slideIndex: number, elementIndex: number, patch: Partial<PPTElement>): PPTElement {
@@ -705,14 +759,14 @@ function reorderElementList(stores: Stores, payload: {
   toIndex: number;
 }): PPTElement[] {
   const found = findElement(stores.slides.slides, payload.elementId, payload.slideId, stores.slides.slideIndex);
-  const elements = clonePlain(found.slide.elements);
+  const elements = found.slide.elements.slice();
   const [element] = elements.splice(found.elementIndex, 1);
   if (!element) throw new Error(`Element not found: ${payload.elementId}`);
   elements.splice(insertIndex(payload.toIndex, elements.length), 0, element);
   updateSlideAt(stores, found.slideIndex, {
     elements
-  });
-  return elements;
+  }, { clone: false });
+  return clonePlain(elements);
 }
 function orderElementLayer(stores: Stores, payload: {
   elementId: string;
@@ -1371,6 +1425,7 @@ export function createAgenticApi(options: {
   });
   const withMutation = async <TData,>(command: FikaAgentCommand, handler: () => TData | Promise<TData>, changed: boolean | ((data: TData) => boolean) = true, runOptions: RunCommandOptions = {}): Promise<FikaCommandResult<TData>> => {
     if (destroyed) return failResult(command, new Error('Fika controller has been destroyed')) as FikaCommandResult<TData>;
+    flushCommitQueue();
     const before = captureRuntimeState(stores);
     const beforeAuthoring = captureAuthoringState();
     const beforeVersion = documentVersion;
@@ -1391,7 +1446,7 @@ export function createAgenticApi(options: {
       // an already-applied patch must not invent progress, an undo entry or a
       // new version (which hosts use to trigger captures and further checks).
       const didChange = mayChange && (
-        !deepEqual(before, captureRuntimeState(stores)) ||
+        hasRuntimeStateChanged(before, captureRuntimeState(stores)) ||
         !deepEqual(beforeAuthoring, captureAuthoringState()) ||
         command.type === 'view.setLocale'
       );
@@ -1415,7 +1470,10 @@ export function createAgenticApi(options: {
       let nextSnapshotId: number | undefined;
       if (didChange && !dryRun) {
         if (command.meta?.commit !== false && runOptions.commit !== false) nextSnapshotId = await commitSnapshot(command);
-        if (runOptions.version !== false) documentVersion++;
+        if (runOptions.version !== false) {
+          documentVersion++;
+          scheduleSelectionChanged();
+        }
       }
       const result = makeResult(command, didChange && !dryRun, syncDataDocumentVersion(data), true, warnings);
       if (result.changed && changesDocument(command)) result.changedSlideIds = changedSlideIds(before.slides, stores.slides.slides);
@@ -1600,7 +1658,7 @@ export function createAgenticApi(options: {
   register('canvas.get', (payload: { pageId?: string; offset?: number; limit?: number; textLimit?: number } = {}) => summarizeCanvas(stores.slides.slides, stores.slides.slides[stores.slides.slideIndex]?.id, stores.main.activeElementIdList, stores.slides.viewportSize, stores.slides.viewportRatio, payload));
   register('deck.get', () => documentFromStores(stores));
   register('deck.set', (payload: FikaDeckInput) => {
-    restoreDocument(stores, documentFromPayload(payload));
+    restoreDocument(stores, documentFromPayload(payload), 0, { alreadyCloned: true });
     return documentFromStores(stores);
   });
   const importDocument = (payload: unknown) => {
@@ -1633,7 +1691,7 @@ export function createAgenticApi(options: {
     restoreDocument(stores, {
       ...document,
       slides: applied.slides,
-    });
+    }, 0, { alreadyCloned: true });
     return documentFromStores(stores);
   };
   register('import.json', importDocument);
@@ -1644,10 +1702,10 @@ export function createAgenticApi(options: {
     const patch = documentPatchFromPayload(payload);
     if (patch.title !== undefined) stores.slides.setTitle(patch.title);
     if (patch.slides) {
-      stores.slides.setSlides(clonePlain(patch.slides), patch.theme ? mergeDeckTheme(stores.slides.theme, patch.theme) : undefined);
+      stores.slides.setSlides(patch.slides, patch.theme ? mergeDeckTheme(stores.slides.theme, patch.theme) : undefined, { clone: false });
     } else if (patch.theme) stores.slides.setTheme(mergeDeckTheme(stores.slides.theme, patch.theme));
     applyViewport(stores, patch.viewport);
-    if (patch.templates) stores.slides.setTemplates(clonePlain(patch.templates));
+    if (patch.templates) stores.slides.setTemplates(patch.templates);
     return documentFromStores(stores);
   });
   register('deck.setTitle', (payload: {
@@ -2320,11 +2378,11 @@ export function createAgenticApi(options: {
       index: slideIndex
     } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
     const element = normalizeElement(payload.element, stores.slides.theme);
-    const elements = clonePlain(slide.elements);
+    const elements = slide.elements.slice();
     elements.splice(insertIndex(payload.index, elements.length), 0, element);
     updateSlideAt(stores, slideIndex, {
       elements
-    });
+    }, { clone: false });
     if (payload.select !== false) stores.main.setActiveElementIdList([element.id]);
     return clonePlain(element);
   });
@@ -2340,13 +2398,13 @@ export function createAgenticApi(options: {
       preserveExternalSlideLinks: payload.preserveExternalSlideLinks,
       slideIdMap: payload.slideIdMap
     });
-    const elements = clonePlain(slide.elements);
+    const elements = slide.elements.slice();
     elements.splice(insertIndex(payload.index, elements.length), 0, ...cloned.elements);
     const animations = [...(slide.animations || []), ...cloned.animations];
     updateSlideAt(stores, slideIndex, {
       elements,
       animations
-    });
+    }, { clone: false });
     if (payload.select !== false) stores.main.setActiveElementIdList(cloned.elements.map(element => element.id));
     return {
       slideId: slide.id,
@@ -2502,7 +2560,7 @@ export function createAgenticApi(options: {
     if (!elementIds.length) throw new AgenticCommandError('InvalidElementId', 'At least one element ID is required', 'elementIds');
     const first = findElement(stores.slides.slides, elementIds[0], payload.slideId, stores.slides.slideIndex);
     const groupId = payload.groupId || createId('group');
-    const elements = clonePlain(first.slide.elements);
+    const elements = first.slide.elements.slice();
     const updated: PPTElement[] = [];
     for (const id of elementIds) {
       const elementIndex = elements.findIndex(element => element.id === id);
@@ -2515,7 +2573,7 @@ export function createAgenticApi(options: {
     }
     updateSlideAt(stores, first.slideIndex, {
       elements
-    });
+    }, { clone: false });
     return updated;
   });
   register('elements.ungroup', (payload: {
@@ -2528,17 +2586,20 @@ export function createAgenticApi(options: {
     } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
     const seed = slide.elements.find(element => element.id === payload.groupIdOrElementId);
     const groupId = seed?.groupId || payload.groupIdOrElementId;
-    const elements = clonePlain(slide.elements);
+    const elements = slide.elements.slice();
     const updated: PPTElement[] = [];
-    for (const element of elements) {
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
       if (element.groupId !== groupId) continue;
-      delete element.groupId;
-      updated.push(clonePlain(element));
+      const next = { ...element };
+      delete next.groupId;
+      elements[i] = next;
+      updated.push(clonePlain(next));
     }
     if (!updated.length) throw new AgenticCommandError('ElementGroupNotFound', `Element group not found: ${payload.groupIdOrElementId}`, 'groupIdOrElementId');
     updateSlideAt(stores, slideIndex, {
       elements
-    });
+    }, { clone: false });
     return updated;
   });
   const setElementLock = (payload: {
@@ -2711,11 +2772,11 @@ export function createAgenticApi(options: {
       index: slideIndex
     } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
     const element = createShapeElementFromInput(payload);
-    const elements = clonePlain(slide.elements);
+    const elements = slide.elements.slice();
     elements.splice(insertIndex(payload.index, elements.length), 0, element);
     updateSlideAt(stores, slideIndex, {
       elements
-    });
+    }, { clone: false });
     if (payload.select !== false) stores.main.setActiveElementIdList([element.id]);
     return clonePlain(element);
   };
@@ -2798,13 +2859,13 @@ export function createAgenticApi(options: {
       index: slideIndex
     } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
     const element = normalizeLatexElement(payload.element);
-    const elements = clonePlain(slide.elements);
+    const elements = slide.elements.slice();
     elements.splice(insertIndex(payload.index, elements.length), 0, element);
     updateSlideAt(stores, slideIndex, {
       elements
-    });
+    }, { clone: false });
     if (payload.select !== false) stores.main.setActiveElementIdList([element.id]);
-    return element;
+    return clonePlain(element);
   });
   register('latex.update', (payload: {
     elementId: string;
@@ -2936,13 +2997,13 @@ export function createAgenticApi(options: {
       defaultFontName: payload.element?.defaultFontName ?? payload.style?.fontName ?? stores.slides.theme.fontName ?? '',
       defaultColor: payload.element?.defaultColor ?? payload.style?.color ?? stores.slides.theme.fontColor ?? '#000000'
     }) as PPTTextElement;
-    const elements = clonePlain(slide.elements);
+    const elements = slide.elements.slice();
     elements.splice(insertIndex(payload.index, elements.length), 0, element);
     updateSlideAt(stores, slideIndex, {
       elements
-    });
+    }, { clone: false });
     if (payload.select !== false) stores.main.setActiveElementIdList([element.id]);
-    return element;
+    return clonePlain(element);
   });
   register('text.update', (payload: {
     elementId: string;
@@ -3068,13 +3129,13 @@ export function createAgenticApi(options: {
       index: slideIndex
     } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
     const element = normalizeLineElement(payload.element);
-    const elements = clonePlain(slide.elements);
+    const elements = slide.elements.slice();
     elements.splice(insertIndex(payload.index, elements.length), 0, element);
     updateSlideAt(stores, slideIndex, {
       elements
-    });
+    }, { clone: false });
     if (payload.select !== false) stores.main.setActiveElementIdList([element.id]);
-    return element;
+    return clonePlain(element);
   });
   register('lines.update', (payload: {
     elementId: string;
@@ -3244,13 +3305,13 @@ export function createAgenticApi(options: {
       type: 'table';
     };
     const element = normalizeElement(elementPayload, stores.slides.theme) as PPTTableElement;
-    const elements = clonePlain(slide.elements);
+    const elements = slide.elements.slice();
     elements.splice(insertIndex(index, elements.length), 0, element);
     updateSlideAt(stores, slideIndex, {
       elements
-    });
+    }, { clone: false });
     if (select !== false) stores.main.setActiveElementIdList([element.id]);
-    return element;
+    return clonePlain(element);
   });
   register('tables.update', (payload: {
     elementId: string;
@@ -3505,13 +3566,13 @@ export function createAgenticApi(options: {
       lineColor: chart.lineColor ?? '#e8ecf4',
       type: 'chart'
     }, stores.slides.theme) as PPTChartElement;
-    const elements = clonePlain(slide.elements);
+    const elements = slide.elements.slice();
     elements.splice(insertIndex(index, elements.length), 0, element);
     updateSlideAt(stores, slideIndex, {
       elements
-    });
+    }, { clone: false });
     if (select !== false) stores.main.setActiveElementIdList([element.id]);
-    return element;
+    return clonePlain(element);
   });
   register('charts.update', (payload: {
     elementId: string;
@@ -4165,13 +4226,13 @@ export function createAgenticApi(options: {
       index: slideIndex
     } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
     const element = normalizeAudioElement(payload, stores.slides.theme.themeColors[0] || '#4472c4');
-    const elements = clonePlain(slide.elements);
+    const elements = slide.elements.slice();
     elements.splice(insertIndex(payload.index, elements.length), 0, element);
     updateSlideAt(stores, slideIndex, {
       elements
-    });
+    }, { clone: false });
     if (payload.select !== false) stores.main.setActiveElementIdList([element.id]);
-    return element;
+    return clonePlain(element);
   });
   register('audio.update', (payload: {
     elementId: string;
@@ -4645,8 +4706,12 @@ export function createAgenticApi(options: {
     const before = captureRuntimeState(stores);
     const beforeDocumentVersion = documentVersion;
     try {
+      flushCommitQueue();
       if (direction === 'undo') await stores.snapshot.unDo();else await stores.snapshot.reDo();
-      if (command.meta?.dryRun) restoreRuntimeState(stores, before);else documentVersion++;
+      if (command.meta?.dryRun) restoreRuntimeState(stores, before);else {
+        documentVersion++;
+        scheduleSelectionChanged();
+      }
       const result = makeResult(command, !command.meta?.dryRun, getState(stores, documentVersion));
       if (result.changed) emitDocumentChanged(command);
       emit({
@@ -4694,6 +4759,7 @@ export function createAgenticApi(options: {
   };
   const executeBatchNow = async (commands: FikaAgentCommand[], batchOptions: FikaBatchOptions = {}) => {
     if (destroyed) return commands.map(command => failResult(command, new Error('Fika controller has been destroyed')));
+    flushCommitQueue();
     const before = captureRuntimeState(stores);
     const beforeDocumentVersion = documentVersion;
     const beforeAuthoring = captureAuthoringState();
@@ -4728,7 +4794,7 @@ export function createAgenticApi(options: {
           })?.skipped;
           const mayChange = command.type === 'search.replace' ? (data as FikaSearchResults).count > 0 : skippedBootstrap ? false : descriptor.mutates;
           const changed = mayChange && (
-            !deepEqual(commandBefore, captureRuntimeState(stores)) ||
+            hasRuntimeStateChanged(commandBefore, captureRuntimeState(stores)) ||
             !deepEqual(commandBeforeAuthoring, captureAuthoringState()) ||
             command.type === 'view.setLocale'
           );
@@ -4793,6 +4859,7 @@ export function createAgenticApi(options: {
           batchSnapshotId = await commitSnapshot(batchCommand);
         }
         documentVersion++;
+        scheduleSelectionChanged();
         if (batchSnapshotId !== undefined) {
           for (const result of documentChangedResults) result.snapshotId = batchSnapshotId;
         }
@@ -5782,17 +5849,87 @@ export function createAgenticApi(options: {
       json: () => documentFromStores(stores)
     }
   };
-  const emitSelectionChanged = () => {
-    if (!listeners.size) return;
-    emit({
-      type: 'selectionChanged',
-      data: getState(stores, documentVersion)
+  let selectionEmitQueued = false;
+  let lastSelectionKey: FikaBridgeState | null = null;
+  function sameBridgeState(a: FikaBridgeState, b: FikaBridgeState): boolean {
+    return (
+      a.title === b.title
+      && a.slideIndex === b.slideIndex
+      && a.slideCount === b.slideCount
+      && a.currentSlideId === b.currentSlideId
+      && a.handleElementId === b.handleElementId
+      && a.activeGroupElementId === b.activeGroupElementId
+      && a.viewportSize === b.viewportSize
+      && a.viewportRatio === b.viewportRatio
+      && a.canvasScale === b.canvasScale
+      && a.canvasPercentage === b.canvasPercentage
+      && a.screening === b.screening
+      && a.canUndo === b.canUndo
+      && a.canRedo === b.canRedo
+      && a.documentVersion === b.documentVersion
+      && samePrimitiveArray(a.selectedSlideIndexes, b.selectedSlideIndexes)
+      && samePrimitiveArray(a.selectedElementIds, b.selectedElementIds)
+      && samePrimitiveArray(a.hiddenElementIds, b.hiddenElementIds)
+    );
+  }
+  function scheduleSelectionChanged() {
+    if (!listeners.size || selectionEmitQueued) return;
+    selectionEmitQueued = true;
+    queueMicrotask(() => {
+      selectionEmitQueued = false;
+      if (destroyed || !listeners.size) return;
+      const next = getState(stores, documentVersion);
+      if (lastSelectionKey && sameBridgeState(lastSelectionKey, next)) return;
+      lastSelectionKey = next;
+      emit({
+        type: 'selectionChanged',
+        data: next
+      });
     });
-  };
+  }
   stopHandles.push(
-    useMainStore.subscribe(emitSelectionChanged),
-    useSlidesStore.subscribe(emitSelectionChanged),
-    useScreenStore.subscribe(emitSelectionChanged),
+    useMainStore.subscribe((state, prev) => {
+      if (!listeners.size) return;
+      if (
+        state.selectedSlidesIndex !== prev.selectedSlidesIndex
+        || state.activeElementIdList !== prev.activeElementIdList
+        || state.handleElementId !== prev.handleElementId
+        || state.activeGroupElementId !== prev.activeGroupElementId
+        || state.hiddenElementIdList !== prev.hiddenElementIdList
+        || state.canvasScale !== prev.canvasScale
+        || state.canvasPercentage !== prev.canvasPercentage
+      ) {
+        scheduleSelectionChanged();
+      }
+    }),
+    useSlidesStore.subscribe((state, prev) => {
+      if (!listeners.size) return;
+      if (
+        state.title !== prev.title
+        || state.slideIndex !== prev.slideIndex
+        || state.slides.length !== prev.slides.length
+        || state.slides[state.slideIndex]?.id !== prev.slides[prev.slideIndex]?.id
+        || state.viewportSize !== prev.viewportSize
+        || state.viewportRatio !== prev.viewportRatio
+      ) {
+        scheduleSelectionChanged();
+      }
+    }),
+    useScreenStore.subscribe((state, prev) => {
+      if (!listeners.size) return;
+      if (state.screening !== prev.screening) {
+        scheduleSelectionChanged();
+      }
+    }),
+    useSnapshotStore.subscribe((state, prev) => {
+      if (!listeners.size) return;
+      if (
+        selectCanUndo(state) !== selectCanUndo(prev)
+        || selectCanRedo(state) !== selectCanRedo(prev)
+      ) {
+        scheduleSelectionChanged();
+      }
+    }),
     subscribeFikaAiSlideInsertEvents(event => {
       if (!listeners.size) return;
       emit({

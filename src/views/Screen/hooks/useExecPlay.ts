@@ -29,7 +29,6 @@ type SyncMessage =
 const getFormatedAnimations = () => selectFormatedAnimations(useSlidesStore.getState())
 
 export default () => {
-  const slidesStore = useSlidesStore()
   const slideIndex = useSlidesStore(s => s.slideIndex)
   const isAudienceMode = new URLSearchParams(window.location.search).get('mode') === 'audience'
 
@@ -89,7 +88,7 @@ export default () => {
           animationIndex: animationIndexRef.current,
           viewportSize: state.viewportSize,
           viewportRatio: state.viewportRatio,
-          slides: JSON.parse(JSON.stringify(state.slides)),
+          slides: state.slides,
         } as SyncMessage)
       }
     }
@@ -206,7 +205,7 @@ export default () => {
       revokeAnimation()
     }
     else if (useSlidesStore.getState().slideIndex > 0) {
-      slidesStore.updateSlideIndex(useSlidesStore.getState().slideIndex - 1)
+      useSlidesStore.getState().updateSlideIndex(useSlidesStore.getState().slideIndex - 1)
       const nextSlideIndex = useSlidesStore.getState().slideIndex
       if (nextSlideIndex < playedSlidesMinIndexRef.current) {
         setAnimationIndex(0)
@@ -230,7 +229,7 @@ export default () => {
       runAnimation()
     }
     else if (state.slideIndex < state.slides.length - 1) {
-      slidesStore.updateSlideIndex(state.slideIndex + 1)
+      useSlidesStore.getState().updateSlideIndex(state.slideIndex + 1)
       setAnimationIndex(0)
       inAnimationRef.current = false
     }
@@ -422,17 +421,17 @@ export default () => {
   }, [])
 
   const turnPrevSlide = () => {
-    slidesStore.updateSlideIndex(useSlidesStore.getState().slideIndex - 1)
+    useSlidesStore.getState().updateSlideIndex(useSlidesStore.getState().slideIndex - 1)
     setAnimationIndex(0)
   }
   const turnNextSlide = () => {
-    slidesStore.updateSlideIndex(useSlidesStore.getState().slideIndex + 1)
+    useSlidesStore.getState().updateSlideIndex(useSlidesStore.getState().slideIndex + 1)
     setAnimationIndex(0)
   }
 
   const turnSlideToIndex = (index: number) => {
     syncChannelRef.current?.postMessage({ type: 'TURN_TO_INDEX', index } as SyncMessage)
-    slidesStore.updateSlideIndex(index)
+    useSlidesStore.getState().updateSlideIndex(index)
     setAnimationIndex(0)
   }
   turnSlideToIndexRef.current = turnSlideToIndex
@@ -441,7 +440,7 @@ export default () => {
     const index = useSlidesStore.getState().slides.findIndex(slide => slide.id === id)
     if (index !== -1) {
       syncChannelRef.current?.postMessage({ type: 'TURN_TO_ID', id } as SyncMessage)
-      slidesStore.updateSlideIndex(index)
+      useSlidesStore.getState().updateSlideIndex(index)
       setAnimationIndex(0)
     }
   }

@@ -8,7 +8,7 @@ import type { PPTElement } from '@/types/slides'
 import { clicksToEditText, collectVisualHitPlan, DEBUG_HIT_AREAS, elementHasClickableContent, focusElementEditor, hasInteractiveSurface, HIT_RING_SIDES, hitLayerSkipRebuild, hitRectClipPath, hitRingLayout, occludersAboveRect, pointInAnyVisualHitRect, pointInVisualHitRect, type VisualHitRect } from '@/utils/canvasHitTest'
 import { queryFika } from '@/utils/portal'
 import { useMainStore } from '@/store'
-import useElementContextmenu from '@/hooks/useElementContextmenu'
+import type { ElementContextmenus } from './Operate/ContextMenuBridge'
 
 export type IHitLayerProps = {
   elementList: PPTElement[]
@@ -20,7 +20,7 @@ export type IHitLayerProps = {
   disabled: boolean
   selectElement: (e: MouseEvent | TouchEvent, element: PPTElement, canMove?: boolean, andEdit?: boolean) => void
   beginEdit: (elementId: string, caret?: { left: number; top: number }) => void
-  openLinkDialog: () => void
+  getContextmenus: ElementContextmenus
   className?: string
 }
 
@@ -67,7 +67,6 @@ const HitLayer = memo((props: IHitLayerProps) => {
   }, [hitSource, isGesturing])
 
   const elementById = (id: string) => props.elementList.find(el => el.id === id)
-  const { contextmenus: contextmenusFor } = useElementContextmenu(props.openLinkDialog)
 
   const contextmenusForRect = (id: string) => {
     const element = elementById(id)
@@ -75,7 +74,7 @@ const HitLayer = memo((props: IHitLayerProps) => {
     if (!element.lock && !selectedIdSet.has(id)) {
       props.selectElement(new MouseEvent('contextmenu'), element, false)
     }
-    return contextmenusFor(element, props.activeElementIdList.length > 1)
+    return props.getContextmenus(element, props.activeElementIdList.length > 1)
   }
 
   const hasRing = (id: string) => {

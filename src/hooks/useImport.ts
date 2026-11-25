@@ -592,8 +592,14 @@ export function getImportApi() {
     if (gen == null) return false;
     const theme = slidesState().theme;
     const shapeList: ShapePoolItem[] = [];
+    const shapeByPptxType = new Map<string, ShapePoolItem>();
     for (const item of SHAPE_LIST) {
-      shapeList.push(...item.children);
+      for (const child of item.children) {
+        shapeList.push(child);
+        if (child.pptxShapeType && !shapeByPptxType.has(child.pptxShapeType)) {
+          shapeByPptxType.set(child.pptxShapeType, child);
+        }
+      }
     }
     try {
       await importJob.tick(0, 0, gen);
@@ -892,7 +898,7 @@ export function getImportApi() {
                   const lineElement = parseLineElement(el, ratio);
                   pushElement(lineElement, originBox);
                 } else {
-                  const shape = shapeList.find(item => item.pptxShapeType === el.shapType);
+                  const shape = el.shapType ? shapeByPptxType.get(el.shapType) : undefined;
                   const gradient: Gradient | undefined = el.fill?.type === 'gradient' ? {
                     type: el.fill.value.path === 'line' ? 'linear' : 'radial',
                     colors: el.fill.value.colors.map(item => ({

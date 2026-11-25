@@ -80,7 +80,7 @@ export type FikaCommandRegistryView = ReadonlyMap<string, {
 }>;
 export const AGENTIC_DOCS: FikaAgenticDocs = docsJson as unknown as FikaAgenticDocs;
 function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+  return structuredClone(value);
 }
 
 /** Describe a single command: its doc annotation plus live registry facts. */

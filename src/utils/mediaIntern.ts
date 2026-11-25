@@ -12,6 +12,17 @@ const blobByUrl = new Map<string, Blob>()
 const jobs = new Map<string, Promise<string>>()
 const internListeners = new Set<(from: string, to: string) => void>()
 
+let internRevision = 0
+let persistedSlideCache = new WeakMap<Slide, Slide>()
+
+export const getMediaInternRevision = () => internRevision
+export const hasInternedBlobs = () => dataUrlByBlob.size > 0
+
+const invalidatePersistedSlideCache = () => {
+  internRevision++
+  persistedSlideCache = new WeakMap<Slide, Slide>()
+}
+
 export const onMediaInterned = (fn: (from: string, to: string) => void) => {
   internListeners.add(fn)
   return () => { internListeners.delete(fn) }
@@ -60,21 +71,69 @@ const rewriteSrc = (src: string, map?: Map<string, string>) => {
   return persistableMediaSrc(src)
 }
 
-export const rewritePersistableMediaSrcs = <T extends Slide>(slides: T[]): T[] => {
-  for (const slide of slides) {
-    if (slide.background?.type === 'image' && slide.background.image) {
-      slide.background.image.src = rewriteSrc(slide.background.image.src)
-    }
-    for (const element of slide.elements || []) {
-      if (element.type === 'image' && element.src) element.src = rewriteSrc(element.src)
-      if (element.type === 'shape' && element.pattern) element.pattern = rewriteSrc(element.pattern)
-      if (element.type === 'video' || element.type === 'audio') {
-        if (element.src) element.src = rewriteSrc(element.src)
-        if (element.type === 'video' && element.poster) element.poster = rewriteSrc(element.poster)
-      }
+const rewriteSlidePersistableMediaSrcs = <T extends Slide>(slide: T): T => {
+  if (slide.background?.type === 'image' && slide.background.image) {
+    slide.background.image.src = rewriteSrc(slide.background.image.src)
+  }
+  for (const element of slide.elements || []) {
+    if (element.type === 'image' && element.src) element.src = rewriteSrc(element.src)
+    if (element.type === 'shape' && element.pattern) element.pattern = rewriteSrc(element.pattern)
+    if (element.type === 'video' || element.type === 'audio') {
+      if (element.src) element.src = rewriteSrc(element.src)
+      if (element.type === 'video' && element.poster) element.poster = rewriteSrc(element.poster)
     }
   }
+  return slide
+}
+
+export const rewritePersistableMediaSrcs = <T extends Slide>(slides: T[]): T[] => {
+  if (!dataUrlByBlob.size) return slides
+  for (const slide of slides) {
+    rewriteSlidePersistableMediaSrcs(slide)
+  }
   return slides
+}
+
+function freezeDeepInDev<T>(value: T): T {
+  if (process.env.NODE_ENV === 'production') return value
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value
+  Object.freeze(value)
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) freezeDeepInDev(value[i])
+  }
+  else {
+    for (const key of Object.keys(value)) {
+      freezeDeepInDev((value as Record<string, unknown>)[key])
+    }
+  }
+  return value
+}
+
+/**
+ * Clone slides into plain persistence-safe objects with any session-scoped
+ * `blob:` aliases rewritten back to durable data URLs.
+ *
+ * Store updates are immutable per slide, so untouched slides hit the per-slide
+ * WeakMap cache in O(1) while modified slides are cloned via `structuredClone`.
+ * Cached slides are treated as read-only snapshots (frozen in non-production
+ * builds to catch accidental host mutation) and invalidated automatically
+ * whenever `dataUrlByBlob` changes.
+ */
+export const cloneSlidesForPersistence = (slides: readonly Slide[]): Slide[] => {
+  const needsRewrite = dataUrlByBlob.size > 0
+  const result = new Array<Slide>(slides.length)
+  for (let i = 0; i < slides.length; i++) {
+    const slide = slides[i]
+    let persisted = persistedSlideCache.get(slide)
+    if (!persisted) {
+      persisted = structuredClone(slide)
+      if (needsRewrite) rewriteSlidePersistableMediaSrcs(persisted)
+      freezeDeepInDev(persisted)
+      persistedSlideCache.set(slide, persisted)
+    }
+    result[i] = persisted
+  }
+  return result
 }
 
 export const startInternSlideMedia = (slide: Slide) => {
@@ -97,6 +156,7 @@ export const internMediaSrc = async (src: string): Promise<string> => {
     blobUrlByDataUrl.set(src, url)
     dataUrlByBlob.set(url, src)
     blobByUrl.set(url, blob)
+    invalidatePersistedSlideCache()
     notifyInterned(src, url)
     return url
   })()
@@ -146,4 +206,5 @@ export const resetMediaInternForTests = () => {
   dataUrlByBlob.clear()
   blobByUrl.clear()
   jobs.clear()
+  invalidatePersistedSlideCache()
 }

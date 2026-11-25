@@ -3,12 +3,14 @@
   background-color: #fff;
   overflow: hidden;
   user-select: none;
+  contain: layout style paint;
 }
 
 .canvas-slide-thumb {
   position: relative;
   overflow: hidden;
   pointer-events: none;
+  contain: layout style paint;
 
   canvas {
     width: 100%;

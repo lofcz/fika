@@ -10,7 +10,6 @@ import useGlobalHotkey from '@/hooks/useGlobalHotkey'
 import usePasteEvent from '@/hooks/usePasteEvent'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import EditorHeader from './EditorHeader/index'
-import MynaWorkspace from '../Myna/MynaWorkspace'
 import Canvas from './Canvas/index'
 import CanvasTool from './CanvasTool/index'
 import Thumbnails from './Thumbnails/index'
@@ -22,7 +21,6 @@ import InlineMathEditorDialog from './InlineMathEditorDialog'
 import ImageReplaceDialog from './ImageReplaceDialog'
 import ImportReplaceDialog from './ImportReplaceDialog'
 import JobProgressOverlay from '@/components/JobProgressOverlay'
-import ExportDialog from './ExportDialog/index'
 import SelectPanel from './SelectPanel'
 import SearchPanel from './SearchPanel'
 import NotesPanel from './NotesPanel'
@@ -42,6 +40,8 @@ const onThumbsResize = (size: PanelSize) => {
   setPreviewPaneWidth(size.inPixels)
 }
 
+const ExportDialog = lazy(() => import('./ExportDialog/index'))
+const MynaWorkspace = lazy(() => import('../Myna/MynaWorkspace'))
 const MermaidEditorDialog = lazy(() => import('./MermaidEditorDialog'))
 const CodeEditorDialog = lazy(() => import('./CodeEditorDialog'))
 const SlideCodePanel = lazy(() => import('./SlideCodePanel'))
@@ -88,7 +88,7 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
   const [rightPaneDragging, setRightPaneDragging] = useState(false)
   const [hostResizing, setHostResizing] = useState(false)
   const rightPaneWidthRef = useRef(rightPaneWidth)
-  const rightPanePrefRef = useRef(readRightPanePreference(measureHostWidth()))
+  const rightPanePrefRef = useRef<PaneSizePreference | null>(null)
   const rightPaneDraggingRef = useRef(false)
   const hostResizeIdleRef = useRef(0)
   const lastHostWidthRef = useRef(0)
@@ -108,6 +108,9 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
 
   applyHostLayoutRef.current = (width: number) => {
     syncRightPanelToWidth(width)
+    if (!rightPanePrefRef.current) {
+      rightPanePrefRef.current = readRightPanePreference(width)
+    }
     if (!rightPaneDraggingRef.current) {
       const nextRight = scaleRightPaneWidth(rightPanePrefRef.current, width)
       if (nextRight !== rightPaneWidthRef.current) {
@@ -198,10 +201,8 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
   useEffect(() => {
     setPreviewViewportRatio(useSlidesStore.getState().viewportRatio)
     ensureMathStylesForSlides(useSlidesStore.getState().slides)
-    const unsubViewportRatio = useSlidesStore.subscribe((state, prev) => {
+    const unsubSlides = useSlidesStore.subscribe((state, prev) => {
       if (state.viewportRatio !== prev.viewportRatio) setPreviewViewportRatio(state.viewportRatio)
-    })
-    const unsubMath = useSlidesStore.subscribe((state, prev) => {
       if (!mathReady.value && state.slides !== prev.slides) ensureMathStylesForSlides(state.slides)
     })
     const onHostResize = () => {
@@ -237,8 +238,7 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
     }
     return () => {
       cancelled = true
-      unsubViewportRatio()
-      unsubMath()
+      unsubSlides()
       editorResizeObserver?.disconnect()
       editorResizeObserver = null
       window.clearTimeout(hostResizeIdleRef.current)
@@ -255,7 +255,7 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
         style={{ '--right-pane-width': `${rightPaneWidth}px` } as CSSProperties}
       >
         {!myna ? <EditorHeader className={cx('layout-header')} /> : null}
-        {myna ? <MynaWorkspace /> : <Group
+        {myna ? <Suspense fallback={null}><MynaWorkspace /></Suspense> : <Group
           id="fika-editor-main"
           orientation="horizontal"
           className={cx('layout-content')}
@@ -356,7 +356,11 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
         closeButton
         onClosed={closeExportDialog}
       >
-        <ExportDialog />
+        {dialogForExport ? (
+          <Suspense fallback={null}>
+            <ExportDialog />
+          </Suspense>
+        ) : null}
       </Modal>
     </>
   )

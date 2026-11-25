@@ -6,7 +6,7 @@ import { MIN_SIZE } from '@/configs/element'
 import { SHAPE_PATH_FORMULAS } from '@/configs/shapes'
 import { clonePlain } from '@/utils/clonePlain'
 import { bindDocumentDrag, rafCoalesce } from '@/utils/gestureBind'
-import { findSlideViewport, getPointerClient, getViewportRenderedScale, pointerDeltaToCanvas } from '@/utils/canvasPointer'
+import { findSlideViewport, getPointerClient, getViewportRenderedScale } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { applyLiveSize, autoHeightInsetSum, measureAutoTextHeight, measureLiveTableHeight, tableCellMinHeight } from '@/utils/liveElementSize'
 import { placeholderHeightFloor } from '@/utils/placeholderLayout'
@@ -152,8 +152,7 @@ export default (
     let isMouseDown = true
     let stopGesture: (() => void) | null = null
     gesturingRef.current = true
-    useMainStore.getState().setScalingState(true)
-    useMainStore.getState().setGesturingState(true)
+    useMainStore.setState({ isScaling: true, isGesturing: true })
     const commitBase = captureSlideCommitBase()
 
     const elOriginLeft = element.left
@@ -169,7 +168,7 @@ export default (
 
     const viewport = findSlideViewport(e.target)
     const startPointer = getPointerClient(e)
-    const getRenderedScale = () => getViewportRenderedScale(viewport, canvasScale)
+    const renderedScale = getViewportRenderedScale(viewport, canvasScale)
 
     const minSize = MIN_SIZE[element.type] || 20
     const getSizeWithinRange = (size: number, type: 'width' | 'height') => {
@@ -201,7 +200,6 @@ export default (
 
       const x = currentPointer.x - startPointer.x
       const y = currentPointer.y - startPointer.y
-      const renderedScale = getRenderedScale()
 
       let width = elOriginWidth
       let height = elOriginHeight
@@ -408,8 +406,7 @@ export default (
       }
 
       gesturingRef.current = false
-      useMainStore.getState().setScalingState(false)
-      useMainStore.getState().setGesturingState(false)
+      useMainStore.setState({ isScaling: false, isGesturing: false })
     }
 
     stopGesture = bindLiveGesture(handleMousemove, handleMouseup)
@@ -423,8 +420,7 @@ export default (
     let isMouseDown = true
     let stopGesture: (() => void) | null = null
     gesturingRef.current = true
-    useMainStore.getState().setScalingState(true)
-    useMainStore.getState().setGesturingState(true)
+    useMainStore.setState({ isScaling: true, isGesturing: true })
     const commitBase = captureSlideCommitBase()
     
     const { minX, maxX, minY, maxY } = range
@@ -434,6 +430,7 @@ export default (
 
     const viewport = findSlideViewport(e.target)
     const startPointer = getPointerClient(e)
+    const renderedScale = getViewportRenderedScale(viewport, canvasScaleRef.current)
 
     const activeIds = new Set(activeElementIdList)
     const originElementList: PPTElement[] = elementList.map(el => (
@@ -449,8 +446,9 @@ export default (
     const handleMousemove = (e: MouseEvent | TouchEvent) => {
       if (!isMouseDown) return
       
-      const { x, y: scaledY } = pointerDeltaToCanvas(startPointer, e, viewport, canvasScaleRef.current)
-      let y = scaledY
+      const currentPointer = getPointerClient(e)
+      const x = (currentPointer.x - startPointer.x) / renderedScale
+      let y = (currentPointer.y - startPointer.y) / renderedScale
 
       if (ctrlOrShiftKeyActive) {
         if (command === OperateResizeHandlers.RIGHT_BOTTOM || command === OperateResizeHandlers.LEFT_TOP) y = x / aspectRatio
@@ -552,8 +550,7 @@ export default (
       }
 
       gesturingRef.current = false
-      useMainStore.getState().setScalingState(false)
-      useMainStore.getState().setGesturingState(false)
+      useMainStore.setState({ isScaling: false, isGesturing: false })
     }
 
     stopGesture = bindLiveGesture(handleMousemove, handleMouseup)

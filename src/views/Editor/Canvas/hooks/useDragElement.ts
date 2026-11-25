@@ -13,7 +13,7 @@ import { bindDocumentDrag, rafCoalesce } from '@/utils/gestureBind'
 import { clearLiveElementOffset, readLiveMultiOrigin, setLiveElementOffset, settleLiveElementOffset } from '@/utils/liveElementOffset'
 import { buildSnapIndex } from '@/utils/spatial'
 import { resolveGridSize, sameSnapGuides, snapMovingBox, type SnapBox } from '@/utils/snap'
-import { findSlideViewport, getPointerClient, pointerDeltaToCanvas } from '@/utils/canvasPointer'
+import { findSlideViewport, getPointerClient, getViewportRenderedScale, clientDeltaToCanvas } from '@/utils/canvasPointer'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import { captureSlideCommitBase, commitSlideElements } from '@/utils/commitSlideElements'
 import { resolvePagePositions } from '@/views/Myna/pageLayout'
@@ -100,6 +100,7 @@ export default (
     for (const node of dragRoots) node.setAttribute('data-myna-drag-root', '')
     if (mynaViewRef.current && clip) clip.style.overflow = 'visible'
     const startPointer = getPointerClient(e)
+    const renderedScale = getViewportRenderedScale(viewport, canvasScaleRef.current)
     const copyOnDrag = !isTouchEvent && (e.ctrlKey || e.metaKey)
 
     let isMisoperation: boolean | null = null
@@ -174,7 +175,7 @@ export default (
 
       if (!duplicateTriggered && copyOnDrag) duplicateTriggered = true
       
-      let { x: moveX, y: moveY } = pointerDeltaToCanvas(startPointer, e, viewport, canvasScaleRef.current)
+      let { x: moveX, y: moveY } = clientDeltaToCanvas(currentPointer.x - startPointer.x, currentPointer.y - startPointer.y, renderedScale)
 
       if (shiftKeyStateRef.current) {
         if (Math.abs(moveX) > Math.abs(moveY)) moveY = 0

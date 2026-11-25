@@ -217,9 +217,10 @@ export default (options?: UseMediaQueueOptions) => {
 
   const pump = async () => {
     const concurrency = getMediaConcurrency()
-    while (activeCountRef.current < concurrency) {
-      const next = itemsRef.current.find(item => item.status === 'queued')
-      if (!next) break
+    const items = itemsRef.current
+    for (let i = 0; i < items.length && activeCountRef.current < concurrency; i++) {
+      const next = items[i]
+      if (next.status !== 'queued') continue
       patchItem(next.id, { status: 'processing', progress: 0 })
       activeCountRef.current += 1
       void processItem(next)

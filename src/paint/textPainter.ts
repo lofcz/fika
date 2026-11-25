@@ -6,7 +6,7 @@ import type { TextAlign, TextAlignVertical } from '@/types/slides'
 import { serializeRichTextHtml, normalizeFittedFontSizes } from '@/utils/prosemirror'
 import { getInlineMathRaster } from '@/paint/rasterResources'
 import { latexFallbackText } from '@/utils/inlineMathBox'
-import { measureInlineMathBox } from '@/utils/math'
+import { measureInlineMathBox, mathReady } from '@/utils/math'
 import {
   DEFAULT_TEXT_FONT_FAMILY,
   DEFAULT_TEXT_FONT_SIZE,
@@ -16,6 +16,7 @@ import {
   extractBlocksCached,
   normalizeFontFamilyName,
   prepareRichInlineCached,
+  subscribeTextFontChanges,
   blockLineBoxHeight,
   fixedLineMetrics,
   listColumnInset,
@@ -134,12 +135,22 @@ const ensurePaintFontLoaded = (
   }).catch(() => {})
 }
 
+const graphemeSegmenter = typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+  ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+  : null
+
 const graphemeCount = (text: string) => {
-  if (typeof Intl.Segmenter !== 'function') return text.length
+  if (!graphemeSegmenter) return text.length
   let count = 0
-  for (const _part of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)) count++
+  for (const _part of graphemeSegmenter.segment(text)) count++
   return count
 }
+
+const baselineMetricsCache = new Map<string, { ascent: number; descent: number }>()
+const BASELINE_METRICS_CACHE_MAX = 600
+subscribeTextFontChanges(() => {
+  baselineMetricsCache.clear()
+})
 
 const textRunOf = (items: TextFitRun[]) => items.find(run => !run.mathLatex) || items[0]
 
@@ -168,14 +179,22 @@ const lineBaseline = (
   }
   anchor ??= textRunOf(line.items)
   const size = (anchor?.size || DEFAULT_TEXT_FONT_SIZE) * scale
-  if (anchor) ctx.font = fontOf({ ...anchor, italic: false }, fallbackFamily, scale)
-  const metrics = ctx.measureText('Hg')
-  const ascent = metrics.fontBoundingBoxAscent || metrics.actualBoundingBoxAscent || size * 0.8
-  const descent = metrics.fontBoundingBoxDescent || metrics.actualBoundingBoxDescent || size * 0.2
+  const font = anchor ? fontOf({ ...anchor, italic: false }, fallbackFamily, scale) : ctx.font
+  let cached = baselineMetricsCache.get(font)
+  if (!cached) {
+    if (anchor) ctx.font = font
+    const metrics = ctx.measureText('Hg')
+    cached = {
+      ascent: metrics.fontBoundingBoxAscent || metrics.actualBoundingBoxAscent || size * 0.8,
+      descent: metrics.fontBoundingBoxDescent || metrics.actualBoundingBoxDescent || size * 0.2,
+    }
+    if (baselineMetricsCache.size >= BASELINE_METRICS_CACHE_MAX) baselineMetricsCache.clear()
+    baselineMetricsCache.set(font, cached)
+  }
   // Half-leading may go negative: with line-height below the font's own box
   // (e.g. `1` on a badge digit) CSS still centres the content area, so the
   // canvas must too — clamping at 0 sat the glyph a few px low.
-  return y + (line.height - ascent - descent) / 2 + ascent
+  return y + (line.height - cached.ascent - cached.descent) / 2 + cached.ascent
 }
 
 const paintText = (
@@ -193,8 +212,11 @@ const paintText = (
   const canvasText = ctx as CanvasRenderingContext2D & { letterSpacing?: string }
   if ('letterSpacing' in canvasText) canvasText.letterSpacing = `${letterSpacing}px`
   ctx.fillText(text, x, baseline)
+  if (!run.underline && !run.strikethrough) return
   const metrics = ctx.measureText(text)
-  const width = metrics.width + Math.max(0, graphemeCount(text) - 1) * letterSpacing
+  const width = letterSpacing
+    ? metrics.width + Math.max(0, graphemeCount(text) - 1) * letterSpacing
+    : metrics.width
   const size = run.size * scale
   ctx.lineWidth = Math.max(0.75, size * 0.055)
   ctx.strokeStyle = run.color || '#333'
@@ -285,7 +307,7 @@ export const paintRichText = (
   const lineHeight = options.lineHeight ?? 1.5
   const letterSpacing = options.letterSpacing || 0
   const paragraphSpace = options.paragraphSpace ?? 5
-  const { blocks: cachedBlocks } = extractBlocksCached(
+  const { blocks: cachedBlocks, mathMeasured } = extractBlocksCached(
     html,
     options.defaultFontFamily,
     defaultSize,
@@ -314,7 +336,7 @@ export const paintRichText = (
       ...(runs ? { runs } : {}),
     }
   })
-  applyMeasuredMathBoxes(blocks, measureInlineMathBox)
+  if (!mathMeasured && mathReady.value) applyMeasuredMathBoxes(blocks, measureInlineMathBox)
   const fitScale = options.fit
     ? textFitScaleForHtml(html, {
         innerWidth,
@@ -409,6 +431,7 @@ export const paintRichText = (
           color,
           !!run.mathDisplay,
           options.invalidate ?? (() => {}),
+          options.onIncomplete,
         )
         if (raster && chipW > 0 && chipH > 0) {
           const natW = Math.max(1, raster.width)

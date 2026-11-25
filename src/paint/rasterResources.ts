@@ -10,7 +10,8 @@ import { isLightCodeTheme } from '@/configs/code'
 import { renderMermaidForImage } from '@/utils/mermaid'
 import { LATEX_ELEMENT_FONT_SIZE, ensureMathliveReady, renderLatexElementHtml, renderMathToHtml } from '@/utils/math'
 import { MATH_FONT_CHANGE_TOKEN, subscribeTextFontChanges } from '@/utils/textFit'
-import { EMBED_ROOT_CLASS } from '@/utils/portal'
+import { EMBED_ROOT_CLASS, MATH_PROBE_ATTR } from '@/utils/portal'
+import { captureMathHostDirectSvg } from './mathSvgRaster'
 
 echarts.use([
   BarChart,
@@ -44,6 +45,8 @@ type WorkItem = {
 export type RasterDiagnostics = {
   completed: number
   droppedUnmounted: number
+  directSvgHits: number
+  snapdomFallbacks: number
   rejectEmptyDimensions: number
   rejectBounds: number
   rejectCaptureError: number
@@ -58,12 +61,14 @@ const jobs = new Map<string, Promise<Raster | null>>()
 const listeners = new Map<string, Set<() => void>>()
 const workQueue: WorkItem[] = []
 const ownerPriorities = new Map<string, 'visible' | 'overscan'>()
-const ownerListeners = new Map<string, Array<{ key: string; fn: () => void }>>()
+const ownerListeners = new Map<string, Map<string, () => void>>()
 const scrollIdleListeners = new Set<() => void>()
 
 const rasterDiagnostics: RasterDiagnostics = {
   completed: 0,
   droppedUnmounted: 0,
+  directSvgHits: 0,
+  snapdomFallbacks: 0,
   rejectEmptyDimensions: 0,
   rejectBounds: 0,
   rejectCaptureError: 0,
@@ -93,6 +98,8 @@ export const readRasterDiagnostics = (): RasterDiagnostics & { queued: number; i
 export const resetRasterDiagnostics = () => {
   rasterDiagnostics.completed = 0
   rasterDiagnostics.droppedUnmounted = 0
+  rasterDiagnostics.directSvgHits = 0
+  rasterDiagnostics.snapdomFallbacks = 0
   rasterDiagnostics.rejectEmptyDimensions = 0
   rasterDiagnostics.rejectBounds = 0
   rasterDiagnostics.rejectCaptureError = 0
@@ -175,7 +182,7 @@ export const releaseRasterOwner = (ownerId: string) => {
   const registered = ownerListeners.get(ownerId)
   if (registered) {
     ownerListeners.delete(ownerId)
-    for (const { key, fn } of registered) {
+    for (const [key, fn] of registered) {
       const set = listeners.get(key)
       if (!set) continue
       set.delete(fn)
@@ -314,10 +321,14 @@ export const requestRaster = (key: string, produce: RasterProducer, invalidate: 
   if (owner) {
     let entries = ownerListeners.get(owner.id)
     if (!entries) {
-      entries = []
+      entries = new Map()
       ownerListeners.set(owner.id, entries)
     }
-    entries.push({ key, fn: invalidate })
+    const prevFn = entries.get(key)
+    if (prevFn && prevFn !== invalidate) {
+      set.delete(prevFn)
+    }
+    entries.set(key, invalidate)
     let pending = ownerPendingKeys.get(owner.id)
     if (!pending) {
       pending = new Set()
@@ -549,10 +560,92 @@ const MAX_MATH_RASTER_RETRIES = 3
 const mathFailureCounts = new Map<string, number>()
 const mathRetryAfter = new Map<string, number>()
 
+const STALE_MATH_MAX = 256
+const TINTED_MATH_MAX = 512
+const staleMathRasters = new Map<string, Raster>()
+const tintedMathRasters = new Map<string, HTMLCanvasElement>()
+const HAS_LATEX_COLOR_RE = /\\(?:(?:text)?color|(?:f)?colorbox|bbox|emph)\b/
+
+export const hasLatexColorCommand = (latex: string): boolean => HAS_LATEX_COLOR_RE.test(latex)
+
+/**
+ * 1.25× geometric size ladder for interactive thumbnail math rasters so minor
+ * font-size differences share one raster captured at bucket ceiling and drawn
+ * scaled down (never blurry upscaling). Exports bypass this ladder.
+ */
+const MATH_SIZE_LADDER_RATIO = 1.25
+const MATH_SIZE_LADDER_LOG = Math.log(MATH_SIZE_LADDER_RATIO)
+const MATH_SIZE_LADDER_MIN = 10
+export const mathSizeBucket = (fontSize: number): number => {
+  const clamped = Math.max(MATH_SIZE_LADDER_MIN, fontSize)
+  const step = Math.ceil(Math.log(clamped / MATH_SIZE_LADDER_MIN) / MATH_SIZE_LADDER_LOG)
+  return Math.round(MATH_SIZE_LADDER_MIN * Math.pow(MATH_SIZE_LADDER_RATIO, Math.max(0, step)) * 2) / 2
+}
+
+const rememberStaleMathRaster = (staleKey: string, raster: Raster) => {
+  staleMathRasters.delete(staleKey)
+  staleMathRasters.set(staleKey, raster)
+  while (staleMathRasters.size > STALE_MATH_MAX) {
+    const oldest = staleMathRasters.keys().next().value
+    if (!oldest) break
+    staleMathRasters.delete(oldest)
+  }
+}
+
+const tintMonochromeRaster = (mono: Raster, monoKey: string, color: string): Raster => {
+  if (typeof document === 'undefined') return mono
+  const normalizedColor = color.trim().toLowerCase()
+  if (normalizedColor === '#000' || normalizedColor === '#000000' || normalizedColor === 'black' || normalizedColor === 'rgb(0, 0, 0)') {
+    return mono
+  }
+  const tintKey = `${monoKey}\0${normalizedColor}`
+  const cached = tintedMathRasters.get(tintKey)
+  if (cached) {
+    tintedMathRasters.delete(tintKey)
+    tintedMathRasters.set(tintKey, cached)
+    return cached
+  }
+  const out = document.createElement('canvas')
+  out.width = Math.max(1, mono.width)
+  out.height = Math.max(1, mono.height)
+  if ('style' in mono && mono.style.width && mono.style.height) {
+    out.style.width = mono.style.width
+    out.style.height = mono.style.height
+  }
+  const ctx = out.getContext('2d')
+  if (!ctx) return mono
+  ctx.drawImage(mono, 0, 0)
+  ctx.globalCompositeOperation = 'source-in'
+  ctx.fillStyle = color
+  ctx.fillRect(0, 0, out.width, out.height)
+  tintedMathRasters.set(tintKey, out)
+  while (tintedMathRasters.size > TINTED_MATH_MAX) {
+    const oldest = tintedMathRasters.keys().next().value
+    if (!oldest) break
+    const evicted = tintedMathRasters.get(oldest)
+    if (evicted) {
+      evicted.width = 0
+      evicted.height = 0
+    }
+    tintedMathRasters.delete(oldest)
+  }
+  return out
+}
+
+const clearTintedAndStaleMathRasters = () => {
+  staleMathRasters.clear()
+  for (const node of tintedMathRasters.values()) {
+    node.width = 0
+    node.height = 0
+  }
+  tintedMathRasters.clear()
+}
+
 const clearMathRasters = () => {
   mathRasterRevision++
   mathFailureCounts.clear()
   mathRetryAfter.clear()
+  clearTintedAndStaleMathRasters()
   if (!mathFontsAllLoaded) mathFontsPromise = null
   for (const [key, raster] of rasters) {
     if (!key.startsWith('imath:') && !key.startsWith('latex:')) continue
@@ -652,6 +745,7 @@ const ensureMathRasterBooth = (): HTMLElement => {
   const booth = document.createElement('div')
   booth.id = MATH_RASTER_BOOTH_ID
   booth.className = EMBED_ROOT_CLASS
+  booth.setAttribute(MATH_PROBE_ATTR, 'true')
   booth.setAttribute('aria-hidden', 'true')
   booth.style.cssText = [
     'position:fixed',
@@ -668,16 +762,30 @@ const ensureMathRasterBooth = (): HTMLElement => {
 }
 
 /**
- * Verify a transparent SnapDOM math capture contains visible pixels.
+ * Verify a transparent math capture contains visible pixels.
  * Checks alpha only — white/light math ink on dark slides has RGB > 248 and
  * MUST count as valid ink rather than degrading to fallback text.
+ *
+ * Catches `SecurityError` when Safari/WebKit taints a `<foreignObject>` SVG
+ * canvas: defaults to `false` so direct-SVG cleanly falls back to SnapDOM,
+ * while callers on the SnapDOM fallback pass `{ onTainted: true }` so WebKit
+ * never drops a valid rendered formula.
  */
-export const canvasHasInk = (node: HTMLCanvasElement): boolean => {
+export const canvasHasInk = (
+  node: HTMLCanvasElement,
+  options?: { onTainted?: boolean },
+): boolean => {
   const ctx = node.getContext('2d', { willReadFrequently: true })
   if (!ctx) return false
   const { width, height } = node
   if (!(width > 0) || !(height > 0)) return false
-  const data = ctx.getImageData(0, 0, width, height).data
+  let data: Uint8ClampedArray
+  try {
+    data = ctx.getImageData(0, 0, width, height).data
+  }
+  catch {
+    return options?.onTainted ?? false
+  }
   let ink = 0
   for (let i = 0; i < data.length; i += 4) {
     if (data[i + 3] < 12) continue
@@ -738,8 +846,9 @@ const LATEX_RASTER_HIDPI_BUDGET = 1_500_000
 
 /**
  * Tight MathLive snapshot of a formula — same nowrap, max-content stage as
- * `LatexContent`. Never caches fallback rasters so transient CSS/font races
- * retry cleanly.
+ * `LatexContent`. Captures single-color formulas once in monochrome black and
+ * tints via `source-in` so light/dark slides share one raster. Never caches
+ * fallback rasters so transient CSS/font races retry cleanly.
  */
 export const getLatexRaster = (
   element: PPTLatexElement,
@@ -747,8 +856,10 @@ export const getLatexRaster = (
 ): Raster | undefined => {
   const boxW = Math.max(1, Math.round(element.width))
   const boxH = Math.max(1, Math.round(element.height))
-  const key = `latex:${hash(`${mathRasterRevision}\0${element.latex}\0${boxW}\0${boxH}\0${element.color}`)}`
-  return requestMathRaster(key, element.latex, async () => {
+  const monochrome = !hasLatexColorCommand(element.latex)
+  const captureColor = monochrome ? '#000000' : element.color
+  const key = `latex:${hash(`${mathRasterRevision}\0${element.latex}\0${boxW}\0${boxH}\0${captureColor}`)}`
+  const base = requestMathRaster(key, element.latex, async () => {
     await ensureMathliveReady()
     await ensureMathFontsLoaded()
     const host = document.createElement('div')
@@ -761,7 +872,7 @@ export const getLatexRaster = (
       'white-space:nowrap',
       'line-height:normal',
       `font-size:${LATEX_ELEMENT_FONT_SIZE}px`,
-      `color:${element.color}`,
+      `color:${captureColor}`,
       'pointer-events:none',
       'background:transparent',
     ].join(';')
@@ -788,13 +899,20 @@ export const getLatexRaster = (
       void host.offsetWidth
       const width = Math.max(1, Math.ceil(host.offsetWidth))
       const height = Math.max(1, Math.ceil(host.offsetHeight))
+      const dpr = width * height * 4 <= LATEX_RASTER_HIDPI_BUDGET ? 2 : 1
+      const direct = await captureMathHostDirectSvg(host, width, height, dpr)
+      if (direct && canvasHasInk(direct)) {
+        rasterDiagnostics.directSvgHits++
+        return direct
+      }
+      rasterDiagnostics.snapdomFallbacks++
       const { captureToCanvas } = await import('@/utils/snapdomCapture')
       const captured = await captureToCanvas(host, {
-        dpr: width * height * 4 <= LATEX_RASTER_HIDPI_BUDGET ? 2 : 1,
+        dpr,
         embedFonts: true,
         reconcile: true,
       })
-      if (captured && canvasHasInk(captured)) return captured
+      if (captured && canvasHasInk(captured, { onTainted: true })) return captured
       recordRejection('rejectNoInk', element.latex, { width, height })
       return null
     }
@@ -806,13 +924,15 @@ export const getLatexRaster = (
       host.remove()
     }
   }, invalidate)
+  if (!base) return undefined
+  return monochrome ? tintMonochromeRaster(base, key, element.color) : base
 }
 
 /**
- * Typeset inline/display math at a 0.5px-quantized font size and snapshot it.
- * The booth is `.fika-embed-root` so scoped MathLive CSS applies; failed or
- * empty captures return `null` (never cached) and retry up to 3 times while
- * `textPainter` draws readable fallback text in the interim.
+ * Typeset inline/display math and snapshot it. Interactive thumbnails use a
+ * 1.25× size ladder (drawing stale rasters while a new bucket renders) and
+ * monochrome capture + `source-in` tinting so light/dark cards share one
+ * capture. Exports (`collecting !== null`) bypass bucketing for exact size.
  */
 export const getInlineMathRaster = (
   latex: string,
@@ -820,10 +940,15 @@ export const getInlineMathRaster = (
   color: string,
   display: boolean,
   invalidate: () => void,
+  onStale?: () => void,
 ): Raster | undefined => {
-  const size = quantizeMathFontSize(fontSize)
-  const key = `imath:${hash(`${mathRasterRevision}\0${latex}\0${size}\0${color}\0${display ? 1 : 0}`)}`
-  return requestMathRaster(key, latex, async () => {
+  const isExport = collecting !== null
+  const size = isExport ? quantizeMathFontSize(fontSize) : mathSizeBucket(fontSize)
+  const monochrome = !hasLatexColorCommand(latex)
+  const captureColor = monochrome ? '#000000' : color
+  const key = `imath:${hash(`${mathRasterRevision}\0${latex}\0${size}\0${captureColor}\0${display ? 1 : 0}`)}`
+  const staleKey = `${mathRasterRevision}\0${latex}\0${display ? 1 : 0}\0${captureColor}`
+  const base = requestMathRaster(key, latex, async () => {
     await ensureMathliveReady()
     await ensureMathFontsLoaded()
     const host = document.createElement('div')
@@ -836,7 +961,7 @@ export const getInlineMathRaster = (
       'white-space:nowrap',
       'line-height:normal',
       `font-size:${size}px`,
-      `color:${color}`,
+      `color:${captureColor}`,
       'background:transparent',
     ].join(';')
     host.innerHTML = renderMathToHtml(latex, display)
@@ -856,6 +981,12 @@ export const getInlineMathRaster = (
         recordRejection('rejectBounds', latex, { width, height, size })
         return null
       }
+      const direct = await captureMathHostDirectSvg(host, width, height, 2)
+      if (direct && canvasHasInk(direct)) {
+        rasterDiagnostics.directSvgHits++
+        return direct
+      }
+      rasterDiagnostics.snapdomFallbacks++
       const { captureToCanvas } = await import('@/utils/snapdomCapture')
       const captured = await captureToCanvas(host, {
         width,
@@ -864,7 +995,7 @@ export const getInlineMathRaster = (
         embedFonts: true,
         reconcile: true,
       })
-      if (captured && canvasHasInk(captured)) return captured
+      if (captured && canvasHasInk(captured, { onTainted: true })) return captured
       recordRejection('rejectNoInk', latex, { width, height, size })
       return null
     }
@@ -876,6 +1007,18 @@ export const getInlineMathRaster = (
       host.remove()
     }
   }, invalidate)
+  if (base) {
+    if (!isExport) rememberStaleMathRaster(staleKey, base)
+    return monochrome ? tintMonochromeRaster(base, key, color) : base
+  }
+  if (!isExport) {
+    const stale = staleMathRasters.get(staleKey)
+    if (stale) {
+      onStale?.()
+      return monochrome ? tintMonochromeRaster(stale, `stale:${staleKey}`, color) : stale
+    }
+  }
+  return undefined
 }
 
 if (typeof window !== 'undefined') {
@@ -894,6 +1037,7 @@ export const clearSlideRasterResources = () => {
   ownerListeners.clear()
   ownerPendingKeys.clear()
   staleChartRasters.clear()
+  clearTintedAndStaleMathRasters()
   mathFailureCounts.clear()
   mathRetryAfter.clear()
 }

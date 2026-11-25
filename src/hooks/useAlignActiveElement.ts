@@ -1,6 +1,7 @@
 import { useMainStore, useSlidesStore, selectActiveElementList, selectCurrentSlide } from '@/store';
 import type { PPTElement } from '@/types/slides';
 import { ElementAlignCommands } from '@/types/edit';
+import { clonePlain } from '@/utils/clonePlain';
 import { alignElementToRange, getElementListRange } from '@/utils/element';
 import useHistorySnapshot from './useHistorySnapshot';
 interface RangeMap {
@@ -25,7 +26,7 @@ export default () => {
       minY,
       maxY
     } = getElementListRange(activeElementList);
-    const elementList: PPTElement[] = JSON.parse(JSON.stringify(currentSlide.elements));
+    const elementList: PPTElement[] = clonePlain(currentSlide.elements);
 
     const groupElementRangeMap: RangeMap = {};
     for (const activeElement of activeElementList) {
