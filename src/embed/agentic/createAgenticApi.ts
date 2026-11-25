@@ -22,7 +22,8 @@ import { inferViewportFromSlides } from '../inferViewport';
 import { hasInternedBlobs, rewritePersistableMediaSrcs } from '@/utils/mediaIntern';
 import { flushCommitQueue } from '@/utils/commitQueue';
 import { computeImageAspectFitPatch, findManuallyReplacedElementIdForSlot, isManualImageReplacementProtected } from '@/utils/imageReplace';
-import { clampIndex, cloneElementsWithRemappedIds, clonePatch, clonePlain, cloneSlidesWithRemappedIds, createId, createIssue, createTableCell, ensureElementOnSlide, ensureSlide, findElement, findSlideLinkReferences, insertIndex, isCanonicalCommandType, mergeShapeElement, mergeTheme, normalizeAnimation, normalizeAudioElement, normalizeAudioPatch, deriveLatexGeometry, normalizeElement, normalizeElementLink, normalizeLatexElement, normalizeLineElement, normalizeNote, normalizeNotePatch, normalizeReply, normalizeShapeElement, normalizeSlide, normalizeTableElementPatch, resolveMediaAsset, toIdList, updateLineElement } from './helpers';
+import { clampIndex, cloneElementsWithRemappedIds, clonePatch, clonePlain, cloneSlidesWithRemappedIds, createId, createIssue, createTableCell, ensureElementOnSlide, ensureSlide, findElement, findSlideLinkReferences, insertIndex, isCanonicalCommandType, mergeShapeElement, mergeTheme, needsHfmathForElement, normalizeAnimation, normalizeAudioElement, normalizeAudioPatch, deriveLatexGeometryAsync, normalizeElement, normalizeElementLink, normalizeLatexElement, normalizeLineElement, normalizeNote, normalizeNotePatch, normalizeReply, normalizeShapeElement, normalizeSlide, normalizeTableElementPatch, payloadNeedsHfmath, resolveMediaAsset, toIdList, updateLineElement } from './helpers';
+import { ensureHfmath } from '@/utils/hfmathLazy';
 import { stripThemeInlineStyles } from './themeFormatting';
 import { agentTextToHtmlBreaks } from '@/utils/agentText';
 import { applyTextRunStyle, extractDominantTextRunStyle, markdownToHtml, mergeTextRunStyles, type TextRunStyle } from '@/utils/markdown';
@@ -387,14 +388,71 @@ function changedSlideIds(before: Slide[], after: Slide[]): string[] {
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-function cloneJsonSafePayload<T = unknown>(payload: unknown, path: string): T {
-  try {
-    const serialized = JSON.stringify(payload);
-    if (serialized === undefined) throw new Error('Payload is not JSON-serializable');
-    return JSON.parse(serialized) as T;
-  } catch {
+/**
+ * Normalize a payload with exact `JSON.parse(JSON.stringify(...))` semantics
+ * (`toJSON`, `NaN`/`Infinity` -> `null`, omitting `undefined`/function/symbol
+ * object keys, rejecting circular refs & `BigInt`) without allocating giant
+ * JSON strings for embedded base64 media.
+ */
+function normalizeJsonSafeValue(value: unknown, path: string, seen: Set<object>): unknown {
+  let current = value;
+  if (current !== null && typeof current === 'object' && typeof (current as { toJSON?: unknown }).toJSON === 'function') {
+    try {
+      current = (current as { toJSON: () => unknown }).toJSON();
+    } catch {
+      throw new AgenticCommandError('InvalidDocument', 'Document payload must be JSON-serializable', path);
+    }
+  }
+  if (current === null) return null;
+  const type = typeof current;
+  if (type === 'string' || type === 'boolean') return current;
+  if (type === 'number') {
+    if (!Number.isFinite(current as number)) return null;
+    return Object.is(current, -0) ? 0 : current;
+  }
+  if (type === 'bigint') {
     throw new AgenticCommandError('InvalidDocument', 'Document payload must be JSON-serializable', path);
   }
+  if (type === 'undefined' || type === 'function' || type === 'symbol') {
+    return undefined;
+  }
+  const obj = current as object;
+  if (seen.has(obj)) {
+    throw new AgenticCommandError('InvalidDocument', 'Document payload must be JSON-serializable', path);
+  }
+  seen.add(obj);
+  try {
+    if (Array.isArray(obj)) {
+      const out = new Array<unknown>(obj.length);
+      for (let i = 0; i < obj.length; i++) {
+        const normalized = normalizeJsonSafeValue(obj[i], path, seen);
+        out[i] = normalized === undefined ? null : normalized;
+      }
+      return out;
+    }
+    if (obj instanceof Boolean) return obj.valueOf();
+    if (obj instanceof Number) {
+      const num = obj.valueOf();
+      return Number.isFinite(num) ? (Object.is(num, -0) ? 0 : num) : null;
+    }
+    if (obj instanceof String) return obj.valueOf();
+    const record = obj as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(record)) {
+      const normalized = normalizeJsonSafeValue(record[key], path, seen);
+      if (normalized !== undefined) out[key] = normalized;
+    }
+    return out;
+  } finally {
+    seen.delete(obj);
+  }
+}
+function cloneJsonSafePayload<T = unknown>(payload: unknown, path: string): T {
+  const normalized = normalizeJsonSafeValue(payload, path, new Set<object>());
+  if (normalized === undefined) {
+    throw new AgenticCommandError('InvalidDocument', 'Document payload must be JSON-serializable', path);
+  }
+  return normalized as T;
 }
 function documentPayloadRoot(payload: unknown): {
   document: unknown;
@@ -1434,6 +1492,15 @@ export function createAgenticApi(options: {
     const dryRun = runOptions.dryRun ?? command.meta?.dryRun === true;
     currentWarnings = warnings;
     try {
+      if (payloadNeedsHfmath(command.payload, command.type)) {
+        await ensureHfmath();
+        if (destroyed) {
+          restoreRuntimeState(stores, before);
+          documentVersion = beforeVersion;
+          restoreAuthoringState(beforeAuthoring);
+          return failResult(command, new Error('Fika controller has been destroyed')) as FikaCommandResult<TData>;
+        }
+      }
       const data = await handler();
       if (destroyed) {
         restoreRuntimeState(stores, before);
@@ -2165,6 +2232,7 @@ export function createAgenticApi(options: {
     const {
       slide: sourceSlide
     } = resolveTemplateSlide(data, payload.slug);
+    if (payloadNeedsHfmath(sourceSlide)) await ensureHfmath();
     const [slide] = instantiateTemplateSlides(normalizeDocumentSlides([sourceSlide], 'template.slides'));
     const index = fromApiInsertSlideIndex(payload.index, stores.slides.slides.length);
     syncPlanOnInsert(index, 1);
@@ -2365,7 +2433,7 @@ export function createAgenticApi(options: {
     elementId: string;
     slideId?: string;
   }) => clonePlain(findElement(stores.slides.slides, payload.elementId, payload.slideId, stores.slides.slideIndex).element));
-  register('elements.create', (payload: {
+  register('elements.create', async (payload: {
     slideId?: string;
     index?: number;
     element: Partial<PPTElement> & {
@@ -2377,6 +2445,7 @@ export function createAgenticApi(options: {
       slide,
       index: slideIndex
     } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
+    if (needsHfmathForElement(payload.element)) await ensureHfmath();
     const element = normalizeElement(payload.element, stores.slides.theme);
     const elements = slide.elements.slice();
     elements.splice(insertIndex(payload.index, elements.length), 0, element);
@@ -2853,11 +2922,12 @@ export function createAgenticApi(options: {
     const element = findElement(stores.slides.slides, payload.elementId, payload.slideId, stores.slides.slideIndex).element;
     return element.type === 'latex' ? clonePlain(element) : null;
   });
-  register('latex.create', (payload: FikaCreateLatexElementInput) => {
+  register('latex.create', async (payload: FikaCreateLatexElementInput) => {
     const {
       slide,
       index: slideIndex
     } = ensureSlide(stores.slides.slides, payload.slideId, stores.slides.slideIndex);
+    if (needsHfmathForElement({ ...payload.element, type: 'latex' })) await ensureHfmath();
     const element = normalizeLatexElement(payload.element);
     const elements = slide.elements.slice();
     elements.splice(insertIndex(payload.index, elements.length), 0, element);
@@ -2867,7 +2937,7 @@ export function createAgenticApi(options: {
     if (payload.select !== false) stores.main.setActiveElementIdList([element.id]);
     return clonePlain(element);
   });
-  register('latex.update', (payload: {
+  register('latex.update', async (payload: {
     elementId: string;
     slideId?: string;
     patch: FikaLatexElementPatch;
@@ -2880,7 +2950,7 @@ export function createAgenticApi(options: {
     const nextLatex = typeof patch.latex === 'string' ? patch.latex.trim() : '';
     const hasNewPath = typeof patch.path === 'string' && patch.path.trim().length > 0;
     if (nextLatex && nextLatex !== found.element.latex && !hasNewPath) {
-      const geometry = deriveLatexGeometry(nextLatex);
+      const geometry = await deriveLatexGeometryAsync(nextLatex);
       patch.latex = nextLatex;
       patch.path = geometry.path;
       if (patch.viewBox === undefined) patch.viewBox = geometry.viewBox;
@@ -4781,6 +4851,9 @@ export function createAgenticApi(options: {
         const previousWarnings = currentWarnings;
         currentWarnings = warnings;
         try {
+          if (payloadNeedsHfmath(command.payload, command.type)) {
+            await ensureHfmath();
+          }
           const data = await descriptor.handler(command.payload, {
             ...command,
             meta: {

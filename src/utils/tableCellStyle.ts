@@ -2,7 +2,8 @@ import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
 import type { TableCell, TableCellStyle } from '@/types/slides'
 import { flushCommitQueue } from '@/utils/commitQueue'
-import { rememberTableStyleTarget, tableStyleTarget } from '@/utils/tableStyleTarget'
+import { clonePlain } from '@/utils/clonePlain'
+import { collectTableCellIds, forgetTableStyleTarget, rememberTableStyleTarget, resolveTableStyleTarget, tableStyleTarget } from '@/utils/tableStyleTarget'
 import { updateTableCellTextAttrs, type TableTextAttrs } from '@/utils/prosemirror/table'
 import { getTableEditor } from '@/utils/prosemirror/tableEditor'
 
@@ -11,7 +12,7 @@ export { rememberTableStyleTarget, tableStyleTarget } from '@/utils/tableStyleTa
 // oxlint-disable-next-line react/rules-of-hooks -- zustand snapshot helper, not a React hook
 const history = useHistorySnapshot()
 
-const cloneGrid = (data: TableCell[][]) => JSON.parse(JSON.stringify(data)) as TableCell[][]
+const cloneGrid = (data: TableCell[][]) => clonePlain(data)
 
 const cellKey = (row: number, col: number) => `${row}_${col}`
 
@@ -36,8 +37,14 @@ export function applyTableCellStyles(
   const slide = selectCurrentSlide(useSlidesStore.getState())
   const el = slide?.elements.find(item => item.id === elementId)
   if (!el || el.type !== 'table' || el.lock || main.readOnly) return false
-  const cells = options?.allCells ? [] : tableStyleTarget(elementId, options?.cells ?? main.selectedTableCells)
-  if (cells.length) rememberTableStyleTarget(elementId, cells)
+  const explicitCells = options?.cells ?? main.selectedTableCells
+  const resolved = options?.allCells ? [] : resolveTableStyleTarget(elementId, el.data, explicitCells)
+  if (resolved === null) {
+    forgetTableStyleTarget(elementId)
+    return false
+  }
+  const cells = resolved
+  if (cells.length) rememberTableStyleTarget(elementId, cells, collectTableCellIds(el.data, cells))
   const data = cloneGrid(el.data)
   const textAttrs: TableTextAttrs = options?.clearText ? { clear: true } : {}
   const boxStyle = { ...style }

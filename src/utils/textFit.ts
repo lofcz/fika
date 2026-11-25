@@ -514,7 +514,7 @@ const measureRunsHeight = (
 const preparedHandleCache = new Map<string, ReturnType<typeof pretextPrepare>>()
 const PREPARED_CACHE_MAX = 600
 const prepareCached = (text: string, font: string, letterSpacing?: number, whiteSpace?: TextFitBlock['whiteSpace']) => {
-  const key = `${text.length}\0${text.slice(0, 64)}\0${font}\0${letterSpacing ?? 0}\0${whiteSpace ?? 'normal'}`
+  const key = `${text.length}\0${text}\0${font}\0${letterSpacing ?? 0}\0${whiteSpace ?? 'normal'}`
   let prepared = preparedHandleCache.get(key)
   if (!prepared) {
     prepared = pretextPrepare(text, font, { letterSpacing, whiteSpace })
@@ -595,16 +595,38 @@ export function fitFontScaleForBlocks(blocks: TextFitBlock[], options: FitFontSc
   if (minScale >= 1) return minScale;
   if (!blocks.length || options.innerWidth <= 2 || options.innerHeight <= 2) return 1;
   try {
-    const fits = (sizeScale: number) => measureAt(blocks, options, sizeScale) <= options.innerHeight;
-    if (fits(1)) return 1;
+    const h1 = measureAt(blocks, options, 1);
+    if (h1 <= options.innerHeight) return 1;
     let lo = minScale;
     let hi = 1;
     let best = minScale;
-    // 10 halvings ≈ 0.1% font precision (matching useTextFit's DOM search),
-    // eliminating the ~1.4% quantization jump when clicking a slide.
+    // Analytical 2D-area first guess (`sqrt(innerHeight / h1)`): wrapped text
+    // height shrinks super-linearly with scale, so probing near the analytical
+    // root narrows `[lo, hi]` sharply and cuts Pretext prepares roughly in half.
+    const ratio = options.innerHeight / Math.max(1, h1);
+    const guess = Math.max(lo + 0.002, Math.min(hi - 0.002, Math.sqrt(ratio)));
+    if (guess > lo && guess < hi) {
+      if (measureAt(blocks, options, guess) <= options.innerHeight) {
+        best = guess;
+        lo = guess;
+        const upper = Math.min(hi - 0.002, guess * 1.15);
+        if (upper > lo && measureAt(blocks, options, upper) > options.innerHeight) {
+          hi = upper;
+        }
+      }
+      else {
+        hi = guess;
+        const lower = Math.max(lo + 0.002, Math.min(guess * 0.82, ratio));
+        if (lower < hi && measureAt(blocks, options, lower) <= options.innerHeight) {
+          best = lower;
+          lo = lower;
+        }
+      }
+    }
+    // Refine to 0.1% font precision (matching useTextFit's DOM search).
     for (let i = 0; i < 10 && hi - lo > 0.001; i++) {
       const mid = (lo + hi) / 2;
-      if (fits(mid)) {
+      if (measureAt(blocks, options, mid) <= options.innerHeight) {
         best = mid;
         lo = mid;
       } else hi = mid;
@@ -787,9 +809,25 @@ type BlocksMemoEntry = {
 }
 const blocksMemo = new Map<string, BlocksMemoEntry>()
 const BLOCKS_MEMO_MAX = 400
-const computeBlocksMetricKey = (blocks: TextFitBlock[]) => (
-  JSON.stringify(blocks, (key, value) => (key === 'color' || key === 'listColor') ? undefined : value)
-)
+const computeBlocksMetricKey = (blocks: TextFitBlock[]): string => {
+  const parts: string[] = []
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i]
+    parts.push(
+      `${b.text}\x01${b.whiteSpace ?? ''}\x01${b.size}\x01${b.paragraphSize ?? ''}\x01${b.paragraphIndent ?? ''}\x01${b.lineHeight ?? ''}\x01${b.lineHeightPx ?? ''}\x01${b.marginTop ?? ''}\x01${b.marginBottom ?? ''}\x01${b.bold ? 1 : 0}\x01${b.fontWeight ?? ''}\x01${b.italic ? 1 : 0}\x01${b.fontFamily}\x01${b.listItem ? 1 : 0}\x01${b.firstInList ? 1 : 0}\x01${b.listFontSize ?? ''}\x01${b.listOrdered ? 1 : 0}\x01${b.listIndentPx ?? ''}\x01${b.listIndentEm ?? ''}\x01${b.align ?? ''}\x01${b.listMarker ?? ''}`,
+    )
+    const runs = b.runs
+    if (runs?.length) {
+      for (let j = 0; j < runs.length; j++) {
+        const r = runs[j]
+        parts.push(
+          `\x02${r.text}\x03${r.size}\x03${r.bold ? 1 : 0}\x03${r.fontWeight ?? ''}\x03${r.italic ? 1 : 0}\x03${r.underline ? 1 : 0}\x03${r.strikethrough ? 1 : 0}\x03${r.fontFamily ?? ''}\x03${r.mathLatex ?? ''}\x03${r.mathDisplay ? 1 : 0}\x03${r.extraWidth ?? ''}\x03${r.mathHeight ?? ''}`,
+        )
+      }
+    }
+  }
+  return parts.join('\x04')
+}
 
 export const extractBlocksCached = (
   html: string,
@@ -837,13 +875,17 @@ export type FitScaleOptions = {
   locale?: string
   /** Pre-extracted blocks (e.g. after MathLive refined math chip sizes). */
   blocks?: TextFitBlock[]
+  /** Precomputed metricKey from `extractBlocksCached` to skip redundant cache lookup. */
+  metricKey?: string
   minFontSize?: number
 }
 
-const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
+const fitScaleMemoKey = (html: string, options: FitScaleOptions, precomputedMetricKey?: string) => {
   const fontFamily = resolvePaintFontFamily(options.defaultFontFamily)
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
-  const { metricKey } = extractBlocksCached(html, fontFamily, defaultSize, options.defaultWeight, options.defaultItalic)
+  const metricKey = precomputedMetricKey
+    ?? options.metricKey
+    ?? extractBlocksCached(html, fontFamily, defaultSize, options.defaultWeight, options.defaultItalic).metricKey
   // Color rewrites and rendered CSS spelling do not change text geometry.
   const key = fitSessionKey(
     metricKey,
@@ -944,7 +986,7 @@ export function rememberFitScale(html: string, options: FitScaleOptions, scale: 
   if (!html) return
   const fontFamily = resolvePaintFontFamily(options.defaultFontFamily)
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
-  const { blocks } = extractBlocksCached(
+  const { blocks, metricKey } = extractBlocksCached(
     html,
     fontFamily,
     defaultSize,
@@ -952,7 +994,7 @@ export function rememberFitScale(html: string, options: FitScaleOptions, scale: 
     options.defaultItalic,
   )
   scale = Math.max(scale, minimumTextFitScale(blocks, options.minFontSize))
-  const key = fitScaleMemoKey(html, options)
+  const key = fitScaleMemoKey(html, options, metricKey)
   const prev = fitScaleMemo.get(key)
   if (prev !== undefined && Math.abs(prev - scale) < FIT_SCALE_CHANGE_EPSILON) return
   // If DOM's binary search settled fractionally above a Pretext wrap cliff
@@ -996,12 +1038,15 @@ export function textFitScaleForHtml(
   const fontFamily = resolvePaintFontFamily(options.defaultFontFamily)
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
   const letterSpacing = options.letterSpacing || 0
-  const memoKey = fitScaleMemoKey(html, options)
+  let extracted: BlocksMemoEntry | undefined
+  const metricKey = options.metricKey ?? (
+    extracted = extractBlocksCached(html, fontFamily, defaultSize, options.defaultWeight, options.defaultItalic)
+  ).metricKey
+  const memoKey = fitScaleMemoKey(html, options, metricKey)
   const memoized = options.blocks ? undefined : fitScaleMemo.get(memoKey)
   if (memoized !== undefined) return memoized
-  const { blocks } = options.blocks
-    ? { blocks: options.blocks }
-    : extractBlocksCached(html, fontFamily, defaultSize, options.defaultWeight, options.defaultItalic)
+  const blocks = options.blocks
+    ?? (extracted ?? extractBlocksCached(html, fontFamily, defaultSize, options.defaultWeight, options.defaultItalic)).blocks
   // Re-wrap search against the exact inner box (`Math.round(innerHeight) + 0.49`
   // matches browser integer `Math.round(layoutHeight) === scrollHeight <= height`,
   // and full `innerWidth`) so unvisited thumbnails agree with the live editor.

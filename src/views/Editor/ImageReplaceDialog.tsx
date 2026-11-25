@@ -16,7 +16,7 @@ import MediaPicker, { type MediaPickerReplacePayload } from './CanvasTool/MediaP
 
 const isImageElement = (el: PPTElement): el is PPTImageElement => el.type === 'image'
 
-const ImageReplaceDialog = memo(() => {
+const ImageReplaceDialog = memo(({ request }: { request?: { seq: number; elementId: string } }) => {
   const { addHistorySnapshot } = useHistorySnapshot()
   const readOnly = useMainStore(s => s.readOnly)
   const [visible, setVisible] = useState(false)
@@ -24,6 +24,7 @@ const ImageReplaceDialog = memo(() => {
   const [sessionId, setSessionId] = useState(0)
   const titleId = useId()
   const hotkeysDisabledByDialogRef = useRef(false)
+  const handledSeqRef = useRef(0)
 
   const targetPresent = useSlidesStore(s => {
     if (!target) return false
@@ -33,18 +34,11 @@ const ImageReplaceDialog = memo(() => {
     if (!el || !isImageElement(el)) return false
     return isElementSelectable(el, slide.elements, useMainStore.getState().hiddenElementIdList)
   })
-
-  useEffect(() => {
-    if (!visible) return
-    if (readOnly || !target || !targetPresent) {
-      setVisible(false)
-      setTarget(null)
-    }
-  }, [visible, readOnly, target, targetPresent])
+  const modalVisible = visible && !readOnly && !!target && targetPresent
 
   useEffect(() => {
     const main = useMainStore.getState()
-    if (visible) {
+    if (modalVisible) {
       if (!main.disableHotkeys) {
         hotkeysDisabledByDialogRef.current = true
         main.setDisableHotkeysState(true)
@@ -55,7 +49,7 @@ const ImageReplaceDialog = memo(() => {
       hotkeysDisabledByDialogRef.current = false
       main.setDisableHotkeysState(false)
     }
-  }, [visible])
+  }, [modalVisible])
 
   useEffect(() => () => {
     if (hotkeysDisabledByDialogRef.current) {
@@ -85,6 +79,7 @@ const ImageReplaceDialog = memo(() => {
   }, [restoreCanvasFocus])
 
   const handleClosed = useCallback(() => {
+    setTarget(null)
     restoreCanvasFocus()
   }, [restoreCanvasFocus])
 
@@ -119,6 +114,36 @@ const ImageReplaceDialog = memo(() => {
   }, [target, addHistorySnapshot])
 
   useEffect(() => {
+    if (!visible || !target) return
+    let active = true
+    const closeIfInvalid = () => {
+      if (!active) return
+      const main = useMainStore.getState()
+      if (main.readOnly) {
+        setVisible(false)
+        setTarget(null)
+        return
+      }
+      const slide = useSlidesStore.getState().slides.find(item => item.id === target.slideId)
+      const el = slide && !slide.skeleton
+        ? slide.elements.find(item => item.id === target.elementId)
+        : undefined
+      if (!el || !isImageElement(el) || !isElementSelectable(el, slide!.elements, main.hiddenElementIdList)) {
+        setVisible(false)
+        setTarget(null)
+      }
+    }
+    const unsubSlides = useSlidesStore.subscribe(closeIfInvalid)
+    const unsubMain = useMainStore.subscribe(closeIfInvalid)
+    queueMicrotask(closeIfInvalid)
+    return () => {
+      active = false
+      unsubSlides()
+      unsubMain()
+    }
+  }, [visible, target])
+
+  useEffect(() => {
     const openReplaceDialog = (elementId: string) => {
       const main = useMainStore.getState()
       if (main.readOnly) return
@@ -132,15 +157,20 @@ const ImageReplaceDialog = memo(() => {
       setSessionId(id => id + 1)
       setVisible(true)
     }
-    emitter.on(EmitterEvents.OPEN_IMAGE_REPLACE_DIALOG, openReplaceDialog)
-    return () => {
-      emitter.off(EmitterEvents.OPEN_IMAGE_REPLACE_DIALOG, openReplaceDialog)
+    if (!request) {
+      emitter.on(EmitterEvents.OPEN_IMAGE_REPLACE_DIALOG, openReplaceDialog)
+      return () => {
+        emitter.off(EmitterEvents.OPEN_IMAGE_REPLACE_DIALOG, openReplaceDialog)
+      }
     }
-  }, [])
+    if (request.seq === handledSeqRef.current) return
+    handledSeqRef.current = request.seq
+    openReplaceDialog(request.elementId)
+  }, [request])
 
   return (
     <Modal
-      visible={visible}
+      visible={modalVisible}
       onUpdateVisible={setVisible}
       onClosed={handleClosed}
       width={560}

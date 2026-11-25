@@ -13,7 +13,7 @@ import type { PPTLineElement, PPTElement, PPTImageElement, PPTLatexElement, PPTC
 import type { FikaMediaKind, FikaMediaUploadResult } from '@/configs/mediaUpload';
 import { layoutMediaBoxes, DEFAULT_VIDEO_SIZE, DEFAULT_AUDIO_SIZE, type MediaBox } from '@/utils/mediaLayout';
 import { fitLatexBoxToSlide } from '@/utils/latex';
-import { hfmath } from '@/components/LaTeXEditor/hfmath';
+import { ensureHfmath } from '@/utils/hfmathLazy';
 import { type ShapePoolItem, SHAPE_PATH_FORMULAS } from '@/configs/shapes';
 import type { LinePoolItem } from '@/configs/lines';
 import { getChartDefaultData } from '@/configs/chart';
@@ -452,7 +452,7 @@ export default () => {
   };
 
   /** Create multiple LaTeX elements (e.g. from equation extractor), laid out in rows. */
-  const createLatexElements = (dataList: {
+  const createLatexElements = async (dataList: {
     latex: string;
     w: number;
     h: number;
@@ -466,13 +466,15 @@ export default () => {
     const gap = 16;
     const availableWidth = Math.max(1, canvasWidth - padding * 2);
     const availableHeight = Math.max(1, canvasHeight - padding * 2);
+    const needsHfmath = dataList.some(data => !data.path);
+    const Hfmath = needsHfmath ? await ensureHfmath() : null;
     const sizedItems = dataList.map(data => {
       const scale = Math.min(1, availableWidth / data.w, availableHeight / data.h);
       const w = data.w * scale;
       const h = data.h * scale;
       let path = data.path;
-      if (!path) {
-        const eq = new hfmath(data.latex);
+      if (!path && Hfmath) {
+        const eq = new Hfmath(data.latex);
         path = eq.pathd({});
       }
       return {

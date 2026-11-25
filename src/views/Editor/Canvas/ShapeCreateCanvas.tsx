@@ -39,7 +39,7 @@ const ShapeCreateCanvas = memo((props: IShapeCreateCanvasProps) => {
   const [committedScribblePaths, setCommittedScribblePaths] = useState<Array<{ d: string; fill: string }>>([])
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
-  const [scribblePaint, setScribblePaint] = useState<InkPaint>(solidPaint(INK_SOLID_SWATCHES[0]))
+  const [scribblePaint, setScribblePaint] = useState<InkPaint>(() => solidPaint(INK_SOLID_SWATCHES[0]))
   const [scribbleSize, setScribbleSize] = useState(DEFAULT_FREEHAND_SIZE)
   const [mousePosition, setMousePosition] = useState<[number, number] | null>(null)
   const [points, setPoints] = useState<[number, number][]>([])
@@ -143,8 +143,8 @@ const ShapeCreateCanvas = memo((props: IShapeCreateCanvasProps) => {
   }
 
   const syncHistoryButtons = () => {
-    setCanUndo(historyRef.current.canUndo)
-    setCanRedo(historyRef.current.canRedo)
+    setCanUndo(!!historyRef.current?.canUndo)
+    setCanRedo(!!historyRef.current?.canRedo)
   }
 
   const surfaceRef = useRef<DrawingSurface>({
@@ -152,7 +152,8 @@ const ShapeCreateCanvas = memo((props: IShapeCreateCanvasProps) => {
     baseline: null,
     redraw: paintCommittedStrokes,
   })
-  const historyRef = useRef(new CommandHistory(50, syncHistoryButtons))
+  const historyRef = useRef<CommandHistory | null>(null)
+  if (!historyRef.current) historyRef.current = new CommandHistory(50, syncHistoryButtons)
   surfaceRef.current.redraw = paintCommittedStrokes
 
   const appendScribbleSample = (e: PointerEvent) => {
@@ -192,18 +193,18 @@ const ShapeCreateCanvas = memo((props: IShapeCreateCanvasProps) => {
       cancelCurrentStroke()
       return
     }
-    historyRef.current.undo()
+    historyRef.current?.undo()
   }
 
   const redoScribble = () => {
     if (isDrawingRef.current) return
-    historyRef.current.redo()
+    historyRef.current?.redo()
   }
 
   const discardScribble = () => {
     cancelCurrentStroke()
     surfaceRef.current.strokes.length = 0
-    historyRef.current.clear()
+    historyRef.current?.clear()
     paintCommittedStrokes()
     closeCanvas()
   }
@@ -349,7 +350,7 @@ const ShapeCreateCanvas = memo((props: IShapeCreateCanvasProps) => {
     currentStrokeRef.current = null
     setScribblePath('')
     if (!stroke || !strokeHasInk(stroke)) return
-    historyRef.current.execute(new AddStrokeCommand(surfaceRef.current, stroke))
+    historyRef.current?.execute(new AddStrokeCommand(surfaceRef.current, stroke))
   }
 
   const close = () => {

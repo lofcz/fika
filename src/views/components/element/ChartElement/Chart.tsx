@@ -81,7 +81,16 @@ const Chart = memo((props: IChartProps) => {
     if (!el) return;
     chartInst.current = echarts.init(el, null, { renderer: 'svg' });
     updateOption();
-    const resizeListener = () => chartInst.current?.resize();
+    let lastW = el.clientWidth;
+    let lastH = el.clientHeight;
+    const resizeListener = () => {
+      const nextW = el.clientWidth;
+      const nextH = el.clientHeight;
+      if (nextW === lastW && nextH === lastH) return;
+      lastW = nextW;
+      lastH = nextH;
+      chartInst.current?.resize();
+    };
     const resizeObserver = new ResizeObserver(resizeListener);
     resizeObserver.observe(el);
     return () => {
@@ -91,13 +100,14 @@ const Chart = memo((props: IChartProps) => {
     };
   }, []);
 
-  useEffect(() => { updateOption(); }, [type]);
-  useEffect(() => { updateOption(); }, [data]);
-  useEffect(() => { updateOption(); }, [themeColorsProp]);
-  useEffect(() => { updateOption(); }, [textColor]);
-  useEffect(() => { updateOption(); }, [lineColor]);
-  useEffect(() => { updateOption(); }, [options]);
-  useEffect(() => { updateOption(); }, [width]);
+  const didInitialOptionRef = useRef(false);
+  useEffect(() => {
+    if (!didInitialOptionRef.current) {
+      didInitialOptionRef.current = true;
+      return;
+    }
+    updateOption();
+  }, [type, data, themeColorsProp, textColor, lineColor, options, width]);
 
   return <div className={cx('chart')} ref={chartRef} />;
 });

@@ -76,6 +76,7 @@ import { getFikaLocale } from '@/i18n/locale'
 import message from '@/utils/message'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { classifyElementListSync, patchEditingElementChrome, snapSlideElements, slideElementsSnapEqual } from './elementListSync'
+import { useSyncImageBitmapCache } from '@/views/components/element/ImageElement/useImageBitmap'
 
 const WHEEL_PAGE_STEP = 100
 
@@ -256,6 +257,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
   const viewportRatio = useSlidesStore(s => s.viewportRatio)
   const viewportSize = useSlidesStore(s => s.viewportSize)
   const { operateLineColor, operateLineHalo } = useOperateChrome()
+  useSyncImageBitmapCache()
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const alignmentStoreRef = useRef<AlignmentLinesStore | null>(null)
@@ -318,20 +320,21 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
   const lastListRef = useRef<PPTElement[]>(currentSlide ? currentSlide.elements : EMPTY_ELEMENTS)
 
   const setElementList = useCallback((next: PPTElement[] | ((prev: PPTElement[]) => PPTElement[])) => {
+    const snap = currentSnapRef.current
     setLocalListState(prev => {
-      const base = (prev && prev.snap === currentSnapRef.current) ? prev.list : lastListRef.current
+      const base = (prev && prev.snap === snap) ? prev.list : lastListRef.current
       const resolved = typeof next === 'function' ? next(base) : next
-      lastListRef.current = resolved
-      return { snap: currentSnapRef.current, list: resolved }
+      return { snap, list: resolved }
     })
   }, [])
 
   const syncElementListFromStore = useCallback(() => {
     const storeSlide = selectCurrentSlide(useSlidesStore.getState())
+    const nextList = storeSlide ? storeSlide.elements : EMPTY_ELEMENTS
+    if (currentSnapRef.current?.id === storeSlide?.id && lastListRef.current === nextList) return
     const nextSnap = snapSlideElements(storeSlide)
     prevSlideRef.current = nextSnap
     currentSnapRef.current = nextSnap
-    const nextList = storeSlide ? storeSlide.elements : EMPTY_ELEMENTS
     lastListRef.current = nextList
     setLocalListState({ snap: nextSnap, list: nextList })
   }, [])
@@ -452,7 +455,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
 
   const currentSlideId = currentSlide?.id
   useEffect(() => {
-    setLayerStack(null)
+    if (layerStackRef.current !== null) setLayerStack(null)
   }, [currentSlideId, canvasScale])
 
   const applyLayerStackSelection = useCallback((entry: LayerStackEntry, memberIds: string[]) => {
@@ -849,6 +852,11 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
   const activeIdSet = useMemo(() => (activeElementIdList.length ? new Set(activeElementIdList) : null), [activeElementIdList])
   const hiddenIdSet = useMemo(() => (hiddenElementIdList.length ? new Set(hiddenElementIdList) : null), [hiddenElementIdList])
 
+  const operateLineStyle = useMemo(() => ({
+    '--operate-line': operateLineColor,
+    '--operate-line-halo': operateLineHalo,
+  } as CSSProperties), [operateLineColor, operateLineHalo])
+
   return (
     <SlideScaleContext.Provider value={canvasScale}>
       <ContextMenuBridge openLinkDialog={openLinkDialog} menuRef={elementContextmenusRef} />
@@ -857,7 +865,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
         ref={canvasRef}
         data-fika-canvas
         tabIndex={-1}
-        style={{ '--operate-line': operateLineColor, '--operate-line-halo': operateLineHalo, ...style } as CSSProperties}
+        style={style}
         onMouseDownCapture={e => {
           if (!e.currentTarget.contains(e.target as Node)) return
           // Navigation takes priority over page activation and editing, including
@@ -892,7 +900,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
         }}
       >
         {mynaView && <MynaPageCanvas left={viewportStyles.left} top={viewportStyles.top} canvasWidth={canvasRef.current?.clientWidth || 0} canvasHeight={canvasRef.current?.clientHeight || 0} />}
-        {creatingElement ? <ElementCreateSelection onCreated={data => insertElementFromCreateSelection(data)} /> : null}
+        {creatingElement ? <ElementCreateSelection onCreated={data => insertElementFromCreateSelection(data)} operateLineColor={operateLineColor} /> : null}
         {creatingCustomShape ? <ShapeCreateCanvas mode={creatingCustomShape ?? 'polygon'} onCreated={data => insertCustomShape(data)} /> : null}
         <div
           className={cx('viewport-wrapper')}
@@ -904,7 +912,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
             top: viewportStyles.top + 'px',
           }}
         >
-          <ViewportBackground showGrid={!mynaView} />
+          <ViewportBackground showGrid={!mynaView} operateLineColor={operateLineColor} />
           {mynaView && <MynaFrameTitles elements={elementList} scale={canvasScale} drag={dragElement} />}
           {skeletonSlide ? (
             <SlideSkeleton
@@ -918,7 +926,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
                 : undefined}
             />
           ) : null}
-          <div className={cx('operates')}>
+          <div className={cx('operates')} style={operateLineStyle}>
             <AlignmentLinesLayer
               store={alignmentStore}
               elementList={elementList}
@@ -1002,6 +1010,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
               left={mouseSelection.left}
               width={mouseSelection.width}
               height={mouseSelection.height}
+              operateLineColor={operateLineColor}
             />
           ) : null}
         </div>

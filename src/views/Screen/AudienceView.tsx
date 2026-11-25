@@ -149,7 +149,7 @@ export default function AudienceView() {
             }}
           >
             {writingBoardBlackboard ? <div className={cx('blackboard')} /> : null}
-            {writingBoardDataURL ? <img src={writingBoardDataURL} /> : null}
+            {writingBoardDataURL ? <img src={writingBoardDataURL} alt="" /> : null}
           </div>
         </div>
       ) : null}

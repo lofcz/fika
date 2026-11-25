@@ -59,7 +59,7 @@ const LayoutPicker = memo((props: ILayoutPickerProps) => {
   onSelectRef.current = props.onSelect
 
   const pick = useCallback((slide: Slide) => {
-    onSelectRef.current?.(JSON.parse(JSON.stringify(slide)) as Slide)
+    onSelectRef.current?.(structuredClone(slide))
   }, [])
 
   return (

@@ -27,32 +27,35 @@ export const useImageBitmapState = (src: string): ImageBitmapLoadState => {
   })
 
   useEffect(() => {
+    const setIfChanged = (next: ImageBitmapLoadState) => {
+      setState(prev => (prev.bitmap === next.bitmap && prev.status === next.status ? prev : next))
+    }
     if (!src) {
-      setState({ bitmap: null, status: 'idle' })
+      setIfChanged({ bitmap: null, status: 'idle' })
       return
     }
     const full = getCachedImageBitmap(src)
     if (full) {
-      setState({ bitmap: full, status: 'loaded' })
+      setIfChanged({ bitmap: full, status: 'loaded' })
       return
     }
     const thumb = getCachedPreviewImageBitmap(src)
-    if (thumb) setState({ bitmap: thumb, status: 'loaded' })
-    else setState({ bitmap: null, status: 'loading' })
+    if (thumb) setIfChanged({ bitmap: thumb, status: 'loaded' })
+    else setIfChanged({ bitmap: null, status: 'loading' })
 
     let cancelled = false
     const run = async () => {
       const preview = thumb ?? await loadPreviewImageBitmap(src)
       if (cancelled) return
       if (preview && !getCachedImageBitmap(src)) {
-        setState({ bitmap: preview, status: 'loaded' })
+        setIfChanged({ bitmap: preview, status: 'loaded' })
       }
       const next = await loadImageBitmap(src)
       if (cancelled) return
       if (next) {
-        setState({ bitmap: next, status: 'loaded' })
+        setIfChanged({ bitmap: next, status: 'loaded' })
       } else if (!preview && !getCachedImageBitmap(src)) {
-        setState({ bitmap: null, status: 'error' })
+        setIfChanged({ bitmap: null, status: 'error' })
       }
     }
     void run()
@@ -67,8 +70,13 @@ export const useImageBitmapState = (src: string): ImageBitmapLoadState => {
 export const useImageBitmap = (src: string): ImageBitmap | null => useImageBitmapState(src).bitmap
 
 export const useSyncImageBitmapCache = () => {
-  const slides = useSlidesStore(s => s.slides)
   useEffect(() => {
-    syncImageBitmapsToSlides(slides)
-  }, [slides])
+    let lastSlides = useSlidesStore.getState().slides
+    syncImageBitmapsToSlides(lastSlides)
+    return useSlidesStore.subscribe(state => {
+      if (state.slides === lastSlides) return
+      lastSlides = state.slides
+      syncImageBitmapsToSlides(lastSlides)
+    })
+  }, [])
 }

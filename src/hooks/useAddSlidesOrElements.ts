@@ -6,10 +6,9 @@ import type { AddSlideOptions } from '@/store/slides'
 import type { PPTElement, Slide } from '@/types/slides'
 import { clonePlain } from '@/utils/clonePlain'
 import { createSlideIdMap, createElementIdMap, getElementRange } from '@/utils/element'
-import useHistorySnapshot from '@/hooks/useHistorySnapshot'
+import useHistorySnapshot, { getHistorySnapshot } from '@/hooks/useHistorySnapshot'
 
-export default () => {
-  const { addHistorySnapshot } = useHistorySnapshot()
+export function createAddSlidesOrElements(addHistorySnapshot = getHistorySnapshot().addHistorySnapshot) {
 
   const addElementsFromData = (elements: PPTElement[]) => {
     const currentSlide = selectCurrentSlide(useSlidesStore.getState())
@@ -81,4 +80,9 @@ export default () => {
     addElementsFromData,
     addSlidesFromData,
   }
+}
+
+export default () => {
+  const { addHistorySnapshot } = useHistorySnapshot()
+  return createAddSlidesOrElements(addHistorySnapshot)
 }

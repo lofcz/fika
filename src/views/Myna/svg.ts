@@ -12,9 +12,18 @@ import { elementLocksTextBox, resolveTextBoxLayout } from '@/utils/placeholderLa
 import { getFikaExportMediaResolver } from '@/configs/exportMediaResolver'
 import { embedSvgFonts } from '@/utils/fontEmbedCss'
 import { getChartOption, expandChartThemeColors } from '@/views/components/element/ChartElement/chartOption'
-import * as echarts from 'echarts/core'
-import { SVGRenderer } from 'echarts/renderers'
 import { DEFAULT_CHART_LINE_COLOR } from '@/configs/chart'
+
+let svgEchartsPromise: Promise<typeof import('./echartsSvgRuntime').default> | null = null
+async function ensureSvgEcharts() {
+  if (!svgEchartsPromise) {
+    svgEchartsPromise = import('./echartsSvgRuntime').then(mod => mod.default).catch(error => {
+      svgEchartsPromise = null
+      throw error
+    })
+  }
+  return svgEchartsPromise
+}
 
 export interface MynaSvgTarget { slide: Slide; theme: SlideTheme; viewportSize: number; viewportRatio: number }
 export interface MynaSvgOptions { selectedIds?: readonly string[]; transparentBackground?: boolean; signal?: AbortSignal }
@@ -178,7 +187,6 @@ export async function exportMynaSvg(target: MynaSvgTarget, options: MynaSvgOptio
       else chunks.push(`<image width="${pageWidth}" height="${pageHeight}" preserveAspectRatio="xMidYMid ${bg.image.size === 'contain' ? 'meet' : 'slice'}" href="${xml(href)}"/>`)
     }
   }
-  echarts.use([SVGRenderer])
   for (const e of elements) {
     check()
     // Clip in page coordinates outside the element's own transform, including raster fallbacks.
@@ -235,6 +243,7 @@ export async function exportMynaSvg(target: MynaSvgTarget, options: MynaSvgOptio
       }
       case 'table': body = table(e); break
       case 'chart': {
+        const echarts = await ensureSvgEcharts()
         const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: e.width, height: e.height })
         try {
           const colors = resolveChartElementSeriesColors(e, { background: slide.background, fallbackSurface: theme.backgroundColor })

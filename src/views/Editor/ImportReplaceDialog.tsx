@@ -22,7 +22,7 @@ import styles from './ImportReplaceDialog.module.scss'
 
 const cx = bindStyles(styles)
 
-const ImportReplaceDialog = memo(() => {
+const ImportReplaceDialog = memo(({ skipRegister = false }: { skipRegister?: boolean }) => {
   const { LL } = useI18nContext()
   const visible = useImportConfirmStore(s => s.visible)
   const slideCount = useImportConfirmStore(s => s.slideCount)
@@ -39,6 +39,7 @@ const ImportReplaceDialog = memo(() => {
   }, [LL])
 
   useEffect(() => {
+    if (skipRegister) return
     const unregister = useImportConfirmStore.getState().register()
     return () => {
       unregister()
@@ -47,7 +48,7 @@ const ImportReplaceDialog = memo(() => {
       }
       useMainStore.getState().setDisableHotkeysState(false)
     }
-  }, [])
+  }, [skipRegister])
 
   useEffect(() => {
     useMainStore.getState().setDisableHotkeysState(visible)

@@ -64,8 +64,14 @@ export default function MynaFramesPanel({ query = '', kind = 'all', compact = fa
       const latest = useSlidesStore.getState().slides.find(s => s.id === pageId)?.elements.find(e => e.id === target.id)
       // An asynchronous upload must not undo deletion, replacement, or newer geometry edits.
       if (latest?.type === 'image' && latest.photoFrame && latest.src === oldSrc && !latest.lock) commit([fillPhotoFrame(latest, src, size.width, size.height)], pageId)
-    } catch { if (request.isCurrent()) setFailed(true) }
-    finally { request.finish(); setBusy(false) }
+    }
+    catch {
+      if (request.isCurrent()) setFailed(true)
+    }
+    finally {
+      setBusy(false)
+      request.finish()
+    }
   }
   const assets = [...new Set(slides.flatMap(s => s.elements.filter((e): e is PPTImageElement => e.type === 'image' && !e.photoFrame?.empty).map(e => e.src)))].filter(src => src !== FRAME_PLACEHOLDER)
   const layouts = FRAME_LAYOUTS.filter(layout => (kind === 'all' || (kind === 'frames' ? frameCells(layout).length === 1 : frameCells(layout).length > 1)) && t[layout].toLocaleLowerCase().includes(query.toLocaleLowerCase().trim()))

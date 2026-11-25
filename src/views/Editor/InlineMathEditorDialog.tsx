@@ -16,13 +16,14 @@ type MathField = HTMLElement & {
   getValue: (format?: string) => string
 }
 
-const InlineMathEditorDialog = memo(() => {
+const InlineMathEditorDialog = memo(({ request }: { request?: { seq: number; payload: OpenInlineMathPayload } }) => {
   const { LL } = useI18nContext()
   const [visible, setVisible] = useState(false)
   const fieldHostRef = useRef<HTMLDivElement | null>(null)
   const [fieldReady, setFieldReady] = useState(false)
   const [editing, setEditing] = useState<OpenInlineMathPayload | null>(null)
   const mathFieldRef = useRef<MathField | null>(null)
+  const handledSeqRef = useRef(0)
 
   const destroyField = () => {
     const mathField = mathFieldRef.current
@@ -85,13 +86,21 @@ const InlineMathEditorDialog = memo(() => {
     if (!visible) destroyField()
   }, [visible])
 
+  useEffect(() => () => {
+    destroyField()
+  }, [])
+
   useEffect(() => {
-    emitter.on(EmitterEvents.OPEN_INLINE_MATH_EDITOR, openEditor)
-    return () => {
-      emitter.off(EmitterEvents.OPEN_INLINE_MATH_EDITOR, openEditor)
-      destroyField()
+    if (!request) {
+      emitter.on(EmitterEvents.OPEN_INLINE_MATH_EDITOR, openEditor)
+      return () => {
+        emitter.off(EmitterEvents.OPEN_INLINE_MATH_EDITOR, openEditor)
+      }
     }
-  }, [openEditor])
+    if (request.seq === handledSeqRef.current) return
+    handledSeqRef.current = request.seq
+    openEditor(request.payload)
+  }, [request, openEditor])
 
   return (
     <Modal visible={visible} onUpdateVisible={setVisible} width={640} onClosed={handleClosed}>

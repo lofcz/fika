@@ -20,7 +20,6 @@ import useFilter from './useFilter'
 import ImageOutline from './ImageOutline/index'
 import ImageClipHandler from './ImageClipHandler'
 import ImageBitmapSurface from './ImageBitmapSurface'
-import { useSyncImageBitmapCache } from './useImageBitmap'
 
 export type IImageElementProps = {
   elementInfo: PPTImageElement
@@ -42,7 +41,6 @@ const ImageElement = memo((props: IImageElementProps) => {
   const { flipStyle } = useElementFlip(props.elementInfo.flipH, props.elementInfo.flipV)
   const { clipShape, imgPosition } = useClipImage(props.elementInfo)
   const { filter } = useFilter(props.elementInfo.filters)
-  useSyncImageBitmapCache()
 
   const handleSelectElement = useCallback((e: MouseEvent | TouchEvent) => {
     if (props.elementInfo.lock) return

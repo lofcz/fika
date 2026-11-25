@@ -65,11 +65,35 @@ export const escapeCellText = (text: string) => text
  * MathLive finishes loading (kicked off lazily here on first math encounter);
  * until then math segments fall back to their literal LaTeX source.
  */
+const FORMAT_TEXT_CACHE_MAX = 400
+const formatTextCache = new Map<string, string>()
+
+export const clearFormatTextCache = () => {
+  formatTextCache.clear()
+}
+
 export const formatText = (text: string, textFormat?: 'html', _mathVersion?: number) => {
   void _mathVersion;
   if (!text) return '';
-  if (textFormat === 'html') return serializeTableText(parseTableText({ text, textFormat }), true);
-  if (!containsMath(text)) return escapeCellText(text);
-  if (!mathReady.value) void ensureMathliveReady();
-  return tokenizeMath(text).map(segment => segment.type === 'math' ? renderMathToHtml(segment.value, segment.display) : escapeCellText(segment.value)).join('');
+  const mathFlag = mathReady.value ? 1 : 0;
+  const cacheKey = `${textFormat ?? 'plain'}|${mathFlag}\0${text}`;
+  const cached = formatTextCache.get(cacheKey);
+  if (cached !== undefined) {
+    formatTextCache.delete(cacheKey);
+    formatTextCache.set(cacheKey, cached);
+    return cached;
+  }
+  let result: string;
+  if (textFormat === 'html') result = serializeTableText(parseTableText({ text, textFormat }), true);
+  else if (!containsMath(text)) result = escapeCellText(text);
+  else {
+    if (!mathReady.value) void ensureMathliveReady();
+    result = tokenizeMath(text).map(segment => segment.type === 'math' ? renderMathToHtml(segment.value, segment.display) : escapeCellText(segment.value)).join('');
+  }
+  if (formatTextCache.size >= FORMAT_TEXT_CACHE_MAX) {
+    const oldest = formatTextCache.keys().next().value;
+    if (oldest !== undefined) formatTextCache.delete(oldest);
+  }
+  formatTextCache.set(cacheKey, result);
+  return result;
 };

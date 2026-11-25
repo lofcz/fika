@@ -10,9 +10,10 @@ export interface ScreenActions {
 
 export type ScreenStore = ScreenState & ScreenActions
 
-export const useScreenStore = create<ScreenStore>()((set) => ({
+export const useScreenStore = create<ScreenStore>()((set, get) => ({
   screening: false,
   setScreening(screening) {
+    if (get().screening === screening) return
     set({ screening })
   },
 }))

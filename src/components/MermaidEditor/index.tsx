@@ -33,11 +33,16 @@ const MermaidEditor = memo((props: IMermaidEditorProps) => {
   onUpdateRef.current = props.onUpdate
 
   useEffect(() => {
+    let cancelled = false
     prefetchMermaid()
-    void whenMermaidReady().then(() => setEngineReady(true))
+    void whenMermaidReady().then(() => {
+      if (!cancelled) setEngineReady(true)
+    })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     const version = ++renderVersionRef.current
     if (!code) {
       setSvg('')
@@ -49,21 +54,22 @@ const MermaidEditor = memo((props: IMermaidEditorProps) => {
     void (async () => {
       try {
         const result = await renderMermaid(code, 'editor')
-        if (version !== renderVersionRef.current) return
+        if (cancelled || version !== renderVersionRef.current) return
         setSvg(result)
         setError('')
       }
       catch (err) {
-        if (version !== renderVersionRef.current || isMermaidRenderSuperseded(err)) return
+        if (cancelled || version !== renderVersionRef.current || isMermaidRenderSuperseded(err)) return
         setSvg('')
         setError(err instanceof Error ? err.message : LLRef.current.components.mermaidEditor.syntaxError())
       }
     })()
+    return () => { cancelled = true }
   }, [code, engineReady])
 
   useEffect(() => {
-    setCode(value || DEFAULT_MERMAID_SAMPLE)
-    setTimeout(() => textAreaRef.current?.focus(), 0)
+    const timer = setTimeout(() => textAreaRef.current?.focus(), 0)
+    return () => clearTimeout(timer)
   }, [])
 
   const update = useCallback(async () => {

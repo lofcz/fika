@@ -348,7 +348,10 @@ export default function LaserTrailOverlay({
     engine.syncCanvasSize()
     engine.bindPointer(active && trackPointer)
     window.addEventListener('resize', engine.syncCanvasSize)
-    return () => engine.teardown()
+    return () => {
+      window.removeEventListener('resize', engine.syncCanvasSize)
+      engine.teardown()
+    }
   }, [engine])
 
   return <canvas ref={canvasRef} className={cx('laser-trail')} />

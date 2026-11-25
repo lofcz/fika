@@ -1,17 +1,18 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './MouseSelection.module.scss'
 const cx = bindStyles(styles)
-import { memo } from 'react'
+import { memo, type CSSProperties } from 'react'
 
 export type IMouseSelectionProps = {
   top: number
   left: number
   width: number
   height: number
+  operateLineColor?: string
 }
 
 const MouseSelection = memo((props: IMouseSelectionProps) => {
-  const { top, left, width, height } = props
+  const { top, left, width, height, operateLineColor } = props
   return (
     <div
       className={cx('mouse-selection')}
@@ -21,7 +22,8 @@ const MouseSelection = memo((props: IMouseSelectionProps) => {
         left: left + 'px',
         width: width + 'px',
         height: height + 'px',
-      }}
+        ...(operateLineColor ? { '--operate-line': operateLineColor } : {}),
+      } as CSSProperties}
     />
   )
 })

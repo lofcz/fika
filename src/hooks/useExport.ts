@@ -1725,9 +1725,11 @@ export function createPresentationExporter(
             } else if (el.type === 'shape') {
               if (el.special) {
                 const container = document.createElement('div');
-                const { createElement } = await import('react');
-                const { createRoot } = await import('react-dom/client');
-                const { flushSync } = await import('react-dom');
+                const [{ createElement }, { createRoot }, { flushSync }] = await Promise.all([
+                  import('react'),
+                  import('react-dom/client'),
+                  import('react-dom'),
+                ]);
                 const root = createRoot(container);
                 flushSync(() => {
                   root.render(createElement(BaseShapeElement, { elementInfo: el }));

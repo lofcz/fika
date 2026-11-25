@@ -5,7 +5,6 @@ const cx = bindStyles(styles)
 import { useRef, useMemo, useCallback, memo, useState, useEffect, type CSSProperties, type ReactNode } from 'react'
 
 import { useMainStore, useSlidesStore } from '@/store'
-import { getImportApi } from '@/hooks/useImport'
 import useScreening from '@/hooks/useScreening'
 import useSlideHandler from '@/hooks/useSlideHandler'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
@@ -25,6 +24,8 @@ import { useI18nContext } from '@/i18n/useI18nContext'
 import { EXTRAS_ENABLED } from '@/configs/featureFlags'
 import { isMac } from '@/utils/common'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import message from '@/utils/message'
+import { getLL } from '@/i18n/getLL'
 
 const LOCALE_ORDER: Locales[] = ['en', 'cs', 'sk', 'pl']
 
@@ -41,10 +42,19 @@ const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.
 const importPickedFiles = (files: FileList) => {
   const file = files[0]
   if (!file) return
-  const { importJSON, importPPTXFile } = getImportApi()
   const name = file.name.toLowerCase()
-  if (name.endsWith('.json') || file.type === 'application/json') importJSON(files)
-  else if (name.endsWith('.pptx') || file.type === PPTX_MIME) importPPTXFile(files)
+  const isJson = name.endsWith('.json') || file.type === 'application/json'
+  const isPptx = name.endsWith('.pptx') || file.type === PPTX_MIME
+  if (!isJson && !isPptx) return
+  const copied = Array.from(files)
+  void import('@/hooks/useImport').then(({ getImportApi }) => {
+    const { importJSON, importPPTXFile } = getImportApi()
+    if (isJson) return importJSON(copied)
+    return importPPTXFile(copied)
+  }).catch(error => {
+    console.error('[fika] failed to load import module', error)
+    message.error(getLL().editor.import.failed())
+  })
 }
 
 const HeaderTitle = memo(({ myna = false }: { myna?: boolean }) => {

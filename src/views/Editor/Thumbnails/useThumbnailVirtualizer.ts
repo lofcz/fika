@@ -21,6 +21,8 @@ const rowHasSection = (item: RailSlideMeta | undefined, index: number, hasSectio
   !!(item?.sectionTag || (hasSection && index === 0))
 )
 
+const EMPTY_IDS: string[] = []
+
 export const useThumbnailVirtualizer = (
   items: RailSlideMeta[],
   hasSection: boolean,
@@ -29,13 +31,24 @@ export const useThumbnailVirtualizer = (
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const dest = usePreviewDestSize()
   const thumbHeight = dest.cssHeight + ROW_CHROME
+  const latestRef = useRef({ items, hasSection, thumbHeight })
+  latestRef.current = { items, hasSection, thumbHeight }
+
+  const getScrollElement = useMemo(() => () => scrollRef.current, [])
+  const estimateSize = useMemo(() => (index: number) => {
+    const cur = latestRef.current
+    return cur.thumbHeight + (rowHasSection(cur.items[index], index, cur.hasSection) ? SECTION_HEIGHT : 0)
+  }, [])
+  const getItemKey = useMemo(() => (index: number) => latestRef.current.items[index]?.id ?? index, [])
+
   const virtualizer = useVirtualizer({
     count: items.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: index => thumbHeight
-      + (rowHasSection(items[index], index, hasSection) ? SECTION_HEIGHT : 0),
+    getScrollElement,
+    estimateSize,
     overscan: 3,
-    getItemKey: index => items[index]?.id ?? index,
+    getItemKey,
+    // Never call ReactDOM.flushSync synchronously inside scroll events.
+    useFlushSync: false,
   })
 
   useEffect(() => {
@@ -52,21 +65,15 @@ export const useThumbnailVirtualizer = (
     return () => el.removeEventListener('scroll', onScroll, true)
   }, [])
 
-  const windowItems = virtualizer.getVirtualItems()
-  const pinnedSlideIds: string[] = []
-  const virtualItems = windowItems
+  const virtualItems = virtualizer.getVirtualItems()
 
-  const startIndex = windowItems[0]?.index
-  const endIndex = windowItems[windowItems.length - 1]?.index
-  const visibleSlideIds = useMemo(() => {
-    if (startIndex === undefined || endIndex === undefined) return []
-    const ids: string[] = []
-    for (let i = startIndex; i <= endIndex; i++) {
-      const id = items[i]?.id
-      if (id) ids.push(id)
-    }
-    return ids
-  }, [startIndex, endIndex, items])
-
-  return { scrollRef, virtualizer, virtualItems, visibleSlideIds, pinnedSlideIds, thumbHeight, dest }
+  return {
+    scrollRef,
+    virtualizer,
+    virtualItems,
+    visibleSlideIds: EMPTY_IDS,
+    pinnedSlideIds: EMPTY_IDS,
+    thumbHeight,
+    dest,
+  }
 }

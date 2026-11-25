@@ -4,11 +4,9 @@ import { MIME_MAP } from '@/configs/mime'
 import { getImageDataURL } from '@/utils/image'
 import { registerMediaBlob } from '@/utils/mediaIntern'
 import useCreateElement from './useCreateElement'
-import useImport from './useImport'
 
 export default () => {
   const { createImageElement, createVideoElement, createAudioElement } = useCreateElement()
-  const { importSpecificFile, importPPTXFile } = useImport()
 
   const pasteDataTransfer = (dataTransfer: DataTransfer) => {
     const dataItems = dataTransfer.items
@@ -52,7 +50,12 @@ export default () => {
       if (!isFile && dataTransferFirstItem.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
         const pptxFile = dataTransferFirstItem.getAsFile()
         if (pptxFile) {
-          importPPTXFile([pptxFile])
+          void import('./useImport')
+            .then(({ getImportApi }) => getImportApi().importPPTXFile([pptxFile]))
+            .catch(error => {
+              console.error('[fika] failed to load import module', error)
+              message.error(getLL().editor.import.failed())
+            })
           isFile = true
         }
       }
@@ -63,7 +66,12 @@ export default () => {
           const ext = unknownFile.name.split('.').pop() || ''
 
           if (ext === 'fika') {
-            importSpecificFile([unknownFile])
+            void import('./useImport')
+              .then(({ getImportApi }) => getImportApi().importSpecificFile([unknownFile]))
+              .catch(error => {
+                console.error('[fika] failed to load import module', error)
+                message.error(getLL().editor.import.failed())
+              })
             isFile = true
           }
         }

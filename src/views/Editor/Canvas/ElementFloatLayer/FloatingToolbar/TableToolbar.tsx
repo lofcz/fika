@@ -7,7 +7,7 @@ import { useCallback, memo, useEffect, useState } from 'react'
 import { useMainStore, useSlidesStore } from '@/store'
 import type { PPTTableElement } from '@/types/slides'
 import { applyTableCellStyles } from '@/utils/tableCellStyle'
-import { tableStyleTarget } from '@/utils/tableStyleTarget'
+import { resolveTableStyleTarget } from '@/utils/tableStyleTarget'
 import emitter, { EmitterEvents, type TableCommand } from '@/utils/emitter'
 import BorderPanel from './BorderPanel'
 import Popover from '@/components/Popover'
@@ -32,7 +32,7 @@ const TableToolbar = memo((props: ITableToolbarProps) => {
   const cell = useSlidesStore(s => {
     const el = findSlideElement(s, handleElementId)
     if (el?.type !== 'table') return undefined
-    const [r, c] = (tableStyleTarget(handleElementId, selectedTableCells)[0] || '0_0').split('_').map(Number)
+    const [r, c] = ((resolveTableStyleTarget(handleElementId, el.data, selectedTableCells) ?? [])[0] || '0_0').split('_').map(Number)
     return el.data[r]?.[c]
   })
   const [attrs, setAttrs] = useState<TableTextAttrs>({})
@@ -56,7 +56,7 @@ const TableToolbar = memo((props: ITableToolbarProps) => {
   const cellBackcolor = useSlidesStore(s => {
     const el = findSlideElement(s, handleElementId)
     if (!el || el.type !== 'table') return ''
-    const selected = tableStyleTarget(handleElementId, selectedTableCells)[0]
+    const selected = (resolveTableStyleTarget(handleElementId, el.data, selectedTableCells) ?? [])[0]
     const rowIndex = selected ? +selected.split('_')[0] : 0
     const colIndex = selected ? +selected.split('_')[1] : 0
     return el.data[rowIndex]?.[colIndex]?.style?.backcolor || ''

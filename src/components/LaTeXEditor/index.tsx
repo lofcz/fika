@@ -135,6 +135,8 @@ export default function LaTeXEditor({
 
   useEffect(() => {
     let cancelled = false
+    let rafOuter = 0
+    let rafInner = 0
 
     const mountField = async () => {
       await ensureMathliveReady()
@@ -161,15 +163,20 @@ export default function LaTeXEditor({
       setFieldReady(true)
       syncEmpty()
       getKeyboard()?.addEventListener('virtual-keyboard-toggle', syncKeyboard)
-      requestAnimationFrame(() => {
+      rafOuter = requestAnimationFrame(() => {
+        if (cancelled) return
         field.focus()
-        requestAnimationFrame(() => placeHint())
+        rafInner = requestAnimationFrame(() => {
+          if (!cancelled) placeHint()
+        })
       })
     }
 
     void mountField()
     return () => {
       cancelled = true
+      if (rafOuter) cancelAnimationFrame(rafOuter)
+      if (rafInner) cancelAnimationFrame(rafInner)
       destroyField()
     }
   }, [destroyField, syncEmpty, placeHint, syncKeyboard])

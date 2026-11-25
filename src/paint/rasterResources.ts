@@ -1,29 +1,27 @@
-import * as echarts from 'echarts/core'
-import { BarChart, LineChart, PieChart, RadarChart, ScatterChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, RadarComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
-
 import type { PPTChartElement, PPTCodeElement, PPTLatexElement, PPTMermaidElement } from '@/types/slides'
 import { getChartOption, expandChartThemeColors } from '@/views/components/element/ChartElement/chartOption'
-import { codeElementToBoothHtml } from '@/utils/codeHighlight'
 import { isLightCodeTheme } from '@/configs/code'
-import { renderMermaidForImage } from '@/utils/mermaid'
 import { LATEX_ELEMENT_FONT_SIZE, ensureMathliveReady, renderLatexElementHtml, renderMathToHtml } from '@/utils/math'
 import { MATH_FONT_CHANGE_TOKEN, subscribeTextFontChanges } from '@/utils/textFit'
 import { EMBED_ROOT_CLASS, MATH_PROBE_ATTR } from '@/utils/portal'
-import { captureMathHostDirectSvg } from './mathSvgRaster'
+import { captureMathHostDirectSvg, hasMathliveStaticRules } from './mathSvgRaster'
 
-echarts.use([
-  BarChart,
-  LineChart,
-  PieChart,
-  ScatterChart,
-  RadarChart,
-  GridComponent,
-  LegendComponent,
-  RadarComponent,
-  CanvasRenderer,
-])
+type EchartsCore = typeof import('./echartsRuntime').default
+let echartsLoader: Promise<EchartsCore> | null = null
+const loadEcharts = (): Promise<EchartsCore> => {
+  if (!echartsLoader) {
+    echartsLoader = import('./echartsRuntime')
+      .then(mod => mod.default)
+      .catch(err => {
+        echartsLoader = null
+        throw err
+      })
+  }
+  return echartsLoader
+}
+
+/** Preload the lazy ECharts canvas runtime before tight headless export deadlines. */
+export const preloadEcharts = (): Promise<void> => loadEcharts().then(() => undefined)
 
 type Raster = ImageBitmap | HTMLCanvasElement
 type RasterProducer = () => Promise<Raster | null> | Raster | null
@@ -459,7 +457,8 @@ export const getChartRaster = (
     lineColor,
   })
   const key = `chart:${hash(payload)}`
-  const raster = requestRaster(key, () => {
+  const raster = requestRaster(key, async () => {
+    const echarts = await loadEcharts()
     const width = Math.max(1, Math.ceil(element.width))
     const height = Math.max(1, Math.ceil(element.height))
     const source = canvas(width, height)
@@ -512,6 +511,7 @@ export const getMermaidRaster = (
   const width = Math.max(1, Math.round(element.width))
   const height = Math.max(1, Math.round(element.height))
   return requestRaster(key, async () => {
+    const { renderMermaidForImage } = await import('@/utils/mermaid')
     const raw = await renderMermaidForImage(element.code, `canvas-${hash(element.id + element.code)}`)
     // renderMermaid already emits width/height="100%"; rewrite them via the DOM
     // (string-splicing duplicates the attributes, which is unparseable XML).
@@ -541,6 +541,7 @@ export const getCodeRaster = (
     try {
       // Same Shiki booth markup the export path uses: inline styles only and
       // real gutter spans, so it survives the SVG foreignObject round-trip.
+      const { codeElementToBoothHtml } = await import('@/utils/codeHighlight')
       booth = await codeElementToBoothHtml(element)
     }
     catch {
@@ -861,6 +862,10 @@ export const getLatexRaster = (
   const key = `latex:${hash(`${mathRasterRevision}\0${element.latex}\0${boxW}\0${boxH}\0${captureColor}`)}`
   const base = requestMathRaster(key, element.latex, async () => {
     await ensureMathliveReady()
+    if (!hasMathliveStaticRules()) {
+      recordRejection('rejectCaptureError', element.latex)
+      return null
+    }
     await ensureMathFontsLoaded()
     const host = document.createElement('div')
     host.className = EMBED_ROOT_CLASS
@@ -950,6 +955,10 @@ export const getInlineMathRaster = (
   const staleKey = `${mathRasterRevision}\0${latex}\0${display ? 1 : 0}\0${captureColor}`
   const base = requestMathRaster(key, latex, async () => {
     await ensureMathliveReady()
+    if (!hasMathliveStaticRules()) {
+      recordRejection('rejectCaptureError', latex, { size })
+      return null
+    }
     await ensureMathFontsLoaded()
     const host = document.createElement('div')
     host.className = EMBED_ROOT_CLASS

@@ -144,7 +144,7 @@ const Templates = memo((props: ITemplatesProps) => {
 
   const activeSlides = activeThemeData.slides
 
-  const cloneSlides = (slides: Slide[]) => JSON.parse(JSON.stringify(slides)) as Slide[]
+  const cloneSlides = (slides: Slide[]) => structuredClone(slides)
   const prepareSlidesForInsert = (slides: Slide[]) => {
     const clonedSlides = instantiateTemplateSlides(slides)
     for (const slide of clonedSlides) delete slide.type
@@ -158,7 +158,7 @@ const Templates = memo((props: ITemplatesProps) => {
   const insertTemplates = useCallback(() => {
     props.onSelectAll?.({
       slides: prepareSlidesForInsert(activeSlides),
-      theme: JSON.parse(JSON.stringify(activeThemeData.theme)),
+      theme: structuredClone(activeThemeData.theme),
     })
   }, [props.onSelectAll, activeSlides, activeThemeData.theme])
 
@@ -173,7 +173,7 @@ const Templates = memo((props: ITemplatesProps) => {
       title: activeCatalogItem?.name || data.title || LL.editor.templates.currentTheme(),
       width: data.width,
       height: data.height,
-      theme: JSON.parse(JSON.stringify(data.theme)),
+      theme: structuredClone(data.theme),
       slides: cloneSlides(data.slides),
     })
   }, [activeThemeData, LL, props.onExport, activeCatalogItem?.name])
@@ -254,7 +254,7 @@ const Templates = memo((props: ITemplatesProps) => {
       name: data.title,
       width: data.width,
       height: data.height,
-      theme: JSON.parse(JSON.stringify(data.theme)),
+      theme: structuredClone(data.theme),
       slides: cloneSlides(data.slides),
     }
   }
@@ -271,12 +271,22 @@ const Templates = memo((props: ITemplatesProps) => {
     return LL.editor.templates.themeParseFailed()
   }, [LL])
 
+  const activeReaderRef = useRef<FileReader | null>(null)
+
+  useEffect(() => () => {
+    activeReaderRef.current?.abort()
+    activeReaderRef.current = null
+  }, [])
+
   const importTheme = useCallback((files: FileList) => {
     const file = files[0]
     if (!file) return
 
+    activeReaderRef.current?.abort()
     const reader = new FileReader()
-    reader.addEventListener('load', () => {
+    activeReaderRef.current = reader
+    const onLoad = () => {
+      if (activeReaderRef.current === reader) activeReaderRef.current = null
       try {
         const template = getImportedTheme(file, reader.result as string)
         useSlidesStore.getState().addImportedTemplate(template)
@@ -286,8 +296,13 @@ const Templates = memo((props: ITemplatesProps) => {
       catch (error) {
         message.error(mapThemeImportError(error))
       }
-    })
-    reader.addEventListener('error', () => message.error(LL.editor.templates.themeReadFailed()))
+    }
+    const onError = () => {
+      if (activeReaderRef.current === reader) activeReaderRef.current = null
+      message.error(LL.editor.templates.themeReadFailed())
+    }
+    reader.addEventListener('load', onLoad, { once: true })
+    reader.addEventListener('error', onError, { once: true })
     reader.readAsText(file)
   }, [changeCatalog, LL, mapThemeImportError])
 

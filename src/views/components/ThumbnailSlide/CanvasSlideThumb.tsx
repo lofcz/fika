@@ -10,7 +10,7 @@ import {
   updateRasterOwnerPriority,
   withRasterRequestContext,
 } from '@/paint/rasterResources'
-import { scheduleSlidePaint, type PaintPriority } from '@/paint/scheduler'
+import { reprioritizeSlidePaint, scheduleSlidePaint, type PaintPriority } from '@/paint/scheduler'
 import { getCurrentDpr, isPaneDragging } from '@/views/Editor/Thumbnails/paneSize'
 import { arePaintedSlideIdentitiesEqual, useThumbViewportTheme, type PaintedSlide } from './paintedSlide'
 import {
@@ -51,11 +51,13 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
   const paintKey = useId()
   const { viewportSize, viewportRatio, theme } = useThumbViewportTheme()
   const latest = useRef({ slide, width, showPlaceholders, viewportSize, viewportRatio, theme })
-  const priority = useRef<PaintPriority>('visible')
+  // Default to offscreen 'nearby' until IntersectionObserver confirms visibility
+  // so overscan rows mounted during fast scroll never steal paint budget.
+  const priority = useRef<PaintPriority>('nearby')
   const mounted = useRef(true)
   const lastPaintedSigRef = useRef('')
   const paintedCompleteRef = useRef(false)
-  const lastDprRef = useRef(getCurrentDpr())
+  const lastDprRef = useRef<number | null>(null)
   const cancelScheduledRef = useRef<(() => void) | null>(null)
   const asyncInvalidateTimerRef = useRef(0)
   const asyncInvalidateFirstRef = useRef(0)
@@ -80,7 +82,7 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
     return { value, dpr, cssWidth, cssHeight, pixelWidth, pixelHeight, sig }
   }, [])
 
-  const scheduleRef = useRef<(force?: boolean) => () => void>(() => () => {})
+  const scheduleRef = useRef<(force?: boolean, precomputed?: ReturnType<typeof computePaintTarget>) => () => void>(() => () => {})
 
   const scheduleAsyncRepaint = useCallback(() => {
     if (!mounted.current || isThumbnailScrolling()) return
@@ -102,8 +104,8 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
     }, delay)
   }, [paintKey])
 
-  const schedule = useCallback((force = false) => {
-    const target = computePaintTarget()
+  const schedule = useCallback((force = false, precomputed?: ReturnType<typeof computePaintTarget>) => {
+    const target = precomputed ?? computePaintTarget()
     const canvas = canvasRef.current
     // During pane-gutter drag, CSS scales the already-painted bitmap cleanly;
     // skip repainting and avoid polluting the LRU with intermediate sizes.
@@ -133,6 +135,9 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
       }
     }
     cancelScheduledRef.current?.()
+    // While actively scrolling, defer cold paints to 'nearby' so the scroll
+    // frame only blits cached bitmaps and cold rows drain smoothly once scroll settles.
+    const effectivePriority: PaintPriority = isThumbnailScrolling() && !force ? 'nearby' : priority.current
     const cancel = scheduleSlidePaint(paintKey, () => {
       cancelScheduledRef.current = null
       const liveCanvas = canvasRef.current
@@ -188,7 +193,7 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
       if (!invalidated && !isPaneDragging()) {
         putCachedThumbFromCanvas(capturedSig, liveCanvas, result.complete ? 0 : INCOMPLETE_THUMB_TTL_MS, live.value.slide.id)
       }
-    }, priority.current)
+    }, effectivePriority)
     cancelScheduledRef.current = cancel
     return cancel
   }, [computePaintTarget, paintKey, scheduleAsyncRepaint])
@@ -209,11 +214,14 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
     }
   }, [paintKey])
 
+  const layoutTargetRef = useRef<ReturnType<typeof computePaintTarget> | null>(null)
+
   // Synchronous cache blit before first browser paint so scroll remounts never flash blank.
   useLayoutEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const target = computePaintTarget()
+    layoutTargetRef.current = target
     if (lastPaintedSigRef.current === target.sig && canvas.dataset.canvasPainted === target.value.slide.id) return
     const cached = getCachedThumbEntry(target.sig)
     if (cached && blitCachedThumb(canvas, cached.surface, target.pixelWidth, target.pixelHeight)) {
@@ -226,7 +234,9 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
 
   useEffect(() => {
     const canvas = canvasRef.current
-    const target = computePaintTarget()
+    const target = layoutTargetRef.current ?? computePaintTarget()
+    layoutTargetRef.current = null
+    if (lastDprRef.current === null) lastDprRef.current = target.dpr
     if (
       lastPaintedSigRef.current === target.sig
       && canvas?.dataset.canvasPainted === target.value.slide.id
@@ -235,13 +245,14 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
       return
     }
     const firstPaint = !canvas?.dataset.canvasPainted
-    if (firstPaint || !paintedCompleteRef.current) return schedule(!paintedCompleteRef.current && lastPaintedSigRef.current === target.sig)
+    if (firstPaint || !paintedCompleteRef.current) return schedule(!paintedCompleteRef.current && lastPaintedSigRef.current === target.sig, target)
     const timer = window.setTimeout(() => { schedule() }, EDIT_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [slide, theme, viewportSize, viewportRatio, width, showPlaceholders, computePaintTarget, schedule])
 
   useEffect(() => {
     let overscanTimer = 0
+    if (lastDprRef.current === null) lastDprRef.current = getCurrentDpr()
     const unsubRuntime = registerThumbRuntimeListener({
       onDprChange: nextDpr => {
         if (nextDpr === lastDprRef.current) return
@@ -252,19 +263,19 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
         if (mounted.current) scheduleRef.current()
       },
       onScrollIdle: () => {
-        // Settle any mounted thumb that blitted/painted a provisional frame while
-        // scrolling so fast flings never leave visible slides on fallback text.
-        // Wake visible thumbs immediately and stagger overscan thumbs slightly so
-        // visible slides claim priority first.
+        // Settle any mounted thumb that blitted/painted a provisional frame or
+        // deferred a cold paint while scrolling. Wake visible thumbs first and
+        // stagger overscan thumbs slightly so visible slides claim priority.
         if (!mounted.current || paintedCompleteRef.current) return
         if (priority.current === 'visible') {
-          scheduleRef.current(true)
+          reprioritizeSlidePaint(paintKey, 'visible')
+          if (!cancelScheduledRef.current) scheduleRef.current(true)
           return
         }
         if (overscanTimer) window.clearTimeout(overscanTimer)
         overscanTimer = window.setTimeout(() => {
           overscanTimer = 0
-          if (mounted.current && !paintedCompleteRef.current && !isThumbnailScrolling()) {
+          if (mounted.current && !paintedCompleteRef.current && !isThumbnailScrolling() && !cancelScheduledRef.current) {
             scheduleRef.current(true)
           }
         }, 120)
@@ -294,6 +305,7 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
     const unsubVisibility = host
       ? observeThumbVisibility(host, visible => {
           priority.current = visible ? 'visible' : 'background'
+          reprioritizeSlidePaint(paintKey, priority.current)
           updateRasterOwnerPriority(paintKey, visible ? 'visible' : 'overscan')
           if (!visible) return
           const target = computePaintTarget()
@@ -302,7 +314,7 @@ const CanvasSlideThumb = memo(({ slide, width, showPlaceholders = false }: ICanv
             || canvasRef.current?.dataset.canvasPainted !== target.value.slide.id
             || (!paintedCompleteRef.current && !isThumbnailScrolling())
           ) {
-            scheduleRef.current(!paintedCompleteRef.current && lastPaintedSigRef.current === target.sig)
+            scheduleRef.current(!paintedCompleteRef.current && lastPaintedSigRef.current === target.sig, target)
           }
         })
       : () => {}

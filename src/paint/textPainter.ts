@@ -238,6 +238,7 @@ const prepareLines = (
   blocks: TextFitBlock[],
   width: number,
   family: string,
+  defaultColor: string,
   scale: number,
   lineHeight: number,
   letterSpacing: number,
@@ -252,11 +253,12 @@ const prepareLines = (
           bold: block.bold,
           fontWeight: block.fontWeight,
           italic: block.italic,
+          color: defaultColor,
           fontFamily: block.fontFamily,
         }]
     const items = sourceRuns.map(run => ({
       ...run,
-      color: run.color,
+      color: run.color || defaultColor,
       fontFamily: run.fontFamily || block.fontFamily || family,
     }))
     const prepared = prepareRichInlineCached(items.map(run => (
@@ -307,7 +309,7 @@ export const paintRichText = (
   const lineHeight = options.lineHeight ?? 1.5
   const letterSpacing = options.letterSpacing || 0
   const paragraphSpace = options.paragraphSpace ?? 5
-  const { blocks: cachedBlocks, mathMeasured } = extractBlocksCached(
+  const { blocks: cachedBlocks, metricKey, mathMeasured } = extractBlocksCached(
     html,
     options.defaultFontFamily,
     defaultSize,
@@ -349,6 +351,7 @@ export const paintRichText = (
         letterSpacing,
         blockSpace: paragraphSpace,
         minFontSize: options.minFontSize,
+        metricKey,
       })
     : 1
 
@@ -377,7 +380,7 @@ export const paintRichText = (
     return painted
   }
 
-  const lines = prepareLines(blocks, innerWidth, options.defaultFontFamily, fitScale, lineHeight, letterSpacing)
+  const lines = prepareLines(blocks, innerWidth, options.defaultFontFamily, options.defaultColor, fitScale, lineHeight, letterSpacing)
   let totalHeight = lines.reduce((sum, line) => sum + line.height, 0)
   totalHeight += blocks.reduce((sum, block, index) => sum + paragraphGap(blocks[index - 1], block, paragraphSpace), 0) + (blocks.at(-1)?.marginBottom ?? 0)
   const vOffset = options.vAlign === 'middle'
@@ -462,10 +465,7 @@ export const paintRichText = (
       }
       ctx.textAlign = 'left'
       ctx.textBaseline = 'alphabetic'
-      paintText(ctx, fragment.text, x, baseline, {
-        ...run,
-        color: run.color || options.defaultColor,
-      }, options.defaultFontFamily, fitScale, letterSpacing)
+      paintText(ctx, fragment.text, x, baseline, run, options.defaultFontFamily, fitScale, letterSpacing)
       x += fragment.occupiedWidth
     }
     y += line.height

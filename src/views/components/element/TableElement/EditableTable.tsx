@@ -5,6 +5,7 @@ import { type CSSProperties, type MouseEvent as ReactMouseEvent, useMemo, useCal
 
 import { openContextmenu } from '@/utils/openContextmenu';
 import { arraysEqual } from '@/utils/object';
+import { clonePlain } from '@/utils/clonePlain';
 import { nanoid } from 'nanoid';
 import { useMainStore } from '@/store';
 import type { PPTElementOutline, TableCell, TableTheme } from '@/types/slides';
@@ -39,13 +40,14 @@ type TableCellViewProps = {
   isSelected: boolean;
   hide: boolean;
   outline: PPTElementOutline;
-  cellMinHeight: number;
   onMouseDown: (e: MouseEvent, rowIndex: number, colIndex: number) => void;
   onMouseEnter: (rowIndex: number, colIndex: number) => void;
   onContextMenu: (event: ReactMouseEvent<HTMLTableCellElement>) => void;
   onInput: (value: string, rowIndex: number, colIndex: number, cellId: string, ignoreHistory?: boolean) => void;
   onInsertExcel: (value: string[][], rowIndex: number, colIndex: number, rich?: boolean) => void;
 };
+
+const EMPTY_CELL_POS: number[] = [];
 
 const areTableCellViewPropsEqual = (prev: TableCellViewProps, next: TableCellViewProps) => {
   if (prev.mathReady !== next.mathReady || prev.elementId !== next.elementId) return false;
@@ -62,7 +64,6 @@ const TableCellView = memo((props: TableCellViewProps) => {
     isSelected,
     hide,
     outline,
-    cellMinHeight,
     onMouseDown,
     onMouseEnter,
     onContextMenu,
@@ -92,10 +93,10 @@ const TableCellView = memo((props: TableCellViewProps) => {
       sessions={props.sessions}
       cell={cell}
       className={cx('cell-text', { active: isActive })}
-      style={getTextStyle(cellMinHeight, cell.style, true)}
+      style={getTextStyle(0, cell.style, true)}
       onUpdateValue={(value, ignoreHistory) => onInput(value, rowIndex, colIndex, cell.id, ignoreHistory)}
       onInsertExcelData={(value, rich) => onInsertExcel(value, rowIndex, colIndex, rich)}
-    /> : <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style, cell.textFormat === 'html')} dangerouslySetInnerHTML={{ __html: formatText(cell.text, cell.textFormat, props.mathReady ? 1 : 0) }} />}
+    /> : <div className={cx('cell-text')} style={getTextStyle(0, cell.style, cell.textFormat === 'html')} dangerouslySetInnerHTML={{ __html: formatText(cell.text, cell.textFormat, props.mathReady ? 1 : 0) }} />}
   </td>;
 }, areTableCellViewPropsEqual);
 TableCellView.displayName = 'TableCellView';
@@ -104,6 +105,7 @@ export type IEditableTableProps = {
   elementId: string;
   data: TableCell[][];
   width: number;
+  initialHeight?: number;
   cellMinHeight: number;
   colWidths: number[];
   outline: PPTElementOutline;
@@ -123,6 +125,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
     elementId,
     data,
     width,
+    initialHeight,
     cellMinHeight,
     colWidths,
     outline,
@@ -164,18 +167,35 @@ const EditableTable = memo((props: IEditableTableProps) => {
   const setTableCells = (newData: TableCell[][]) => {
     writeGrid(newData);
   };
-  const cloneCommittedGrid = () => JSON.parse(JSON.stringify(takeCommittedGrid())) as TableCell[][];
+  const cloneCommittedGrid = () => clonePlain(takeCommittedGrid());
 
   const { themeColors } = useSubThemeColor(theme);
   const mathIsReady = useMathReady(tableCells);
 
-  const [colSizeList, setColSizeList] = useState(() => colWidths.map(item => item * width));
-  const [liveRowHeight, setLiveRowHeight] = useState<number | null>(null);
-  // Tallest row the content needs at the current widths / fonts. Rows are
-  // uniform (the painter and PPTX export draw them so), so every row takes
-  // the tallest one and `cellMinHeight` stays the floor: nothing is clipped,
-  // and the element's height follows (see the wrapper's ResizeObserver).
-  const [contentRowHeight, setContentRowHeight] = useState<number | null>(null);
+  const propsColKey = `${width}|${colWidths.join(',')}`;
+  const baseColSizeList = useMemo(() => colWidths.map(item => item * width), [colWidths, width]);
+  const [colOverride, setColOverride] = useState<{ key: string; sizes: number[] } | null>(null);
+  const colSizeList = colOverride && colOverride.key === propsColKey ? colOverride.sizes : baseColSizeList;
+  const setColSizeList = useCallback((next: number[]) => {
+    setColOverride(prev => {
+      const current = prev && prev.key === propsColKey ? prev.sizes : baseColSizeList;
+      if (numArrEqual(current, next)) return prev;
+      return { key: propsColKey, sizes: next };
+    });
+  }, [propsColKey, baseColSizeList]);
+  const [liveRowHeightState, setLiveRowHeightState] = useState<{ key: string; value: number } | null>(null);
+  const liveRowHeight = liveRowHeightState && liveRowHeightState.key === propsColKey ? liveRowHeightState.value : null;
+  const setLiveRowHeight = useCallback((value: number | null) => {
+    setLiveRowHeightState(value === null ? null : { key: propsColKey, value });
+  }, [propsColKey]);
+  // Tallest row the content needs at the current widths / fonts. Seed from the
+  // element's current height so switching StaticTable -> EditableTable never
+  // flashes clipped for a frame before `measureRows` completes.
+  const [contentRowHeight, setContentRowHeight] = useState<number | null>(() => {
+    if (!initialHeight || !(initialHeight > 0)) return null;
+    const perRow = initialHeight / Math.max(1, data.length);
+    return perRow > cellMinHeight ? perRow : null;
+  });
   const tableRef = useRef<HTMLTableElement>(null);
   const colSizeListRef = useRef(colSizeList);
   const colOriginRef = useRef<number[] | null>(null);
@@ -188,8 +208,6 @@ const EditableTable = memo((props: IEditableTableProps) => {
   const paintRowHeight = liveRowHeight ?? Math.max(cellMinHeight, contentRowHeight ?? 0);
   useEffect(() => {
     colOriginRef.current = null;
-    setLiveRowHeight(null);
-    setColSizeList(colWidths.map(item => item * width));
   }, [colWidths, width]);
 
   // Measure what the rows need with every row at its floor (a `tr` height is
@@ -240,7 +258,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
       if (wasScaling && !state.isScaling) setLiveRowHeight(null);
       wasScaling = state.isScaling;
     });
-  }, []);
+  }, [setLiveRowHeight]);
   useEffect(() => {
     const table = tableRef.current;
     if (!table || typeof ResizeObserver === 'undefined') return;
@@ -260,7 +278,7 @@ const EditableTable = memo((props: IEditableTableProps) => {
     if (colsChanged) setColSizeList(next);
     const rows = Math.max(rowCountRef.current, 1);
     setLiveRowHeight(size.height / rows);
-  }), [elementId]);
+  }), [elementId, setColSizeList, setLiveRowHeight]);
 
   const skipStyleTargetSyncRef = useRef(false);
   const removeSelectedCells = useCallback((forgetStyleTarget = false) => {
@@ -268,9 +286,27 @@ const EditableTable = memo((props: IEditableTableProps) => {
     setStartCell([]);
     setEndCell([]);
   }, []);
+  const prevEditableRef = useRef(editable);
+  if (prevEditableRef.current && !editable) {
+    skipStyleTargetSyncRef.current = true;
+  }
+  prevEditableRef.current = editable;
   useEffect(() => {
-    if (!editable) removeSelectedCells();
-  }, [editable, removeSelectedCells]);
+    if (!editable && (startCell.length > 0 || endCell.length > 0)) {
+      removeSelectedCells();
+    }
+  }, [editable, startCell.length, endCell.length, removeSelectedCells]);
+  const maxRowIdx = tableCells.length - 1;
+  const maxColIdx = (tableCells[0]?.length ?? 0) - 1;
+  const clampCellCoord = (coord: number[]) => {
+    if (!editable || coord.length < 2 || maxRowIdx < 0 || maxColIdx < 0) return EMPTY_CELL_POS;
+    const r = coord[0];
+    const c = coord[1];
+    if (r < 0 || r > maxRowIdx || c < 0 || c > maxColIdx) return EMPTY_CELL_POS;
+    return coord;
+  };
+  const activeStartCell = clampCellCoord(startCell);
+  const activeEndCell = activeStartCell.length ? clampCellCoord(endCell) : EMPTY_CELL_POS;
 
   const dragLinePosition = useMemo(() => {
     const positions: number[] = [];
@@ -282,15 +318,16 @@ const EditableTable = memo((props: IEditableTableProps) => {
   }, [colSizeList]);
 
   const { hideCells } = useHideCells(tableCells);
+  const hideCellSet = useMemo(() => (hideCells.length ? new Set(hideCells) : null), [hideCells]);
 
   const selectedCells = useMemo(() => {
-    if (!startCell.length) return [] as string[];
-    const [startX, startY] = startCell;
-    if (!endCell.length) return [`${startX}_${startY}`];
-    const [endX, endY] = endCell;
+    if (!activeStartCell.length) return [] as string[];
+    const [startX, startY] = activeStartCell;
+    if (!activeEndCell.length) return [`${startX}_${startY}`];
+    const [endX, endY] = activeEndCell;
     if (startX === endX && startY === endY) return [`${startX}_${startY}`];
     const next: string[] = [];
-    const { top: minX, left: minY, bottom: maxX, right: maxY } = tableSelectionBounds(tableCells, startCell, endCell);
+    const { top: minX, left: minY, bottom: maxX, right: maxY } = tableSelectionBounds(tableCells, activeStartCell, activeEndCell);
     for (let i = 0; i < tableCells.length; i++) {
       const rowCells = tableCells[i];
       for (let j = 0; j < rowCells.length; j++) {
@@ -298,8 +335,10 @@ const EditableTable = memo((props: IEditableTableProps) => {
       }
     }
     return next;
-  }, [startCell, endCell, tableCells]);
+  }, [activeStartCell, activeEndCell, tableCells]);
 
+  const onChangeSelectedCellsRef = useRef(onChangeSelectedCells);
+  onChangeSelectedCellsRef.current = onChangeSelectedCells;
   const prevSelectedCells = useRef<string[] | undefined>(undefined);
   useEffect(() => {
     if (prevSelectedCells.current !== undefined && arraysEqual(selectedCells, prevSelectedCells.current)) return;
@@ -309,8 +348,8 @@ const EditableTable = memo((props: IEditableTableProps) => {
     const skipEmptySelection = skipStyleTargetSyncRef.current && !selectedCells.length;
     skipStyleTargetSyncRef.current = false;
     if (skipEmptySelection) return;
-    onChangeSelectedCells?.(selectedCells);
-  }, [selectedCells, onChangeSelectedCells]);
+    onChangeSelectedCellsRef.current?.(selectedCells);
+  }, [selectedCells]);
 
   const activedCell = selectedCells.length > 1 ? null : selectedCells[0];
 
@@ -738,9 +777,8 @@ const EditableTable = memo((props: IEditableTableProps) => {
           colIndex={colIndex}
           isActive={activedCell === `${rowIndex}_${colIndex}`}
           isSelected={selectedCells.includes(`${rowIndex}_${colIndex}`) && selectedCells.length > 1}
-          hide={hideCells.includes(`${rowIndex}_${colIndex}`)}
+          hide={!!hideCellSet?.has(`${rowIndex}_${colIndex}`)}
           outline={outline}
-          cellMinHeight={paintRowHeight}
           onMouseDown={handleCellMousedown}
           onMouseEnter={handleCellMouseenter}
           onContextMenu={handleCellContextMenu}

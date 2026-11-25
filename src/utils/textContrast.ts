@@ -1306,6 +1306,8 @@ export const rewriteDefaultInksInHtml = (html: string, ink: string): string => {
  * opaque own fills are left alone. Mutates nothing on the input.
  */
 export const applySlideBackgroundWithContrast = (slide: Slide, theme: ThemeColors): Slide => {
+  // Called inside immer drafts (where `slide` or nested properties may be Proxy
+  // drafts); JSON round-trip reads safely through Proxy traps without DataCloneError.
   const next: Slide = JSON.parse(JSON.stringify(slide));
   const slideSurfaces = resolveSlideSurfaceColors(next.background, theme.backgroundColor);
   const font = theme.fontColor || '#333333';

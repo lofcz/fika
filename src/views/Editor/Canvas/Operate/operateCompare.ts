@@ -7,8 +7,8 @@ const CONTENT_KEYS = new Set(['content', 'text'])
 
 export function styleEqual(a?: CSSProperties, b?: CSSProperties) {
   if (a === b) return true
-  if (!a || !b) return !a && !b
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+  if (a == null || b == null) return false
+  const keys = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])
   for (const key of keys) {
     if ((a as Record<string, unknown>)[key] !== (b as Record<string, unknown>)[key]) return false
   }

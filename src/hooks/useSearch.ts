@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useMainStore, useSlidesStore, selectHandleElement, selectCurrentSlide } from '@/store';
-import type { PPTTableElement } from '@/types/slides';
+import type { PPTElement, PPTTableElement } from '@/types/slides';
 import message from '@/utils/message';
 import { queryFika } from '@/utils/portal';
 import { getLL } from '@/i18n/getLL';
@@ -265,13 +265,20 @@ export default () => {
     searchActiveRef.current = true;
     const results = collectSearchResults();
     const originalSlides = useSlidesStore.getState().slides;
+    const slideById = new Map(originalSlides.map(slide => [slide.id, slide]));
+    const elementsBySlide = new Map<string, Map<string, PPTElement>>();
     for (let i = 0; i < results.length; i++) {
       const lastTarget = results[i - 1];
       const target = results[i];
       if (lastTarget && lastTarget.slideId === target.slideId && lastTarget.elId === target.elId) continue;
-      const targetSlide = originalSlides.find(item => item.id === target.slideId);
+      const targetSlide = slideById.get(target.slideId);
       if (!targetSlide) continue;
-      const targetElement = targetSlide.elements.find(item => item.id === target.elId);
+      let elMap = elementsBySlide.get(target.slideId);
+      if (!elMap) {
+        elMap = new Map(targetSlide.elements.map(item => [item.id, item]));
+        elementsBySlide.set(target.slideId, elMap);
+      }
+      const targetElement = elMap.get(target.elId);
       if (!targetElement || !isElementSelectable(targetElement, targetSlide.elements, [])) continue;
       if (target.elType === 'table') {
         const table = targetElement as PPTTableElement;

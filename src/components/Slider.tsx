@@ -229,19 +229,12 @@ const Slider = memo((vrProps: ISliderProps) => {
       const next = getPercentage(native)
       if (Math.abs(next - startRef.current) < Math.abs(next - endRef.current)) assignHandler('start')
       else assignHandler('end')
-      updateRange(native)
-      document.addEventListener('mousemove', updateRange)
-      document.addEventListener('touchmove', updateRange)
-      document.addEventListener('mouseup', updateRangeEnd)
-      document.addEventListener('touchend', updateRangeEnd)
     }
-    else {
-      updatePercentage(native)
-      document.addEventListener('mousemove', updatePercentage)
-      document.addEventListener('touchmove', updatePercentage)
-      document.addEventListener('mouseup', updatePercentageEnd)
-      document.addEventListener('touchend', updatePercentageEnd)
-    }
+    move(native)
+    document.addEventListener('mousemove', move)
+    document.addEventListener('touchmove', move, { passive: true })
+    document.addEventListener('mouseup', end)
+    document.addEventListener('touchend', end)
   }
 
   return (

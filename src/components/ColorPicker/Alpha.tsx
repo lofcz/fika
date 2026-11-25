@@ -22,7 +22,7 @@ const Alpha = memo((props: IAlphaProps) => {
   })();
   const alphaRef = useRef<HTMLDivElement | null>(null);
   const handleChange = useCallback((e: MouseEvent | TouchEvent) => {
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     if (!alphaRef.current) return;
     const isTouchEvent = !(e instanceof MouseEvent);
     if (isTouchEvent && (!e.changedTouches || !e.changedTouches[0])) return;
@@ -50,7 +50,7 @@ const Alpha = memo((props: IAlphaProps) => {
   const handleMouseDown = useCallback((e: ReactMouseEvent | ReactTouchEvent) => {
     handleChange(e.nativeEvent);
     window.addEventListener('mousemove', handleChange);
-    window.addEventListener('touchmove', handleChange);
+    window.addEventListener('touchmove', handleChange, { passive: true });
     window.addEventListener('mouseup', unbindEventListeners);
     window.addEventListener('touchend', unbindEventListeners);
   }, [handleChange, unbindEventListeners]);

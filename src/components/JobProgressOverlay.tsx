@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 
 import FullscreenSpin from '@/components/FullscreenSpin'
-import useImport from '@/hooks/useImport'
+import { useImportProgress } from '@/hooks/importJob'
 import { formatJobProgressTip, jobBoxValue, type JobProgressLabels } from '@/utils/jobProgress'
 
 export type IJobProgressOverlayProps = {
@@ -15,7 +15,7 @@ export type IJobProgressOverlayProps = {
 const CLOSE_HOLD_MS = 400
 
 const JobProgressOverlay = memo((props: IJobProgressOverlayProps) => {
-  const job = useImport()
+  const job = useImportProgress()
   const loading = !!jobBoxValue(props.loading ?? job.importing, false)
   const liveProgress = Math.min(1, Math.max(0, Number(jobBoxValue(props.progress ?? job.importProgress, 0)) || 0))
   const current = Number(jobBoxValue(props.current ?? job.importSlide, 0)) || 0

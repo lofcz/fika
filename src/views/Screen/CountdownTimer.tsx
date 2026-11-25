@@ -19,6 +19,8 @@ export default function CountdownTimer({ left = 5, top = 5, onClose }: ICountdow
   const [inTiming, setInTiming] = useState(false)
   const [isCountdown, setIsCountdown] = useState(false)
   const [time, setTime] = useState(0)
+  const timeRef = useRef(time)
+  timeRef.current = time
   const minute = Math.floor(time / 60)
   const second = time % 60
   const inputEditable = !isCountdown || inTiming
@@ -38,35 +40,37 @@ export default function CountdownTimer({ left = 5, top = 5, onClose }: ICountdow
   const reset = () => {
     clearTimer()
     setInTiming(false)
-    setTime(isCountdown ? 600 : 0)
+    const next = isCountdown ? 600 : 0
+    timeRef.current = next
+    setTime(next)
   }
 
   const start = () => {
     clearTimer()
     if (isCountdown) {
       timerRef.current = setInterval(() => {
-        setTime(current => {
-          const next = current - 1
-          if (next <= 0) {
-            clearTimer()
-            setInTiming(false)
-            return 600
-          }
-          return next
-        })
+        const next = timeRef.current - 1
+        if (next <= 0) {
+          clearTimer()
+          setInTiming(false)
+          timeRef.current = 600
+          setTime(600)
+          return
+        }
+        timeRef.current = next
+        setTime(next)
       }, 1000)
     }
     else {
       timerRef.current = setInterval(() => {
-        setTime(current => {
-          const next = current + 1
-          if (next > 36000) {
-            clearTimer()
-            setInTiming(false)
-            return current
-          }
-          return next
-        })
+        const next = timeRef.current + 1
+        if (next > 36000) {
+          clearTimer()
+          setInTiming(false)
+          return
+        }
+        timeRef.current = next
+        setTime(next)
       }, 1000)
     }
     setInTiming(true)
@@ -78,13 +82,13 @@ export default function CountdownTimer({ left = 5, top = 5, onClose }: ICountdow
   }
 
   const toggleCountdown = () => {
-    setIsCountdown(current => !current)
+    const nextCountdown = !isCountdown
+    setIsCountdown(nextCountdown)
     clearTimer()
     setInTiming(false)
-    setTime(current => {
-      void current
-      return !isCountdown ? 600 : 0
-    })
+    const nextTime = nextCountdown ? 600 : 0
+    timeRef.current = nextTime
+    setTime(nextTime)
   }
 
   const changeTime = (e: React.ChangeEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement> | React.KeyboardEvent<HTMLInputElement>, type: 'minute' | 'second') => {

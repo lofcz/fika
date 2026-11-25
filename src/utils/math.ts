@@ -14,8 +14,10 @@
  */
 
 import { decodeXML } from 'entities';
+import { getFikaAssetBase } from '@/utils/assetBase';
 import { APP_SHELL_ID, EMBED_ROOT_CLASS, getFikaPortalTarget, MATH_PROBE_ATTR, resolveOffscreenHost } from '@/utils/portal';
 import { MATH_FONT_CHANGE_TOKEN, notifyInlineMathReady, registerInlineMathMeasurer, subscribeTextFontChanges } from '@/utils/textFit';
+import { FIKA_MATH_BASE_CSS, hasMathliveStaticRules, resetMathSvgRasterCache, setBundledMathStaticCss, stripMathStaticGlobalAtRules } from '@/paint/mathSvgRaster';
 
 export { MATH_CLASS, estimateInlineMathBox, htmlHasFikaMath, isPlausibleInlineMathBox } from './inlineMathBox';
 import { estimateInlineMathBox, isPlausibleInlineMathBox, MATH_CLASS } from './inlineMathBox';
@@ -90,6 +92,125 @@ export function renderMathInnerMarkup(latex: string, display = false): string | 
   });
 }
 
+declare const __webpack_public_path__: string | undefined;
+
+const MATH_STATIC_STYLE_ATTR = 'data-fika-math-static';
+
+const hasKatexFontFaceInDocument = (): boolean => {
+  if (typeof document === 'undefined') return false;
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules: CSSRuleList | undefined;
+    try {
+      rules = sheet.cssRules;
+    }
+    catch {
+      continue;
+    }
+    if (!rules) continue;
+    for (let i = 0; i < rules.length; i++) {
+      const rule = rules[i];
+      if (typeof CSSFontFaceRule !== 'undefined' && rule instanceof CSSFontFaceRule) {
+        const fam = rule.style.getPropertyValue('font-family');
+        if (fam && /KaTeX_Main/i.test(fam)) return true;
+      }
+    }
+  }
+  return false;
+};
+
+const fontBaseFromScriptUrl = (url: string): string | null => {
+  try {
+    const resolved = new URL(url, typeof document !== 'undefined' ? document.baseURI : undefined);
+    const dir = resolved.href.replace(/\/[^/]*$/, '/').replace(/\/chunks\/$/, '/');
+    return `${dir}fonts/`;
+  }
+  catch {
+    return null;
+  }
+};
+
+export const resolveMathFontBaseUrl = (): string => {
+  const configured = getFikaAssetBase();
+  if (configured) return `${configured.replace(/\/+$/, '')}/fonts/`;
+  try {
+    const wp = typeof __webpack_public_path__ === 'string' ? __webpack_public_path__ : '';
+    if (wp && wp !== './' && wp !== 'auto') {
+      return `${wp.replace(/\/+$/, '')}/fonts/`;
+    }
+  }
+  catch { /* ignore undeclared __webpack_public_path__ in non-webpack runtimes */ }
+  if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+    const scripts = document.querySelectorAll<HTMLScriptElement>('script[src]');
+    for (let i = 0; i < scripts.length; i++) {
+      const src = scripts[i].src;
+      if (src && src.includes('fika-embed')) {
+        const base = fontBaseFromScriptUrl(src);
+        if (base) return base;
+      }
+    }
+    const links = document.querySelectorAll<HTMLLinkElement>('link[href]');
+    for (let i = 0; i < links.length; i++) {
+      const href = links[i].href;
+      if (href && href.includes('fika-embed')) {
+        const base = fontBaseFromScriptUrl(href);
+        if (base) return base;
+      }
+    }
+  }
+  if (typeof performance !== 'undefined' && typeof performance.getEntriesByType === 'function') {
+    const entries = performance.getEntriesByType('resource');
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const name = entries[i]?.name;
+      if (name && (name.includes('fika-embed.js') || name.includes('fika-embed.css'))) {
+        const base = fontBaseFromScriptUrl(name);
+        if (base) return base;
+      }
+    }
+  }
+  const stack = new Error().stack;
+  if (stack) {
+    const match = /(https?:\/\/[^\s)'"]+?\/(?:fika-embed\.js|chunks\/[^/\s)'"]+\.js))/.exec(stack);
+    if (match?.[1]) {
+      const base = fontBaseFromScriptUrl(match[1]);
+      if (base) return base;
+    }
+  }
+  return './fonts/';
+};
+
+/**
+ * Ensure MathLive `.ML__*` layout rules and KaTeX `@font-face` declarations
+ * exist in `document.head` even when headless APIs (`renderSlideImage`) run on
+ * a cold tab where `fika-embed.css` was never linked.
+ */
+export function ensureMathStaticStyles(staticCssRaw?: string, fontsCssRaw?: string): boolean {
+  const sanitizedStatic = staticCssRaw ? stripMathStaticGlobalAtRules(staticCssRaw) : '';
+  if (sanitizedStatic) setBundledMathStaticCss(sanitizedStatic);
+  if (typeof document === 'undefined' || !document.head) return false;
+  const hasLayout = hasMathliveStaticRules();
+  const hasFonts = hasKatexFontFaceInDocument();
+  if (hasLayout && hasFonts) return false;
+  const existing = document.head.querySelector<HTMLStyleElement>(`style[${MATH_STATIC_STYLE_ATTR}]`);
+  if (existing) return false;
+  const chunks: string[] = [];
+  if (!hasFonts && fontsCssRaw) {
+    const fontBase = resolveMathFontBaseUrl();
+    chunks.push(fontsCssRaw.replace(/url\(\s*['"]?(?:\.\/)?fonts\/([^'")]+)['"]?\s*\)/gi, (_, file: string) => `url("${fontBase}${file}")`));
+  }
+  if (!hasLayout && sanitizedStatic) {
+    // Scope fallback layout rules under `.fika-embed-root` (which every math
+    // probe, raster booth, and embedded editor carries) without leaking page-wide.
+    chunks.push(`.${EMBED_ROOT_CLASS}{${sanitizedStatic}${FIKA_MATH_BASE_CSS}}`);
+  }
+  if (!chunks.length) return false;
+  const style = document.createElement('style');
+  style.setAttribute(MATH_STATIC_STYLE_ATTR, 'true');
+  style.textContent = chunks.join('\n');
+  document.head.appendChild(style);
+  resetMathSvgRasterCache();
+  return true;
+}
+
 /** Lazily import MathLive and configure it for a bundled (offline) font setup. */
 export function ensureMathliveReady(): Promise<MathliveModule> {
   if (mathlivePromise) return mathlivePromise;
@@ -101,7 +222,9 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
     import('mathlive'),
     import('mathlive/static.css'),
     import('mathlive/fonts.css'),
-  ]).then(([mod]) => {
+    import('mathlive/static.css?raw').then(m => m.default).catch(() => ''),
+    import('mathlive/fonts.css?raw').then(m => m.default).catch(() => ''),
+  ]).then(([mod, , , staticCssRaw, fontsCssRaw]) => {
     const resolved = mod as unknown as MathliveModule;
     try {
       resolved.MathfieldElement.fontsDirectory = null;
@@ -109,10 +232,11 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
       // Document-level MathLive sheets (keyboard, popovers) only apply inside
       // Fika — the embed root or the standalone shell.
       resolved.MathfieldElement.stylesheetScope = `:is(.${EMBED_ROOT_CLASS}, #${APP_SHELL_ID})`;
-    } catch {}
+    } catch { /* ignore read-only test mocks */ }
     try {
       resolved.initVirtualKeyboardInCurrentBrowsingContext?.();
-    } catch {}
+    } catch { /* ignore non-DOM environments */ }
+    ensureMathStaticStyles(staticCssRaw, fontsCssRaw);
     mathlive = resolved;
     mathReady.value = true;
     mathReadyVersion++;
@@ -130,7 +254,7 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
               void face.load().catch(() => {});
             }
           }
-        } catch {}
+        } catch { /* ignore font iteration error */ }
       }
       if (document.fonts?.status === 'loading') {
         document.fonts.ready.then(() => {

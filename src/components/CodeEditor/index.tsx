@@ -100,32 +100,38 @@ const CodeEditor = memo((vrProps: ICodeEditorProps) => {
     const previous = languageRef.current
     if (previous === language) return
     languageRef.current = language
+    let cancelled = false
     void (async () => {
       if (!editorRef.current) return
       try {
         await editorRef.current.setLanguage(language)
       }
       catch {
+        if (cancelled) return
         languageRef.current = previous
         setLanguage(previous)
       }
     })()
+    return () => { cancelled = true }
   }, [language])
 
   useEffect(() => {
     const previous = themeRef.current
     if (previous === theme) return
     themeRef.current = theme
+    let cancelled = false
     void (async () => {
       if (!editorRef.current) return
       try {
         await editorRef.current.setTheme(theme)
       }
       catch {
+        if (cancelled) return
         themeRef.current = previous
         setTheme(previous)
       }
     })()
+    return () => { cancelled = true }
   }, [theme])
 
   useEffect(() => {

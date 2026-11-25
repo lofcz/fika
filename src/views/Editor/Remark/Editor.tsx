@@ -227,13 +227,15 @@ const Editor = memo((props: IEditorProps) => {
 
   useEffect(() => {
     mountedRef.current = true
-    void Promise.resolve().then(() => {
-      if (!mountedRef.current) return
-      initTimerRef.current = setTimeout(initEditor, 0)
-    })
+    initTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) initEditor()
+    }, 0)
     return () => {
       mountedRef.current = false
-      if (initTimerRef.current) clearTimeout(initTimerRef.current)
+      if (initTimerRef.current) {
+        clearTimeout(initTimerRef.current)
+        initTimerRef.current = undefined
+      }
       handleInput.flush()
       handleInput.cancel()
       if (editorViewRef.current?.hasFocus()) handleBlur()
@@ -245,9 +247,11 @@ const Editor = memo((props: IEditorProps) => {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     void Promise.resolve().then(() => {
-      if (mountedRef.current) updateTextContent()
+      if (!cancelled && mountedRef.current) updateTextContent()
     })
+    return () => { cancelled = true }
   }, [props.value, updateTextContent])
 
   return (

@@ -52,15 +52,18 @@ const CanvasScrollbars = memo((props: ICanvasScrollbarsProps) => {
   panRef.current = pan
 
   useEffect(() => {
+    let active = true
     let resizeObserver: ResizeObserver | null = null
     let raf = 0
     const observe = () => {
+      if (!active) return
       const el = canvasEl(canvasRef)
       if (!el) {
         raf = requestAnimationFrame(observe)
         return
       }
       resizeObserver = new ResizeObserver(() => {
+        if (!active) return
         const host = canvasEl(canvasRef)
         setCanvasWidth(host?.clientWidth || 0)
         setCanvasHeight(host?.clientHeight || 0)
@@ -71,6 +74,7 @@ const CanvasScrollbars = memo((props: ICanvasScrollbarsProps) => {
     }
     observe()
     return () => {
+      active = false
       if (raf) cancelAnimationFrame(raf)
       resizeObserver?.disconnect()
     }

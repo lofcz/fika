@@ -1,4 +1,4 @@
-import { useCallback, memo, useState, useEffect, useRef } from 'react'
+import { useCallback, memo, useRef, useState, useEffect } from 'react'
 
 import { useSlidesStore, selectCurrentSlide } from '@/store'
 import type { PPTCodeElement, PPTElement } from '@/types/slides'
@@ -11,17 +11,22 @@ import Modal from '@/components/Modal'
 
 const isCodeElement = (el: PPTElement): el is PPTCodeElement => el.type === 'code'
 
-const CodeEditorDialog = memo(() => {
+const CodeEditorDialog = memo(({ request }: { request?: { seq: number; elementId: string } }) => {
   const { addHistorySnapshot } = useHistorySnapshot()
   const [visible, setVisible] = useState(false)
   const [editingElementId, setEditingElementId] = useState('')
+  const [sessionKey, setSessionKey] = useState('')
+  const handledSeqRef = useRef(0)
   const { element: editingCodeElement, present } = useHeldSlideElement(editingElementId, visible, isCodeElement)
+  const modalVisible = visible && (!editingElementId || present)
 
-  useEffect(() => {
-    if (!visible || !editingElementId || present) return
-    setVisible(false)
-    setEditingElementId('')
-  }, [visible, editingElementId, present])
+  const openCodeEditor = useCallback((elementId: string) => {
+    const element = selectCurrentSlide(useSlidesStore.getState())?.elements.find(item => item.id === elementId)
+    if (!element || element.type !== 'code' || element.lock) return
+    setEditingElementId(element.id)
+    setSessionKey(element.id)
+    setVisible(true)
+  }, [])
 
   const updateCode = useCallback((payload: CodeEditorPayload) => {
     const id = editingElementId
@@ -35,28 +40,45 @@ const CodeEditorDialog = memo(() => {
   }, [editingElementId, addHistorySnapshot])
 
   const close = useCallback(() => setVisible(false), [])
+  const handleClosed = useCallback(() => setEditingElementId(''), [])
 
   useEffect(() => {
-    const openCodeEditor = (elementId: string) => {
-      const element = selectCurrentSlide(useSlidesStore.getState()).elements.find(item => item.id === elementId)
-      if (!element || element.type !== 'code' || element.lock) return
-      setEditingElementId(element.id)
-      setVisible(true)
+    if (!visible || !editingElementId) return
+    let active = true
+    const closeIfMissing = () => {
+      if (!active) return
+      const slide = selectCurrentSlide(useSlidesStore.getState())
+      const el = slide?.elements.find(item => item.id === editingElementId)
+      if (!el || !isCodeElement(el) || el.lock) {
+        setVisible(false)
+        setEditingElementId('')
+      }
     }
-    emitter.on(EmitterEvents.OPEN_CODE_EDITOR, openCodeEditor)
+    const unsub = useSlidesStore.subscribe(closeIfMissing)
+    queueMicrotask(closeIfMissing)
     return () => {
-      emitter.off(EmitterEvents.OPEN_CODE_EDITOR, openCodeEditor)
+      active = false
+      unsub()
     }
-  }, [])
+  }, [visible, editingElementId])
 
-  const sessionIdRef = useRef(editingElementId)
-  if (visible && editingElementId) sessionIdRef.current = editingElementId
+  useEffect(() => {
+    if (!request) {
+      emitter.on(EmitterEvents.OPEN_CODE_EDITOR, openCodeEditor)
+      return () => {
+        emitter.off(EmitterEvents.OPEN_CODE_EDITOR, openCodeEditor)
+      }
+    }
+    if (request.seq === handledSeqRef.current) return
+    handledSeqRef.current = request.seq
+    openCodeEditor(request.elementId)
+  }, [request, openCodeEditor])
 
   return (
-    <Modal visible={visible} onUpdateVisible={setVisible} width={880}>
+    <Modal visible={modalVisible} onUpdateVisible={setVisible} onClosed={handleClosed} width={880}>
       {editingCodeElement ? (
         <LazyCodeEditor
-          key={sessionIdRef.current}
+          key={sessionKey}
           code={editingCodeElement.code}
           language={editingCodeElement.language}
           theme={editingCodeElement.theme}

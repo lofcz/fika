@@ -129,13 +129,66 @@ export const slideAffectedByFontChanges = (
   return false
 }
 
+const CANVAS_POOL_MAX_PER_SIZE = 6
+const CANVAS_POOL_MAX_SIZES = 4
+const canvasPool = new Map<string, HTMLCanvasElement[]>()
+
+const acquirePooledCanvas = (width: number, height: number): HTMLCanvasElement => {
+  const sizeKey = `${width}x${height}`
+  const bucket = canvasPool.get(sizeKey)
+  const reused = bucket?.pop()
+  if (reused) {
+    if (reused.width !== width) reused.width = width
+    if (reused.height !== height) reused.height = height
+    return reused
+  }
+  const node = document.createElement('canvas')
+  node.width = width
+  node.height = height
+  return node
+}
+
+const recyclePooledCanvas = (node: HTMLCanvasElement) => {
+  const width = node.width
+  const height = node.height
+  if (!(width > 0) || !(height > 0)) return
+  const sizeKey = `${width}x${height}`
+  let bucket = canvasPool.get(sizeKey)
+  if (!bucket) {
+    if (canvasPool.size >= CANVAS_POOL_MAX_SIZES) {
+      const oldestKey = canvasPool.keys().next().value
+      if (oldestKey !== undefined) {
+        for (const stale of canvasPool.get(oldestKey) ?? []) {
+          stale.width = 0
+          stale.height = 0
+        }
+        canvasPool.delete(oldestKey)
+      }
+    }
+    bucket = []
+    canvasPool.set(sizeKey, bucket)
+  }
+  if (bucket.length < CANVAS_POOL_MAX_PER_SIZE) {
+    bucket.push(node)
+  }
+  else {
+    node.width = 0
+    node.height = 0
+  }
+}
+
 const releaseSurface = (surface: ThumbSurface) => {
   if (typeof ImageBitmap !== 'undefined' && surface instanceof ImageBitmap) {
     surface.close()
   }
   else if ('width' in surface && 'height' in surface) {
-    ;(surface as HTMLCanvasElement).width = 0
-    ;(surface as HTMLCanvasElement).height = 0
+    if (typeof HTMLCanvasElement !== 'undefined' && surface instanceof HTMLCanvasElement) {
+      recyclePooledCanvas(surface)
+    }
+    else {
+      ;(surface as HTMLCanvasElement).width = 0
+      ;(surface as HTMLCanvasElement).height = 0
+    }
   }
 }
 
@@ -273,30 +326,35 @@ export const putCachedThumbFromCanvas = (
   if (!(width > 0) || !(height > 0)) return
   const bytes = width * height * 4
   if (bytes > THUMB_BITMAP_CACHE_MAX_BYTES) return
-  const copy = document.createElement('canvas')
-  copy.width = width
-  copy.height = height
-  const ctx = copy.getContext('2d')
-  if (!ctx) return
+  // Start an async ImageBitmap snapshot directly from `source` (off-main-thread
+  // decode/upload, avoiding a second copy once settled) while storing a pooled
+  // sync canvas copy for immediate same-frame scroll-back blits.
+  const bitmapPromise = ttlMs === 0 && typeof createImageBitmap === 'function'
+    ? createImageBitmap(source).catch(() => null)
+    : null
+  const copy = acquirePooledCanvas(width, height)
+  const ctx = copy.getContext('2d', { alpha: false })
+  if (!ctx) {
+    recyclePooledCanvas(copy)
+    void bitmapPromise?.then(bmp => bmp?.close())
+    return
+  }
   ctx.drawImage(source, 0, 0)
-  if (!putCachedThumbSurface(key, copy, THUMB_BITMAP_CACHE_MAX_BYTES, ttlMs, slideId)) return
-  if (ttlMs === 0 && typeof createImageBitmap === 'function') {
-    const upgrade = () => {
-      const current = cache.get(key)
-      if (!current || current.surface !== copy) return
-      void createImageBitmap(copy).then(bitmap => {
-        const latest = cache.get(key)
-        if (!latest || latest.surface !== copy) {
-          bitmap.close()
-          return
-        }
-        latest.surface = bitmap
-        copy.width = 0
-        copy.height = 0
-      }).catch(() => {})
-    }
-    if (typeof requestIdleCallback === 'function') requestIdleCallback(upgrade, { timeout: 150 })
-    else setTimeout(upgrade, 32)
+  if (!putCachedThumbSurface(key, copy, THUMB_BITMAP_CACHE_MAX_BYTES, ttlMs, slideId)) {
+    void bitmapPromise?.then(bmp => bmp?.close())
+    return
+  }
+  if (bitmapPromise) {
+    void bitmapPromise.then(bitmap => {
+      if (!bitmap) return
+      const latest = cache.get(key)
+      if (!latest || latest.surface !== copy) {
+        bitmap.close()
+        return
+      }
+      latest.surface = bitmap
+      recyclePooledCanvas(copy)
+    })
   }
 }
 

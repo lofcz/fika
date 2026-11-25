@@ -52,7 +52,7 @@ const Hue = memo((props: IHueProps) => {
   huePropRef.current = props.hue
 
   const handleChange = useCallback((e: MouseEvent | TouchEvent) => {
-    e.preventDefault()
+    if (e.cancelable) e.preventDefault()
     if (!hueRef.current) return
     const isTouchEvent = !(e instanceof MouseEvent)
     if (isTouchEvent && (!e.changedTouches || !e.changedTouches[0])) return
@@ -88,7 +88,7 @@ const Hue = memo((props: IHueProps) => {
   const handleMouseDown = useCallback((e: MouseEvent | TouchEvent) => {
     handleChange(e)
     window.addEventListener('mousemove', handleChange)
-    window.addEventListener('touchmove', handleChange)
+    window.addEventListener('touchmove', handleChange, { passive: true })
     window.addEventListener('mouseup', unbindEventListeners)
     window.addEventListener('touchend', unbindEventListeners)
   }, [handleChange, unbindEventListeners])

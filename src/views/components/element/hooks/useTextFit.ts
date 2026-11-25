@@ -12,6 +12,7 @@ import {
   extractBlocksCached,
   innerBoxFromLiveStyles,
   MATH_FONT_CHANGE_TOKEN,
+  measureTextBlocksHeight,
   minimumTextFitScale,
   normalizeFontFamilyName,
   rememberFitScale,
@@ -19,6 +20,7 @@ import {
   subscribeTextFontChanges,
   textFitScaleForHtml,
   type FitScaleOptions,
+  type TextFitBlock,
 } from '@/utils/textFit'
 import { htmlContainsMath } from '@/utils/math'
 import {
@@ -26,9 +28,36 @@ import {
   enqueueVerifyJob,
   readVerifiedFit,
   runVerifyBatch,
+  shouldSkipDomVerify,
   verifiedFitKey,
   type PendingVerifyJob,
 } from './textFitBatcher'
+
+function fontsLoadedForBlocks(blocks: TextFitBlock[], defaultFamily: string): boolean {
+  if (typeof document === 'undefined' || !document.fonts || document.fonts.status === 'loading') return false
+  const checked = new Set<string>()
+  const checkFamily = (raw: string | undefined) => {
+    const fam = (raw || defaultFamily || '').trim()
+    if (!fam || checked.has(fam)) return true
+    checked.add(fam)
+    try {
+      return document.fonts.check(`16px ${fam}`)
+    }
+    catch {
+      return false
+    }
+  }
+  if (!checkFamily(defaultFamily)) return false
+  for (const block of blocks) {
+    if (!checkFamily(block.fontFamily)) return false
+    if (block.runs) {
+      for (const run of block.runs) {
+        if (run.fontFamily && !checkFamily(run.fontFamily)) return false
+      }
+    }
+  }
+  return true
+}
 
 const DEFAULT_INSET: TextInset = [10, 10, 10, 10]
 const DEFAULT_LINE_HEIGHT = 1.5
@@ -230,6 +259,51 @@ export default (
     if (!host) return
 
     if (host.style.getPropertyValue('--paragraphSpace')) host.style.removeProperty('--paragraphSpace')
+    let maxFontSize = params.defaultSize ?? 16
+    for (const block of extracted.blocks) {
+      if (block.size > maxFontSize) maxFontSize = block.size
+    }
+    const maxLinePx = maxFontSize * Math.max(1, params.lineHeight)
+
+    // Fast-skip DOM verification when Pretext reports `scale === 1` with ample
+    // vertical headroom (>= 15% and >= 0.5 line), no inline math, horizontal
+    // layout, and all box fonts are already loaded.
+    const isVertical = el.type === 'text' && !!el.vertical
+    const hasMath = htmlContainsMath(contentHtml)
+    if (
+      !isScaling
+      && !opts?.liveEdit
+      && estimate >= 1
+      && !isVertical
+      && !hasMath
+      && fontsLoadedForBlocks(extracted.blocks, params.defaultFontFamily || '')
+    ) {
+      const h1 = measureTextBlocksHeight(extracted.blocks, {
+        innerWidth: Math.max(1, innerWidth),
+        lineHeight: params.lineHeight,
+        blockSpace: params.blockSpace ?? 0,
+        letterSpacing: params.letterSpacing || undefined,
+        sizeScale: 1,
+      })
+      if (shouldSkipDomVerify({
+        estimate,
+        pretextHeight: h1,
+        boxHeight: height,
+        maxLinePx,
+        isScaling,
+        liveEdit: !!opts?.liveEdit,
+        isVertical,
+        hasMath,
+        fontsReady: true,
+        contentHtml,
+      })) {
+        // Estimate-only fast-skip: apply scale 1 without writing an unverified
+        // entry into `verifiedFitCache`.
+        rememberFitScale(contentHtml, params, 1, el.id)
+        return
+      }
+    }
+
     const content = host.querySelector('.ProseMirror, .ProseMirror-static, .prosemirror-editor') as HTMLElement | null
     if (!content || height <= 2) return
 
@@ -262,6 +336,8 @@ export default (
       lastCommitted: estimate,
       hasUpperBound: false,
       skipCacheWrite: !!opts?.liveEdit,
+      maxFontSize,
+      maxLinePx,
     }
 
     if (opts?.batch && typeof queueMicrotask === 'function') {
@@ -401,11 +477,15 @@ export default (
       lastAppliedKeyRef.current = ''
       scheduleRef.current()
     }
+    let cancelled = false
     const unsubscribeFonts = subscribeTextFontChanges(refreshFonts)
     if (typeof document !== 'undefined' && document.fonts?.status === 'loading') {
-      document.fonts.ready.then(() => refreshFonts()).catch(() => {})
+      document.fonts.ready.then(() => {
+        if (!cancelled) refreshFonts()
+      }).catch(() => {})
     }
     return () => {
+      cancelled = true
       unsubscribeFonts()
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = 0

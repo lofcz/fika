@@ -7,13 +7,15 @@ import { nativePointerEvent, type ReactPointerEvent } from '@/utils/canvasPointe
 import { openContextmenu } from '@/utils/openContextmenu';
 import { useMainStore, useSlidesStore } from '@/store';
 import { drainCommitQueue } from '@/utils/commitQueue';
-import { rememberTableStyleTarget } from '@/utils/tableStyleTarget';
+import { collectTableCellIds, rememberTableStyleTarget } from '@/utils/tableStyleTarget';
 import type { PPTTableElement, TableCell } from '@/types/slides';
 import type { ContextmenuItem } from '@/components/Contextmenu/types';
 import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 import EditableTable from './EditableTable';
-import { areTableElementInfosEqual, forgetTableCellWrite, rememberTableCellWrite } from './gridCompare';
+import StaticTable from './StaticTable';
+import { areTableElementInfosEqual, computeUniformTableHeight, forgetTableCellWrite, rememberTableCellWrite } from './gridCompare';
 import { useI18nContext } from '@/i18n/useI18nContext';
+import { flushElementSizeSync, scheduleElementSizeSync } from '@/views/Editor/Canvas/batchedHeightSync';
 
 export type ITableElementProps = {
   elementInfo: PPTTableElement;
@@ -43,14 +45,31 @@ const TableElement = memo((props: ITableElementProps) => {
   }, []);
 
   const editable = !!(isEditing && !elementInfo.lock);
+  const mountEditable = editable || isHandleElement;
+  const wasEditableRef = useRef(false);
   useEffect(() => {
     if (isHandleElement) return
     if (useMainStore.getState().editingElementId === props.elementInfo.id) drainCommitQueue()
   }, [isHandleElement, props.elementInfo.id]);
   useEffect(() => {
-    useMainStore.getState().setDisableHotkeysState(editable);
+    if (editable) {
+      wasEditableRef.current = true;
+      useMainStore.getState().setDisableHotkeysState(true);
+    }
+    else if (wasEditableRef.current) {
+      wasEditableRef.current = false;
+      useMainStore.getState().setDisableHotkeysState(false);
+    }
   }, [editable]);
-  useEffect(() => () => { forgetTableCellWrite(elementInfoRef.current.id); }, []);
+  useEffect(() => () => {
+    if (wasEditableRef.current) {
+      wasEditableRef.current = false;
+      useMainStore.getState().setDisableHotkeysState(false);
+    }
+    const id = elementInfoRef.current.id;
+    flushElementSizeSync(id);
+    forgetTableCellWrite(id);
+  }, []);
 
   const startEdit = useCallback(() => {
     if (elementInfoRef.current.lock) return;
@@ -93,20 +112,41 @@ const TableElement = memo((props: ITableElementProps) => {
     });
   }, []);
 
+  const mountEditableRef = useRef(mountEditable);
+  mountEditableRef.current = mountEditable;
+
   // The element's height follows the live table (uniform rows, each as tall
   // as the tallest row's content, `cellMinHeight` the floor) — not the other
-  // way round. The outer box has an explicit height, so observe the table
-  // wrapper, whose height is the rows' actual sum.
+  // way round. Observe BOTH `StaticTable` (so unselected agent-created tables
+  // with tall text grow to fit without clipping) and `EditableTable`.
   const syncHeightToTable = useCallback(() => {
     const wrapper = elementRef.current?.querySelector<HTMLElement>('[data-live-table]');
     if (!wrapper || isScalingRef.current) return;
     // Layout px (unaffected by the canvas zoom transform).
     const realHeight = wrapper.offsetHeight;
-    if (realHeight > 0 && Math.abs(elementHeightRef.current - realHeight) >= 0.5) {
-      useSlidesStore.getState().updateElement({
-        id: elementIdRef.current,
-        props: { height: realHeight }
-      });
+    if (!(realHeight > 0)) return;
+    if (mountEditableRef.current) {
+      if (Math.abs(elementHeightRef.current - realHeight) >= 0.5) {
+        scheduleElementSizeSync(elementIdRef.current, { height: realHeight });
+      }
+      return;
+    }
+    if (realHeight > elementHeightRef.current + 0.5) {
+      // Static view: measure natural row heights directly (without `height / rows`
+      // feedback) and write the exact uniform `max(tallestRow, cellMinHeight) * rows`
+      // height in ONE single store write matching the painter/PPTX export.
+      const table = wrapper.querySelector('table');
+      const rows = Array.from(table?.tBodies[0]?.rows ?? []);
+      const targetHeight = rows.length
+        ? computeUniformTableHeight(
+            rows.map(row => row.offsetHeight),
+            elementInfoRef.current.cellMinHeight,
+            realHeight,
+          )
+        : realHeight;
+      if (targetHeight > elementHeightRef.current + 0.5) {
+        scheduleElementSizeSync(elementIdRef.current, { height: targetHeight });
+      }
     }
   }, []);
   useEffect(() => {
@@ -115,7 +155,7 @@ const TableElement = memo((props: ITableElementProps) => {
     const observer = new ResizeObserver(() => { syncHeightToTable(); });
     observer.observe(wrapper);
     return () => observer.disconnect();
-  }, [syncHeightToTable]);
+  }, [mountEditable, syncHeightToTable]);
   // A store write that the content overrules (a smaller `height`, a lower
   // `cellMinHeight`) leaves the wrapper's size unchanged, so the observer
   // stays silent — reconcile explicitly (skip initial mount, which ResizeObserver handles).
@@ -149,7 +189,8 @@ const TableElement = memo((props: ITableElementProps) => {
 
   const updateSelectedCells = useCallback((cells: string[]) => {
     if (useMainStore.getState().handleElementId !== elementIdRef.current) return;
-    rememberTableStyleTarget(elementIdRef.current, cells);
+    const cellIds = collectTableCellIds(elementInfoRef.current.data, cells);
+    rememberTableStyleTarget(elementIdRef.current, cells, cellIds);
     useMainStore.getState().setSelectedTableCells(cells);
   }, []);
 
@@ -173,11 +214,12 @@ const TableElement = memo((props: ITableElementProps) => {
         data-live-box
         onContextMenu={event => { event.stopPropagation(); event.preventDefault(); openContextmenu(event, contextmenusRef.current); }}
       >
-        <EditableTable
+        {mountEditable ? <EditableTable
           onMouseDown={stopTableMouseDown}
           elementId={elementInfo.id}
           data={elementInfo.data}
           width={elementInfo.width}
+          initialHeight={elementInfo.height}
           cellMinHeight={elementInfo.cellMinHeight}
           colWidths={elementInfo.colWidths}
           outline={elementInfo.outline}
@@ -186,7 +228,17 @@ const TableElement = memo((props: ITableElementProps) => {
           onChange={updateTableCells}
           onChangeColWidths={updateColWidths}
           onChangeSelectedCells={updateSelectedCells}
-        />
+        /> : <StaticTable
+          data={elementInfo.data}
+          width={elementInfo.width}
+          height={elementInfo.height}
+          cellMinHeight={elementInfo.cellMinHeight}
+          colWidths={elementInfo.colWidths}
+          outline={elementInfo.outline}
+          theme={elementInfo.theme}
+          liveTable
+          onMouseDown={stopTableMouseDown}
+        />}
         {!editable || elementInfo.lock ? <div
           className={cx('table-mask', { lock: elementInfo.lock })}
           onDoubleClick={startEdit}

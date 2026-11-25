@@ -18,6 +18,7 @@ import {
   isThumbnailScrolling,
   mathSizeBucket,
   notifyThumbnailScrollActivity,
+  preloadEcharts,
   quantizeMathFontSize,
   readRasterDiagnostics,
   releaseRasterOwner,
@@ -26,8 +27,10 @@ import {
   subscribeThumbnailScrollIdle,
   withRasterRequestContext,
 } from '@/paint/rasterResources'
-import { extractReferencedKatexFamilies } from '@/paint/mathSvgRaster'
-import { measureInlineMathBoxWithRenderer, resetInlineMathProbeForTest } from '@/utils/math'
+import { extractReferencedKatexFamilies, getBundledMathStaticCss, hasMathliveStaticRules } from '@/paint/mathSvgRaster'
+import { reprioritizeSlidePaint, scheduleSlidePaint } from '@/paint/scheduler'
+import { ensureMathStaticStyles, measureInlineMathBoxWithRenderer, resetInlineMathProbeForTest, resolveMathFontBaseUrl } from '@/utils/math'
+import { getFikaAssetBase, setFikaAssetBase } from '@/utils/assetBase'
 import { EMBED_ROOT_CLASS, MATH_PROBE_ATTR, resolveOffscreenHost } from '@/utils/portal'
 import { getThumbRuntimeActiveCount, registerThumbRuntimeListener } from '@/views/components/ThumbnailSlide/thumbRailRuntime'
 import { resolveLiveTextPaint } from '@/utils/textContrast'
@@ -463,6 +466,164 @@ describe('math raster helpers', () => {
     })
     expect(r1).toBe(r2)
     expect(r1.ink).toBe('#ffffff')
+  })
+
+  it('B4: injects scoped MathLive static + rewritten font CSS on cold tabs without fika-embed.css', async () => {
+    const origDocument = globalThis.document
+    const origWindow = globalThis.window
+    if (typeof globalThis.window === 'undefined') {
+      ;(globalThis as unknown as { window: unknown }).window = { location: { search: '' } }
+    }
+    const headChildren: Array<{ attrs: Map<string, string>; textContent: string; setAttribute: (k: string, v: string) => void }> = []
+    const fakeHead = {
+      appendChild(node: (typeof headChildren)[number]) {
+        headChildren.push(node)
+        return node
+      },
+      querySelector(selector: string) {
+        if (selector === 'style[data-fika-math-static]') {
+          return headChildren.find(el => el.attrs.has('data-fika-math-static')) ?? null
+        }
+        return null
+      },
+    }
+    const fakeDocument = {
+      head: fakeHead,
+      styleSheets: [] as CSSStyleSheet[],
+      createElement() {
+        const attrs = new Map<string, string>()
+        return {
+          attrs,
+          textContent: '',
+          setAttribute(k: string, v: string) { attrs.set(k, v) },
+        }
+      },
+      querySelector(selector: string) {
+        return fakeHead.querySelector(selector)
+      },
+    }
+    ;(globalThis as unknown as { document: unknown }).document = fakeDocument
+    setFikaAssetBase('/fika-assets')
+    try {
+      expect(hasMathliveStaticRules()).toBe(false)
+      const rawStaticWithEmbeddedFonts = [
+        '@font-face{font-family:KaTeX_Main;src:url(fonts/KaTeX_Main-Regular.woff2) format("woff2")}',
+        ':root{--ML__static-fonts:true}',
+        '.ML__frac-line{border-bottom:1px solid currentColor}',
+      ].join('')
+      const injected = ensureMathStaticStyles(
+        rawStaticWithEmbeddedFonts,
+        '@font-face{font-family:KaTeX_Main;src:url(fonts/KaTeX_Main-Regular.woff2) format("woff2")}',
+      )
+      expect(injected).toBe(true)
+      expect(hasMathliveStaticRules()).toBe(true)
+      expect(headChildren).toHaveLength(1)
+      expect(headChildren[0].textContent).toContain('/fika-assets/fonts/KaTeX_Main-Regular.woff2')
+      expect(headChildren[0].textContent).toContain(`.${EMBED_ROOT_CLASS}{`)
+      // Static CSS passed into bundledMathStaticCss and scoped wrapper must have
+      // relative @font-face and :root blocks stripped so they never override embedded base64 fonts.
+      expect(getBundledMathStaticCss()).not.toContain('@font-face')
+      expect(getBundledMathStaticCss()).not.toContain(':root')
+      expect(getBundledMathStaticCss()).toContain('.ML__frac-line')
+      expect(headChildren[0].textContent).not.toContain('url(fonts/')
+      // Idempotent once injected.
+      expect(ensureMathStaticStyles('.ML__frac-line{}', '')).toBe(false)
+
+      // Without setFikaAssetBase (cold dynamic import('/fika-assets/fika-embed.js')),
+      // resolveMathFontBaseUrl infers /fika-assets/fonts/ from PerformanceResourceTiming.
+      setFikaAssetBase('')
+      const origGetEntries = performance.getEntriesByType
+      ;(performance as unknown as { getEntriesByType: (t: string) => Array<{ name: string }> }).getEntriesByType = () => [
+        { name: 'http://127.0.0.1:4173/fika-assets/fika-embed.js' },
+      ]
+      try {
+        expect(resolveMathFontBaseUrl()).toBe('http://127.0.0.1:4173/fika-assets/fonts/')
+      }
+      finally {
+        performance.getEntriesByType = origGetEntries
+      }
+
+      // configureRenderAssets configures assetBaseUrl (+ __webpack_public_path__)
+      // for cold headless renderSlideImage / renderDeckAtlas calls.
+      const { configureRenderAssets } = await import('@/embed/render')
+      configureRenderAssets({ assetBaseUrl: '/custom-fika/' })
+      expect(getFikaAssetBase()).toBe('/custom-fika')
+      expect(resolveMathFontBaseUrl()).toBe('/custom-fika/fonts/')
+    }
+    finally {
+      setFikaAssetBase('')
+      if (origDocument === undefined) {
+        delete (globalThis as unknown as { document?: unknown }).document
+      }
+      else {
+        ;(globalThis as unknown as { document: unknown }).document = origDocument
+      }
+      if (origWindow === undefined) {
+        delete (globalThis as unknown as { window?: unknown }).window
+      }
+      else {
+        ;(globalThis as unknown as { window: unknown }).window = origWindow
+      }
+    }
+  })
+
+  it('B9: defers nearby overscan paints while scrolling and promotes on reprioritizeSlidePaint', async () => {
+    const origWindow = globalThis.window
+    const origRaf = globalThis.requestAnimationFrame
+    if (typeof globalThis.window === 'undefined') {
+      ;(globalThis as unknown as { window: typeof globalThis }).window = globalThis
+    }
+    const rafCallbacks: FrameRequestCallback[] = []
+    ;(globalThis as unknown as { requestAnimationFrame: typeof requestAnimationFrame }).requestAnimationFrame = cb => {
+      rafCallbacks.push(cb)
+      return rafCallbacks.length
+    }
+    const flushOneFrame = () => {
+      const next = rafCallbacks.shift()
+      if (next) next(performance.now())
+    }
+    try {
+      notifyThumbnailScrollActivity()
+      expect(isThumbnailScrolling()).toBe(true)
+
+      const ran: string[] = []
+      const cancelNearby = scheduleSlidePaint('b9-nearby', () => { ran.push('nearby') }, 'nearby')
+      const cancelVisible = scheduleSlidePaint('b9-visible', () => { ran.push('visible') }, 'visible')
+
+      // Frame 1 during active scroll runs only the visible job (1 per scroll frame) and defers nearby.
+      flushOneFrame()
+      expect(ran).toEqual(['visible'])
+
+      // Frame 2 still scrolling: nearby stays deferred until promoted or scroll settles.
+      flushOneFrame()
+      expect(ran).toEqual(['visible'])
+
+      // IO confirms visibility -> reprioritize promotes the queued nearby job immediately.
+      reprioritizeSlidePaint('b9-nearby', 'visible')
+      flushOneFrame()
+      expect(ran).toEqual(['visible', 'nearby'])
+
+      cancelNearby()
+      cancelVisible()
+      // Let scroll debounce finish so global scrollActive resets cleanly.
+      await new Promise(r => setTimeout(r, 200))
+      expect(isThumbnailScrolling()).toBe(false)
+    }
+    finally {
+      if (origRaf === undefined) {
+        delete (globalThis as unknown as { requestAnimationFrame?: unknown }).requestAnimationFrame
+      }
+      else {
+        ;(globalThis as unknown as { requestAnimationFrame: typeof requestAnimationFrame }).requestAnimationFrame = origRaf
+      }
+      if (origWindow === undefined) {
+        delete (globalThis as unknown as { window?: unknown }).window
+      }
+    }
+  })
+
+  it('H3: preloadEcharts loads the lazy chart runtime cleanly before headless export', async () => {
+    await expect(preloadEcharts()).resolves.toBeUndefined()
   })
 })
 

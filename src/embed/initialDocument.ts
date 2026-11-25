@@ -22,8 +22,10 @@ export function applyDocumentToStores(document: FikaInitialDocument): void {
     title: document.title,
     slides: repairDuplicateElementIds(document.slides),
     theme: document.theme,
-    viewportSize: viewport?.size,
-    viewportRatio: viewport?.ratio,
+    replaceTheme: true,
+    slideIndex: 0,
+    viewportSize: viewport?.size ?? 1000,
+    viewportRatio: viewport?.ratio ?? 0.5625,
     viewportWidthInches: document.viewport?.widthInches,
     hasViewportWidthInches: true,
   })

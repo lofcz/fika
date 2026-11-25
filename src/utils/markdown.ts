@@ -51,7 +51,11 @@ function createBaseParser() {
   };
   return parser;
 }
-const markdownParser = createBaseParser();
+let markdownParserInstance: MarkdownIt | null = null;
+const getMarkdownParser = (): MarkdownIt => {
+  if (!markdownParserInstance) markdownParserInstance = createBaseParser();
+  return markdownParserInstance;
+};
 let mathMarkdownParserPromise: Promise<MarkdownIt> | null = null;
 let mathMarkdownParser: MarkdownIt | null = null;
 
@@ -158,7 +162,7 @@ export async function markdownToHtml(markdown: string): Promise<string> {
   if (markdown == null) return '';
   const source = normalizeAgentText(String(markdown)).trim();
   if (!source) return '';
-  const parser = containsMath(source) ? await loadMathMarkdownParser() : markdownParser;
+  const parser = containsMath(source) ? await loadMathMarkdownParser() : getMarkdownParser();
   return parser.render(source).trim();
 }
 
@@ -199,7 +203,7 @@ export function renderInlineMarkdown(markdown: string): string {
   if (containsMath(source) && mathMarkdownParser) {
     return stripOuterParagraph(mathMarkdownParser.render(source).trim());
   }
-  return markdownParser.renderInline(source).trim();
+  return getMarkdownParser().renderInline(source).trim();
 }
 
 /** Typographic run style applied on top of Markdown-rendered HTML. */

@@ -114,9 +114,16 @@ export function createDocumentChangeWatcher(
       emitDebounced.flush()
     },
     mute() {
+      if (muted === 0) {
+        // Flush any pre-reveal unsaved edits before suppressing transient reveal
+        // frames so `destroy()` during reveal can never drop earlier user edits.
+        if (queued) {
+          queued = false
+          emitDebounced()
+        }
+        emitDebounced.flush()
+      }
       muted++
-      queued = false
-      emitDebounced.cancel()
     },
     unmute() {
       muted = Math.max(0, muted - 1)

@@ -50,7 +50,8 @@ export default function LaTeXExtractor({ onUpdate, onClose }: ILaTeXExtractorPro
   }
 
   useEffect(() => {
-    setTimeout(() => textAreaRef.current?.focus(), 0)
+    const timer = window.setTimeout(() => textAreaRef.current?.focus(), 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   const insertSelected = () => {

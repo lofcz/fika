@@ -58,12 +58,25 @@ export const persistableMediaSrc = (src: string) => {
   return dataUrlByBlob.get(src) ?? src
 }
 
+const registeredBlobUrls = new Set<string>()
+
 /**
  * Record an object URL created outside the intern layer (e.g. pasted video)
- * so `getInternedBlob` can still inline its bytes during export.
+ * so `getInternedBlob` can still inline its bytes during export and destroy
+ * can revoke the object URL cleanly.
  */
 export const registerMediaBlob = (url: string, blob: Blob) => {
   blobByUrl.set(url, blob)
+  if (isBlobUrl(url)) registeredBlobUrls.add(url)
+}
+
+/** Revoke externally registered object URLs (pasted audio/video) on session teardown. */
+export const revokeRegisteredMediaBlobs = () => {
+  for (const url of registeredBlobUrls) {
+    URL.revokeObjectURL(url)
+    blobByUrl.delete(url)
+  }
+  registeredBlobUrls.clear()
 }
 
 const rewriteSrc = (src: string, map?: Map<string, string>) => {
@@ -202,6 +215,7 @@ export const internSlidesMedia = async (slides: Slide[]) => {
 
 export const resetMediaInternForTests = () => {
   for (const url of blobByUrl.keys()) URL.revokeObjectURL(url)
+  registeredBlobUrls.clear()
   blobUrlByDataUrl.clear()
   dataUrlByBlob.clear()
   blobByUrl.clear()

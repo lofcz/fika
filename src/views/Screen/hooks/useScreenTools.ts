@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { LaserColorId, ScreenTool } from '@/configs/laser'
 
 /**
@@ -19,6 +19,7 @@ export const useScreenTools = () => {
   const switchTool = (next: ScreenTool | null) => {
     toolRef.current = next
     setToolState(next)
+    if (next === 'pen') setPenSession(true)
   }
 
   const toggleTool = (next: ScreenTool) => {
@@ -35,10 +36,6 @@ export const useScreenTools = () => {
     setPenSession(false)
     if (toolRef.current === 'pen') switchTool(null)
   }
-
-  useEffect(() => {
-    if (tool === 'pen') setPenSession(true)
-  }, [tool])
 
   return {
     tool,

@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './StaticTable.module.scss'
 const cx = bindStyles(styles)
-import { type CSSProperties, memo, useState, useEffect } from 'react';
+import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useMemo } from 'react';
 
 import type { PPTElementOutline, TableCell, TableTheme } from '@/types/slides';
 import { getCellStyle, getTextStyle, formatText } from './utils';
@@ -12,24 +12,36 @@ import useMathReady from './useMathReady';
 export type IStaticTableProps = {
   data: TableCell[][];
   width: number;
+  height?: number;
   cellMinHeight: number;
   colWidths: number[];
   outline: PPTElementOutline;
   theme?: TableTheme;
   editable?: boolean;
+  liveTable?: boolean;
+  onMouseDown?: (e: ReactMouseEvent) => void;
 };
 
 const StaticTable = memo((props: IStaticTableProps) => {
-  const { data, width, cellMinHeight, colWidths, outline, theme } = props;
-  const [colSizeList, setColSizeList] = useState(() => colWidths.map(item => item * width));
-  const totalWidth = colSizeList.reduce((a, b) => a + b, 0);
-  useEffect(() => {
-    setColSizeList(colWidths.map(item => item * width));
-  }, [colWidths, width]);
+  const { data, width, height, cellMinHeight, colWidths, outline, theme, liveTable, onMouseDown } = props;
+  const colSizeList = useMemo(() => colWidths.map(item => item * width), [colWidths, width]);
+  const totalWidth = useMemo(() => colSizeList.reduce((a, b) => a + b, 0), [colSizeList]);
   const { hideCells } = useHideCells(data);
+  const hideSet = useMemo(() => (hideCells.length ? new Set(hideCells) : null), [hideCells]);
   const { themeColors } = useSubThemeColor(theme);
   const mathIsReady = useMathReady(data);
-  return <div className={cx('static-table')} style={{ width: totalWidth + 'px' }}>
+  const rowCount = Math.max(1, data.length);
+  const trHeight = liveTable && height && height > 0
+    ? Math.max(cellMinHeight, Math.floor(height / rowCount))
+    : cellMinHeight;
+  const minTableHeight = liveTable && height && height > 0 ? Math.max(height, trHeight * rowCount) : undefined;
+  // Use uniform `trHeight = max(cellMinHeight, floor(height / rowCount))` so
+  // unselected static tables distribute row height identically to EditableTable,
+  // the canvas thumbnail painter, and PPTX export (never proportionally by content).
+  // `floor` keeps `rowCount * trHeight <= height` so single-step `tallest * rows`
+  // growth terminates in one store write without feedback oscillation.
+
+  return <div className={cx('static-table')} data-live-table={liveTable ? '' : undefined} style={{ width: totalWidth + 'px' }} onMouseDown={onMouseDown}>
     <table
       className={cx({
         theme,
@@ -39,6 +51,7 @@ const StaticTable = memo((props: IStaticTableProps) => {
         'col-footer': theme?.colFooter
       })}
       style={{
+        ...(minTableHeight ? { height: minTableHeight + 'px' } : {}),
         '--themeColor': theme?.color,
         '--headerColor': themeColors.header,
         '--subThemeColor1': themeColors.stripe,
@@ -46,14 +59,15 @@ const StaticTable = memo((props: IStaticTableProps) => {
       } as CSSProperties}
     >
       <colgroup>{colSizeList.map((colWidth, index) => <col span={1} key={index} width={colWidth} />)}</colgroup>
-      <tbody>{data.map((rowCells, rowIndex) => <tr key={rowIndex} style={{ height: cellMinHeight + 'px' }}>
+      <tbody>{data.map((rowCells, rowIndex) => <tr key={rowIndex} style={{ height: trHeight + 'px' }}>
         {rowCells.map((cell, colIndex) => <td
           className={cx('cell')}
+          data-cell-index={`${rowIndex}_${colIndex}`}
           data-cell-fill={cell.style?.backcolor || undefined}
           data-cell-color={cell.style?.color || undefined}
           style={{
             ...getCellStyle(outline, cell.style),
-            display: !hideCells.includes(`${rowIndex}_${colIndex}`) ? '' : 'none'
+            display: hideSet?.has(`${rowIndex}_${colIndex}`) ? 'none' : ''
           }}
           key={cell.id}
           rowSpan={cell.rowspan}

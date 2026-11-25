@@ -6,7 +6,18 @@
  * booth needs a hidpi backing store. Fonts embed automatically (`'auto'`);
  * pass `false` only to skip webfonts the way the old `fontEmbedCSS: ''` did.
  */
-import { snapdom, type SnapdomOptions } from '@zumer/snapdom'
+import type { SnapdomOptions } from '@zumer/snapdom'
+
+let snapdomLoader: Promise<(typeof import('@zumer/snapdom'))['snapdom']> | null = null
+const loadSnapdom = () => {
+  if (!snapdomLoader) {
+    snapdomLoader = import('@zumer/snapdom').then(mod => mod.snapdom).catch(err => {
+      snapdomLoader = null
+      throw err
+    })
+  }
+  return snapdomLoader
+}
 
 export type SnapdomCaptureOptions = Pick<
   SnapdomOptions,
@@ -31,13 +42,16 @@ const withDefaults = (options: SnapdomCaptureOptions = {}): SnapdomOptions => ({
 })
 
 export const prefetchSnapdom = () => {
-  void import('@zumer/snapdom')
+  void loadSnapdom().catch(() => {})
 }
 
-export const captureToCanvas = (
+export const captureToCanvas = async (
   element: Element,
   options?: SnapdomCaptureOptions,
-): Promise<HTMLCanvasElement> => snapdom.toCanvas(element, withDefaults(options))
+): Promise<HTMLCanvasElement> => {
+  const snapdom = await loadSnapdom()
+  return snapdom.toCanvas(element, withDefaults(options))
+}
 
 export const captureToPngDataUrl = async (
   element: Element,

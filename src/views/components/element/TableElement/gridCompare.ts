@@ -74,17 +74,33 @@ export const isTableCellHtmlEcho = (elementId: string, data: TableCell[][]) => {
 }
 
 export const areTableCellViewEqual = (
-  prev: { cell: TableCell; isActive: boolean; isSelected: boolean; hide: boolean; cellMinHeight: number; rowIndex: number; colIndex: number },
-  next: { cell: TableCell; isActive: boolean; isSelected: boolean; hide: boolean; cellMinHeight: number; rowIndex: number; colIndex: number },
+  prev: { cell: TableCell; isActive: boolean; isSelected: boolean; hide: boolean; cellMinHeight?: number; rowIndex: number; colIndex: number },
+  next: { cell: TableCell; isActive: boolean; isSelected: boolean; hide: boolean; cellMinHeight?: number; rowIndex: number; colIndex: number },
 ) => {
   if (prev.rowIndex !== next.rowIndex || prev.colIndex !== next.colIndex) return false
   if (prev.isActive !== next.isActive || prev.isSelected !== next.isSelected || prev.hide !== next.hide) return false
-  if (prev.cellMinHeight !== next.cellMinHeight) return false
   const a = prev.cell
   const b = next.cell
   if (a.id !== b.id || a.rowspan !== b.rowspan || a.colspan !== b.colspan) return false
   if (a.style !== b.style && !styleEqual(a.style, b.style)) return false
   return a.text === b.text && a.textFormat === b.textFormat
+}
+
+export const computeUniformTableHeight = (
+  rowHeights: readonly number[],
+  cellMinHeight: number,
+  wrapperHeight = 0,
+): number => {
+  if (!rowHeights.length) return Math.max(0, wrapperHeight)
+  let tallest = cellMinHeight
+  let rowSum = 0
+  for (let i = 0; i < rowHeights.length; i++) {
+    const h = rowHeights[i]
+    rowSum += h
+    if (h > tallest) tallest = h
+  }
+  const chromeDelta = Math.max(0, wrapperHeight - rowSum)
+  return Math.max(wrapperHeight, Math.ceil(tallest * rowHeights.length + chromeDelta))
 }
 
 export const areTableElementInfosEqual = (a: PPTTableElement, b: PPTTableElement) => {

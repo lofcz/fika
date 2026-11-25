@@ -7,7 +7,7 @@ import { memo, useState, useEffect } from 'react'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { useMainStore, useSlidesStore } from '@/store'
 import { applyTableCellStyles } from '@/utils/tableCellStyle'
-import { tableStyleTarget } from '@/utils/tableStyleTarget'
+import { resolveTableStyleTarget } from '@/utils/tableStyleTarget'
 import { getTableEditor } from '@/utils/prosemirror/tableEditor'
 import { shallowEqual, useHandleElementId, useHandleElementSelect } from '../common/handleElement'
 import type { PPTTableElement, TableCellStyle, TableTheme } from '@/types/slides'
@@ -33,7 +33,7 @@ const TableStylePanel = memo(() => {
   const selectedCells = useMainStore(s => s.selectedTableCells)
   const tableStyle = useHandleElementSelect(el => {
     if (!el || el.type !== 'table') return null
-    const selected = tableStyleTarget(el.id, useMainStore.getState().selectedTableCells)[0]
+    const selected = (resolveTableStyleTarget(el.id, el.data, useMainStore.getState().selectedTableCells) ?? [])[0]
     const rowIndex = selected ? +selected.split('_')[0] : 0
     const colIndex = selected ? +selected.split('_')[1] : 0
     return {

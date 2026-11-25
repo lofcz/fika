@@ -2,29 +2,23 @@ import { FixedTextCreationContext } from '@/hooks/textCreationDefaults'
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { memo, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, Suspense, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { Group, Panel, Separator, useDefaultLayout, usePanelRef, type Layout, type LayoutChangedMeta, type PanelSize } from 'react-resizable-panels'
 
-import { useMainStore, useSlidesStore } from '@/store'
+import { useMainStore, useSlidesStore, useImportConfirmStore } from '@/store'
 import useGlobalHotkey from '@/hooks/useGlobalHotkey'
 import usePasteEvent from '@/hooks/usePasteEvent'
 import { useI18nContext } from '@/i18n/useI18nContext'
+import emitter, { EmitterEvents, type OpenInlineMathPayload } from '@/utils/emitter'
 import EditorHeader from './EditorHeader/index'
 import Canvas from './Canvas/index'
 import CanvasTool from './CanvasTool/index'
 import Thumbnails from './Thumbnails/index'
 import Toolbar from './Toolbar/index'
 import Remark from './Remark/index'
-import ChartDataEditorDialog from './ChartDataEditorDialog'
-import LatexEditorDialog from './LatexEditorDialog'
-import InlineMathEditorDialog from './InlineMathEditorDialog'
-import ImageReplaceDialog from './ImageReplaceDialog'
-import ImportReplaceDialog from './ImportReplaceDialog'
 import JobProgressOverlay from '@/components/JobProgressOverlay'
-import SelectPanel from './SelectPanel'
-import SearchPanel from './SearchPanel'
+import { createRetryableLazy, LazyChunkBoundary } from '@/components/LazyChunkBoundary'
 import NotesPanel from './NotesPanel'
-import MarkupPanel from './MarkupPanel'
 import Modal from '@/components/Modal'
 import { Icon } from '@/components/Icon'
 import { getEnabledExportTabs } from '@/configs/exportTabs'
@@ -40,11 +34,175 @@ const onThumbsResize = (size: PanelSize) => {
   setPreviewPaneWidth(size.inPixels)
 }
 
-const ExportDialog = lazy(() => import('./ExportDialog/index'))
-const MynaWorkspace = lazy(() => import('../Myna/MynaWorkspace'))
-const MermaidEditorDialog = lazy(() => import('./MermaidEditorDialog'))
-const CodeEditorDialog = lazy(() => import('./CodeEditorDialog'))
-const SlideCodePanel = lazy(() => import('./SlideCodePanel'))
+const exportDialogLazy = createRetryableLazy(() => import('./ExportDialog/index'))
+const mynaWorkspaceLazy = createRetryableLazy(() => import('../Myna/MynaWorkspace'))
+const chartDataEditorDialogLazy = createRetryableLazy(() => import('./ChartDataEditorDialog'))
+const latexEditorDialogLazy = createRetryableLazy(() => import('./LatexEditorDialog'))
+const mermaidEditorDialogLazy = createRetryableLazy(() => import('./MermaidEditorDialog'))
+const codeEditorDialogLazy = createRetryableLazy(() => import('./CodeEditorDialog'))
+const inlineMathEditorDialogLazy = createRetryableLazy(() => import('./InlineMathEditorDialog'))
+const imageReplaceDialogLazy = createRetryableLazy(() => import('./ImageReplaceDialog'))
+const importReplaceDialogLazy = createRetryableLazy(() => import('./ImportReplaceDialog'))
+const selectPanelLazy = createRetryableLazy(() => import('./SelectPanel'))
+const searchPanelLazy = createRetryableLazy(() => import('./SearchPanel'))
+const markupPanelLazy = createRetryableLazy(() => import('./MarkupPanel'))
+const slideCodePanelLazy = createRetryableLazy(() => import('./SlideCodePanel'))
+
+const ExportDialog = exportDialogLazy.Component
+const MynaWorkspace = mynaWorkspaceLazy.Component
+const ChartDataEditorDialog = chartDataEditorDialogLazy.Component
+const LatexEditorDialog = latexEditorDialogLazy.Component
+const MermaidEditorDialog = mermaidEditorDialogLazy.Component
+const CodeEditorDialog = codeEditorDialogLazy.Component
+const InlineMathEditorDialog = inlineMathEditorDialogLazy.Component
+const ImageReplaceDialog = imageReplaceDialogLazy.Component
+const ImportReplaceDialog = importReplaceDialogLazy.Component
+const SelectPanel = selectPanelLazy.Component
+const SearchPanel = searchPanelLazy.Component
+const MarkupPanel = markupPanelLazy.Component
+const SlideCodePanel = slideCodePanelLazy.Component
+
+const onImportReplaceChunkError = () => {
+  importReplaceDialogLazy.reset()
+  if (useImportConfirmStore.getState().visible) {
+    useImportConfirmStore.getState().settle(null)
+  }
+}
+
+/**
+ * Mount heavy modal dialogs only after their first open request so initial
+ * editor render avoids loading lazy dialog chunks, mounting hidden portals,
+ * and subscribing closed dialogs to selection/slide store updates.
+ */
+const EditorDialogs = memo(() => {
+  const importConfirmVisible = useImportConfirmStore(s => s.visible)
+  const [chartReq, setChartReq] = useState<{ seq: number } | null>(null)
+  const [latexReq, setLatexReq] = useState<{ seq: number } | null>(null)
+  const [mermaidReq, setMermaidReq] = useState<{ seq: number; elementId: string } | null>(null)
+  const [codeReq, setCodeReq] = useState<{ seq: number; elementId: string } | null>(null)
+  const [inlineMathReq, setInlineMathReq] = useState<{ seq: number; payload: OpenInlineMathPayload } | null>(null)
+  const [imageReplaceReq, setImageReplaceReq] = useState<{ seq: number; elementId: string } | null>(null)
+
+  useEffect(() => {
+    const unregister = useImportConfirmStore.getState().register()
+    const onChart = () => setChartReq(prev => ({ seq: (prev?.seq ?? 0) + 1 }))
+    const onLatex = () => setLatexReq(prev => ({ seq: (prev?.seq ?? 0) + 1 }))
+    const onMermaid = (elementId: string) => setMermaidReq(prev => ({ seq: (prev?.seq ?? 0) + 1, elementId }))
+    const onCode = (elementId: string) => setCodeReq(prev => ({ seq: (prev?.seq ?? 0) + 1, elementId }))
+    const onInlineMath = (payload: OpenInlineMathPayload) => setInlineMathReq(prev => ({ seq: (prev?.seq ?? 0) + 1, payload }))
+    const onImageReplace = (elementId: string) => setImageReplaceReq(prev => ({ seq: (prev?.seq ?? 0) + 1, elementId }))
+
+    emitter.on(EmitterEvents.OPEN_CHART_DATA_EDITOR, onChart)
+    emitter.on(EmitterEvents.OPEN_LATEX_EDITOR, onLatex)
+    emitter.on(EmitterEvents.OPEN_MERMAID_EDITOR, onMermaid)
+    emitter.on(EmitterEvents.OPEN_CODE_EDITOR, onCode)
+    emitter.on(EmitterEvents.OPEN_INLINE_MATH_EDITOR, onInlineMath)
+    emitter.on(EmitterEvents.OPEN_IMAGE_REPLACE_DIALOG, onImageReplace)
+
+    return () => {
+      unregister()
+      if (useImportConfirmStore.getState().visible) {
+        useImportConfirmStore.getState().settle(null)
+      }
+      useMainStore.getState().setDisableHotkeysState(false)
+      emitter.off(EmitterEvents.OPEN_CHART_DATA_EDITOR, onChart)
+      emitter.off(EmitterEvents.OPEN_LATEX_EDITOR, onLatex)
+      emitter.off(EmitterEvents.OPEN_MERMAID_EDITOR, onMermaid)
+      emitter.off(EmitterEvents.OPEN_CODE_EDITOR, onCode)
+      emitter.off(EmitterEvents.OPEN_INLINE_MATH_EDITOR, onInlineMath)
+      emitter.off(EmitterEvents.OPEN_IMAGE_REPLACE_DIALOG, onImageReplace)
+    }
+  }, [])
+
+  return (
+    <>
+      {chartReq !== null ? (
+        <LazyChunkBoundary
+          onRetry={chartDataEditorDialogLazy.reset}
+          onError={chartDataEditorDialogLazy.reset}
+          resetKey={chartReq.seq}
+          fallback={null}
+        >
+          <Suspense fallback={null}>
+            <ChartDataEditorDialog request={chartReq} />
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : null}
+      {latexReq !== null ? (
+        <LazyChunkBoundary
+          onRetry={latexEditorDialogLazy.reset}
+          onError={latexEditorDialogLazy.reset}
+          resetKey={latexReq.seq}
+          fallback={null}
+        >
+          <Suspense fallback={null}>
+            <LatexEditorDialog request={latexReq} />
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : null}
+      {mermaidReq !== null ? (
+        <LazyChunkBoundary
+          onRetry={mermaidEditorDialogLazy.reset}
+          onError={mermaidEditorDialogLazy.reset}
+          resetKey={mermaidReq.seq}
+          fallback={null}
+        >
+          <Suspense fallback={null}>
+            <MermaidEditorDialog request={mermaidReq} />
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : null}
+      {codeReq !== null ? (
+        <LazyChunkBoundary
+          onRetry={codeEditorDialogLazy.reset}
+          onError={codeEditorDialogLazy.reset}
+          resetKey={codeReq.seq}
+          fallback={null}
+        >
+          <Suspense fallback={null}>
+            <CodeEditorDialog request={codeReq} />
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : null}
+      {inlineMathReq !== null ? (
+        <LazyChunkBoundary
+          onRetry={inlineMathEditorDialogLazy.reset}
+          onError={inlineMathEditorDialogLazy.reset}
+          resetKey={inlineMathReq.seq}
+          fallback={null}
+        >
+          <Suspense fallback={null}>
+            <InlineMathEditorDialog request={inlineMathReq} />
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : null}
+      {imageReplaceReq !== null ? (
+        <LazyChunkBoundary
+          onRetry={imageReplaceDialogLazy.reset}
+          onError={imageReplaceDialogLazy.reset}
+          resetKey={imageReplaceReq.seq}
+          fallback={null}
+        >
+          <Suspense fallback={null}>
+            <ImageReplaceDialog request={imageReplaceReq} />
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : null}
+      {importConfirmVisible ? (
+        <LazyChunkBoundary
+          onRetry={importReplaceDialogLazy.reset}
+          onError={onImportReplaceChunkError}
+          resetKey={importConfirmVisible}
+          fallback={null}
+        >
+          <Suspense fallback={null}>
+            <ImportReplaceDialog skipRegister />
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : null}
+    </>
+  )
+})
 
 const DEFAULT_CODE_PANEL_HEIGHT = 180
 const NARROW_RIGHT_PANEL_PX = 1100
@@ -255,7 +413,17 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
         style={{ '--right-pane-width': `${rightPaneWidth}px` } as CSSProperties}
       >
         {!myna ? <EditorHeader className={cx('layout-header')} /> : null}
-        {myna ? <Suspense fallback={null}><MynaWorkspace /></Suspense> : <Group
+        {myna ? (
+          <LazyChunkBoundary
+            onRetry={mynaWorkspaceLazy.reset}
+            onError={mynaWorkspaceLazy.reset}
+            resetKey={myna}
+          >
+            <Suspense fallback={null}>
+              <MynaWorkspace />
+            </Suspense>
+          </LazyChunkBoundary>
+        ) : <Group
           id="fika-editor-main"
           orientation="horizontal"
           className={cx('layout-content')}
@@ -287,15 +455,22 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
             <CanvasTool className={cx('center-top')} />
             <Canvas className={cx('center-body')} />
             {showCodePanel ? (
-              <Suspense fallback={null}>
-                <SlideCodePanel
-                  className={cx('center-code')}
-                  style={{ height: `${codePanelHeight}px` }}
-                  height={codePanelHeight}
-                  onUpdateHeight={setCodePanelHeight}
-                  onClose={closeCodePanel}
-                />
-              </Suspense>
+              <LazyChunkBoundary
+                onRetry={slideCodePanelLazy.reset}
+                onError={slideCodePanelLazy.reset}
+                resetKey={showCodePanel}
+                fallback={null}
+              >
+                <Suspense fallback={null}>
+                  <SlideCodePanel
+                    className={cx('center-code')}
+                    style={{ height: `${codePanelHeight}px` }}
+                    height={codePanelHeight}
+                    onUpdateHeight={setCodePanelHeight}
+                    onClose={closeCodePanel}
+                  />
+                </Suspense>
+              </LazyChunkBoundary>
             ) : null}
             <Remark
               className={cx('center-bottom')}
@@ -335,19 +510,44 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
         </Group>}
       </div>
 
-      {showSelectPanel ? <SelectPanel /> : null}
-      {showSearchPanel ? <SearchPanel /> : null}
+      {showSelectPanel ? (
+        <LazyChunkBoundary
+          onRetry={selectPanelLazy.reset}
+          onError={selectPanelLazy.reset}
+          resetKey={showSelectPanel}
+          fallback={null}
+        >
+          <Suspense fallback={null}>
+            <SelectPanel />
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : null}
+      {showSearchPanel ? (
+        <LazyChunkBoundary
+          onRetry={searchPanelLazy.reset}
+          onError={searchPanelLazy.reset}
+          resetKey={showSearchPanel}
+          fallback={null}
+        >
+          <Suspense fallback={null}>
+            <SearchPanel />
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : null}
       {showNotesPanel ? <NotesPanel /> : null}
-      {showMarkupPanel ? <MarkupPanel /> : null}
-      <ChartDataEditorDialog />
-      <LatexEditorDialog />
-      <Suspense fallback={null}>
-        <MermaidEditorDialog />
-        <CodeEditorDialog />
-      </Suspense>
-      <InlineMathEditorDialog />
-      <ImageReplaceDialog />
-      <ImportReplaceDialog />
+      {showMarkupPanel ? (
+        <LazyChunkBoundary
+          onRetry={markupPanelLazy.reset}
+          onError={markupPanelLazy.reset}
+          resetKey={showMarkupPanel}
+          fallback={null}
+        >
+          <Suspense fallback={null}>
+            <MarkupPanel />
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : null}
+      <EditorDialogs />
       <JobProgressOverlay labels={importLabels} />
 
       <Modal
@@ -357,9 +557,15 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
         onClosed={closeExportDialog}
       >
         {dialogForExport ? (
-          <Suspense fallback={null}>
-            <ExportDialog />
-          </Suspense>
+          <LazyChunkBoundary
+            onRetry={exportDialogLazy.reset}
+            onError={exportDialogLazy.reset}
+            resetKey={dialogForExport}
+          >
+            <Suspense fallback={null}>
+              <ExportDialog />
+            </Suspense>
+          </LazyChunkBoundary>
         ) : null}
       </Modal>
     </>

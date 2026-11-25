@@ -6,11 +6,13 @@
  *
  *   node scripts/_repro-statika-export.mjs [--no-lato]
  */
+import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 
 const DEV_URL = 'http://127.0.0.1:5173/'
 const NO_LATO = process.argv.includes('--no-lato')
 const sleep = ms => new Promise(r => setTimeout(r, ms))
+const STATIKA_FIXTURE = readFileSync(new URL('./fixtures/_e2e-statika.json', import.meta.url), 'utf8')
 
 const browser = await chromium.launch({ headless: true })
 try {
@@ -25,8 +27,8 @@ try {
   await page.waitForFunction(() => !!window.__FIKA_SLIDES__, { timeout: 30000 })
   await sleep(500)
 
-  const loaded = await page.evaluate(async noLato => {
-    let text = await (await fetch('/_e2e-statika.json')).text()
+  const loaded = await page.evaluate(async ({ noLato, fixtureText }) => {
+    let text = fixtureText
     if (noLato) text = text.replaceAll('Lato', 'Arial')
     const deck = JSON.parse(text)
     const store = window.__FIKA_SLIDES__.getState()
@@ -34,7 +36,7 @@ try {
     if (deck.title) store.setTitle(deck.title)
     if (deck.width) store.setViewportSize(deck.width)
     return { slides: store.slides.length, noLato }
-  }, NO_LATO)
+  }, { noLato: NO_LATO, fixtureText: STATIKA_FIXTURE })
   console.log('deck loaded', JSON.stringify(loaded))
   await sleep(800)
 

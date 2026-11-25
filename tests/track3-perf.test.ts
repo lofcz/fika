@@ -106,8 +106,12 @@ import {
   internMediaSrc,
   resetMediaInternForTests,
 } from '@/utils/mediaIntern'
-import { buildPersistedDocument } from '@/embed/documentChangeWatch'
+import { buildPersistedDocument, createDocumentChangeWatcher } from '@/embed/documentChangeWatch'
+import { applyDocumentToStores } from '@/embed/initialDocument'
 import { createAgenticApi } from '@/embed/agentic/createAgenticApi'
+import { payloadNeedsHfmath } from '@/embed/agentic/helpers'
+import { registerTemplateLoaders } from '@/embed/agentic/templates'
+import { getCachedHfmath } from '@/utils/hfmathLazy'
 import { registerCommitFlusher } from '@/utils/commitQueue'
 import { bindTooltips } from '@/utils/tooltipBindCore'
 
@@ -444,6 +448,334 @@ describe('Track 3 store, persistence, history, agentic, and tooltip performance 
       ;(globalThis as Record<string, unknown>).Element = prevElement
       ;(globalThis as Record<string, unknown>).Node = prevNode
       ;(globalThis as Record<string, unknown>).Document = prevDocument
+    }
+  })
+
+  it('B2: resetSnapshotHistory isolates remounts and drops stale in-flight undo, while immediate post-mount edits stay undoable', async () => {
+    // Simulate mount #1 applying deck1 + deferring baseline snapshot before returning controller.
+    applyDocumentToStores({ title: 'Deck 1', slides: [makeSlide('d1_s1', 'Deck 1 Original')] })
+    const seedPromise = useSnapshotStore.getState().initSnapshotDatabase({ defer: true })
+
+    // Immediate post-mount host command (0ms after mountFika resolves) must be undoable.
+    const runtime1 = createAgenticApi()
+    const updateRes = await runtime1.api.slides.update('d1_s1', {
+      elements: [makeTextEl('el_d1_s1', 'Deck 1 Mutated Immediately')],
+    })
+    await seedPromise
+    expect(updateRes.ok).toBe(true)
+    expect(useSnapshotStore.getState().snapshotLength).toBe(2)
+
+    await useSnapshotStore.getState().unDo()
+    expect((useSlidesStore.getState().slides[0].elements[0] as PPTTextElement).content).toBe('<p>Deck 1 Original</p>')
+    runtime1.stop()
+
+    // Destroy mount #1: resetSnapshotHistory clears state + Dexie rows and invalidates stale work.
+    await useSnapshotStore.getState().resetSnapshotHistory()
+    expect(useSnapshotStore.getState().snapshotCursor).toBe(-1)
+    expect(useSnapshotStore.getState().snapshotLength).toBe(0)
+    expect(snapshotRows.size).toBe(0)
+
+    // Mount #2 with a completely different deck: pressing Undo must NOT restore Deck 1.
+    applyDocumentToStores({ title: 'Deck 2', slides: [makeSlide('d2_s1', 'Deck 2 Fresh')] })
+    await useSnapshotStore.getState().initSnapshotDatabase()
+    await useSnapshotStore.getState().unDo()
+    expect(useSlidesStore.getState().slides[0].id).toBe('d2_s1')
+    expect((useSlidesStore.getState().slides[0].elements[0] as PPTTextElement).content).toBe('<p>Deck 2 Fresh</p>')
+  })
+
+  it('B3: applyDocumentToStores resets slideIndex to 0 and replaces theme instead of merging, and resetSession clears transient main state', () => {
+    useSlidesStore.getState().applyDocument({
+      title: 'Dark Deck',
+      slides: [makeSlide('dark_1', 'A'), makeSlide('dark_2', 'B')],
+      theme: { backgroundColor: '#111111', fontColor: '#ffffff', fontName: 'Fira Code' },
+      slideIndex: 1,
+    })
+    useMainStore.getState().setActiveElementIdList(['el_dark_2'])
+    useMainStore.getState().setEditingElementId('el_dark_2')
+    useMainStore.getState().setReadOnly(true)
+    useMainStore.getState().setSearchPanelState(true)
+
+    useMainStore.getState().resetSession()
+    expect(useMainStore.getState().activeElementIdList).toEqual([])
+    expect(useMainStore.getState().editingElementId).toBe('')
+    expect(useMainStore.getState().readOnly).toBe(false)
+    expect(useMainStore.getState().showSearchPanel).toBe(false)
+
+    // Mounting a fresh deck without theme must replace (not merge) the previous dark theme and reset slideIndex to 0.
+    applyDocumentToStores({ title: 'Light Deck', slides: [makeSlide('light_1', 'Fresh')] })
+    const next = useSlidesStore.getState()
+    expect(next.slideIndex).toBe(0)
+    expect(next.theme.backgroundColor).toBe('#fff')
+    expect(next.theme.fontColor).toBe('#333')
+    expect(next.theme.fontName).toBe('Calibri')
+  })
+
+  it('B7: documentChangeWatch.mute() flushes pending unsaved edits before suppressing reveal frames', async () => {
+    const emitted: string[] = []
+    const watcher = createDocumentChangeWatcher(
+      useSlidesStore,
+      doc => emitted.push((doc.slides[0].elements[0] as PPTTextElement).content),
+      400,
+    )
+    try {
+      // User edit queued for 400ms debounce.
+      useSlidesStore.getState().updateElement({
+        id: 'el_s1',
+        props: { content: '<p>Unsaved User Edit</p>' },
+      })
+      // Reveal starts immediately and calls mute() before the 400ms debounce fires.
+      watcher.mute()
+      expect(emitted).toEqual(['<p>Unsaved User Edit</p>'])
+
+      // Transient reveal frames while muted must NOT emit.
+      useSlidesStore.getState().updateElement({
+        id: 'el_s1',
+        props: { content: '<p>Transient Reveal Frame</p>' },
+      })
+      await Promise.resolve()
+      watcher.destroy()
+      expect(emitted).toEqual(['<p>Unsaved User Edit</p>'])
+    } finally {
+      watcher.destroy()
+    }
+  })
+
+  it('cloneJsonSafePayload normalizes toJSON/NaN/Infinity and rejects circular refs and BigInt without JSON.stringify cloning', async () => {
+    const runtime = createAgenticApi()
+    try {
+      const circular: Record<string, unknown> = { title: 'Bad', slides: [] }
+      circular.self = circular
+      const circularRes = await runtime.api.execute({ type: 'deck.set', payload: circular })
+      expect(circularRes.ok).toBe(false)
+      expect(circularRes.errors?.[0]?.code).toBe('InvalidDocument')
+
+      const bigIntRes = await runtime.api.execute({
+        type: 'deck.set',
+        payload: { title: 'Bad', slides: [], extra: 1n },
+      })
+      expect(bigIntRes.ok).toBe(false)
+      expect(bigIntRes.errors?.[0]?.code).toBe('InvalidDocument')
+
+      // toJSON() on nested value is honored just like JSON.parse(JSON.stringify(...)).
+      const toJsonRes = await runtime.api.execute({
+        type: 'deck.set',
+        payload: {
+          title: { toJSON: () => 'From toJSON' },
+          slides: [makeSlide('tojson_s1', 'Hello')],
+        },
+      })
+      expect(toJsonRes.ok).toBe(true)
+      expect(useSlidesStore.getState().title).toBe('From toJSON')
+
+      // Non-finite numbers (NaN / Infinity) normalize to null and are rejected by geometry validators.
+      const nanSlide = makeSlide('nan_s1', 'Hello')
+      nanSlide.elements[0].left = Number.NaN
+      const nanRes = await runtime.api.execute({
+        type: 'deck.set',
+        payload: {
+          title: 'Bad Geometry',
+          slides: [nanSlide],
+        },
+      })
+      expect(nanRes.ok).toBe(false)
+    } finally {
+      runtime.stop()
+    }
+  })
+
+  it('Blocker 2: updateSlide background change succeeds on immer draft without DataCloneError and retints default text ink', () => {
+    expect(() => {
+      useSlidesStore.getState().updateSlide({
+        background: { type: 'solid', color: '#111111' },
+      })
+    }).not.toThrow()
+
+    const updatedSlide = useSlidesStore.getState().slides[0]
+    expect(updatedSlide.background).toEqual({ type: 'solid', color: '#111111' })
+    const textEl = updatedSlide.elements[0] as PPTTextElement
+    expect(textEl.defaultColor).not.toBe('#222222')
+  })
+
+  it('Remaining Blocker #1: deck.set applies synchronously for non-LaTeX decks so deck.get, slide lookup, and onChange see it in the same tick', () => {
+    const runtime = createAgenticApi()
+    const emittedTitles: string[] = []
+    const watcher = createDocumentChangeWatcher(
+      useSlidesStore,
+      doc => emittedTitles.push(doc.title),
+      400,
+    )
+    try {
+      // Mirrors controller.setDocument(): fire deck.set without awaiting, then immediately read & emit.
+      void runtime.api.deck.set({
+        title: 'Sync Deck',
+        slides: [makeSlide('sync_1', 'First'), makeSlide('sync_2', 'Second')],
+      }, { source: 'host' })
+      watcher.emit()
+
+      const immediate = runtime.api.deck.get()
+      expect(immediate.title).toBe('Sync Deck')
+      expect(immediate.slides.map(s => s.id)).toEqual(['sync_1', 'sync_2'])
+      expect(useSlidesStore.getState().slides.findIndex(s => s.id === 'sync_2')).toBe(1)
+
+      // Synchronous flush in the same tick (before any microtask) must emit the newly set deck.
+      watcher.flush()
+      expect(emittedTitles).toEqual(['Sync Deck'])
+    } finally {
+      watcher.destroy()
+      runtime.stop()
+    }
+  })
+
+  it('Remaining Blocker #5: slides.insertFromTemplate preloads hfmath on a cold module when template slide has unpathed LaTeX', async () => {
+    expect(getCachedHfmath()).toBeNull()
+    registerTemplateLoaders({
+      math_tpl: async () => ({
+        title: 'Math Template',
+        width: 1000,
+        height: 562.5,
+        theme: { themeColors: ['#111111'], fontColor: '#111111', fontName: 'Inter', backgroundColor: '#ffffff' },
+        slides: [{
+          id: 'tpl_s1',
+          type: 'content',
+          elements: [{
+            type: 'latex',
+            id: 'tpl_ltx',
+            left: 40,
+            top: 40,
+            width: 200,
+            height: 80,
+            rotate: 0,
+            latex: '\\frac{a}{b}',
+            path: '',
+            color: '#000000',
+            strokeWidth: 2,
+            viewBox: [200, 80],
+            fixedRatio: true,
+          }],
+        }],
+      }),
+    })
+    const prevWindow = (globalThis as Record<string, unknown>).window
+    if (prevWindow === undefined) {
+      ;(globalThis as Record<string, unknown>).window = {}
+    }
+    const runtime = createAgenticApi()
+    try {
+      const res = await runtime.api.slides.insertFromTemplate({
+        templateId: 'math_tpl',
+        slug: 'content_1',
+      })
+      expect(res.ok).toBe(true)
+      expect(getCachedHfmath()).not.toBeNull()
+      const insertedId = (res.data as { slideId?: string } | undefined)?.slideId
+      const inserted = useSlidesStore.getState().slides.find(s => s.id === insertedId)
+      const latexEl = inserted?.elements.find(el => el.type === 'latex')
+      expect(latexEl?.type).toBe('latex')
+      expect(latexEl && latexEl.type === 'latex' ? latexEl.path.length : 0).toBeGreaterThan(0)
+    } finally {
+      runtime.stop()
+      registerTemplateLoaders(undefined)
+      if (prevWindow === undefined) {
+        delete (globalThis as Record<string, unknown>).window
+      }
+    }
+  })
+
+  it('Blocker 3: payloadNeedsHfmath detects nested latex without path and slides.create preloads hfmath to derive path', async () => {
+    expect(payloadNeedsHfmath({ slide: { elements: [{ type: 'latex', latex: 'x^2', path: '' }] } }, 'slides.create')).toBe(true)
+    expect(payloadNeedsHfmath({ slide: { elements: [{ type: 'latex', latex: 'x^2', path: 'M0 0' }] } }, 'slides.create')).toBe(false)
+    expect(payloadNeedsHfmath({ latex: 'x^2' }, 'latex.create')).toBe(true)
+    expect(payloadNeedsHfmath({ latex: 'x^2', path: 'M0 0' }, 'latex.create')).toBe(false)
+    expect(payloadNeedsHfmath({ slide: { elements: [{ type: 'text', content: '<p>Hi</p>' }] } }, 'slides.create')).toBe(false)
+
+    const prevWindow = (globalThis as Record<string, unknown>).window
+    if (prevWindow === undefined) {
+      ;(globalThis as Record<string, unknown>).window = {}
+    }
+    const runtime = createAgenticApi()
+    try {
+      const res = await runtime.api.slides.create({
+        slide: {
+          id: 'latex_slide',
+          elements: [{
+            type: 'latex',
+            id: 'ltx_1',
+            left: 40,
+            top: 40,
+            width: 200,
+            height: 80,
+            rotate: 0,
+            latex: 'x^2 + y^2',
+            path: '',
+            color: '#000000',
+            strokeWidth: 2,
+            viewBox: [200, 80],
+            fixedRatio: true,
+          }],
+        },
+      })
+      expect(res.ok).toBe(true)
+      const created = useSlidesStore.getState().slides.find(s => s.id === 'latex_slide')
+      const latexEl = created?.elements.find(el => el.id === 'ltx_1')
+      expect(latexEl?.type).toBe('latex')
+      expect(latexEl && latexEl.type === 'latex' ? latexEl.path.length : 0).toBeGreaterThan(0)
+    } finally {
+      runtime.stop()
+      if (prevWindow === undefined) {
+        delete (globalThis as Record<string, unknown>).window
+      }
+    }
+  })
+
+  it('Blocker 11: updateSlideElementGeometry updates geometry without clearing skeleton/aiRequestId and no-ops when unchanged', () => {
+    useSlidesStore.getState().applyDocument({
+      title: 'Skeleton Deck',
+      slides: [{
+        ...makeSlide('skel_1', 'Draft'),
+        skeleton: true,
+        aiRequestId: 'req_123',
+      }],
+      slideIndex: 0,
+    })
+
+    useSlidesStore.getState().updateSlideElementGeometry(
+      'skel_1',
+      new Map([['el_skel_1', { height: 240 }]]),
+    )
+    const afterUpdate = useSlidesStore.getState().slides[0]
+    expect(afterUpdate.skeleton).toBe(true)
+    expect(afterUpdate.aiRequestId).toBe('req_123')
+    expect(afterUpdate.elements[0].height).toBe(240)
+    expect(afterUpdate.elements[0].width).toBe(300)
+
+    // Identical geometry must not publish a store update.
+    let notifications = 0
+    const unsub = useSlidesStore.subscribe(() => { notifications++ })
+    try {
+      useSlidesStore.getState().updateSlideElementGeometry(
+        'skel_1',
+        new Map([['el_skel_1', { height: 240 }]]),
+      )
+    } finally {
+      unsub()
+    }
+    expect(notifications).toBe(0)
+  })
+
+  it('H2: updateSlideIndex drains commit queue when editingElementId is active even with zero live ProseMirror editors', () => {
+    let drained = 0
+    const unregister = registerCommitFlusher(() => {
+      drained++
+      useMainStore.getState().setEditingElementId('')
+    })
+    try {
+      useMainStore.getState().setEditingElementId('table_cell_1')
+      useSlidesStore.getState().updateSlideIndex(1)
+      expect(drained).toBe(1)
+      expect(useMainStore.getState().editingElementId).toBe('')
+    } finally {
+      unregister()
+      useMainStore.getState().setEditingElementId('')
     }
   })
 })

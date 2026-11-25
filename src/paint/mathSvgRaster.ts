@@ -30,7 +30,7 @@ const KATEX_CLASS_FAMILY_MAP: ReadonlyArray<readonly [needle: string, family: st
 ]
 
 /** Extra Fika rules from `mixin.scss` required so fraction & radical bars match live DOM. */
-const FIKA_MATH_BASE_CSS = [
+export const FIKA_MATH_BASE_CSS = [
   '.fika-math{display:inline-block;vertical-align:baseline;line-height:normal;white-space:nowrap;--_text-font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}',
   '.fika-math .ML__latex{line-height:1.2;white-space:nowrap}',
   '.fika-math .ML__base,.fika-math .ML__mfrac,.fika-math .ML__vlist,.fika-math .ML__vlist-t{box-sizing:content-box}',
@@ -55,10 +55,54 @@ type FontFaceSource = {
 }
 
 let cachedStaticMathCss = ''
+let cachedEncodedStaticMathCss = ''
+let bundledMathStaticCss = ''
 let stylesheetsScanned = false
 const fontFaceSourcesByFamily = new Map<string, FontFaceSource[]>()
-const resolvedFontCssByFamily = new Map<string, Promise<string | null>>()
+const resolvedEncodedFontCssByFamily = new Map<string, Promise<string | null>>()
 const dataUrlByFontUrl = new Map<string, Promise<string | null>>()
+
+/** Strip `@font-face{...}` and `:root{...}` blocks so static layout CSS never overrides embedded base64 fonts. */
+export const stripMathStaticGlobalAtRules = (css: string): string => (
+  css.replace(/@font-face\s*\{[^}]*\}/gi, '').replace(/:root\s*\{[^}]*\}/gi, '').trim()
+)
+
+/** Supply bundled `mathlive/static.css` text as a fallback when no stylesheet carries `.ML__*`. */
+export const setBundledMathStaticCss = (css: string) => {
+  const sanitized = stripMathStaticGlobalAtRules(css)
+  if (sanitized && sanitized !== bundledMathStaticCss) {
+    bundledMathStaticCss = sanitized
+    stylesheetsScanned = false
+    cachedStaticMathCss = ''
+    cachedEncodedStaticMathCss = ''
+  }
+}
+
+export const getBundledMathStaticCss = () => bundledMathStaticCss
+
+/** Fast check (no CSSRule.cssText serialization) for whether `.ML__*` rules exist in the document. */
+export const hasMathliveStaticRules = (): boolean => {
+  if (typeof document === 'undefined') return false
+  if (document.querySelector('style[data-fika-math-static]')) return true
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules: CSSRuleList | undefined
+    try {
+      rules = sheet.cssRules
+    }
+    catch {
+      continue
+    }
+    if (!rules) continue
+    for (let i = 0; i < rules.length; i++) {
+      const rule = rules[i]
+      if (typeof CSSStyleRule !== 'undefined' && rule instanceof CSSStyleRule) {
+        const sel = rule.selectorText
+        if (sel && sel.includes('ML__frac-line')) return true
+      }
+    }
+  }
+  return false
+}
 
 const normalizeKatexFamily = (raw: string): string => (
   raw.replace(/^['"]+|['"]+$/g, '').trim().toLowerCase()
@@ -129,16 +173,17 @@ const ensureMathCssIndexed = (): boolean => {
     }
     if (!rules) continue
     const sheetBase = sheet.href || docBase
-    for (const rule of Array.from(rules)) {
-      const text = rule.cssText
-      if (!text) continue
+    for (let i = 0; i < rules.length; i++) {
+      const rule = rules[i]
+      // Filter by selectorText / font-family BEFORE reading rule.cssText so we
+      // never serialize thousands of unrelated app CSSOM rules on initial load.
       if (typeof CSSFontFaceRule !== 'undefined' && rule instanceof CSSFontFaceRule) {
         const familyRaw = rule.style.getPropertyValue('font-family')
-        if (!/KaTeX/i.test(familyRaw)) continue
+        if (!familyRaw || !/KaTeX/i.test(familyRaw)) continue
         const family = normalizeKatexFamily(familyRaw)
         const weight = (rule.style.getPropertyValue('font-weight') || '400').trim()
         const style = (rule.style.getPropertyValue('font-style') || 'normal').trim()
-        const srcProp = rule.style.getPropertyValue('src') || text
+        const srcProp = rule.style.getPropertyValue('src') || rule.cssText
         const url = extractFontUrl(srcProp, sheetBase)
         if (!url) continue
         const dedupKey = `${family}|${weight}|${style}`
@@ -161,24 +206,30 @@ const ensureMathCssIndexed = (): boolean => {
       if (typeof CSSStyleRule !== 'undefined' && rule instanceof CSSStyleRule) {
         const sel = rule.selectorText || ''
         if (sel.includes('ML__') || sel.includes('fika-math')) {
+          const text = rule.cssText
+          if (text) staticRules.push(text)
+        }
+      }
+      else if (typeof CSSGroupingRule !== 'undefined' && rule instanceof CSSGroupingRule) {
+        const text = rule.cssText
+        if (text && (text.includes('ML__') || text.includes('fika-math'))) {
           staticRules.push(text)
         }
       }
-      else if (text.includes('ML__') || text.includes('fika-math')) {
-        staticRules.push(text)
-      }
     }
   }
-  if (staticRules.length > 0 && fontFaceSourcesByFamily.size > 0) {
-    cachedStaticMathCss = `${staticRules.join('')}${FIKA_MATH_BASE_CSS}`
+  const baseStatic = staticRules.length > 0 ? staticRules.join('') : bundledMathStaticCss
+  if (baseStatic && fontFaceSourcesByFamily.size > 0) {
+    cachedStaticMathCss = `${baseStatic}${FIKA_MATH_BASE_CSS}`
+    cachedEncodedStaticMathCss = encodeURIComponent(cachedStaticMathCss)
     stylesheetsScanned = true
     return true
   }
   return false
 }
 
-const getEmbeddedFontCssForFamily = (family: string): Promise<string | null> => {
-  const existing = resolvedFontCssByFamily.get(family)
+const getEncodedFontCssForFamily = (family: string): Promise<string | null> => {
+  const existing = resolvedEncodedFontCssByFamily.get(family)
   if (existing) return existing
   const sources = fontFaceSourcesByFamily.get(family)
   if (!sources?.length) return Promise.resolve(null)
@@ -190,12 +241,15 @@ const getEmbeddedFontCssForFamily = (family: string): Promise<string | null> => 
     }),
   ).then(parts => {
     if (parts.some(part => !part)) {
-      resolvedFontCssByFamily.delete(family)
+      resolvedEncodedFontCssByFamily.delete(family)
       return null
     }
-    return parts.join('')
+    // Pre-encode once per KaTeX family (`encodeURIComponent` is homomorphic
+    // under concatenation), eliminating ~160ms of per-formula base64 escaping
+    // while keeping `data:image/svg+xml` untainted across Chromium & Firefox.
+    return encodeURIComponent(parts.join(''))
   })
-  resolvedFontCssByFamily.set(family, promise)
+  resolvedEncodedFontCssByFamily.set(family, promise)
   return promise
 }
 
@@ -204,6 +258,11 @@ const getXmlSerializer = () => {
   if (!sharedXmlSerializer) sharedXmlSerializer = new XMLSerializer()
   return sharedXmlSerializer
 }
+
+const SVG_STYLE_OPEN_ENC = encodeURIComponent('<style><![CDATA[')
+const SVG_STYLE_CLOSE_OPEN_FO_ENC = encodeURIComponent(']]></style><foreignObject x="0" y="0" ')
+const SVG_FO_DIV_OPEN_ENC = encodeURIComponent(`><div xmlns="http://www.w3.org/1999/xhtml" class="${EMBED_ROOT_CLASS}" style="margin:0;padding:0;background:transparent">`)
+const SVG_TAIL_ENC = encodeURIComponent('</div></foreignObject></svg>')
 
 /**
  * Render an already-measured offscreen MathLive `host` directly to a HiDPI
@@ -218,21 +277,20 @@ export async function captureMathHostDirectSvg(
 ): Promise<HTMLCanvasElement | null> {
   if (!ensureMathCssIndexed()) return null
   const families = extractReferencedKatexFamilies(host.innerHTML)
-  const fontCssParts = await Promise.all(families.map(getEmbeddedFontCssForFamily))
+  const encodedFontCssParts = await Promise.all(families.map(getEncodedFontCssForFamily))
   // Every referenced KaTeX font family must resolve; otherwise fall back to SnapDOM.
-  if (fontCssParts.some(part => !part)) return null
-  const styleBlock = `${fontCssParts.join('')}${cachedStaticMathCss}`
+  if (encodedFontCssParts.some(part => !part)) return null
   const xhtml = getXmlSerializer().serializeToString(host)
   const pixelW = Math.max(1, Math.ceil(width * dpr))
   const pixelH = Math.max(1, Math.ceil(height * dpr))
-  // Wrap in `.fika-embed-root` inside foreignObject so scoped stylesheet rules match.
-  const svg = [
+  // Only encode the tiny per-formula markup + header; CSS and embedded woff2
+  // font faces are pre-encoded once per session/family (keeps data: URI clean
+  // so Chromium never taints the canvas like blob: SVG <foreignObject> URLs).
+  const encodedHead = encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${pixelW}" height="${pixelH}" viewBox="0 0 ${width} ${height}">`,
-    `<style><![CDATA[${styleBlock}]]></style>`,
-    `<foreignObject x="0" y="0" width="${width}" height="${height}">`,
-    `<div xmlns="http://www.w3.org/1999/xhtml" class="${EMBED_ROOT_CLASS}" style="margin:0;padding:0;background:transparent">${xhtml}</div>`,
-    '</foreignObject></svg>',
-  ].join('')
+  )
+  const encodedFoDims = encodeURIComponent(`width="${width}" height="${height}"`)
+  const dataUri = `data:image/svg+xml;charset=utf-8,${encodedHead}${SVG_STYLE_OPEN_ENC}${encodedFontCssParts.join('')}${cachedEncodedStaticMathCss}${SVG_STYLE_CLOSE_OPEN_FO_ENC}${encodedFoDims}${SVG_FO_DIV_OPEN_ENC}${encodeURIComponent(xhtml)}${SVG_TAIL_ENC}`
 
   try {
     const image = new Image()
@@ -240,7 +298,7 @@ export async function captureMathHostDirectSvg(
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve()
       image.onerror = () => reject(new Error('Direct math SVG decode failed'))
-      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+      image.src = dataUri
     })
     const out = document.createElement('canvas')
     out.width = pixelW
@@ -260,7 +318,8 @@ export async function captureMathHostDirectSvg(
 export const resetMathSvgRasterCache = () => {
   stylesheetsScanned = false
   cachedStaticMathCss = ''
+  cachedEncodedStaticMathCss = ''
   fontFaceSourcesByFamily.clear()
-  resolvedFontCssByFamily.clear()
+  resolvedEncodedFontCssByFamily.clear()
   dataUrlByFontUrl.clear()
 }

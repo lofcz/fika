@@ -27,6 +27,8 @@ let cursorSlides: Slide[] | null = null
 let cursorMeta: Omit<CapturedSlideState, 'slides'> | null = null
 let snapshotQueue: Promise<void> = Promise.resolve()
 let flushPendingIdle: (() => void) | null = null
+let cancelPendingIdle: (() => void) | null = null
+let snapshotGeneration = 0
 
 function captureSlidesState(slidesStore: SlidesState): CapturedSlideState {
   return {
@@ -50,15 +52,13 @@ function sameSlideRefs(a: Slide[], b: Slide[]): boolean {
   return true
 }
 
-function waitForIdle(): { promise: Promise<void>; flush: () => void } {
+function waitForIdle(): { promise: Promise<boolean>; flush: () => void; cancel: () => void } {
   let done = false
-  let resolve!: () => void
+  let resolve!: (proceed: boolean) => void
   let idleId: number | null = null
   let timerId: ReturnType<typeof setTimeout> | null = null
 
-  const finish = () => {
-    if (done) return
-    done = true
+  const clearTimers = () => {
     if (idleId !== null && typeof cancelIdleCallback === 'function') {
       cancelIdleCallback(idleId)
       idleId = null
@@ -68,10 +68,24 @@ function waitForIdle(): { promise: Promise<void>; flush: () => void } {
       timerId = null
     }
     if (flushPendingIdle === finish) flushPendingIdle = null
-    resolve()
+    if (cancelPendingIdle === abort) cancelPendingIdle = null
   }
 
-  const promise = new Promise<void>(res => {
+  const finish = () => {
+    if (done) return
+    done = true
+    clearTimers()
+    resolve(true)
+  }
+
+  const abort = () => {
+    if (done) return
+    done = true
+    clearTimers()
+    resolve(false)
+  }
+
+  const promise = new Promise<boolean>(res => {
     resolve = res
     if (typeof requestIdleCallback === 'function') {
       idleId = requestIdleCallback(finish, { timeout: 500 })
@@ -82,7 +96,8 @@ function waitForIdle(): { promise: Promise<void>; flush: () => void } {
   })
 
   flushPendingIdle = finish
-  return { promise, flush: finish }
+  cancelPendingIdle = abort
+  return { promise, flush: finish, cancel: abort }
 }
 
 // IndexedDB calls yield between reads and writes. Keep the cursor and database
@@ -161,6 +176,7 @@ export interface SnapshotActions {
   setSnapshotCursor: (cursor: number) => void
   setSnapshotLength: (length: number) => void
   initSnapshotDatabase: (options?: { defer?: boolean }) => Promise<void>
+  resetSnapshotHistory: () => Promise<void>
   addSnapshot: () => Promise<void>
   unDo: () => Promise<void>
   reDo: () => Promise<void>
@@ -182,11 +198,31 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
     set(state => state.snapshotLength === length ? state : { snapshotLength: length })
   },
 
+  resetSnapshotHistory() {
+    snapshotGeneration++
+    cancelPendingIdle?.()
+    cursorSlides = null
+    cursorMeta = null
+    set(state => (
+      state.snapshotCursor === -1 && state.snapshotLength === 0
+        ? state
+        : { snapshotCursor: -1, snapshotLength: 0 }
+    ))
+    const gen = snapshotGeneration
+    return queueSnapshot(async () => {
+      if (gen !== snapshotGeneration) return
+      await db.snapshots.clear()
+    }, { flushIdle: false })
+  },
+
   initSnapshotDatabase(options) {
     // Capture initial references synchronously before any deferred idle step so
     // an edit arriving before idle fires still gets the true initial baseline.
+    cancelPendingIdle?.()
     const initial = captureSlidesState(useSlidesStore.getState())
+    const gen = ++snapshotGeneration
     const writeInitial = async () => {
+      if (gen !== snapshotGeneration) return
       cursorSlides = initial.slides
       cursorMeta = {
         index: initial.index,
@@ -198,6 +234,7 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
         templates: initial.templates,
       }
       await db.snapshots.clear()
+      if (gen !== snapshotGeneration) return
       await db.snapshots.add({
         index: initial.index,
         title: initial.title,
@@ -208,6 +245,7 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
         templates: structuredClone(initial.templates),
         slides: structuredClone(initial.slides),
       })
+      if (gen !== snapshotGeneration) return
       set(state => (
         state.snapshotCursor === 0 && state.snapshotLength === 1
           ? state
@@ -216,10 +254,10 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
     }
 
     if (options?.defer) {
-      if (flushPendingIdle) flushPendingIdle()
       const idle = waitForIdle()
       return queueSnapshot(async () => {
-        await idle.promise
+        const proceed = await idle.promise
+        if (!proceed || gen !== snapshotGeneration) return
         await writeInitial()
       }, { flushIdle: false })
     }
@@ -229,11 +267,14 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
 
   addSnapshot() {
     const captured = captureSlidesState(useSlidesStore.getState())
+    const gen = snapshotGeneration
     return queueSnapshot(async () => {
+      if (gen !== snapshotGeneration) return
       const nextSlides = captured.slides
       const slideIndex = captured.index
       const cursor = get().snapshotCursor
       const allKeys = await db.snapshots.orderBy('id').primaryKeys() as number[]
+      if (gen !== snapshotGeneration) return
 
       const redoKeys = cursor >= 0 && cursor < allKeys.length - 1
         ? allKeys.slice(cursor + 1)
@@ -316,6 +357,7 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
         }
       })
 
+      if (gen !== snapshotGeneration) return
       cursorSlides = nextSlides
       cursorMeta = {
         index: slideIndex,
@@ -337,12 +379,15 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
   },
 
   unDo() {
+    const gen = snapshotGeneration
     return queueSnapshot(async () => {
+      if (gen !== snapshotGeneration) return
       const prevCursor = get().snapshotCursor
       if (prevCursor <= 0) return
 
       const snapshotCursor = prevCursor - 1
       const keys = await db.snapshots.orderBy('id').primaryKeys() as number[]
+      if (gen !== snapshotGeneration) return
       const leavingKey = keys[prevCursor]
       const arrivingKey = keys[snapshotCursor]
       if (arrivingKey === undefined) return
@@ -351,11 +396,12 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
         leavingKey !== undefined ? db.snapshots.get(leavingKey) : Promise.resolve(undefined),
         db.snapshots.get(arrivingKey),
       ])
-      if (!arriving) return
+      if (gen !== snapshotGeneration || !arriving) return
 
       const slides = cursorSlides && leaving?.inversePatches
         ? applyPatches(cursorSlides, leaving.inversePatches)
         : await materializeSlidesByKeys(keys, snapshotCursor)
+      if (gen !== snapshotGeneration) return
 
       restoreSlides(slides, arriving.index, arriving)
       get().setSnapshotCursor(snapshotCursor)
@@ -363,21 +409,25 @@ export const useSnapshotStore = create<SnapshotStore>()((set, get) => ({
   },
 
   reDo() {
+    const gen = snapshotGeneration
     return queueSnapshot(async () => {
+      if (gen !== snapshotGeneration) return
       const prevCursor = get().snapshotCursor
       if (prevCursor >= get().snapshotLength - 1) return
 
       const snapshotCursor = prevCursor + 1
       const keys = await db.snapshots.orderBy('id').primaryKeys() as number[]
+      if (gen !== snapshotGeneration) return
       const arrivingKey = keys[snapshotCursor]
       if (arrivingKey === undefined) return
 
       const arriving = await db.snapshots.get(arrivingKey)
-      if (!arriving) return
+      if (gen !== snapshotGeneration || !arriving) return
 
       const slides = cursorSlides && arriving.patches
         ? applyPatches(cursorSlides, arriving.patches)
         : await materializeSlidesByKeys(keys, snapshotCursor)
+      if (gen !== snapshotGeneration) return
 
       restoreSlides(slides, arriving.index, arriving)
       get().setSnapshotCursor(snapshotCursor)

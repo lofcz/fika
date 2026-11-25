@@ -94,8 +94,22 @@ const ShapeElement = memo((props: IShapeElementProps) => {
     if (editableRef.current) setEditable(false);
   }, []);
   useEffect(() => {
-    if (!isHandleElement) stopEdit();
-  }, [isHandleElement, stopEdit]);
+    let active = true;
+    let queued = false;
+    const unsub = useMainStore.subscribe(state => {
+      if (state.handleElementId === elementInfoRef.current.id || !editableRef.current || queued) return;
+      queued = true;
+      queueMicrotask(() => {
+        queued = false;
+        if (!active) return;
+        if (useMainStore.getState().handleElementId !== elementInfoRef.current.id) stopEdit();
+      });
+    });
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, [stopEdit]);
   const { painted } = useLiveTextPaint(elementInfo, elementInfo.text?.defaultColor, elementInfo.text?.content || '');
   const text: ShapeText = elementInfo.text
     ? {

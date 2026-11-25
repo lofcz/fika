@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, memo } from 'react'
+import { type CSSProperties, type ReactNode, memo, useMemo } from 'react'
 import { RadioGroupValueContext } from '@/types/injectKey'
 import ButtonGroup from './ButtonGroup'
 
@@ -14,12 +14,12 @@ export type IRadioGroupProps = {
 
 const RadioGroup = memo((props: IRadioGroupProps) => {
   const { value, disabled = false, onUpdateValue, children, className, style } = props
+  const contextValue = useMemo(() => ({
+    value,
+    updateValue: (next: string) => { if (!disabled) onUpdateValue?.(next) },
+  }), [value, disabled, onUpdateValue])
   return (
-    <RadioGroupValueContext.Provider value={{
-      value,
-      updateValue: (next) => { if (!disabled) onUpdateValue?.(next) },
-    }}
-    >
+    <RadioGroupValueContext.Provider value={contextValue}>
       <ButtonGroup className={['radio-group', className].filter(Boolean).join(' ')} style={style}>
         {children}
       </ButtonGroup>

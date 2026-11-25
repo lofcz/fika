@@ -1,3 +1,5 @@
+import { isThumbnailScrolling, subscribeThumbnailScrollIdle } from './rasterResources'
+
 export type PaintPriority = 'visible' | 'nearby' | 'background'
 
 type PaintJob = {
@@ -28,12 +30,20 @@ const requestDrain = () => {
   frame = requestAnimationFrame(drain)
 }
 
+subscribeThumbnailScrollIdle(() => {
+  if (jobs.size) requestDrain()
+})
+
 const drain = () => {
   frame = 0
   const started = performance.now()
+  const scrolling = isThumbnailScrolling()
   while (jobs.size) {
     let next: PaintJob | undefined
     for (const candidate of jobs.values()) {
+      // While the thumbnail rail is actively scrolling, defer offscreen
+      // nearby/background cold paints until scroll settles so frames stay 60fps.
+      if (scrolling && candidate.priority > 0) continue
       if (
         !next
         || candidate.priority < next.priority
@@ -54,9 +64,26 @@ const drain = () => {
       canvasPaintStats.paintMs.push(elapsed)
       if (canvasPaintStats.paintMs.length > 300) canvasPaintStats.paintMs.shift()
     }
-    if (performance.now() - started >= FRAME_BUDGET_MS) break
+    if (scrolling || performance.now() - started >= FRAME_BUDGET_MS) break
   }
-  if (jobs.size) requestDrain()
+  if (jobs.size && !scrolling) requestDrain()
+  else if (jobs.size && scrolling) {
+    for (const candidate of jobs.values()) {
+      if (candidate.priority === 0) {
+        requestDrain()
+        break
+      }
+    }
+  }
+}
+
+export const reprioritizeSlidePaint = (key: string, priority: PaintPriority) => {
+  const existing = jobs.get(key)
+  if (!existing) return
+  const nextPriority = priorities[priority]
+  if (existing.priority === nextPriority) return
+  existing.priority = nextPriority
+  if (nextPriority === 0) requestDrain()
 }
 
 export const scheduleSlidePaint = (

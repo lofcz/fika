@@ -2,8 +2,11 @@ import type { Slide, SlideTheme } from '@/types/slides'
 import { paintSlideToCanvas } from '@/paint/slidePainter'
 import { collectSlidePreviewSrcs, loadImageBitmap } from '@/utils/imageBitmapCache'
 import { getFikaExportMediaResolver, type FikaExportMediaResolver } from '@/configs/exportMediaResolver'
-import { collectRasterJobs } from '@/paint/rasterResources'
+import { collectRasterJobs, preloadEcharts } from '@/paint/rasterResources'
 import { deckHasMath, ensureMathliveReady } from '@/utils/math'
+import { setFikaAssetBase } from '@/utils/assetBase'
+
+declare let __webpack_public_path__: string
 
 /**
  * Offscreen slide rendering for hosts and agents.
@@ -14,6 +17,8 @@ import { deckHasMath, ensureMathliveReady } from '@/utils/math'
  */
 
 export interface FikaRenderSlideOptions {
+  /** Runtime assets/chunks base URL when rendering headlessly before mounting an editor. */
+  assetBaseUrl?: string
   /** Output width in CSS px. Height follows the deck ratio. Default 1280. */
   width?: number
   /** Device pixel ratio multiplier for the backing store. Default 1. */
@@ -92,10 +97,28 @@ const IDLE_WINDOW_MS = 220
  * missing are awaited directly; other async resources fire `invalidate`, so an
  * idle window after the last repaint means the frame is final.
  */
-async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, cssWidth: number, dpr: number, timeoutMs: number, transparentBackground = false, imageBitmaps?: ReadonlyMap<string, ImageBitmap>, strictResources = false, onResourceProgress?: (fraction: number) => void): Promise<void> {
-  if (deckHasMath([target.slide])) {
-    await ensureMathliveReady().catch(error => { if (strictResources) throw error })
+export function configureRenderAssets(options: Pick<FikaRenderSlideOptions, 'assetBaseUrl'>): void {
+  if (!options.assetBaseUrl) return
+  setFikaAssetBase(options.assetBaseUrl)
+  try {
+    __webpack_public_path__ = options.assetBaseUrl.replace(/\/?$/, '/')
   }
+  catch { /* non-webpack test runtime */ }
+}
+
+const slideHasChart = (slide: Slide): boolean => (
+  slide.elements.some(element => element.type === 'chart')
+)
+
+async function paintSettled(canvas: HTMLCanvasElement, target: RenderTarget, cssWidth: number, dpr: number, timeoutMs: number, transparentBackground = false, imageBitmaps?: ReadonlyMap<string, ImageBitmap>, strictResources = false, onResourceProgress?: (fraction: number) => void): Promise<void> {
+  const preloads: Promise<unknown>[] = []
+  if (deckHasMath([target.slide])) {
+    preloads.push(ensureMathliveReady().catch(error => { if (strictResources) throw error }))
+  }
+  if (slideHasChart(target.slide)) {
+    preloads.push(preloadEcharts().catch(error => { if (strictResources) throw error }))
+  }
+  if (preloads.length) await Promise.all(preloads)
   await document.fonts?.ready?.catch(() => undefined)
   const deadline = performance.now() + timeoutMs
   let pending = false
@@ -226,6 +249,7 @@ async function loadExportBitmaps(slide: Slide, timeoutMs: number, transparent: b
 
 /** Render one slide to an encoded image. */
 export async function renderSlideImage(target: RenderTarget, options: FikaRenderSlideOptions = {}): Promise<{ blob: Blob; width: number; height: number }> {
+  configureRenderAssets(options)
   const width = Math.max(64, Math.round(options.width ?? 1280))
   const dpr = Math.max(1, options.dpr ?? 1)
   const canvas = document.createElement('canvas')
@@ -281,6 +305,7 @@ export async function renderDeckAtlas(deck: {
   viewportSize: number
   viewportRatio: number
 }, options: FikaDeckAtlasOptions = {}): Promise<FikaDeckAtlasSheet[]> {
+  configureRenderAssets(options)
   const tileWidth = Math.max(160, Math.round(options.tileWidth ?? 640))
   const columns = Math.max(1, Math.round(options.columns ?? 3))
   const maxPerSheet = Math.max(1, Math.round(options.maxPerSheet ?? 12))

@@ -1,4 +1,3 @@
-import fetchRequest from './fetch';
 import { getLL } from '@/i18n/getLL';
 import message from '@/utils/message';
 import { resolveFikaAsset } from '@/utils/assetBase';
@@ -20,27 +19,16 @@ async function getMockJson(url: string): Promise<unknown> {
   }
 }
 
-export const SERVER_URL = import.meta.env.MODE === 'development' ? '/api' : 'https://server.fika.cn';
 interface AIWritingPayload {
   content: string;
   command: string;
 }
+
 export default {
   getMockData(filename: string): Promise<any> {
     return getMockJson(resolveFikaAsset(`mocks/${filename}.json`));
   },
-  AI_Writing({
-    content,
-    command
-  }: AIWritingPayload): Promise<any> {
-    return fetchRequest(`${SERVER_URL}/tools/ai_writing`, {
-      method: 'POST',
-      body: JSON.stringify({
-        content,
-        command,
-        model: 'glm-4.7-flash',
-        stream: true
-      })
-    });
-  }
+  async AI_Writing(_payload: AIWritingPayload): Promise<any> {
+    return { state: -1 };
+  },
 };

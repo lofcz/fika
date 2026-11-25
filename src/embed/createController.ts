@@ -5,7 +5,6 @@ import { setFikaAiSlideInsert } from '@/configs/aiSlideInsert'
 import { useSlidesStore } from '@/store/slides'
 import { useScreenStore } from '@/store/screen'
 import { useMainStore } from '@/store/main'
-import { getImportApi } from '@/hooks/useImport'
 import type { FikaController, FikaDocument, FikaImportPptxOptions } from './types'
 import { applyLocale } from './localeBridge'
 import type { Locales } from '@/i18n/locale'
@@ -98,6 +97,14 @@ export function createController(
     },
 
     async importPptx(data: File | Blob | ArrayBuffer, importOptions?: FikaImportPptxOptions) {
+      if (destroyed) return false
+      let getImportApi: typeof import('@/hooks/useImport').getImportApi
+      try {
+        ({ getImportApi } = await import('@/hooks/useImport'))
+      } catch (error) {
+        console.error('[fika] failed to load PPTX import module', error)
+        return false
+      }
       if (destroyed) return false
       const { importPPTXFile } = getImportApi()
       const file = data instanceof File

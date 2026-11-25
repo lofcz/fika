@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEventHandler, type PointerEvent, type ReactNode } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEventHandler, type PointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   DndContext,
@@ -206,13 +206,14 @@ export default function Draggable({
                   <SortableItem
                     key={ids[index]}
                     id={ids[index]}
+                    element={element}
+                    index={index}
+                    renderItem={item}
                     disabled={!!disabled}
                     handle={handle}
                     row={row}
                     hideWhileDragging={!!overlay && activeId === ids[index]}
-                  >
-                    {item({ element, index })}
-                  </SortableItem>
+                  />
                 ) : null
               ))}
             </div>
@@ -224,21 +225,27 @@ export default function Draggable({
   )
 }
 
-function SortableItem({
-  id,
-  children,
-  disabled,
-  handle,
-  row,
-  hideWhileDragging,
-}: {
+type SortableItemProps = {
   id: string
-  children: ReactNode
+  element: any
+  index: number
+  renderItem: ItemRender
   disabled?: boolean
   handle?: string
   row: VirtualRow | null
   hideWhileDragging?: boolean
-}) {
+}
+
+const SortableItem = memo(function SortableItem({
+  id,
+  element,
+  index,
+  renderItem,
+  disabled,
+  handle,
+  row,
+  hideWhileDragging,
+}: SortableItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
     disabled,
@@ -270,7 +277,17 @@ function SortableItem({
       {...attributes}
       {...filteredListeners}
     >
-      {children}
+      {renderItem({ element, index })}
     </div>
   )
-}
+}, (prev, next) => (
+  prev.id === next.id
+  && prev.element === next.element
+  && prev.index === next.index
+  && prev.renderItem === next.renderItem
+  && prev.disabled === next.disabled
+  && prev.handle === next.handle
+  && prev.hideWhileDragging === next.hideWhileDragging
+  && prev.row?.start === next.row?.start
+  && prev.row?.size === next.row?.size
+))

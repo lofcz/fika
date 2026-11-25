@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { hfmath } from '@/components/LaTeXEditor/hfmath';
+import { ensureHfmath, getCachedHfmath } from '@/utils/hfmathLazy';
 import { getChartDefaultData } from '@/configs/chart';
 import { DEFAULT_CODE_FONT_SIZE, DEFAULT_CODE_LANGUAGE, DEFAULT_CODE_THEME, measureCodeElementSize, resolveCodeLanguage, resolveCodeTheme } from '@/configs/code';
 import { MIME_MAP } from '@/configs/mime';
@@ -696,8 +696,58 @@ export interface LatexGeometry {
  * the agent shows up blank. Deriving the path here makes agent-authored formulas
  * render identically to ones drawn through the editor UI.
  */
+export function needsHfmathForElement(element: unknown): boolean {
+  if (!element || typeof element !== 'object') return false;
+  const candidate = element as Record<string, unknown>;
+  if (candidate.type !== 'latex') return false;
+  const latex = typeof candidate.latex === 'string' ? candidate.latex.trim() : '';
+  const path = typeof candidate.path === 'string' ? candidate.path.trim() : '';
+  return latex.length > 0 && path.length === 0;
+}
+
+/**
+ * Recursively inspect any agentic command payload to determine whether a
+ * `latex` element without a precomputed SVG `path` will need `hfmath`.
+ */
+export function payloadNeedsHfmath(value: unknown, commandType?: string, seen = new Set<object>()): boolean {
+  if (!value || typeof value !== 'object') return false;
+  if (seen.has(value)) return false;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      if (payloadNeedsHfmath(value[i], undefined, seen)) return true;
+    }
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (needsHfmathForElement(record)) return true;
+  if (commandType === 'latex.create' || commandType === 'latex.update') {
+    const candidate = (record.element ?? record.patch ?? record) as Record<string, unknown> | undefined;
+    if (candidate && typeof candidate === 'object') {
+      const latex = typeof candidate.latex === 'string' ? candidate.latex.trim() : '';
+      const path = typeof candidate.path === 'string' ? candidate.path.trim() : '';
+      if (latex.length > 0 && path.length === 0) return true;
+    }
+  }
+  for (const key of Object.keys(record)) {
+    const child = record[key];
+    if (child && typeof child === 'object' && payloadNeedsHfmath(child, undefined, seen)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function ensureHfmathForDocumentPayload(payload: unknown): Promise<void> {
+  if (payloadNeedsHfmath(payload)) {
+    await ensureHfmath();
+  }
+}
+
 export function deriveLatexGeometry(latex: string): LatexGeometry {
-  const eq = new hfmath(latex);
+  const Hfmath = getCachedHfmath();
+  if (!Hfmath) throw new Error('LaTeX engine has not been initialized');
+  const eq = new Hfmath(latex);
   const path = eq.pathd({});
   const box = eq.box({});
   const width = box.w + LATEX_BOX_PADDING;
@@ -708,6 +758,11 @@ export function deriveLatexGeometry(latex: string): LatexGeometry {
     width,
     height
   };
+}
+
+export async function deriveLatexGeometryAsync(latex: string): Promise<LatexGeometry> {
+  await ensureHfmath();
+  return deriveLatexGeometry(latex);
 }
 export function normalizeLatexElement(element: FikaLatexElementInput): PPTLatexElement {
   if (element.id !== undefined) assertId(element.id, 'element.id');

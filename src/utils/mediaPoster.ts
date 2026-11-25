@@ -193,9 +193,23 @@ const extractMp4Cover = (bytes: Uint8Array): Blob | null => {
 };
 const blobToImage = (blob: Blob, signal?: AbortSignal) => {
   return new Promise<HTMLImageElement>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
     const url = URL.createObjectURL(blob);
     const img = new Image();
-    const cleanup = () => URL.revokeObjectURL(url);
+    let revoked = false;
+    const onAbort = () => {
+      cleanup();
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    const cleanup = () => {
+      if (revoked) return;
+      revoked = true;
+      URL.revokeObjectURL(url);
+      signal?.removeEventListener('abort', onAbort);
+    };
     img.onload = () => {
       cleanup();
       resolve(img);
@@ -204,10 +218,7 @@ const blobToImage = (blob: Blob, signal?: AbortSignal) => {
       cleanup();
       reject(new Error('image'));
     };
-    signal?.addEventListener('abort', () => {
-      cleanup();
-      reject(new DOMException('Aborted', 'AbortError'));
-    }, {
+    signal?.addEventListener('abort', onAbort, {
       once: true
     });
     img.src = url;

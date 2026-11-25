@@ -25,4 +25,6 @@ const historySnapshot = {
   undo,
 }
 
+export const getHistorySnapshot = () => historySnapshot
+
 export default () => historySnapshot

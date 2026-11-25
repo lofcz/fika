@@ -151,7 +151,7 @@ export default (mediaRef: MediaRefLike, options: {
     };
     const down = () => {
       document.addEventListener('mousemove', move);
-      document.addEventListener('touchmove', move);
+      document.addEventListener('touchmove', move, { passive: true });
       document.addEventListener('mouseup', up);
       document.addEventListener('touchend', up);
     };
@@ -180,7 +180,7 @@ export default (mediaRef: MediaRefLike, options: {
     };
     const down = () => {
       document.addEventListener('mousemove', move);
-      document.addEventListener('touchmove', move);
+      document.addEventListener('touchmove', move, { passive: true });
       document.addEventListener('mouseup', up);
       document.addEventListener('touchend', up);
     };

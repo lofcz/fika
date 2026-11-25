@@ -35,7 +35,7 @@ const Saturation = memo((props: ISaturationProps) => {
   }), [props.onColorChange]);
   const saturationRef = useRef<HTMLDivElement | null>(null);
   const handleChange = useCallback((e: MouseEvent | TouchEvent) => {
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     if (!saturationRef.current) return;
     const isTouchEvent = !(e instanceof MouseEvent);
     if (isTouchEvent && (!e.changedTouches || !e.changedTouches[0])) return;
@@ -65,7 +65,7 @@ const Saturation = memo((props: ISaturationProps) => {
   const handleMouseDown = useCallback((e: ReactMouseEvent | ReactTouchEvent) => {
     handleChange(e.nativeEvent);
     window.addEventListener('mousemove', handleChange);
-    window.addEventListener('touchmove', handleChange);
+    window.addEventListener('touchmove', handleChange, { passive: true });
     window.addEventListener('mouseup', unbindEventListeners);
     window.addEventListener('touchend', unbindEventListeners);
   }, [handleChange, unbindEventListeners]);

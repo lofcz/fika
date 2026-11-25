@@ -91,10 +91,29 @@ function listTarball(tarball) {
     .map((entry) => entry.replace(/^package\//, ''))
 }
 
+const FORBIDDEN_ARTIFACT_RE = /(?:^|\/)(?:_e2e|_bench)/
+
+function walkFiles(dir, prefix = '', acc = []) {
+  if (!existsSync(dir)) return acc
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name
+    if (entry.isDirectory()) walkFiles(join(dir, entry.name), rel, acc)
+    else acc.push(rel)
+  }
+  return acc
+}
+
 function assertOnDisk() {
   for (const rel of REQUIRED) {
     assert(existsSync(join(root, rel)), `missing ${rel} — run \`bun run build:embed\` before packing`)
   }
+
+  const embedFiles = walkFiles(join(root, 'dist/embed'), 'dist/embed')
+  const leakedEmbed = embedFiles.filter(rel => FORBIDDEN_ARTIFACT_RE.test(rel))
+  assert(
+    leakedEmbed.length === 0,
+    `forbidden _e2e/_bench test fixtures leaked into dist/embed: ${leakedEmbed.join(', ')}`,
+  )
 
   const manifestPath = join(root, 'dist/embed/agentic-manifest.json')
   const agenticTypesPath = join(root, 'dist/types/embed/agentic/types.d.ts')
@@ -139,6 +158,11 @@ function assertTarball(tarball) {
   for (const rel of REQUIRED) {
     assert(files.has(rel), `tarball missing ${rel}`)
   }
+  const leakedTarball = [...files].filter(rel => FORBIDDEN_ARTIFACT_RE.test(rel))
+  assert(
+    leakedTarball.length === 0,
+    `forbidden _e2e/_bench test fixtures leaked into tarball: ${leakedTarball.join(', ')}`,
+  )
   assert(files.size > 20, `tarball is too small (${files.size} files) — embed build was not packed`)
   assert(bytes > 100_000, `tarball is too small (${bytes} bytes) — embed build was not packed`)
   const manifest = JSON.parse(execFileSync('tar', ['-xOzf', tarball, 'package/dist/embed/agentic-manifest.json'], { encoding: 'utf8' }))

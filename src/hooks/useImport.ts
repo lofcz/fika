@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react';
 import { parseTableText, serializeTableText } from '@/utils/prosemirror/table';
-import { parse, type Shape, type Element, type ChartItem, type BaseElement } from 'pptxtojson';
+import type { Shape, Element, ChartItem, BaseElement } from 'pptxtojson';
 import { nanoid } from 'nanoid';
 import tinycolor from 'tinycolor2';
 import { useSlidesStore, useMainStore, useImportConfirmStore } from '@/store';
@@ -9,8 +9,9 @@ import { resizeDeckSlides } from '@/utils/resizeDeck';
 import { decrypt } from '@/utils/crypto';
 import { isFloatEqual } from '@/utils/common';
 import { type ShapePoolItem, SHAPE_LIST, SHAPE_PATH_FORMULAS } from '@/configs/shapes';
-import useAddSlidesOrElements from '@/hooks/useAddSlidesOrElements';
-import useHistorySnapshot from './useHistorySnapshot';
+import { createAddSlidesOrElements } from '@/hooks/useAddSlidesOrElements';
+import { getHistorySnapshot } from './useHistorySnapshot';
+import { getImportJobSnapshot, importJob, subscribeImportJob } from './importJob';
 import message from '@/utils/message';
 import { getLL } from '@/i18n/getLL';
 import { getSvgPathRange, toPoints } from '@/utils/svgPathParser';
@@ -33,12 +34,12 @@ import { internSlidesMedia, startInternSlideMedia } from '@/utils/mediaIntern';
 import { normalizeImportApplyOptions, resolveImportApply, type ImportApplyMode, type ImportApplyOptions } from '@/utils/importApply';
 import { applyImportTransitions } from '@/utils/importTransition';
 import { DEFAULT_TURNING_MODE } from '@/configs/animation';
-import { createJobProgress, isAbortError, slideJobProgress } from '@/utils/jobProgress';
+import { isAbortError, slideJobProgress } from '@/utils/jobProgress';
 import type { Slide, SlideTheme, TableCellStyle, TableCell, ChartType, SlideBackground, PPTShapeElement, PPTLineElement, LinePoint, PPTImageElement, TextAlignVertical, PPTTextElement, PPTCodeElement, ChartOptions, Gradient, PPTElement } from '@/types/slides';
 
 /** Lazy — pulls jszip (and Node stream/Buffer polyfills) only when importing PPTX. */
 const loadPptxImportFidelity = () => import('@/utils/pptxImportFidelity');
-const importJob = createJobProgress();
+const loadPptxParser = () => import('pptxtojson');
 const readFileAsText = (file: File) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => resolve(String(reader.result ?? ''));
@@ -226,14 +227,8 @@ const convertTextContent = (html: string, ratio: number) => {
 const slidesState = () => useSlidesStore.getState();
 
 export function getImportApi() {
-  /* oxlint-disable react/rules-of-hooks -- zustand snapshot helpers, not React hooks */
-  const {
-    addHistorySnapshot
-  } = useHistorySnapshot();
-  const {
-    addSlidesFromData
-  } = useAddSlidesOrElements();
-  /* oxlint-enable react/rules-of-hooks */
+  const { addHistorySnapshot } = getHistorySnapshot();
+  const { addSlidesFromData } = createAddSlidesOrElements();
   const beginImportJob = (total = 0) => {
     if (importJob.running.value) {
       message.warning(getLL().editor.import.busy());
@@ -607,7 +602,7 @@ export function getImportApi() {
         void importJob.tick(0.03 * ratio, 0, gen, { yieldPaint: false });
       });
       await importJob.tick(0.04, 0, gen);
-      const {
+      const [{ parse }, {
         attachElementSource,
         bindImportedAnimations,
         buildLatexElementFromMath,
@@ -616,7 +611,7 @@ export function getImportApi() {
         mapPptxTransitionToTurningMode,
         takeIdentityForGeometry,
         takeIdentityForObjectId
-      } = await loadPptxImportFidelity();
+      }] = await Promise.all([loadPptxParser(), loadPptxImportFidelity()]);
       let json = null;
       try {
         json = await parse(arrayBuffer, {
@@ -1391,14 +1386,9 @@ export function getImportApi() {
   };
 }
 
-const subscribeImportJob = (onChange: () => void) => importJob.subscribe(onChange)
-const getImportJobSnapshot = () => (
-  `${Number(importJob.running.value)}:${importJob.progress.value}:${importJob.current.value}:${importJob.total.value}`
-)
-
 export default function useImport() {
-  const snapshot = useSyncExternalStore(subscribeImportJob, getImportJobSnapshot, getImportJobSnapshot)
-  const [running, progress, current, total] = snapshot.split(':')
+  const snapshot = useSyncExternalStore(subscribeImportJob, getImportJobSnapshot, getImportJobSnapshot);
+  const [running, progress, current, total] = snapshot.split(':');
   return {
     ...getImportApi(),
     importing: running === '1',

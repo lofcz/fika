@@ -331,7 +331,16 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
   const showGapControls = !readOnly && isFikaAiSlideInsertEnabled(aiSlideInsertConfig)
   const aiDisabled = !!aiSlideInsertConfig?.disabled
   const gapLabels = useMemo(() => resolveGapLabels(aiSlideInsertConfig?.labels, LL), [aiSlideInsertConfig?.labels, LL])
-  const selectedSlidesIndex = useMemo(() => [..._selectedSlidesIndex, slideIndex], [_selectedSlidesIndex, slideIndex])
+  const sectionLabels = useMemo(() => ({
+    sectionNamePlaceholder: LL.editor.thumbnails.sectionNamePlaceholder(),
+    untitledSection: LL.editor.thumbnails.untitledSection(),
+    defaultSection: LL.editor.thumbnails.defaultSection(),
+  }), [LL])
+  const selectedSlidesSet = useMemo(() => {
+    const set = new Set<number>(_selectedSlidesIndex)
+    set.add(slideIndex)
+    return set
+  }, [_selectedSlidesIndex, slideIndex])
   const hasSection = useMemo(() => slides.some(item => item.sectionTag), [slides])
   const { scrollRef, virtualizer, virtualItems, dest } = useThumbnailVirtualizer(slides, hasSection, showGapControls)
 
@@ -575,6 +584,46 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
     cancelAiSlide,
   }
 
+  const handleListContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    openContextmenu(event, contextmenusThumbnails)
+  }, [contextmenusThumbnails])
+
+  const renderRailItem = useCallback(({ element, index }: { element: { id: string }; index: number }) => (
+    <ThumbnailRailItem
+      slideId={element.id}
+      nextSlideId={slides[index + 1]?.id ?? null}
+      index={index}
+      totalSlides={slides.length}
+      isActive={slideIndex === index}
+      isSelected={selectedSlidesSet.has(index)}
+      hasSection={hasSection}
+      editingSectionId={editingSectionId}
+      handlersRef={railHandlersRef}
+      sectionNamePlaceholder={sectionLabels.sectionNamePlaceholder}
+      untitledSection={sectionLabels.untitledSection}
+      defaultSection={sectionLabels.defaultSection}
+      thumbSize={dest.cssWidth}
+      showGapControls={showGapControls}
+      aiDisabled={aiDisabled}
+      readOnly={readOnly}
+      gapLabels={gapLabels}
+    />
+  ), [
+    slides,
+    slideIndex,
+    selectedSlidesSet,
+    hasSection,
+    editingSectionId,
+    sectionLabels,
+    dest.cssWidth,
+    showGapControls,
+    aiDisabled,
+    readOnly,
+    gapLabels,
+  ])
+
   return (
     <div
       ref={thumbnailsRootRef}
@@ -594,7 +643,9 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
           onUpdateValue={setPresetLayoutPopoverVisible}
           center
           content={
-            <LayoutPicker onSelect={slide => { createSlideByTemplate(slide); setPresetLayoutPopoverVisible(false) }} />
+            presetLayoutPopoverVisible
+              ? <LayoutPicker onSelect={slide => { createSlideByTemplate(slide); setPresetLayoutPopoverVisible(false) }} />
+              : null
           }
         >
           <div className={cx('select-btn')}><Icon icon="chevron-down" /></div>
@@ -611,28 +662,8 @@ const Thumbnails = memo(({ className, style }: { className?: string; style?: CSS
         totalSize={virtualizer.getTotalSize()}
         onEnd={handleDragEnd}
         overlayRender={slideDragOverlay}
-        onContextMenu={event => { event.preventDefault(); event.stopPropagation(); openContextmenu(event, contextmenusThumbnails) }}
-        item={({ element, index }) => (
-          <ThumbnailRailItem
-            slideId={element.id}
-            nextSlideId={slides[index + 1]?.id ?? null}
-            index={index}
-            totalSlides={slides.length}
-            isActive={slideIndex === index}
-            isSelected={selectedSlidesIndex.includes(index)}
-            hasSection={hasSection}
-            editingSectionId={editingSectionId}
-            handlersRef={railHandlersRef}
-            sectionNamePlaceholder={LL.editor.thumbnails.sectionNamePlaceholder()}
-            untitledSection={LL.editor.thumbnails.untitledSection()}
-            defaultSection={LL.editor.thumbnails.defaultSection()}
-            thumbSize={dest.cssWidth}
-            showGapControls={showGapControls}
-            aiDisabled={aiDisabled}
-            readOnly={readOnly}
-            gapLabels={gapLabels}
-          />
-        )}
+        onContextMenu={handleListContextMenu}
+        item={renderRailItem}
       />
       {showGapControls && slides.length === 0 ? (
         <SlideGapBar

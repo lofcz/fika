@@ -109,6 +109,7 @@ export interface MainActions {
   applyRightPanelAuto: (width: number, narrowPx: number) => void
   setReadOnly: (readOnly: boolean) => void
   setAiReveal: (reveal: Omit<AiRevealState, 'tick'> | null) => void
+  resetSession: () => void
 }
 
 export type MainStore = MainState & MainActions
@@ -405,5 +406,43 @@ export const useMainStore = create<MainStore>()((set, get) => ({
     const nextCollapsed = rightPanelPinned ? rightPanelPinned === 'closed' : width <= narrowPx
     if (rightPanelCollapsed === nextCollapsed) return
     set({ rightPanelCollapsed: nextCollapsed })
+  },
+  resetSession() {
+    set({
+      activeElementIdList: [],
+      handleElementId: '',
+      activeGroupElementId: '',
+      hiddenElementIdList: [],
+      canvasPercentage: 90,
+      canvasScale: 1,
+      canvasDragged: false,
+      thumbnailsFocus: false,
+      editorAreaFocus: false,
+      disableHotkeys: false,
+      gridLineSize: 0,
+      showRuler: false,
+      showBubbleMenu: false,
+      creatingElement: null,
+      creatingCustomShape: null,
+      editingElementId: '',
+      toolbarState: ToolbarStates.SLIDE_DESIGN,
+      clipingImageElementId: '',
+      richTextAttrs: defaultRichTextAttrs,
+      selectedTableCells: [],
+      isScaling: false,
+      isGesturing: false,
+      selectedSlidesIndex: [],
+      dialogForExport: '',
+      textFormatPainter: null,
+      shapeFormatPainter: null,
+      showSelectPanel: false,
+      showSearchPanel: false,
+      showNotesPanel: false,
+      showMarkupPanel: false,
+      rightPanelCollapsed: false,
+      rightPanelPinned: null,
+      readOnly: false,
+      aiReveal: null,
+    })
   },
 }))

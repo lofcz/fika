@@ -1,10 +1,12 @@
 import { drainCommitQueue } from '@/utils/commitQueue'
+import { liveEditorIds } from '@/utils/prosemirror/caret'
 import { clonePlain } from '@/utils/clonePlain'
 import { reconcileFrameTransforms, frameDescendantIds } from '@/utils/nestedFrames'
 import { transferPageElements } from '@/utils/transferPageElements'
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { setAutoFreeze } from 'immer'
+import { useMainStore } from './main'
 import { omit } from '@/utils/object'
 import type { WorkspaceLabel, Slide, SlideTheme, PPTElement, PPTAnimation, SlideTemplate, ImportedSlideTemplate, TurningMode } from '@/types/slides'
 import { DEFAULT_TURNING_MODE } from '@/configs/animation'
@@ -46,12 +48,24 @@ export interface ApplyDocumentInput {
   title?: string
   slides: Slide[]
   theme?: Partial<SlideTheme>
+  replaceTheme?: boolean
   viewportSize?: number
   viewportRatio?: number
   viewportWidthInches?: number
   hasViewportWidthInches?: boolean
   templates?: SlideTemplate[]
   slideIndex?: number
+}
+
+function createDefaultTheme(): SlideTheme {
+  return {
+    themeColors: [...DEFAULT_THEME_COLORS],
+    fontColor: '#333',
+    fontName: 'Calibri',
+    backgroundColor: '#fff',
+    shadow: { h: 3, v: 3, blur: 2, color: '#808080' },
+    outline: { width: 2, color: '#525252', style: 'solid' },
+  }
 }
 
 function readProp<T extends object>(obj: T, key: string): unknown {
@@ -101,6 +115,7 @@ export interface SlidesActions {
   addElement: (element: PPTElement | PPTElement[]) => void
   deleteElement: (elementId: string | string[]) => void
   updateElement: (data: UpdateElementData) => void
+  updateSlideElementGeometry: (slideId: string, patches: ReadonlyMap<string, { width?: number; height?: number }>) => void
   removeElementProps: (data: RemovePropData & { slideId?: string }) => void
 }
 
@@ -251,14 +266,7 @@ setAutoFreeze(process.env.NODE_ENV !== 'production')
 export const useSlidesStore = create<SlidesStore>()(
   immer((set, get) => ({
     title: getLL().editor.presentation.untitled(),
-    theme: {
-      themeColors: [...DEFAULT_THEME_COLORS],
-      fontColor: '#333',
-      fontName: 'Calibri',
-      backgroundColor: '#fff',
-      shadow: { h: 3, v: 3, blur: 2, color: '#808080' },
-      outline: { width: 2, color: '#525252', style: 'solid' },
-    },
+    theme: createDefaultTheme(),
     slides: [],
     slideIndex: 0,
     viewportSize: 1000,
@@ -333,7 +341,13 @@ export const useSlidesStore = create<SlidesStore>()(
         }
         state.slides = nextSlides
         state.slideIndex = nextIndex
-        if (document.theme) {
+        if (document.replaceTheme) {
+          const baseTheme = createDefaultTheme()
+          state.theme = document.theme
+            ? { ...baseTheme, ...(shouldClone ? clonePlain(document.theme) : document.theme) }
+            : baseTheme
+        }
+        else if (document.theme) {
           state.theme = { ...state.theme, ...(shouldClone ? clonePlain(document.theme) : document.theme) }
         }
         if (document.viewportSize !== undefined) state.viewportSize = document.viewportSize
@@ -509,7 +523,9 @@ export const useSlidesStore = create<SlidesStore>()(
 
     updateSlideIndex(index) {
       if (get().slideIndex === index) return
-      drainCommitQueue()
+      if (liveEditorIds().length > 0 || useMainStore.getState().editingElementId) {
+        drainCommitQueue()
+      }
       set((state) => {
         if (state.slideIndex === index) return
         state.slideIndex = index
@@ -556,6 +572,51 @@ export const useSlidesStore = create<SlidesStore>()(
         )))
       })
       markSourcePackageDirty()
+    },
+
+    updateSlideElementGeometry(slideId, patches) {
+      if (!patches.size) return
+      const state = get()
+      const slideIndex = state.slides.findIndex(item => item.id === slideId)
+      const slide = state.slides[slideIndex]
+      if (!slide) return
+      let needsWrite = false
+      for (let i = 0; i < slide.elements.length; i++) {
+        const el = slide.elements[i]
+        const patch = patches.get(el.id)
+        if (!patch) continue
+        if (patch.width !== undefined && !Object.is(el.width, patch.width)) {
+          needsWrite = true
+          break
+        }
+        if (patch.height !== undefined && 'height' in el && !Object.is(el.height, patch.height)) {
+          needsWrite = true
+          break
+        }
+      }
+      if (!needsWrite) return
+      set((draft) => {
+        const nextIndex = draft.slides.findIndex(item => item.id === slideId)
+        const nextSlide = draft.slides[nextIndex]
+        if (!nextSlide) return
+        // Only patch element width/height; never clear `skeleton` or `aiRequestId`.
+        nextSlide.elements = reconcileFrameTransforms(
+          nextSlide.elements,
+          nextSlide.elements.map(el => {
+            const patch = patches.get(el.id)
+            if (!patch) return el
+            const nextWidth = patch.width !== undefined ? patch.width : el.width
+            const hasHeight = 'height' in el
+            const nextHeight = hasHeight && patch.height !== undefined ? patch.height : (hasHeight ? el.height : undefined)
+            if (Object.is(el.width, nextWidth) && (!hasHeight || Object.is(el.height, nextHeight))) {
+              return el
+            }
+            return hasHeight
+              ? { ...el, width: nextWidth, height: nextHeight } as PPTElement
+              : { ...el, width: nextWidth } as PPTElement
+          }),
+        )
+      })
     },
 
     removeElementProps(data) {

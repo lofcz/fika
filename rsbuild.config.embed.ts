@@ -20,6 +20,13 @@ export default defineConfig({
   resolve: {
     alias: resolveAlias,
   },
+  server: {
+    // `scripts/copy-embed-public.mjs` explicitly copies `mocks`, `imgs`, `fonts`;
+    // prevent Rsbuild from copying untracked local `_e2e*`/`_bench*` fixtures.
+    publicDir: {
+      copyOnBuild: false,
+    },
+  },
   output: {
     target: 'web',
     module: true,

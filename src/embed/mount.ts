@@ -34,7 +34,9 @@ import { bindTooltips } from '@/utils/tooltipBind'
 import { setContextmenuRenderer } from '@/utils/openContextmenu'
 import { createController } from './createController'
 import { useMainStore } from '@/store/main'
+import { useScreenStore } from '@/store/screen'
 import { useSlidesStore } from '@/store/slides'
+import { useSnapshotStore } from '@/store/snapshot'
 import { applyDocumentToStores } from './initialDocument'
 import { buildStarterPresentation } from '@/configs/starterPresentation'
 import { getLL } from '@/i18n/getLL'
@@ -136,7 +138,12 @@ export async function mountFika(
     setFikaLocale(locale)
     await applyLocale(locale)
 
-    let root: Root | null = createRoot(appRoot)
+    let root: Root | null = createRoot(appRoot, {
+      onUncaughtError(error, info) {
+        console.error('[fika] uncaught render error', error, info)
+        if (typeof reportError === 'function') reportError(error)
+      },
+    })
     const unmount = () => {
       root?.unmount()
       root = null
@@ -155,12 +162,22 @@ export async function mountFika(
     // hosts issue commands right after `await mountFika(...)`, and a later
     // effect-time apply would overwrite them. The same goes for the starter
     // deck: it is the initial state, not something to load after the fact.
+    let snapshotSeeded = false
     try {
-      if (options.document) applyDocumentToStores(options.document)
+      if (options.document) {
+        applyDocumentToStores(options.document)
+        snapshotSeeded = true
+      }
       else if (!options.loadDocument && options.loadMockOnEmpty !== true) {
         applyDocumentToStores(options.viewMode === 'canva' || options.viewMode === 'myna'
           ? createMynaDocument(getLL(locale).myna)
           : buildStarterPresentation(getLL(locale), options.starterPresentation))
+        snapshotSeeded = true
+      }
+      if (snapshotSeeded) {
+        // Capture initial baseline synchronously BEFORE resolving mountFika so
+        // an immediate post-mount host command can be undone cleanly.
+        void useSnapshotStore.getState().initSnapshotDatabase({ defer: true })
       }
     }
     catch (error) {
@@ -173,7 +190,7 @@ export async function mountFika(
     root.render(
       createElement(TypesafeI18n, {
         locale,
-        children: createElement(EmbedRoot, { init: options }),
+        children: createElement(EmbedRoot, { init: options, snapshotSeeded }),
       }),
     )
 
@@ -192,7 +209,9 @@ export async function mountFika(
       unbindTooltips()
       originalDestroy()
       unmount()
-      useMainStore.getState().setReadOnly(false)
+      useScreenStore.getState().setScreening(false)
+      useMainStore.getState().resetSession()
+      void useSnapshotStore.getState().resetSnapshotHistory()
       if (activeMounts.get(el) === mountPromise) {
         activeMounts.delete(el)
         if (activeHost === el) activeHost = null

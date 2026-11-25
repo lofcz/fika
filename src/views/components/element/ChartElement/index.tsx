@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { useCallback, memo } from 'react';
+import { useCallback, useMemo, memo, Suspense } from 'react';
 import { nativePointerEvent, type ReactPointerEvent } from '@/utils/canvasPointer';
 
 import { openContextmenu } from '@/utils/openContextmenu';
@@ -13,7 +13,11 @@ import { DEFAULT_CHART_LINE_COLOR } from '@/configs/chart';
 import { resolveChartElementSeriesColors, resolveChartLabelColor } from '@/utils/textContrast';
 import { useOutlineRadiusCss } from '@/views/components/element/hooks/useElementOutline';
 import ElementOutline from '@/views/components/element/ElementOutline';
-import Chart from './Chart';
+import { createRetryableLazy, LazyChunkBoundary } from '@/components/LazyChunkBoundary';
+import './Chart.module.scss';
+
+const LazyChart = createRetryableLazy(() => import('./Chart'));
+const Chart = LazyChart.Component;
 
 export type IChartElementProps = {
   elementInfo: PPTChartElement;
@@ -45,6 +49,11 @@ const ChartElement = memo((props: IChartElementProps) => {
   const openDataEditor = () => {
     emitter.emit(EmitterEvents.OPEN_CHART_DATA_EDITOR);
   };
+
+  const seriesColors = useMemo(() => resolveChartElementSeriesColors(elementInfo, {
+    background: slideBackground,
+    fallbackSurface: theme?.backgroundColor,
+  }), [elementInfo, slideBackground, theme?.backgroundColor]);
 
   return <div
     className={cx('editable-element-chart', { lock: elementInfo.lock })}
@@ -78,19 +87,20 @@ const ChartElement = memo((props: IChartElementProps) => {
           outline={elementInfo.outline}
         />
         <div style={{ overflow: outlineBorderRadius ? 'hidden' : undefined, borderRadius: outlineBorderRadius, width: '100%', height: '100%' }}>
-          <Chart
-            width={elementInfo.width}
-            height={elementInfo.height}
-            type={elementInfo.chartType}
-            data={elementInfo.data}
-            themeColors={resolveChartElementSeriesColors(elementInfo, {
-              background: slideBackground,
-              fallbackSurface: theme?.backgroundColor,
-            })}
-            textColor={labelColor}
-            lineColor={gridColor}
-            options={elementInfo.options}
-          />
+          <LazyChunkBoundary onRetry={LazyChart.reset} resetKey={elementInfo.id}>
+            <Suspense fallback={null}>
+              <Chart
+                width={elementInfo.width}
+                height={elementInfo.height}
+                type={elementInfo.chartType}
+                data={elementInfo.data}
+                themeColors={seriesColors}
+                textColor={labelColor}
+                lineColor={gridColor}
+                options={elementInfo.options}
+              />
+            </Suspense>
+          </LazyChunkBoundary>
         </div>
       </div>
     </div>

@@ -9,12 +9,14 @@ import BaseImageElement from '@/views/components/element/ImageElement/BaseImageE
 import BaseTextElement from '@/views/components/element/TextElement/BaseTextElement';
 import BaseShapeElement from '@/views/components/element/ShapeElement/BaseShapeElement';
 import BaseLineElement from '@/views/components/element/LineElement/BaseLineElement';
-import BaseChartElement from '@/views/components/element/ChartElement/BaseChartElement';
 import BaseTableElement from '@/views/components/element/TableElement/BaseTableElement';
 import BaseLatexElement from '@/views/components/element/LatexElement/BaseLatexElement';
 import ScreenVideoElement from '@/views/components/element/VideoElement/ScreenVideoElement';
 import ScreenAudioElement from '@/views/components/element/AudioElement/ScreenAudioElement';
 import { CodeElementPlaceholder } from '@/views/components/element/CodeElement/CodeBlockSkeleton';
+import { createRetryableLazy, LazyChunkBoundary } from '@/components/LazyChunkBoundary';
+const LazyBaseChartElement = createRetryableLazy(() => import('@/views/components/element/ChartElement/BaseChartElement'))
+const BaseChartElement = LazyBaseChartElement.Component
 const BaseMermaidElement = lazy(() => import('@/views/components/element/MermaidElement/BaseMermaidElement'))
 const BaseCodeElement = lazy(() => import('@/views/components/element/CodeElement/BaseCodeElement'))
 export type IScreenElementProps = {
@@ -82,7 +84,13 @@ const ScreenElement = memo((props: IScreenElementProps) => {
     }} title={elementInfo.link?.target || ''} onClick={(event) => {
       openLink(event.nativeEvent);
     }}>{currentElementComponent ? (
-      elementInfo.type === ElementTypes.CODE || elementInfo.type === ElementTypes.MERMAID ? (
+      elementInfo.type === ElementTypes.CHART ? (
+        <LazyChunkBoundary onRetry={LazyBaseChartElement.reset} resetKey={elementInfo.id}>
+          <Suspense fallback={null}>
+            {createElement(currentElementComponent as ComponentType<Record<string, unknown>>, paintProps)}
+          </Suspense>
+        </LazyChunkBoundary>
+      ) : elementInfo.type === ElementTypes.CODE || elementInfo.type === ElementTypes.MERMAID ? (
         <Suspense fallback={elementInfo.type === ElementTypes.CODE ? <CodeElementPlaceholder elementInfo={elementInfo} /> : null}>
           {createElement(currentElementComponent as ComponentType<Record<string, unknown>>, paintProps)}
         </Suspense>

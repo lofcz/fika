@@ -21,9 +21,10 @@ const Screen = lazy(importScreen)
 
 export type IEmbedRootProps = {
   init: FikaMountOptions
+  snapshotSeeded?: boolean
 }
 
-export default function EmbedRoot({ init }: IEmbedRootProps) {
+export default function EmbedRoot({ init, snapshotSeeded = false }: IEmbedRootProps) {
   const { LL, setLocale } = useI18nContext()
   const _isPC = isPC()
   const presentationOnly = init.viewMode === 'presentation'
@@ -72,7 +73,9 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
       }
       await resolveInitialDocument()
       if (presentationOnly && useSlidesStore.getState().slides.length) setScreening(true)
-      void initSnapshotDatabase({ defer: true })
+      if (!snapshotSeeded) {
+        void initSnapshotDatabase({ defer: true })
+      }
       void deleteDiscardedDB()
     })()
     if (typeof requestIdleCallback === 'function') {

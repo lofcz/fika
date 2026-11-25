@@ -1,13 +1,14 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './ElementCreateSelection.module.scss'
 const cx = bindStyles(styles)
-import { useRef, useCallback, memo, useState } from 'react'
+import { useRef, useCallback, memo, useState, type CSSProperties } from 'react'
 
 import { useMainStore, useKeyboardStore, selectCtrlOrShiftKeyActive } from '@/store'
 import type { CreateElementSelectionData } from '@/types/edit'
 
 export type IElementCreateSelectionProps = {
   onCreated?: (payload: CreateElementSelectionData) => void
+  operateLineColor?: string
 }
 
 const ElementCreateSelection = memo((props: IElementCreateSelectionProps) => {
@@ -138,6 +139,7 @@ const ElementCreateSelection = memo((props: IElementCreateSelectionProps) => {
     <div
       className={cx('element-create-selection')}
       ref={selectionRef}
+      style={props.operateLineColor ? ({ '--operate-line': props.operateLineColor } as CSSProperties) : undefined}
       data-create-selection={creatingElement?.type || ''}
       onMouseDown={e => { e.stopPropagation(); createSelection(e) }}
       onContextMenu={e => { e.stopPropagation(); e.preventDefault() }}
