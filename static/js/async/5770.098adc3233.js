@@ -1,0 +1,1 @@
+"use strict";(self.rspackChunkfika_editor=self.rspackChunkfika_editor||[]).push([[5770],{47729(s,r,e){var t=e(78160),a=e(79616);t.PI.SUB_SUP_SCALE=.5;class k extends t.jH{constructor(s){super((0,a.kT)(s))}}e.d(r,{hfmath:()=>k})}}]);
