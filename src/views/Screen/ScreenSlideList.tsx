@@ -1,10 +1,11 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './ScreenSlideList.module.scss'
 const cx = bindStyles(styles)
-import { useEffect, useState, type MouseEventHandler, type TouchEventHandler, type WheelEventHandler } from 'react'
+import { useEffect, useRef, useState, type MouseEventHandler, type TouchEventHandler, type WheelEventHandler } from 'react'
 import { useSlidesStore } from '@/store'
 import { SlideScaleContext } from '@/types/injectKey'
 import { turningDurationVars } from '@/configs/transitions'
+import { resetAnimatedImagePlaybackForSlide } from '@/utils/animatedImagePlayback'
 import { resolveTurningMode, screenWindowRange } from './screenWindow'
 import ScreenSlide from './ScreenSlide'
 
@@ -42,6 +43,13 @@ export default function ScreenSlideList({
   const { start, end } = screenWindowRange(slideIndex, slides.length)
   const currentTurningMode = resolveTurningMode(slides[slideIndex]?.id ?? '', slides[slideIndex]?.turningMode)
   const currentId = slides[slideIndex]?.id
+  const prevSlideIdRef = useRef<string | undefined>(currentId)
+  useEffect(() => {
+    if (prevSlideIdRef.current && prevSlideIdRef.current !== currentId) {
+      resetAnimatedImagePlaybackForSlide(prevSlideIdRef.current)
+    }
+    prevSlideIdRef.current = currentId
+  }, [currentId])
   const [readyIds, setReadyIds] = useState(() => new Set<string>(currentId ? [currentId] : []))
 
   useEffect(() => {
@@ -125,6 +133,7 @@ export default function ScreenSlideList({
                 turnSlideToId={turnSlideToId}
                 manualExitFullscreen={manualExitFullscreen}
                 paintElements={index === slideIndex || readyIds.has(slide.id)}
+                isCurrentSlide={index === slideIndex}
               />
             </div>
           </div>

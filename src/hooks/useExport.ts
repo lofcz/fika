@@ -1202,11 +1202,36 @@ export function createPresentationExporter(
     }
   };
 
+  const rasterizeAvifBlobToPngDataUrl = async (blob: Blob): Promise<string | null> => {
+    try {
+      const bitmap = await createImageBitmap(blob);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, bitmap.width);
+        canvas.height = Math.max(1, bitmap.height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        ctx.drawImage(bitmap, 0, 0);
+        return canvas.toDataURL('image/png');
+      } finally {
+        bitmap.close();
+      }
+    } catch {
+      return null;
+    }
+  };
+
   /**
    * Read a Blob as a data URL for pptxgenjs `options.data` / `cover`.
-   * Prefer the response MIME type; fall back to application/octet-stream.
+   * Preserves animated GIFs intact for PowerPoint; converts AVIF (unsupported by
+   * most PowerPoint builds) into PNG so exported slides never render broken icons.
    */
-  const blobToDataUrl = (blob: Blob): Promise<string> => {
+  const blobToDataUrl = async (blob: Blob): Promise<string> => {
+    const mime = (blob.type || '').split(';')[0].trim().toLowerCase();
+    if (mime === 'image/avif') {
+      const converted = await rasterizeAvifBlobToPngDataUrl(blob);
+      if (converted) return converted;
+    }
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {

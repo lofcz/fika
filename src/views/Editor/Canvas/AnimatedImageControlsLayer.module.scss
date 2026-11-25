@@ -1,0 +1,11 @@
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.box {
+  position: absolute;
+  pointer-events: none;
+}

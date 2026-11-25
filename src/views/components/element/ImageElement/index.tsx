@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './index.module.scss'
 const cx = bindStyles(styles)
-import { useCallback, memo } from 'react'
+import { useCallback, useEffect, useRef, memo } from 'react'
 
 import { openContextmenu } from '@/utils/openContextmenu'
 import { useMainStore, useSlidesStore, selectCurrentSlide } from '@/store'
@@ -11,6 +11,8 @@ import type { ContextmenuItem } from '@/components/Contextmenu/types'
 import emitter, { EmitterEvents } from '@/utils/emitter'
 import { isElementSelectable } from '@/utils/selection'
 import { useI18nContext } from '@/i18n/useI18nContext'
+import type { AnimatedImageFormat } from '@/utils/animatedImage'
+import { registerAnimatedImageElement, useAnimatedImagePaused } from '@/utils/animatedImagePlayback'
 import useElementShadow from '@/views/components/element/hooks/useElementShadow'
 import useElementFlip from '@/views/components/element/hooks/useElementFlip'
 import useHistorySnapshot from '@/hooks/useHistorySnapshot'
@@ -32,10 +34,27 @@ const ImageElement = memo((props: IImageElementProps) => {
   const { LL } = useI18nContext()
   const isClipingTarget = useMainStore(s => s.clipingImageElementId === props.elementInfo.id)
   const setClipingImageElementId = useMainStore(s => s.setClipingImageElementId)
+  const isGesturing = useMainStore(s => s.isGesturing)
   const readOnly = useMainStore(s => s.readOnly)
+  const currentSlideId = useSlidesStore(s => s.slides[s.slideIndex]?.id ?? '')
   const updateElement = useSlidesStore(s => s.updateElement)
   const isMediaUnresolved = elementInfo.mediaState?.status === 'pending' || elementInfo.mediaState?.status === 'error' || !elementInfo.src
   const isCliping = isClipingTarget && !isMediaUnresolved
+  const animatedPaused = useAnimatedImagePaused(currentSlideId, elementInfo.id)
+  const unregisterAnimatedRef = useRef<(() => void) | null>(null)
+
+  const handleAnimatedChange = useCallback((format: AnimatedImageFormat | null) => {
+    unregisterAnimatedRef.current?.()
+    unregisterAnimatedRef.current = null
+    if (format && currentSlideId) {
+      unregisterAnimatedRef.current = registerAnimatedImageElement(currentSlideId, elementInfo.id, format)
+    }
+  }, [currentSlideId, elementInfo.id])
+
+  useEffect(() => () => {
+    unregisterAnimatedRef.current?.()
+    unregisterAnimatedRef.current = null
+  }, [])
   const { addHistorySnapshot } = useHistorySnapshot()
   const { shadowStyle } = useElementShadow(props.elementInfo.shadow)
   const { flipStyle } = useElementFlip(props.elementInfo.flipH, props.elementInfo.flipV)
@@ -129,6 +148,9 @@ const ImageElement = memo((props: IImageElementProps) => {
                 altText={elementInfo.altText}
                 replaceHint={!readOnly && !elementInfo.lock ? LL.editor.mediaSlot.doubleClickToReplace() : undefined}
                 draggable={false}
+                animate
+                paused={animatedPaused || isGesturing || isCliping}
+                onAnimatedChange={handleAnimatedChange}
                 style={{
                   top: imgPosition.top,
                   left: imgPosition.left,

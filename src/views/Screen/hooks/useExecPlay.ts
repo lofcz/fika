@@ -485,6 +485,7 @@ export default () => {
   const handleSlideClick = (e: MouseEvent) => {
     if (laserActiveRef.current) return
     if (e.button !== 0) return
+    if (e.target instanceof Element && e.target.closest('[data-fika-animated-control]')) return
     execNext()
   }
 

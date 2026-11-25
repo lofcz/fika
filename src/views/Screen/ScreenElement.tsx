@@ -25,11 +25,12 @@ export type IScreenElementProps = {
   animationIndex: number;
   slideType?: Slide['type'];
   background?: SlideBackground;
+  isCurrentSlide?: boolean;
   turnSlideToId: (id: string) => void;
   manualExitFullscreen: () => void;
 };
 const ScreenElement = memo((props: IScreenElementProps) => {
-  const { elementInfo, elementIndex, animationIndex, slideType, background, turnSlideToId, manualExitFullscreen } = props
+  const { elementInfo, elementIndex, animationIndex, slideType, background, isCurrentSlide = false, turnSlideToId, manualExitFullscreen } = props
   const currentElementComponent = (() => {
     const elementTypeMap = {
       [ElementTypes.IMAGE]: BaseImageElement,
@@ -74,6 +75,7 @@ const ScreenElement = memo((props: IScreenElementProps) => {
     background,
     themeBackgroundColor: theme.backgroundColor,
     themeFontColor: theme.fontColor,
+    ...(elementInfo.type === ElementTypes.IMAGE ? { isCurrentSlide } : {}),
   };
   return <><div className={cx('screen-element', {
       'link': elementInfo.link

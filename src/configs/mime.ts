@@ -1,5 +1,6 @@
 export const MIME_MAP: Record<string, string> = {
   'image/png': 'png',
+  'image/apng': 'apng',
   'image/jpeg': 'jpg',
   'image/gif': 'gif',
   'image/webp': 'webp',
@@ -31,6 +32,6 @@ export const MIME_MAP: Record<string, string> = {
   'video/3gpp': '3gp',
   'video/3gpp2': '3g2'
 };
-export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif', 'ico'] as const;
+export const IMAGE_EXTENSIONS = ['png', 'apng', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif', 'ico'] as const;
 export const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogv', 'ogg', 'mov', 'm4v', 'mpeg', 'avi'] as const;
 export const AUDIO_EXTENSIONS = ['mp3', 'wav', 'ogg', 'oga', 'm4a', 'aac', 'flac', 'weba', 'aif', 'wma'] as const;

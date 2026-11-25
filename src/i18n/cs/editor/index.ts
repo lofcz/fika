@@ -383,6 +383,8 @@ const cs_editor: NamespaceEditorTranslation = {
     loading: 'Načítám obrázek…',
     error: 'Obrázek není k dispozici',
     doubleClickToReplace: 'Dvojklikem nahradíte',
+    pauseAnimation: 'Pozastavit animaci',
+    playAnimation: 'Spustit animaci',
   },
   elementAnimation: {
     addAnimation: 'Přidat animaci',

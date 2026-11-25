@@ -65,9 +65,90 @@ const webpSize = (bytes: Uint8Array): ImageSize | null => {
   return null
 }
 
+const ascii4 = (bytes: Uint8Array, offset: number) => (
+  String.fromCharCode(bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3])
+)
+
+const readBoxSize = (bytes: Uint8Array, offset: number, end: number): { size: number; headerSize: number } | null => {
+  if (offset + 8 > end) return null
+  const size32 = u32(bytes, offset) >>> 0
+  if (size32 === 0) return { size: end - offset, headerSize: 8 }
+  if (size32 === 1) {
+    if (offset + 16 > end) return null
+    const hi = u32(bytes, offset + 8) >>> 0
+    const lo = u32(bytes, offset + 12) >>> 0
+    const size = hi * 0x100000000 + lo
+    if (size < 16) return null
+    return { size, headerSize: 16 }
+  }
+  if (size32 < 8) return null
+  return { size: size32, headerSize: 8 }
+}
+
+const findAvifBoxSize = (bytes: Uint8Array, start: number, end: number, depth = 0): ImageSize | null => {
+  if (depth > 8) return null
+  let offset = start
+  while (offset + 8 <= end) {
+    const header = readBoxSize(bytes, offset, end)
+    if (!header) break
+    const boxEnd = Math.min(end, offset + header.size)
+    const type = ascii4(bytes, offset + 4)
+    const contentStart = offset + header.headerSize
+
+    if (type === 'ispe' && contentStart + 12 <= boxEnd) {
+      const width = u32(bytes, contentStart + 4) >>> 0
+      const height = u32(bytes, contentStart + 8) >>> 0
+      if (width > 0 && height > 0 && width < 1_000_000 && height < 1_000_000) {
+        return { width, height }
+      }
+    }
+    else if (type === 'av01' && contentStart + 28 <= boxEnd) {
+      const width = u16(bytes, contentStart + 24)
+      const height = u16(bytes, contentStart + 26)
+      if (width > 0 && height > 0) return { width, height }
+    }
+    else if (type === 'meta' && contentStart + 4 <= boxEnd) {
+      const nested = findAvifBoxSize(bytes, contentStart + 4, boxEnd, depth + 1)
+      if (nested) return nested
+    }
+    else if (type === 'stsd' && contentStart + 8 <= boxEnd) {
+      const nested = findAvifBoxSize(bytes, contentStart + 8, boxEnd, depth + 1)
+      if (nested) return nested
+    }
+    else if (
+      type === 'iprp' || type === 'ipco' || type === 'moov'
+      || type === 'trak' || type === 'mdia' || type === 'minf' || type === 'stbl'
+    ) {
+      const nested = findAvifBoxSize(bytes, contentStart, boxEnd, depth + 1)
+      if (nested) return nested
+    }
+
+    if (boxEnd <= offset) break
+    offset = boxEnd
+  }
+  return null
+}
+
+const avifSize = (bytes: Uint8Array): ImageSize | null => {
+  if (bytes.length < 16 || ascii4(bytes, 4) !== 'ftyp') return null
+  const ftyp = readBoxSize(bytes, 0, bytes.length)
+  if (!ftyp || ftyp.size < 16 || ftyp.size > bytes.length) return null
+  let isAvif = false
+  for (let i = 8; i + 4 <= ftyp.size; i += 4) {
+    if (i === 12) continue
+    const brand = ascii4(bytes, i)
+    if (brand === 'avif' || brand === 'avis' || brand === 'mif1' || brand === 'msf1') {
+      isAvif = true
+      break
+    }
+  }
+  if (!isAvif) return null
+  return findAvifBoxSize(bytes, ftyp.size, bytes.length)
+}
+
 export const readImageSize = (buffer: ArrayBuffer | Uint8Array): ImageSize | null => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
-  return pngSize(bytes) || jpegSize(bytes) || gifSize(bytes) || webpSize(bytes)
+  return pngSize(bytes) || jpegSize(bytes) || gifSize(bytes) || webpSize(bytes) || avifSize(bytes)
 }
 
 export const resizeToMaxEdge = (width: number, height: number, maxEdge: number) => {

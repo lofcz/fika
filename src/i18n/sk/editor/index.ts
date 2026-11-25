@@ -341,6 +341,8 @@ const sk_editor: NamespaceEditorTranslation = {
     loading: 'Načítavam obrázok…',
     error: 'Obrázok nie je k dispozícii',
     doubleClickToReplace: 'Dvojklikom nahradíte',
+    pauseAnimation: 'Pozastaviť animáciu',
+    playAnimation: 'Spustiť animáciu',
   },
   elementAnimation: {
     addAnimation: 'Pridať animáciu',

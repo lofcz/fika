@@ -664,6 +664,8 @@ const en_editor: BaseTranslation = {
     loading: 'Loading image…',
     error: 'Image unavailable',
     doubleClickToReplace: 'Double-click to replace',
+    pauseAnimation: 'Pause animation',
+    playAnimation: 'Play animation',
   },
   elementAnimation: {
     addAnimation: 'Add animation',

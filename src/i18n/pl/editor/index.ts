@@ -341,6 +341,8 @@ const pl_editor: NamespaceEditorTranslation = {
     loading: 'Ładowanie obrazu…',
     error: 'Obraz jest niedostępny',
     doubleClickToReplace: 'Kliknij dwukrotnie, aby zamienić',
+    pauseAnimation: 'Wstrzymaj animację',
+    playAnimation: 'Odtwórz animację',
   },
   elementAnimation: {
     addAnimation: 'Dodaj animację',

@@ -15,9 +15,10 @@ export type IScreenSlideProps = {
   turnSlideToId: (id: string) => void;
   manualExitFullscreen: () => void;
   paintElements?: boolean;
+  isCurrentSlide?: boolean;
 };
 const ScreenSlide = memo((props: IScreenSlideProps) => {
-  const { slide, scale, animationIndex, turnSlideToId, manualExitFullscreen, paintElements = true } = props;
+  const { slide, scale, animationIndex, turnSlideToId, manualExitFullscreen, paintElements = true, isCurrentSlide = false } = props;
   const viewportRatio = useSlidesStore(s => s.viewportRatio);
   const viewportSize = useSlidesStore(s => s.viewportSize);
   const background = slide.background;
@@ -27,6 +28,6 @@ const ScreenSlide = memo((props: IScreenSlideProps) => {
         width: viewportSize + 'px',
         height: viewportSize * viewportRatio + 'px',
         transform: `scale(${scale})`
-      }}>{slide.elements.map((element, index) => <ScreenElement key={element.id} elementInfo={element} elementIndex={index + 1} animationIndex={animationIndex} slideType={slide.type} background={slide.background} turnSlideToId={turnSlideToId} manualExitFullscreen={manualExitFullscreen} />)}</div> : null}</div></SlideIdContext.Provider>;
+      }}>{slide.elements.map((element, index) => <ScreenElement key={element.id} elementInfo={element} elementIndex={index + 1} animationIndex={animationIndex} slideType={slide.type} background={slide.background} isCurrentSlide={isCurrentSlide} turnSlideToId={turnSlideToId} manualExitFullscreen={manualExitFullscreen} />)}</div> : null}</div></SlideIdContext.Provider>;
 });
 export default ScreenSlide;

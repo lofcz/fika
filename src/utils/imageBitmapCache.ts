@@ -88,10 +88,16 @@ const touch = (entry: CacheEntry) => {
 }
 
 const previewListeners = new Set<(src: string) => void>()
+const evictListeners = new Set<(keep: ReadonlySet<string>) => void>()
 
 export const subscribePreviewBitmaps = (fn: (src: string) => void) => {
   previewListeners.add(fn)
   return () => { previewListeners.delete(fn) }
+}
+
+export const onImageBitmapEvict = (fn: (keep: ReadonlySet<string>) => void) => {
+  evictListeners.add(fn)
+  return () => { evictListeners.delete(fn) }
 }
 
 const notifyPreview = (src: string) => {
@@ -167,6 +173,11 @@ const loadBlob = (src: string): Promise<Blob | null> => {
   })()
   blobJobs.set(src, job)
   return job
+}
+
+export const loadImageBlob = (src: string): Promise<Blob | null> => {
+  if (!src) return Promise.resolve(null)
+  return loadBlob(src)
 }
 
 const pendingPreviewJobs = () => {
@@ -322,6 +333,7 @@ export const revokeImageBitmapsNotIn = (keep: Iterable<string>) => {
   for (const src of blobJobs.keys()) {
     if (!retain.has(src)) blobJobs.delete(src)
   }
+  for (const fn of evictListeners) fn(retain)
 }
 
 export const syncImageBitmapsToSlides = (slides: readonly Slide[]) => {

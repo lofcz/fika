@@ -1,0 +1,74 @@
+.control {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #ffffff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.28);
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  transform: scale(0.94);
+  transition: opacity 0.14s ease, transform 0.14s ease, background-color 0.14s ease;
+
+  &.compact {
+    right: 6px;
+    bottom: 6px;
+    width: 24px;
+    height: 24px;
+  }
+
+  &.visible {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  &.paused {
+    opacity: 0.88;
+    transform: scale(1);
+  }
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    transform: scale(1.04);
+    background: rgba(15, 23, 42, 0.88);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+.icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+
+  .compact & {
+    width: 11px;
+    height: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control {
+    transition: none;
+  }
+}

@@ -4540,6 +4540,14 @@ export type NamespaceEditorTranslation = {
 		 * D​o​u​b​l​e​-​c​l​i​c​k​ ​t​o​ ​r​e​p​l​a​c​e
 		 */
 		doubleClickToReplace: string
+		/**
+		 * P​a​u​s​e​ ​a​n​i​m​a​t​i​o​n
+		 */
+		pauseAnimation: string
+		/**
+		 * P​l​a​y​ ​a​n​i​m​a​t​i​o​n
+		 */
+		playAnimation: string
 	}
 	elementAnimation: {
 		/**
@@ -10668,6 +10676,14 @@ export type TranslationFunctions = {
 			 * Double-click to replace
 			 */
 			doubleClickToReplace: () => LocalizedString
+			/**
+			 * Pause animation
+			 */
+			pauseAnimation: () => LocalizedString
+			/**
+			 * Play animation
+			 */
+			playAnimation: () => LocalizedString
 		}
 		elementAnimation: {
 			/**

@@ -77,6 +77,8 @@ import message from '@/utils/message'
 import { useI18nContext } from '@/i18n/useI18nContext'
 import { classifyElementListSync, patchEditingElementChrome, snapSlideElements, slideElementsSnapEqual } from './elementListSync'
 import { useSyncImageBitmapCache } from '@/views/components/element/ImageElement/useImageBitmap'
+import { resetAnimatedImagePlaybackForSlide } from '@/utils/animatedImagePlayback'
+import AnimatedImageControlsLayer from './AnimatedImageControlsLayer'
 
 const WHEEL_PAGE_STEP = 100
 
@@ -97,6 +99,7 @@ const OPERATE_CHROME_SELECTOR = [
   '.ProseMirror',
   '.is-editing',
   '.media-player-host',
+  '.animated-image-control',
   '.scrollbar-track',
   '.scrollbar-thumb',
   '.ruler',
@@ -260,6 +263,15 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
   useSyncImageBitmapCache()
 
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const viewportWrapperRef = useRef<HTMLDivElement | null>(null)
+  const activeAnimatedSlideId = currentSlide?.id ?? ''
+  const prevAnimatedSlideIdRef = useRef(activeAnimatedSlideId)
+  useEffect(() => {
+    if (prevAnimatedSlideIdRef.current && prevAnimatedSlideIdRef.current !== activeAnimatedSlideId) {
+      resetAnimatedImagePlaybackForSlide(prevAnimatedSlideIdRef.current)
+    }
+    prevAnimatedSlideIdRef.current = activeAnimatedSlideId
+  }, [activeAnimatedSlideId])
   const alignmentStoreRef = useRef<AlignmentLinesStore | null>(null)
   if (!alignmentStoreRef.current) alignmentStoreRef.current = createAlignmentLinesStore()
   const alignmentStore = alignmentStoreRef.current
@@ -903,6 +915,7 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
         {creatingElement ? <ElementCreateSelection onCreated={data => insertElementFromCreateSelection(data)} operateLineColor={operateLineColor} /> : null}
         {creatingCustomShape ? <ShapeCreateCanvas mode={creatingCustomShape ?? 'polygon'} onCreated={data => insertCustomShape(data)} /> : null}
         <div
+          ref={viewportWrapperRef}
           className={cx('viewport-wrapper')}
           style={{
             zIndex: mynaView ? 2 : undefined,
@@ -973,6 +986,14 @@ const Canvas = memo(({ className, style, allowOverflow = false, mynaView }: { cl
               canvasRef={canvasRef}
               viewportStyles={viewportStyles}
               openLinkDialog={openLinkDialog}
+            />
+            <AnimatedImageControlsLayer
+              slideId={activeAnimatedSlideId}
+              elementList={elementList}
+              canvasScale={canvasScale}
+              hiddenIdSet={hiddenIdSet}
+              wrapperRef={viewportWrapperRef}
+              disabled={!!creatingElement || !!creatingCustomShape || skeletonSlide}
             />
             <AiRevealBadge canvasRef={canvasRef} />
           </div>

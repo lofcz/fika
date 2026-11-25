@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './ElementFilter.module.scss'
 const cx = bindStyles(styles)
-import { useCallback, useMemo, memo, useState, useEffect } from 'react'
+import { useMemo, memo } from 'react'
 
 import { useSlidesStore } from '@/store'
 import { getHandleElement, useHandleElementId, useHandleElementShallow } from './handleElement'
@@ -23,7 +23,7 @@ interface FilterOption {
 
 const ElementFilter = memo(() => {
   const { LL } = useI18nContext()
-  const createDefaultFilters = useCallback((): FilterOption[] => [
+  const filterDefs: FilterOption[] = [
     { label: LL.editor.elementFilter.blur(), key: 'blur', default: 0, value: 0, unit: 'px', max: 10, step: 1 },
     { label: LL.editor.elementFilter.brightness(), key: 'brightness', default: 100, value: 100, unit: '%', max: 200, step: 5 },
     { label: LL.editor.elementFilter.contrast(), key: 'contrast', default: 100, value: 100, unit: '%', max: 200, step: 5 },
@@ -33,9 +33,9 @@ const ElementFilter = memo(() => {
     { label: LL.editor.elementFilter.sepia(), key: 'sepia', default: 0, value: 0, unit: '%', max: 100, step: 5 },
     { label: LL.editor.elementFilter.invert(), key: 'invert', default: 0, value: 0, unit: '%', max: 100, step: 5 },
     { label: LL.editor.elementFilter.opacity(), key: 'opacity', default: 100, value: 100, unit: '%', max: 100, step: 5 },
-  ], [LL])
+  ]
 
-  const presetFilters = useMemo(() => [
+  const presetFilters = [
     { label: LL.editor.elementFilter.presetBlackWhite(), values: { grayscale: '100%' } as ImageElementFilters },
     { label: LL.editor.elementFilter.presetVintage(), values: { sepia: '50%', contrast: '110%', brightness: '90%' } },
     { label: LL.editor.elementFilter.presetSharpen(), values: { contrast: '150%' } },
@@ -45,42 +45,25 @@ const ElementFilter = memo(() => {
     { label: LL.editor.elementFilter.presetVivid(), values: { saturate: '200%' } },
     { label: LL.editor.elementFilter.presetBlur(), values: { blur: '2px' } },
     { label: LL.editor.elementFilter.presetInvert(), values: { invert: '100%' } },
-  ], [LL])
+  ]
 
   const handleElementId = useHandleElementId()
   const imageFilter = useHandleElementShallow(el => {
     if (!el || el.type !== 'image') return null
     return { src: el.src, filters: el.filters }
   })
-  const [activeFilterValues, setActiveFilterValues] = useState<Partial<Record<ImageElementFilterKeys, number>>>({})
-  const [hasFilters, setHasFilters] = useState(false)
   const { addHistorySnapshot } = useHistorySnapshot()
 
+  const hasFilters = Boolean(imageFilter?.filters)
   const filterOptions = useMemo((): FilterOption[] => {
-    const defaults = createDefaultFilters()
-    return defaults.map(item => ({
-      ...item,
-      value: activeFilterValues[item.key] ?? item.value,
-    }))
-  }, [createDefaultFilters, activeFilterValues])
-
-  useEffect(() => {
-    if (!imageFilter) return
-    const filters = imageFilter.filters
-    if (filters) {
-      const values: Partial<Record<ImageElementFilterKeys, number>> = {}
-      for (const item of createDefaultFilters()) {
-        const filterItem = filters[item.key]
-        if (filterItem) values[item.key] = parseInt(filterItem)
-      }
-      setActiveFilterValues(values)
-      setHasFilters(true)
-    }
-    else {
-      setActiveFilterValues({})
-      setHasFilters(false)
-    }
-  }, [imageFilter, createDefaultFilters])
+    const filters = imageFilter?.filters
+    if (!filters) return filterDefs
+    return filterDefs.map(item => {
+      const raw = filters[item.key]
+      const parsed = raw ? parseInt(raw, 10) : Number.NaN
+      return Number.isFinite(parsed) ? { ...item, value: parsed } : item
+    })
+  }, [imageFilter?.filters, filterDefs])
 
   const filters2Style = (filters: ImageElementFilters) => {
     let filter = ''

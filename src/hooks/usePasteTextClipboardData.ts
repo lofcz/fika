@@ -17,7 +17,7 @@ interface PasteTextClipboardDataOptions {
  * Match image URLs from allowed hosts only.
  */
 const isValidImgURL = (url: string) => {
-  return /^https?:\/\/(?:[a-zA-Z0-9-]+\.)*fika\.cn\/[^\s]+\.(?:jpg|jpeg|png|svg|webp)(?:\?.*)?$/i.test(url)
+  return /^https?:\/\/(?:[a-zA-Z0-9-]+\.)*fika\.cn\/[^\s]+\.(?:jpg|jpeg|png|apng|svg|webp|gif|avif)(?:\?.*)?$/i.test(url)
 }
 
 export default () => {
