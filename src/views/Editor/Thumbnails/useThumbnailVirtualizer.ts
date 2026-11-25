@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { useVirtualizer, type VirtualItem, type Virtualizer } from '@tanstack/react-virtual'
 import { usePreviewDestSize, type PreviewDestSize } from './paneSize'
 import type { RailSlideMeta } from '@/views/components/ThumbnailSlide/paintedSlide'
+import { notifyThumbnailScrollActivity } from '@/paint/rasterResources'
 
 const SECTION_HEIGHT = 26
 const ROW_CHROME = 16
@@ -33,13 +34,23 @@ export const useThumbnailVirtualizer = (
     getScrollElement: () => scrollRef.current,
     estimateSize: index => thumbHeight
       + (rowHasSection(items[index], index, hasSection) ? SECTION_HEIGHT : 0),
-    overscan: 1,
+    overscan: 3,
     getItemKey: index => items[index]?.id ?? index,
   })
 
   useEffect(() => {
     virtualizer.measure()
   }, [virtualizer, dest.cssHeight, dest.cssWidth, hasSection, items])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => notifyThumbnailScrollActivity()
+    // Capture phase ensures `isThumbnailScrolling()` flips true before the
+    // virtualizer's scroll listener mounts newly visible thumbnail rows.
+    el.addEventListener('scroll', onScroll, { passive: true, capture: true })
+    return () => el.removeEventListener('scroll', onScroll, true)
+  }, [])
 
   const windowItems = virtualizer.getVirtualItems()
   const pinnedSlideIds: string[] = []

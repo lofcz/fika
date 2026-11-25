@@ -1,7 +1,7 @@
 import { nodes } from 'prosemirror-schema-basic';
 import type { Node, NodeSpec } from 'prosemirror-model';
 import { listItem as _listItem } from 'prosemirror-schema-list';
-import { buildMathElement, normalizeImportedLatex } from '@/utils/math';
+import { buildMathElement, normalizeImportedLatex, renderMathInnerMarkup } from '@/utils/math';
 type Attr = Record<string, number | string>;
 function listAttrsFromDOM(dom: HTMLElement, extra?: Attr): Attr {
   const attr: Attr = {
@@ -229,10 +229,12 @@ const math: NodeSpec = {
     tag: `span.fika-math`,
     getAttrs: dom => {
       const el = dom as HTMLElement;
+      const latex = normalizeImportedLatex(el.getAttribute('data-latex') || '');
+      const display = el.getAttribute('data-display') === 'true';
       return {
-        latex: normalizeImportedLatex(el.getAttribute('data-latex') || ''),
-        html: el.innerHTML,
-        display: el.getAttribute('data-display') === 'true'
+        latex,
+        html: renderMathInnerMarkup(latex, display) ?? el.innerHTML,
+        display
       };
     }
   },

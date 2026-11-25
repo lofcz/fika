@@ -36,7 +36,7 @@ import {
 } from '@/utils/textContrast'
 import { isUnfilledPlaceholder, placeholderAlignOf, placeholderPromptHtml } from '@/utils/placeholderPaint'
 import { placeholderPromptSizeOf, placeholderTypedSizeOf, placeholderWeightOf } from '@/configs/textPresets'
-import { MATH_CLASS } from '@/utils/inlineMathBox'
+import { latexFallbackText, MATH_CLASS } from '@/utils/inlineMathBox'
 import { containsMath, tokenizeMath } from '@/utils/markdown'
 import { escapeLatexAttr } from '@/utils/math'
 import { SLIDE_SKELETON_BLOCKS, SLIDE_SKELETON_FILL, SLIDE_SKELETON_RADIUS } from '@/configs/slideSkeleton'
@@ -186,11 +186,17 @@ const gradientPaint = (
   return paint
 }
 
-const bitmapFor = (src: string, invalidate: () => void, imageBitmaps?: ReadonlyMap<string, ImageBitmap>) => {
+const bitmapFor = (
+  src: string,
+  invalidate: () => void,
+  imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
+  onIncomplete?: () => void,
+) => {
   const full = imageBitmaps?.get(src)
   if (full) return full
   const cached = getCachedPreviewImageBitmap(src)
   if (cached) return cached
+  onIncomplete?.()
   void loadPreviewImageBitmap(src).then(bitmap => {
     if (bitmap) invalidate()
   })
@@ -222,6 +228,7 @@ const paintBackground = (
   height: number,
   invalidate: () => void,
   imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
+  onIncomplete?: () => void,
 ) => {
   const background = slide.background
   if (!background) {
@@ -243,7 +250,7 @@ const paintBackground = (
   ctx.fillRect(0, 0, width, height)
   const source = background.image?.src
   if (!source) return
-  const bitmap = bitmapFor(source, invalidate, imageBitmaps)
+  const bitmap = bitmapFor(source, invalidate, imageBitmaps, onIncomplete)
   if (!bitmap) return
   if (background.image?.size === 'repeat') {
     const scale = Math.min(width / bitmap.width, height / bitmap.height)
@@ -348,6 +355,7 @@ const paintImage = (
   element: PPTImageElement,
   invalidate: () => void,
   imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
+  onIncomplete?: () => void,
 ) => withRectTransform(ctx, element, () => {
   const clip = clipPathForImage(element)
   ctx.save()
@@ -358,7 +366,7 @@ const paintImage = (
     paintImageSlotPlaceholder(ctx, element.width, element.height, slotStatus === 'error' ? 'error' : 'pending')
   }
   else {
-    const bitmap = bitmapFor(element.src, invalidate, imageBitmaps)
+    const bitmap = bitmapFor(element.src, invalidate, imageBitmaps, onIncomplete)
     if (bitmap) {
       ctx.filter = imageFilter(element)
       if (element.clip) {
@@ -391,6 +399,7 @@ const paintShape = (
   theme: SlideTheme,
   invalidate: () => void,
   imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
+  onIncomplete?: () => void,
 ) => withRectTransform(ctx, element, () => {
   const path = scaledPath(resolveShapePaintPath(element), element.width, element.height, element.viewBox)
   ctx.save()
@@ -399,7 +408,7 @@ const paintShape = (
   if (element.pattern) {
     ctx.save()
     ctx.clip(path, 'evenodd')
-    const bitmap = bitmapFor(element.pattern, invalidate, imageBitmaps)
+    const bitmap = bitmapFor(element.pattern, invalidate, imageBitmaps, onIncomplete)
     if (bitmap) drawCover(ctx, bitmap, element.width, element.height)
     ctx.restore()
   }
@@ -435,6 +444,7 @@ const paintShape = (
       fit: element.text.fixedHeight !== false,
       minFontSize: element.text.minFontSize,
       invalidate,
+      onIncomplete,
     })
   }
   ctx.restore()
@@ -447,6 +457,7 @@ const paintTextElement = (
   theme: SlideTheme,
   showPlaceholders: boolean,
   invalidate: () => void,
+  onIncomplete?: () => void,
 ) => withRectTransform(ctx, element, () => {
   const box = roundRectPath(element.width, element.height, resolveOutlineRadiusPx(element.outline?.radius, element.width, element.height))
   ctx.save()
@@ -509,6 +520,7 @@ const paintTextElement = (
     vertical: element.vertical,
     shadow: element.shadow,
     invalidate,
+    onIncomplete,
   })
   ctx.restore()
 })
@@ -589,6 +601,7 @@ const paintLatex = (
   ctx: CanvasRenderingContext2D,
   element: PPTLatexElement,
   invalidate: () => void,
+  onIncomplete?: () => void,
 ) => {
   withRectTransform(ctx, element, () => {
     // The main canvas typesets with MathLive and the editor saves `path: ''`,
@@ -606,13 +619,25 @@ const paintLatex = (
       ctx.drawImage(raster, (element.width - dw) / 2, (element.height - dh) / 2, dw, dh)
       return
     }
-    if (!element.path) return
-    const path = scaledPath(element.path, element.width, element.height, element.viewBox)
+    onIncomplete?.()
+    if (element.path) {
+      const path = scaledPath(element.path, element.width, element.height, element.viewBox)
+      ctx.fillStyle = element.color
+      ctx.strokeStyle = element.color
+      ctx.lineWidth = element.strokeWidth || 0
+      ctx.fill(path, 'evenodd')
+      if (element.strokeWidth) ctx.stroke(path)
+      return
+    }
+    // Readable interim stand-in while the MathLive raster bakes (never cached).
+    const fallback = latexFallbackText(element.latex)
+    if (!fallback) return
+    const fontSize = Math.max(10, Math.min(36, element.height * 0.55))
     ctx.fillStyle = element.color
-    ctx.strokeStyle = element.color
-    ctx.lineWidth = element.strokeWidth || 0
-    ctx.fill(path, 'evenodd')
-    if (element.strokeWidth) ctx.stroke(path)
+    ctx.font = `${fontSize}px ui-sans-serif, system-ui, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(fallback, element.width / 2, element.height / 2, Math.max(1, element.width - 8))
   })
 }
 
@@ -662,6 +687,7 @@ const paintTable = (
   element: PPTTableElement,
   theme: SlideTheme,
   invalidate: () => void,
+  onIncomplete?: () => void,
 ) => withRectTransform(ctx, element, () => {
   const rows = element.data.length
   if (!rows) return
@@ -750,6 +776,7 @@ const paintTable = (
         align: cell.style?.align || 'left',
         fit: false,
         invalidate,
+        onIncomplete,
       })
       ctx.restore()
       x += width
@@ -764,6 +791,7 @@ const paintRasterElement = (
   slide: Slide,
   theme: SlideTheme,
   invalidate: () => void,
+  onIncomplete?: () => void,
 ) => withRectTransform(ctx, element, () => {
   const outline = element.type === 'chart' ? element.outline : undefined
   const box = roundRectPath(element.width, element.height, resolveOutlineRadiusPx(outline?.radius, element.width, element.height))
@@ -793,6 +821,7 @@ const paintRasterElement = (
   ctx.clip(box)
   if (raster) ctx.drawImage(raster, 0, 0, element.width, element.height)
   else {
+    onIncomplete?.()
     ctx.globalAlpha *= 0.2
     ctx.fillStyle = theme.fontColor || '#71717a'
     ctx.fillRect(0, 0, element.width, element.height)
@@ -806,8 +835,9 @@ const paintMedia = (
   element: Extract<PPTElement, { type: 'video' | 'audio' }>,
   invalidate: () => void,
   imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
+  onIncomplete?: () => void,
 ) => withRectTransform(ctx, element, () => {
-  const bitmap = element.poster ? bitmapFor(element.poster, invalidate, imageBitmaps) : undefined
+  const bitmap = element.poster ? bitmapFor(element.poster, invalidate, imageBitmaps, onIncomplete) : undefined
   ctx.save()
   ctx.beginPath()
   ctx.rect(0, 0, element.width, element.height)
@@ -842,19 +872,20 @@ const paintElement = (
   slideW: number,
   slideH: number,
   imageBitmaps?: ReadonlyMap<string, ImageBitmap>,
+  onIncomplete?: () => void,
 ) => {
   switch (element.type) {
-    case 'shape': paintShape(ctx, element, slide, theme, invalidate, imageBitmaps); break
+    case 'shape': paintShape(ctx, element, slide, theme, invalidate, imageBitmaps, onIncomplete); break
     case 'line': paintLine(ctx, element); break
-    case 'image': paintImage(ctx, element, invalidate, imageBitmaps); break
-    case 'text': paintTextElement(ctx, element, slide, theme, showPlaceholders, invalidate); break
-    case 'table': paintTable(ctx, element, theme, invalidate); break
-    case 'latex': paintLatex(ctx, element, invalidate); break
+    case 'image': paintImage(ctx, element, invalidate, imageBitmaps, onIncomplete); break
+    case 'text': paintTextElement(ctx, element, slide, theme, showPlaceholders, invalidate, onIncomplete); break
+    case 'table': paintTable(ctx, element, theme, invalidate, onIncomplete); break
+    case 'latex': paintLatex(ctx, element, invalidate, onIncomplete); break
     case 'chart':
     case 'mermaid':
-    case 'code': paintRasterElement(ctx, element, slide, theme, invalidate); break
+    case 'code': paintRasterElement(ctx, element, slide, theme, invalidate, onIncomplete); break
     case 'video':
-    case 'audio': paintMedia(ctx, element, invalidate, imageBitmaps); break
+    case 'audio': paintMedia(ctx, element, invalidate, imageBitmaps, onIncomplete); break
   }
 }
 
@@ -871,11 +902,16 @@ const paintSkeleton = (ctx: CanvasRenderingContext2D, width: number, height: num
   ctx.restore()
 }
 
+export type PaintSlideResult = {
+  /** False when any async image/math/chart/code raster was still pending or fell back. */
+  complete: boolean
+}
+
 /**
  * Direct Slide JSON -> final-DPR canvas paint. No DOM tree, foreignObject
  * capture, intermediate PNG, or CSS-scale resampling is involved.
  */
-export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlideOptions) => {
+export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlideOptions): PaintSlideResult => {
   const logicalWidth = Math.max(1, options.viewportSize)
   const logicalHeight = Math.max(1, options.viewportSize * options.viewportRatio)
   const cssWidth = Math.max(1, options.cssWidth)
@@ -886,7 +922,9 @@ export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlid
   if (canvas.width !== pixelWidth) canvas.width = pixelWidth
   if (canvas.height !== pixelHeight) canvas.height = pixelHeight
   const ctx = canvas.getContext('2d', { alpha: options.transparentBackground === true })
-  if (!ctx) return
+  if (!ctx) return { complete: false }
+  let complete = true
+  const markIncomplete = () => { complete = false }
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, pixelWidth, pixelHeight)
   ctx.imageSmoothingEnabled = true
@@ -904,7 +942,7 @@ export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlid
     ctx.rect(0, 0, logicalWidth, logicalHeight)
     ctx.clip()
   }
-  if (!options.transparentBackground) paintBackground(ctx, options.slide, logicalWidth, logicalHeight, options.invalidate, options.imageBitmaps)
+  if (!options.transparentBackground) paintBackground(ctx, options.slide, logicalWidth, logicalHeight, options.invalidate, options.imageBitmaps, markIncomplete)
   if (options.slide.skeleton) paintSkeleton(ctx, logicalWidth, logicalHeight)
   for (const element of options.slide.elements) {
     ctx.save()
@@ -918,9 +956,10 @@ export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlid
         ctx.closePath()
         ctx.clip()
       }
-      paintElement(ctx, element, options.slide, options.theme, options.invalidate, !!options.showPlaceholders, logicalWidth, logicalHeight, options.imageBitmaps)
+      paintElement(ctx, element, options.slide, options.theme, options.invalidate, !!options.showPlaceholders, logicalWidth, logicalHeight, options.imageBitmaps, markIncomplete)
     }
     catch (error) {
+      complete = false
       if (import.meta.env.MODE === 'development') {
         console.warn('[slidePainter] element paint failed', element.id, element.type, error)
       }
@@ -928,6 +967,7 @@ export const paintSlideToCanvas = (canvas: HTMLCanvasElement, options: PaintSlid
     finally { ctx.restore() }
   }
   ctx.restore()
+  return { complete }
 }
 
 export const clearSlidePathCache = () => {

@@ -1,7 +1,7 @@
 import { bindStyles } from '@/utils/cssm'
 import styles from './BaseShapeElement.module.scss'
 const cx = bindStyles(styles)
-import { memo, useContext, useRef, type CSSProperties } from 'react';
+import { memo, useContext, useEffect, useRef, type CSSProperties } from 'react';
 
 import type { PPTShapeElement, ShapeText } from '@/types/slides';
 import { useSlidesStore, selectSlideById } from '@/store';
@@ -15,6 +15,8 @@ import { resolveLiveTextPaint } from '@/utils/textContrast';
 import { resolveShapePaintPath } from '@/utils/elementOutline';
 import { shapePathTransform } from '@/utils/shapePaint';
 import { serializeRichTextHtml } from '@/utils/prosemirror';
+import { ensureMathliveReady, htmlContainsMath } from '@/utils/math';
+import { useMathReadyVersion } from '@/hooks/useMathReadyVersion';
 import GradientDefs from './GradientDefs';
 import PatternDefs from './PatternDefs';
 import { areBaseShapePropsEqual } from './shapePaintEqual';
@@ -48,7 +50,12 @@ const BaseShapeElement = memo((props: IBaseShapeElementProps) => {
     wordSpace: elementInfo.text?.wordSpace,
     paragraphSpace: elementInfo.text?.paragraphSpace,
   };
-  const staticContent = serializeRichTextHtml(text.content);
+  const hasMath = htmlContainsMath(text.content);
+  const mathVersion = useMathReadyVersion(hasMath);
+  useEffect(() => {
+    if (hasMath) void ensureMathliveReady().catch(() => {});
+  }, [hasMath]);
+  const staticContent = serializeRichTextHtml(text.content, mathVersion);
   const inset = text.inset || [10, 10, 10, 10];
   // Same shrink-to-fit as the editor: locked shape text scales through the
   // --text-fit-* variables the calc() font sizes consume. The DOM-capture

@@ -12,7 +12,6 @@ import Modal from '@/components/Modal'
 const isLatexElement = (el: PPTElement): el is PPTLatexElement => el.type === 'latex'
 
 const LatexEditorDialog = memo(() => {
-  const slidesStore = useSlidesStore()
   const handleElementId = useMainStore(s => s.handleElementId)
   const [visible, setVisible] = useState(false)
   const [editingElementId, setEditingElementId] = useState('')
@@ -35,13 +34,13 @@ const LatexEditorDialog = memo(() => {
   const updateLatexData = useCallback((data: { path: string; latex: string; w: number; h: number }) => {
     const current = editingLatexElement
     if (!current) return
-    slidesStore.updateElement({
+    useSlidesStore.getState().updateElement({
       id: current.id,
       props: latexPropsAfterEdit(current, data),
     })
     addHistorySnapshot()
     setVisible(false)
-  }, [editingLatexElement, slidesStore, addHistorySnapshot])
+  }, [editingLatexElement, addHistorySnapshot])
 
   const close = useCallback(() => setVisible(false), [])
 

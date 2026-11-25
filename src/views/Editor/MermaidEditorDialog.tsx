@@ -11,7 +11,6 @@ import Modal from '@/components/Modal'
 const isMermaidElement = (el: PPTElement): el is PPTMermaidElement => el.type === 'mermaid'
 
 const MermaidEditorDialog = memo(() => {
-  const slidesStore = useSlidesStore()
   const { addHistorySnapshot } = useHistorySnapshot()
   const [visible, setVisible] = useState(false)
   const [editingElementId, setEditingElementId] = useState('')
@@ -35,14 +34,14 @@ const MermaidEditorDialog = memo(() => {
     if (!id) return
     const current = selectCurrentSlide(useSlidesStore.getState()).elements.find(item => item.id === id)
     if (current?.type === 'mermaid' && code !== current.code) {
-      slidesStore.updateElement({
+      useSlidesStore.getState().updateElement({
         id,
         props: { code },
       })
       addHistorySnapshot()
     }
     setVisible(false)
-  }, [editingElementId, slidesStore, addHistorySnapshot])
+  }, [editingElementId, addHistorySnapshot])
 
   const close = useCallback(() => setVisible(false), [])
 

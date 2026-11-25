@@ -9,7 +9,7 @@ import { codeElementToBoothHtml } from '@/utils/codeHighlight'
 import { isLightCodeTheme } from '@/configs/code'
 import { renderMermaidForImage } from '@/utils/mermaid'
 import { LATEX_ELEMENT_FONT_SIZE, ensureMathliveReady, renderLatexElementHtml, renderMathToHtml } from '@/utils/math'
-import { latexFallbackText } from '@/utils/inlineMathBox'
+import { MATH_FONT_CHANGE_TOKEN, subscribeTextFontChanges } from '@/utils/textFit'
 import { EMBED_ROOT_CLASS } from '@/utils/portal'
 
 echarts.use([
@@ -27,20 +27,173 @@ echarts.use([
 type Raster = ImageBitmap | HTMLCanvasElement
 type RasterProducer = () => Promise<Raster | null> | Raster | null
 
-const RASTER_CACHE_MAX = 192
+export type RasterPriority = 'export' | 'visible' | 'overscan'
+
+type WorkItem = {
+  key: string
+  produce: RasterProducer
+  resolve: (value: Raster | null) => void
+  exportUrgent: boolean
+  /** Mounted thumbnail owners currently awaiting this job. */
+  owners: Set<string>
+  /** True only when requested exclusively by tracked thumbnail owners (safe to drop on unmount). */
+  ownerTracked: boolean
+  seq: number
+}
+
+export type RasterDiagnostics = {
+  completed: number
+  droppedUnmounted: number
+  rejectEmptyDimensions: number
+  rejectBounds: number
+  rejectCaptureError: number
+  rejectNoInk: number
+  rejectRetryCapHit: number
+  lastRejections: Array<{ reason: string; latex: string; width?: number; height?: number; size?: number }>
+}
+
+const RASTER_CACHE_MAX = 512
 const rasters = new Map<string, Raster>()
 const jobs = new Map<string, Promise<Raster | null>>()
 const listeners = new Map<string, Set<() => void>>()
-const workQueue: Array<{ key: string; produce: RasterProducer; resolve: (value: Raster | null) => void }> = []
+const workQueue: WorkItem[] = []
+const ownerPriorities = new Map<string, 'visible' | 'overscan'>()
+const ownerListeners = new Map<string, Array<{ key: string; fn: () => void }>>()
+const scrollIdleListeners = new Set<() => void>()
+
+const rasterDiagnostics: RasterDiagnostics = {
+  completed: 0,
+  droppedUnmounted: 0,
+  rejectEmptyDimensions: 0,
+  rejectBounds: 0,
+  rejectCaptureError: 0,
+  rejectNoInk: 0,
+  rejectRetryCapHit: 0,
+  lastRejections: [],
+}
+
+const recordRejection = (reason: keyof Pick<
+  RasterDiagnostics,
+  'rejectEmptyDimensions' | 'rejectBounds' | 'rejectCaptureError' | 'rejectNoInk' | 'rejectRetryCapHit'
+>, latex: string, detail?: { width?: number; height?: number; size?: number }) => {
+  rasterDiagnostics[reason]++
+  rasterDiagnostics.lastRejections.push({ reason, latex, ...detail })
+  if (rasterDiagnostics.lastRejections.length > 24) rasterDiagnostics.lastRejections.shift()
+}
+
+export const readRasterDiagnostics = (): RasterDiagnostics & { queued: number; inFlight: number; scrollActive: boolean; cacheSize: number } => ({
+  ...rasterDiagnostics,
+  lastRejections: rasterDiagnostics.lastRejections.slice(),
+  queued: workQueue.length,
+  inFlight,
+  scrollActive,
+  cacheSize: rasters.size,
+})
+
+export const resetRasterDiagnostics = () => {
+  rasterDiagnostics.completed = 0
+  rasterDiagnostics.droppedUnmounted = 0
+  rasterDiagnostics.rejectEmptyDimensions = 0
+  rasterDiagnostics.rejectBounds = 0
+  rasterDiagnostics.rejectCaptureError = 0
+  rasterDiagnostics.rejectNoInk = 0
+  rasterDiagnostics.rejectRetryCapHit = 0
+  rasterDiagnostics.lastRejections.length = 0
+}
+
 /**
- * Producers mostly await (SnapDOM serialization, SVG image decode), so a few
- * in flight overlap that latency. One at a time made a math-heavy slide wait
- * for every formula in turn — seconds per slide on a cold cache.
+ * Producers mostly await (SnapDOM serialization, SVG image decode), so up to
+ * MAX_IN_FLIGHT overlap that latency. During active thumbnail scrolling we
+ * pause launching new non-export captures until 150ms after the last scroll
+ * event (debounced — never latched), then immediately drain visible thumbs
+ * first, overscan second, and drop queued jobs for unmounted thumbs.
  */
 const MAX_IN_FLIGHT = 4
+const SCROLL_IDLE_MS = 150
 let inFlight = 0
+let scrollActive = false
+let scrollIdleTimer = 0
+let nextWorkSeq = 1
 /** Set while a paint runs: jobs that paint is waiting for (see `collectRasterJobs`). */
 let collecting: Map<string, Promise<Raster | null>> | null = null
+/** Active thumbnail owner context during `paintSlideToCanvas`. */
+let activeOwner: { id: string; priority: 'visible' | 'overscan' } | null = null
+/** Pending raster keys per thumbnail owner (both queued and in-flight). */
+const ownerPendingKeys = new Map<string, Set<string>>()
+
+export const hasPendingRastersForOwner = (ownerId: string): boolean => {
+  const keys = ownerPendingKeys.get(ownerId)
+  return !!keys && keys.size > 0
+}
+
+export const isThumbnailScrolling = () => scrollActive
+
+export const subscribeThumbnailScrollIdle = (listener: () => void) => {
+  scrollIdleListeners.add(listener)
+  return () => { scrollIdleListeners.delete(listener) }
+}
+
+export const notifyThumbnailScrollActivity = () => {
+  if (typeof window === 'undefined') return
+  scrollActive = true
+  if (scrollIdleTimer) window.clearTimeout(scrollIdleTimer)
+  scrollIdleTimer = window.setTimeout(() => {
+    scrollIdleTimer = 0
+    scrollActive = false
+    for (const listener of Array.from(scrollIdleListeners)) listener()
+    drain()
+  }, SCROLL_IDLE_MS)
+}
+
+export const withRasterRequestContext = <T>(
+  ownerId: string,
+  priority: 'visible' | 'overscan',
+  paint: () => T,
+): T => {
+  const prev = activeOwner
+  ownerPriorities.set(ownerId, priority)
+  activeOwner = { id: ownerId, priority }
+  try {
+    return paint()
+  }
+  finally {
+    activeOwner = prev
+  }
+}
+
+export const updateRasterOwnerPriority = (ownerId: string, priority: 'visible' | 'overscan') => {
+  const prev = ownerPriorities.get(ownerId)
+  ownerPriorities.set(ownerId, priority)
+  if (prev !== priority && priority === 'visible' && !scrollActive) {
+    drain()
+  }
+}
+
+export const releaseRasterOwner = (ownerId: string) => {
+  ownerPriorities.delete(ownerId)
+  ownerPendingKeys.delete(ownerId)
+  const registered = ownerListeners.get(ownerId)
+  if (registered) {
+    ownerListeners.delete(ownerId)
+    for (const { key, fn } of registered) {
+      const set = listeners.get(key)
+      if (!set) continue
+      set.delete(fn)
+      if (set.size === 0) listeners.delete(key)
+    }
+  }
+  for (let i = workQueue.length - 1; i >= 0; i--) {
+    const item = workQueue[i]
+    if (!item.owners.delete(ownerId)) continue
+    if (item.ownerTracked && !item.exportUrgent && item.owners.size === 0) {
+      workQueue.splice(i, 1)
+      jobs.delete(item.key)
+      listeners.delete(item.key)
+      rasterDiagnostics.droppedUnmounted++
+      item.resolve(null)
+    }
+  }
+}
 
 const hash = (value: string) => {
   let h = 2166136261
@@ -51,44 +204,97 @@ const hash = (value: string) => {
   return (h >>> 0).toString(36)
 }
 
+const closeRasterIfBitmap = (raster: Raster | undefined) => {
+  if (typeof ImageBitmap !== 'undefined' && raster instanceof ImageBitmap) {
+    raster.close()
+  }
+}
+
 const touch = (key: string, value: Raster) => {
   rasters.delete(key)
   rasters.set(key, value)
   while (rasters.size > RASTER_CACHE_MAX) {
     const oldest = rasters.keys().next().value
     if (!oldest) break
-    const raster = rasters.get(oldest)
-    if (raster instanceof ImageBitmap) raster.close()
+    closeRasterIfBitmap(rasters.get(oldest))
     rasters.delete(oldest)
   }
 }
 
 const notify = (key: string) => {
+  for (const [ownerId, keys] of ownerPendingKeys) {
+    if (keys.delete(key) && keys.size === 0) ownerPendingKeys.delete(ownerId)
+  }
   const set = listeners.get(key)
   listeners.delete(key)
   if (!set) return
   for (const listener of set) listener()
 }
 
+const itemPriorityRank = (item: WorkItem): number => {
+  if (item.exportUrgent) return 0
+  if (!item.ownerTracked) return 1
+  let best = 3
+  for (const ownerId of item.owners) {
+    const prio = ownerPriorities.get(ownerId)
+    if (prio === 'visible') return 1
+    if (prio === 'overscan' && best > 2) best = 2
+  }
+  return best
+}
+
+const pickNextJob = (): WorkItem | undefined => {
+  if (!workQueue.length) return undefined
+  let bestIdx = -1
+  let bestRank = Infinity
+  let bestSeq = Infinity
+  for (let i = 0; i < workQueue.length; i++) {
+    const item = workQueue[i]
+    const rank = itemPriorityRank(item)
+    if (scrollActive && rank > 0) continue
+    // Strict priority: export (0) > visible (1) > overscan (2) > detached (3).
+    // FIFO within each tier completes one visible slide at a time so thumbnails
+    // flip to `complete: true` quickly instead of starving earlier visible rows.
+    const prefer = rank < bestRank || (rank === bestRank && item.seq < bestSeq)
+    if (prefer) {
+      bestIdx = i
+      bestRank = rank
+      bestSeq = item.seq
+    }
+  }
+  if (bestIdx < 0) return undefined
+  return workQueue.splice(bestIdx, 1)[0]
+}
+
+const runWorkItem = (next: WorkItem) => {
+  if (scrollActive && !next.exportUrgent) {
+    inFlight--
+    workQueue.push(next)
+    return
+  }
+  Promise.resolve()
+    .then(next.produce)
+    .then(value => {
+      if (value) {
+        touch(next.key, value)
+        rasterDiagnostics.completed++
+      }
+      next.resolve(value)
+    })
+    .catch(() => next.resolve(null))
+    .finally(() => {
+      inFlight--
+      notify(next.key)
+      drain()
+    })
+}
+
 const drain = () => {
-  while (inFlight < MAX_IN_FLIGHT) {
-    const next = workQueue.shift()
+  while (inFlight < MAX_IN_FLIGHT && workQueue.length) {
+    const next = pickNextJob()
     if (!next) return
     inFlight++
-    setTimeout(() => {
-      Promise.resolve()
-        .then(next.produce)
-        .then(value => {
-          if (value) touch(next.key, value)
-          next.resolve(value)
-        })
-        .catch(() => next.resolve(null))
-        .finally(() => {
-          inFlight--
-          notify(next.key)
-          drain()
-        })
-    }, 0)
+    setTimeout(() => runWorkItem(next), 0)
   }
 }
 
@@ -104,14 +310,58 @@ export const requestRaster = (key: string, produce: RasterProducer, invalidate: 
     listeners.set(key, set)
   }
   set.add(invalidate)
+  const owner = activeOwner
+  if (owner) {
+    let entries = ownerListeners.get(owner.id)
+    if (!entries) {
+      entries = []
+      ownerListeners.set(owner.id, entries)
+    }
+    entries.push({ key, fn: invalidate })
+    let pending = ownerPendingKeys.get(owner.id)
+    if (!pending) {
+      pending = new Set()
+      ownerPendingKeys.set(owner.id, pending)
+    }
+    pending.add(key)
+  }
+  const exportUrgent = collecting !== null
   let job = jobs.get(key)
   if (!job) {
+    const owners = new Set<string>()
+    if (owner) owners.add(owner.id)
+    const ownerTracked = !!owner && !exportUrgent
     job = new Promise<Raster | null>(resolve => {
-      workQueue.push({ key, produce, resolve })
+      workQueue.push({
+        key,
+        produce,
+        resolve,
+        exportUrgent,
+        owners,
+        ownerTracked,
+        seq: nextWorkSeq++,
+      })
       drain()
     })
     jobs.set(key, job)
     void job.finally(() => jobs.delete(key))
+  }
+  else {
+    const queued = workQueue.find(item => item.key === key)
+    if (queued) {
+      if (exportUrgent && !queued.exportUrgent) {
+        queued.exportUrgent = true
+        queued.ownerTracked = false
+        drain()
+      }
+      if (owner) {
+        queued.owners.add(owner.id)
+        queued.seq = nextWorkSeq++
+      }
+      else {
+        queued.ownerTracked = false
+      }
+    }
   }
   collecting?.set(key, job)
   return undefined
@@ -293,29 +543,95 @@ export const getCodeRaster = (
 }
 
 let mathFontsPromise: Promise<void> | null = null
+let mathFontsAllLoaded = false
+let mathRasterRevision = 0
+const MAX_MATH_RASTER_RETRIES = 3
+const mathFailureCounts = new Map<string, number>()
+const mathRetryAfter = new Map<string, number>()
+
+const clearMathRasters = () => {
+  mathRasterRevision++
+  mathFailureCounts.clear()
+  mathRetryAfter.clear()
+  if (!mathFontsAllLoaded) mathFontsPromise = null
+  for (const [key, raster] of rasters) {
+    if (!key.startsWith('imath:') && !key.startsWith('latex:')) continue
+    closeRasterIfBitmap(raster)
+    rasters.delete(key)
+  }
+}
+
+subscribeTextFontChanges(families => {
+  if (!families || families.has(MATH_FONT_CHANGE_TOKEN)) {
+    clearMathRasters()
+    return
+  }
+  if (mathFontsAllLoaded) return
+  for (const family of families) {
+    if (family.includes('katex')) {
+      clearMathRasters()
+      return
+    }
+  }
+})
+
+const hasDeclaredKatexStylesheet = (): boolean => {
+  if (typeof document === 'undefined') return false
+  try {
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules: CSSRuleList | undefined
+      try {
+        rules = sheet.cssRules
+      }
+      catch {
+        continue
+      }
+      if (!rules) continue
+      for (const rule of Array.from(rules)) {
+        if (rule.cssText && /KaTeX/i.test(rule.cssText)) return true
+      }
+    }
+  }
+  catch {
+    return false
+  }
+  return false
+}
+
+const getKatexFontFaces = (fonts: FontFaceSet): FontFace[] => (
+  Array.from(fonts as unknown as Iterable<FontFace>).filter(face => /KaTeX/i.test(face.family))
+)
+
 /**
- * Two waits before the first capture. `document.fonts.ready` settles once no
- * pending stylesheet load can still add faces — the embed stylesheet that
- * declares the KaTeX `@font-face`s is exactly such a load, and SnapDOM
- * embeds those webfonts automatically. But `ready` only covers faces
- * something on the page already uses, and MathLive's faces stay `unloaded`
- * until a formula needs them, which the snapshot cannot trigger itself.
- * So load every KaTeX face explicitly as well; otherwise the first captures
- * typeset in the system serif (`\ne` paints as `=`, delimiters do not stretch)
- * and stay cached that way.
+ * Ensure KaTeX webfonts used by MathLive are loaded before SnapDOM captures.
+ * Never resolves as "ready" while KaTeX `@font-face` rules are still unloaded,
+ * and retries cleanly if the embed stylesheet arrives after initial boot.
  */
 const ensureMathFontsLoaded = (): Promise<void> => {
   if (mathFontsPromise) return mathFontsPromise
   const fonts = typeof document !== 'undefined' ? document.fonts : undefined
   if (!fonts) return Promise.resolve()
   const promise = fonts.ready.then(async () => {
-    const faces = Array.from(fonts as unknown as Iterable<FontFace>).filter(face => /KaTeX/i.test(face.family))
+    let faces = getKatexFontFaces(fonts)
+    if (!faces.length && hasDeclaredKatexStylesheet()) {
+      // Stylesheet declared KaTeX faces but the FontFaceSet has not registered them yet.
+      await new Promise<void>(resolve => setTimeout(resolve, 32))
+      await fonts.ready
+      faces = getKatexFontFaces(fonts)
+    }
     if (!faces.length) {
-      // No embed stylesheet in this document yet — retry on the next capture.
+      // No KaTeX @font-face in this document yet — retry on the next capture.
       mathFontsPromise = null
       return
     }
     await Promise.all(faces.map(face => face.load().catch(() => undefined)))
+    const loadedCount = faces.filter(face => face.status === 'loaded').length
+    if (loadedCount === 0) {
+      mathFontsPromise = null
+    }
+    else if (loadedCount === faces.length) {
+      mathFontsAllLoaded = true
+    }
   })
   mathFontsPromise = promise.catch(() => {
     mathFontsPromise = null
@@ -351,7 +667,12 @@ const ensureMathRasterBooth = (): HTMLElement => {
   return booth
 }
 
-const canvasHasInk = (node: HTMLCanvasElement): boolean => {
+/**
+ * Verify a transparent SnapDOM math capture contains visible pixels.
+ * Checks alpha only — white/light math ink on dark slides has RGB > 248 and
+ * MUST count as valid ink rather than degrading to fallback text.
+ */
+export const canvasHasInk = (node: HTMLCanvasElement): boolean => {
   const ctx = node.getContext('2d', { willReadFrequently: true })
   if (!ctx) return false
   const { width, height } = node
@@ -360,22 +681,56 @@ const canvasHasInk = (node: HTMLCanvasElement): boolean => {
   let ink = 0
   for (let i = 0; i < data.length; i += 4) {
     if (data[i + 3] < 12) continue
-    if (data[i] > 248 && data[i + 1] > 248 && data[i + 2] > 248) continue
     ink++
     if (ink > 8) return true
   }
   return ink > 0
 }
 
-const fallbackMathCanvas = (latex: string, width: number, height: number, color: string, fontSize: number): HTMLCanvasElement => {
-  const node = canvas(Math.max(1, width), Math.max(1, height))
-  const ctx = node.getContext('2d')
-  if (!ctx) return node
-  ctx.fillStyle = color
-  ctx.font = `${Math.max(8, fontSize)}px ui-sans-serif, system-ui, sans-serif`
-  ctx.textBaseline = 'middle'
-  ctx.fillText(latexFallbackText(latex), 2, node.height / 2, node.width - 4)
-  return node
+/**
+ * Quantize inline math capture font sizes to 0.5px buckets so minor fit-scale
+ * jitter hits the same SnapDOM raster instead of spawning repeated captures.
+ */
+export const quantizeMathFontSize = (fontSize: number): number => (
+  Math.max(1, Math.round(fontSize * 2) / 2)
+)
+
+const requestMathRaster = (
+  key: string,
+  latex: string,
+  produce: RasterProducer,
+  invalidate: () => void,
+): Raster | undefined => {
+  const hit = rasters.get(key)
+  if (hit) {
+    touch(key, hit)
+    return hit
+  }
+  const failKey = `${mathRasterRevision}\0${key}`
+  const failures = mathFailureCounts.get(failKey) ?? 0
+  if (failures >= MAX_MATH_RASTER_RETRIES) {
+    recordRejection('rejectRetryCapHit', latex)
+    return undefined
+  }
+  const retryAt = mathRetryAfter.get(failKey) ?? 0
+  if (retryAt && performance.now() < retryAt) return undefined
+
+  return requestRaster(key, async () => {
+    const result = await produce()
+    if (result) {
+      mathFailureCounts.delete(failKey)
+      mathRetryAfter.delete(failKey)
+      return result
+    }
+    const nextFailures = (mathFailureCounts.get(failKey) ?? 0) + 1
+    mathFailureCounts.set(failKey, nextFailures)
+    if (nextFailures < MAX_MATH_RASTER_RETRIES) {
+      const delayMs = 150 * nextFailures
+      mathRetryAfter.set(failKey, performance.now() + delayMs)
+      window.setTimeout(() => invalidate(), delayMs)
+    }
+    return null
+  }, invalidate)
 }
 
 /** Above this many raster pixels the formula snapshot drops back to 1x. */
@@ -383,24 +738,17 @@ const LATEX_RASTER_HIDPI_BUDGET = 1_500_000
 
 /**
  * Tight MathLive snapshot of a formula — same nowrap, max-content stage as
- * `LatexContent`. SnapDOM v3 `width`/`height` are output size only and do not
- * reflow the live tree, but a flex host sized to the slide box *does*: the
- * stage shrinks (`min-width:auto`), `.ML__latex` wraps, and the thumbnail
- * becomes two lines of fallback-looking text. Capture the unconstrained
- * stage, then `paintLatex` scales that bitmap into the authored box.
- *
- * Font size is the fitted size (not a CSS transform) so radical/fraction
- * rules snap at the painted size. `reconcile: true` pins inline/table-cell
- * boxes SnapDOM otherwise warns may re-wrap under font fallback.
+ * `LatexContent`. Never caches fallback rasters so transient CSS/font races
+ * retry cleanly.
  */
 export const getLatexRaster = (
   element: PPTLatexElement,
   invalidate: () => void,
 ): Raster | undefined => {
-  const boxW = Math.max(1, element.width)
-  const boxH = Math.max(1, element.height)
-  const key = `latex:${hash(`${element.latex}\0${boxW}\0${boxH}\0${element.color}`)}`
-  return requestRaster(key, async () => {
+  const boxW = Math.max(1, Math.round(element.width))
+  const boxH = Math.max(1, Math.round(element.height))
+  const key = `latex:${hash(`${mathRasterRevision}\0${element.latex}\0${boxW}\0${boxH}\0${element.color}`)}`
+  return requestMathRaster(key, element.latex, async () => {
     await ensureMathliveReady()
     await ensureMathFontsLoaded()
     const host = document.createElement('div')
@@ -432,7 +780,8 @@ export const getLatexRaster = (
       const naturalWidth = host.offsetWidth
       const naturalHeight = host.offsetHeight
       if (!(naturalWidth > 0) || !(naturalHeight > 0)) {
-        return fallbackMathCanvas(element.latex, boxW, boxH, element.color, LATEX_ELEMENT_FONT_SIZE)
+        recordRejection('rejectEmptyDimensions', element.latex, { width: naturalWidth, height: naturalHeight })
+        return null
       }
       const fit = Math.min(boxW / naturalWidth, boxH / naturalHeight)
       host.style.fontSize = `${LATEX_ELEMENT_FONT_SIZE * fit}px`
@@ -446,10 +795,12 @@ export const getLatexRaster = (
         reconcile: true,
       })
       if (captured && canvasHasInk(captured)) return captured
-      return fallbackMathCanvas(element.latex, width, height, element.color, LATEX_ELEMENT_FONT_SIZE * fit)
+      recordRejection('rejectNoInk', element.latex, { width, height })
+      return null
     }
     catch {
-      return fallbackMathCanvas(element.latex, boxW, boxH, element.color, LATEX_ELEMENT_FONT_SIZE)
+      recordRejection('rejectCaptureError', element.latex)
+      return null
     }
     finally {
       host.remove()
@@ -458,9 +809,10 @@ export const getLatexRaster = (
 }
 
 /**
- * Typeset inline/display math at the painted font size and snapshot it.
- * The booth is `.fika-embed-root` so scoped MathLive CSS applies; a white
- * or empty capture falls back to readable TeX-ish text instead of a gap.
+ * Typeset inline/display math at a 0.5px-quantized font size and snapshot it.
+ * The booth is `.fika-embed-root` so scoped MathLive CSS applies; failed or
+ * empty captures return `null` (never cached) and retry up to 3 times while
+ * `textPainter` draws readable fallback text in the interim.
  */
 export const getInlineMathRaster = (
   latex: string,
@@ -469,9 +821,9 @@ export const getInlineMathRaster = (
   display: boolean,
   invalidate: () => void,
 ): Raster | undefined => {
-  const size = Math.max(1, fontSize)
-  const key = `imath:${hash(`${latex}\0${size}\0${color}\0${display ? 1 : 0}`)}`
-  return requestRaster(key, async () => {
+  const size = quantizeMathFontSize(fontSize)
+  const key = `imath:${hash(`${mathRasterRevision}\0${latex}\0${size}\0${color}\0${display ? 1 : 0}`)}`
+  return requestMathRaster(key, latex, async () => {
     await ensureMathliveReady()
     await ensureMathFontsLoaded()
     const host = document.createElement('div')
@@ -494,8 +846,15 @@ export const getInlineMathRaster = (
       void host.offsetWidth
       const width = Math.ceil(host.offsetWidth)
       const height = Math.ceil(host.offsetHeight)
-      if (!(width > 0) || !(height > 0) || width < size * 0.35 || height > size * 4.5) {
-        return fallbackMathCanvas(latex, Math.ceil(size * 3), Math.ceil(size * 1.5), color, size)
+      const trimmed = latex.trim()
+      if (!(width > 0) || !(height > 0)) {
+        recordRejection('rejectEmptyDimensions', latex, { width, height, size })
+        return null
+      }
+      // Reject unstyled collapsed slivers while permitting narrow symbols (`1`, `i`, `|`) and tall display formulas.
+      if ((trimmed.length > 2 && width < size * 0.2) || height > size * 8) {
+        recordRejection('rejectBounds', latex, { width, height, size })
+        return null
       }
       const { captureToCanvas } = await import('@/utils/snapdomCapture')
       const captured = await captureToCanvas(host, {
@@ -506,10 +865,12 @@ export const getInlineMathRaster = (
         reconcile: true,
       })
       if (captured && canvasHasInk(captured)) return captured
-      return fallbackMathCanvas(latex, width, height, color, size)
+      recordRejection('rejectNoInk', latex, { width, height, size })
+      return null
     }
     catch {
-      return fallbackMathCanvas(latex, Math.ceil(size * 3), Math.ceil(size * 1.5), color, size)
+      recordRejection('rejectCaptureError', latex, { size })
+      return null
     }
     finally {
       host.remove()
@@ -517,13 +878,22 @@ export const getInlineMathRaster = (
   }, invalidate)
 }
 
+if (typeof window !== 'undefined') {
+  ;(window as unknown as { __FIKA_RASTER_DIAG__?: () => ReturnType<typeof readRasterDiagnostics> }).__FIKA_RASTER_DIAG__ = readRasterDiagnostics
+}
+
 export const hasPendingRasters = () => jobs.size > 0 || workQueue.length > 0
 
 export const clearSlideRasterResources = () => {
   for (const raster of rasters.values()) {
-    if (raster instanceof ImageBitmap) raster.close()
+    closeRasterIfBitmap(raster)
   }
   rasters.clear()
   listeners.clear()
+  ownerPriorities.clear()
+  ownerListeners.clear()
+  ownerPendingKeys.clear()
   staleChartRasters.clear()
+  mathFailureCounts.clear()
+  mathRetryAfter.clear()
 }

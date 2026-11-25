@@ -280,7 +280,10 @@ export const useSlidesStore = create<SlidesStore>()(
       })
       if (themeProps) get().setTheme(themeProps)
       if (!slides.every(slide => !!slide.sourcePackageId)) markSourcePackageDirty()
-      loadGoogleFonts(collectSlidesFonts(slides))
+      const deckFonts = collectSlidesFonts(slides)
+      const themeFont = themeProps?.fontName ?? get().theme.fontName
+      if (themeFont) deckFonts.push(themeFont)
+      loadGoogleFonts(deckFonts)
     },
 
     setTemplates(templates) {

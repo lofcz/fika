@@ -9,11 +9,16 @@ import type { FikaController, FikaDocument, FikaImportPptxOptions } from './type
 import { applyLocale } from './localeBridge'
 import type { Locales } from '@/i18n/locale'
 import { createAgenticApi } from './agentic/createAgenticApi'
-import { debounce } from '@/utils/debounce'
-import { rewritePersistableMediaSrcs } from '@/utils/mediaIntern'
+import {
+  createDocumentChangeWatcher,
+  DOCUMENT_STORE_FIELDS,
+  hasDocumentStateChanged,
+} from './documentChangeWatch'
 import { renderDeckAtlas, renderSlideImage } from './render'
 import { revealSlide, type FikaRevealOptions } from './reveal'
 import type { Slide } from '@/types/slides'
+
+export { DOCUMENT_STORE_FIELDS, hasDocumentStateChanged }
 
 const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
@@ -42,31 +47,11 @@ export function createController(
     unmount: options.unmount,
   })
 
-  const emitChange = options.onChange
-    ? debounce(() => {
-        const slidesStore = useSlidesStore.getState()
-        options.onChange?.({
-          title: slidesStore.title,
-          // Never hand session-scoped blob: URLs to the host: they die with
-          // the session and persisting them loses the media permanently.
-          slides: rewritePersistableMediaSrcs(
-            JSON.parse(JSON.stringify(slidesStore.slides)) as FikaDocument['slides'],
-          ),
-          theme: { ...slidesStore.theme },
-          viewport: {
-            size: slidesStore.viewportSize,
-            ratio: slidesStore.viewportRatio,
-            widthInches: slidesStore.viewportWidthInches,
-          },
-        })
-      }, options.onChangeDebounceMs ?? 400)
-    : null
-
-  // Reveal frames are transient: the host only hears about the finished slide.
-  let changeMuted = 0
-  const stopChangeWatch = emitChange
-    ? useSlidesStore.subscribe(() => { if (!changeMuted) emitChange() })
-    : null
+  const changeWatcher = createDocumentChangeWatcher(
+    useSlidesStore,
+    options.onChange,
+    options.onChangeDebounceMs ?? 400,
+  )
 
   const stopPresentationModeWatch = options.onPresentationModeChange
     ? useScreenStore.subscribe((state, prev) => {
@@ -108,7 +93,7 @@ export function createController(
     setDocument(document: FikaDocument) {
       if (destroyed) return
       runLegacyCommand(agentic.api.deck.set(document, { source: 'host' }))
-      emitChange?.()
+      changeWatcher.emit()
     },
 
     async importPptx(data: File | Blob | ArrayBuffer, importOptions?: FikaImportPptxOptions) {
@@ -126,7 +111,7 @@ export function createController(
         turningMode: importOptions?.turningMode,
         defaultTurningMode: importOptions?.defaultTurningMode,
       })
-      if (ok) emitChange?.()
+      if (ok) changeWatcher.emit()
       return ok
     },
 
@@ -214,11 +199,10 @@ export function createController(
         try {
           await revealSlide(slideId, patch, options, {
             mute() {
-              changeMuted++
-              emitChange?.cancel()
+              changeWatcher.mute()
             },
             unmute() {
-              changeMuted = Math.max(0, changeMuted - 1)
+              changeWatcher.unmute()
             },
             async commit(id, finalPatch) {
               await assertLegacyCommand(agentic.api.slides.update(id, finalPatch, { source: 'host' }))
@@ -247,12 +231,10 @@ export function createController(
     destroy() {
       if (destroyed) return
       flushCommitQueue()
-      emitChange?.flush()
+      changeWatcher.destroy()
       destroyed = true
       useMainStore.getState().setAiReveal(null)
-      stopChangeWatch?.()
       stopPresentationModeWatch?.()
-      emitChange?.cancel()
       agentic.stop()
     },
   }

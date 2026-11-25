@@ -28,7 +28,7 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
   const _isPC = isPC()
   const presentationOnly = init.viewMode === 'presentation'
   const myna = init.viewMode === 'canva' || init.viewMode === 'myna'
-  const slides = useSlidesStore(s => s.slides)
+  const hasSlides = useSlidesStore(s => s.slides.length > 0)
   const setSlides = useSlidesStore(s => s.setSlides)
   const updateSlideIndex = useSlidesStore(s => s.updateSlideIndex)
   const screening = useScreenStore(s => s.screening)
@@ -92,13 +92,13 @@ export default function EmbedRoot({ init }: IEmbedRootProps) {
   useEffect(() => {
     const wasActive = prevScreeningRef.current
     prevScreeningRef.current = screening
-    if (!screening && wasActive && presentationOnly && slides.length > 0) {
+    if (!screening && wasActive && presentationOnly && hasSlides) {
       updateSlideIndex(0)
       setScreening(true)
     }
-  }, [screening, presentationOnly, slides.length, updateSlideIndex, setScreening])
+  }, [screening, presentationOnly, hasSlides, updateSlideIndex, setScreening])
 
-  if (slides.length) {
+  if (hasSlides) {
     if (presentationOnly) {
       return (
         <Suspense fallback={<ScreenShell />}>

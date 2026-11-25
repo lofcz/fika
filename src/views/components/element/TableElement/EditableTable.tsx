@@ -95,7 +95,7 @@ const TableCellView = memo((props: TableCellViewProps) => {
       style={getTextStyle(cellMinHeight, cell.style, true)}
       onUpdateValue={(value, ignoreHistory) => onInput(value, rowIndex, colIndex, cell.id, ignoreHistory)}
       onInsertExcelData={(value, rich) => onInsertExcel(value, rowIndex, colIndex, rich)}
-    /> : <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style, cell.textFormat === 'html')} dangerouslySetInnerHTML={{ __html: formatText(cell.text, cell.textFormat) }} />}
+    /> : <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style, cell.textFormat === 'html')} dangerouslySetInnerHTML={{ __html: formatText(cell.text, cell.textFormat, props.mathReady ? 1 : 0) }} />}
   </td>;
 }, areTableCellViewPropsEqual);
 TableCellView.displayName = 'TableCellView';

@@ -11,7 +11,6 @@ import Modal from '@/components/Modal'
 const isChartElement = (el: PPTElement): el is PPTChartElement => el.type === 'chart'
 
 const ChartDataEditorDialog = memo(() => {
-  const slidesStore = useSlidesStore()
   const handleElementId = useMainStore(s => s.handleElementId)
   const [visible, setVisible] = useState(false)
   const [editingElementId, setEditingElementId] = useState('')
@@ -36,13 +35,13 @@ const ChartDataEditorDialog = memo(() => {
   const updateData = useCallback((payload: { data: ChartData; type: ChartType }) => {
     const id = editingElementId
     if (!id) return
-    slidesStore.updateElement({
+    useSlidesStore.getState().updateElement({
       id,
       props: { data: payload.data, chartType: payload.type },
     })
     addHistorySnapshot()
     setVisible(false)
-  }, [editingElementId, slidesStore, addHistorySnapshot])
+  }, [editingElementId, addHistorySnapshot])
 
   const close = useCallback(() => setVisible(false), [])
 

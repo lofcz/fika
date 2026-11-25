@@ -14,6 +14,7 @@ import { emptyPlaceholderHtml, isEmptyRichText, placeholderBoxVars } from '@/uti
 import { resolveElementSurfaces, resolveLiveTextPaint, resolvePlaceholderColor } from '@/utils/textContrast';
 import { serializeRichTextHtml } from '@/utils/prosemirror';
 import { ensureMathliveReady, htmlContainsMath } from '@/utils/math';
+import { useMathReadyVersion } from '@/hooks/useMathReadyVersion';
 import { selectSlideById, useSlidesStore } from '@/store';
 import { SlideIdContext } from '@/types/injectKey';
 export type IBaseTextElementProps = {
@@ -69,12 +70,14 @@ const BaseTextElement = memo((vrProps: IBaseTextElementProps) => {
     if (isEmptyContent && !showPlaceholders) return {};
     return placeholderBoxVars(elementInfo, isEmptyContent, placeholderColor);
   })();
+  const hasMath = !showPlaceholderPreview && htmlContainsMath(contrastedHtml);
+  const mathVersion = useMathReadyVersion(hasMath);
   const paintedHtml = showPlaceholderPreview
     ? emptyPlaceholderHtml(elementInfo)
-    : serializeRichTextHtml(contrastedHtml);
+    : serializeRichTextHtml(contrastedHtml, mathVersion);
   useEffect(() => {
-    if (htmlContainsMath(paintedHtml)) void ensureMathliveReady().catch(() => {});
-  }, [paintedHtml]);
+    if (hasMath) void ensureMathliveReady().catch(() => {});
+  }, [hasMath]);
   const { shadowStyle } = useElementShadow(elementInfo.shadow);
   const inset = elementInfo.inset || [10, 10, 10, 10];
   const textFitHostRef = useRef<HTMLDivElement | null>(null);

@@ -32,7 +32,7 @@ import { Icon } from '@/components/Icon'
 import { getEnabledExportTabs } from '@/configs/exportTabs'
 import { PREVIEW_DEFAULT_PANE, PREVIEW_MAX_PANE, PREVIEW_MIN_PANE, setPreviewPaneWidth, setPreviewViewportRatio } from './Thumbnails/paneSize'
 import { clampRightPaneWidth, readRightPanePreference, readRightPaneWidth, RIGHT_PANE_MAX, RIGHT_PANE_MIN, scalePreferredPx, scaleRightPaneWidth, writeRightPaneWidth, type PaneSizePreference } from './Toolbar/paneSize'
-import { ensureMathStylesForSlides } from '@/utils/math'
+import { ensureMathStylesForSlides, mathReady } from '@/utils/math'
 
 const clampLeftPaneWidth = (width: number) => (
   Math.round(Math.min(PREVIEW_MAX_PANE, Math.max(PREVIEW_MIN_PANE, width)))
@@ -198,11 +198,11 @@ const Editor = memo(({ myna = false }: { myna?: boolean }) => {
   useEffect(() => {
     setPreviewViewportRatio(useSlidesStore.getState().viewportRatio)
     ensureMathStylesForSlides(useSlidesStore.getState().slides)
-    const unsubViewportRatio = useSlidesStore.subscribe(state => {
-      setPreviewViewportRatio(state.viewportRatio)
+    const unsubViewportRatio = useSlidesStore.subscribe((state, prev) => {
+      if (state.viewportRatio !== prev.viewportRatio) setPreviewViewportRatio(state.viewportRatio)
     })
-    const unsubMath = useSlidesStore.subscribe(state => {
-      ensureMathStylesForSlides(state.slides)
+    const unsubMath = useSlidesStore.subscribe((state, prev) => {
+      if (!mathReady.value && state.slides !== prev.slides) ensureMathStylesForSlides(state.slides)
     })
     const onHostResize = () => {
       if (!panelMotionReadyRef.current) return

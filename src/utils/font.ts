@@ -112,10 +112,33 @@ export const collectSlidesFonts = (slides: unknown): string[] => {
   walk(slides);
   return Array.from(found);
 };
+
+/**
+ * Proactively load any declared-but-unloaded `@font-face` entries referenced by
+ * `fontNames` once at deck load / slide insertion time, rather than discovering
+ * them one-by-one during thumbnail painting.
+ */
+export const preloadDeclaredFontFaces = (fontNames: readonly string[]) => {
+  if (typeof document === 'undefined' || !document.fonts?.load || !fontNames.length) return;
+  const wanted = new Set(
+    fontNames
+      .map(name => name.split(',')[0].replace(/^['"]+|['"]+$/g, '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+  if (!wanted.size) return;
+  try {
+    for (const face of document.fonts as unknown as Iterable<FontFace>) {
+      if (face.status !== 'unloaded') continue;
+      const family = face.family.replace(/^['"]+|['"]+$/g, '').trim().toLowerCase();
+      if (wanted.has(family)) void face.load().catch(() => {});
+    }
+  } catch {}
+};
 export const loadGoogleFonts = (usedFonts: readonly unknown[] | PptxUsedFont[] = []) => {
   const fonts = normalizePptxUsedFonts(usedFonts);
   registerEmbeddedFonts(fonts);
   if (typeof document === 'undefined') return;
+  preloadDeclaredFontFaces(fonts.map(font => font.name));
   const GOOGLE_FONTS_API = 'https://fonts.googleapis.com/css2';
   const fontWeightMap: Record<string, number> = {
     thin: 100,

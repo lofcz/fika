@@ -15,7 +15,7 @@
 
 import { decodeXML } from 'entities';
 import { APP_SHELL_ID, EMBED_ROOT_CLASS, getFikaPortalTarget, resolveOffscreenHost } from '@/utils/portal';
-import { notifyInlineMathReady, registerInlineMathMeasurer, subscribeTextFontChanges } from '@/utils/textFit';
+import { MATH_FONT_CHANGE_TOKEN, notifyInlineMathReady, registerInlineMathMeasurer, subscribeTextFontChanges } from '@/utils/textFit';
 
 export { MATH_CLASS, estimateInlineMathBox, htmlHasFikaMath, isPlausibleInlineMathBox } from './inlineMathBox';
 import { estimateInlineMathBox, isPlausibleInlineMathBox, MATH_CLASS } from './inlineMathBox';
@@ -73,6 +73,22 @@ export function dockMathVirtualKeyboard() {
  * the moment the engine becomes available.
  */
 export const mathReady = { value: false };
+let mathReadyVersion = 0;
+const mathReadyListeners = new Set<() => void>();
+
+export const getMathReadyVersion = () => mathReadyVersion;
+
+export const subscribeMathReady = (listener: () => void) => {
+  mathReadyListeners.add(listener);
+  return () => { mathReadyListeners.delete(listener); };
+};
+
+export function renderMathInnerMarkup(latex: string, display = false): string | null {
+  if (!mathlive) return null;
+  return mathlive.convertLatexToMarkup(normalizeImportedLatex(latex), {
+    defaultMode: display ? 'math' : 'inline-math',
+  });
+}
 
 /** Lazily import MathLive and configure it for a bundled (offline) font setup. */
 export function ensureMathliveReady(): Promise<MathliveModule> {
@@ -99,14 +115,29 @@ export function ensureMathliveReady(): Promise<MathliveModule> {
     } catch {}
     mathlive = resolved;
     mathReady.value = true;
+    mathReadyVersion++;
     inlineMathBoxCache.clear();
     notifyInlineMathReady();
+    for (const listener of Array.from(mathReadyListeners)) listener();
     if (typeof document !== 'undefined') {
       dockMathVirtualKeyboard();
-      document.fonts?.ready?.then(() => {
-        inlineMathBoxCache.clear();
-        notifyInlineMathReady();
-      }).catch(() => {});
+      // Kick off loading every declared KaTeX face once so later formulas
+      // (\sqrt, \sum, \int) never trigger mid-scroll font-load cache wipes.
+      if (document.fonts) {
+        try {
+          for (const face of document.fonts as unknown as Iterable<FontFace>) {
+            if (face.status === 'unloaded' && /KaTeX/i.test(face.family)) {
+              void face.load().catch(() => {});
+            }
+          }
+        } catch {}
+      }
+      if (document.fonts?.status === 'loading') {
+        document.fonts.ready.then(() => {
+          inlineMathBoxCache.clear();
+          notifyInlineMathReady();
+        }).catch(() => {});
+      }
     }
     return resolved;
   }).catch(err => {
@@ -213,8 +244,17 @@ export function renderLatexElementHtml(latex: string): string {
 }
 
 const inlineMathBoxCache = new Map<string, { width: number; height: number }>()
-subscribeTextFontChanges(() => {
-  inlineMathBoxCache.clear()
+subscribeTextFontChanges(families => {
+  if (!families || families.has(MATH_FONT_CHANGE_TOKEN)) {
+    inlineMathBoxCache.clear()
+    return
+  }
+  for (const family of families) {
+    if (family.includes('katex')) {
+      inlineMathBoxCache.clear()
+      return
+    }
+  }
 })
 
 const inlineMathBoxKey = (latex: string, fontSize: number, display: boolean) => (

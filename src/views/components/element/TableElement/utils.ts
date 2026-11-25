@@ -65,7 +65,8 @@ export const escapeCellText = (text: string) => text
  * MathLive finishes loading (kicked off lazily here on first math encounter);
  * until then math segments fall back to their literal LaTeX source.
  */
-export const formatText = (text: string, textFormat?: 'html') => {
+export const formatText = (text: string, textFormat?: 'html', _mathVersion?: number) => {
+  void _mathVersion;
   if (!text) return '';
   if (textFormat === 'html') return serializeTableText(parseTableText({ text, textFormat }), true);
   if (!containsMath(text)) return escapeCellText(text);

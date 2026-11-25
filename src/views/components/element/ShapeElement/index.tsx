@@ -15,6 +15,8 @@ import useHistorySnapshot from '@/hooks/useHistorySnapshot';
 import { resolveElementDefaultFontColor, resolveLiveTextPaint } from '@/utils/textContrast';
 import { resolveShapePaintPath } from '@/utils/elementOutline'
 import { serializeRichTextHtml } from '@/utils/prosemirror';
+import { ensureMathliveReady, htmlContainsMath } from '@/utils/math';
+import { useMathReadyVersion } from '@/hooks/useMathReadyVersion';
 import { editorHtmlLooksEmpty } from '@/utils/prosemirror/commitPolicy';
 import GradientDefs from './GradientDefs';
 import PatternDefs from './PatternDefs';
@@ -119,7 +121,12 @@ const ShapeElement = memo((props: IShapeElementProps) => {
   prevContentRef.current = text.content;
   const editorValueRef = useRef(text.content);
   if (!editable) editorValueRef.current = liveContentRef.current || text.content;
-  const staticContent = serializeRichTextHtml(painted.html);
+  const hasMath = htmlContainsMath(painted.html);
+  const mathVersion = useMathReadyVersion(hasMath);
+  useEffect(() => {
+    if (hasMath) void ensureMathliveReady().catch(() => {});
+  }, [hasMath]);
+  const staticContent = serializeRichTextHtml(painted.html, mathVersion);
   const inset = text.inset || [10, 10, 10, 10];
   const lockedText = shapeTextLocksSize(text);
   const textFitHostRef = useRef<HTMLDivElement | null>(null);

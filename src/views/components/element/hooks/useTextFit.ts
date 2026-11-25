@@ -10,16 +10,19 @@ import { serializeRichTextHtml } from '@/utils/prosemirror'
 import {
   contentBoxOfHost,
   createFitMeasureSession,
+  extractBlocksCached,
   fitSessionKey,
   innerBoxFromLiveStyles,
+  MATH_FONT_CHANGE_TOKEN,
+  minimumTextFitScale,
+  normalizeFontFamilyName,
   rememberFitScale,
   resolvePaintFontFamily,
   subscribeTextFontChanges,
-  extractFitBlocksFromHtml,
-  minimumTextFitScale,
   textFitScaleForHtml,
   type FitMeasureSession,
 } from '@/utils/textFit'
+import { htmlContainsMath } from '@/utils/math'
 
 const DEFAULT_INSET: TextInset = [10, 10, 10, 10]
 const DEFAULT_LINE_HEIGHT = 1.5
@@ -208,14 +211,27 @@ export default (
       blockSpace: fitParagraphSpaceOf(el),
       minFontSize: fitMinimumOf(el),
     }
-    const floor = Math.max(0.01, minimumTextFitScale(extractFitBlocksFromHtml(measuredContent(), params).blocks, params.minFontSize))
+    const contentHtml = measuredContent()
+    const floor = Math.max(
+      0.01,
+      minimumTextFitScale(
+        extractBlocksCached(
+          contentHtml,
+          params.defaultFontFamily,
+          params.defaultSize,
+          params.defaultWeight,
+          params.defaultItalic,
+        ).blocks,
+        params.minFontSize,
+      ),
+    )
     // Pretext estimate first (fast, usually close), then converge on the REAL
     // rendered height: pretext and the browser disagree on wrap points (narrow
     // boxes compound the drift over many lines), and a one-shot correction
     // under-shrinks when wraps change at the corrected scale. Refining both
     // directions on the live DOM ends on the largest scale that truly fits —
     // no clipping (only fitting scales are kept) and no wasted space.
-    const estimate = textFitScaleForHtml(measuredContent(), params)
+    const estimate = textFitScaleForHtml(contentHtml, params)
     commitScale(estimate)
     if (host) {
       host.style.removeProperty('--paragraphSpace')
@@ -248,7 +264,7 @@ export default (
           }
           const settled = low
           commitScale(settled)
-          rememberFitScale(measuredContent(), params, settled, el.id)
+          rememberFitScale(contentHtml, params, settled, el.id)
         }
         if (content.scrollHeight > height + 1 && box) {
           // Paragraph gaps are fixed px and do not scale with the font — in a
@@ -298,7 +314,13 @@ export default (
     applyScale()
   }, [lockMode])
 
+  const didInitialPropsSyncRef = useRef(false)
   useEffect(() => {
+    // useLayoutEffect already synchronously applied the initial mount scale.
+    if (!didInitialPropsSyncRef.current) {
+      didInitialPropsSyncRef.current = true
+      return
+    }
     lastInnerRef.current = { width: 0, height: 0 }
     scheduleRef.current()
   }, [
@@ -327,16 +349,39 @@ export default (
   }), [])
 
   useEffect(() => {
-    const refreshFonts = () => {
+    const refreshFonts = (families?: ReadonlySet<string>) => {
+      if (families && families.size > 0) {
+        const el = elementInfoRef.current
+        const html = fitContentOf(el)
+        const baseFamily = normalizeFontFamilyName(fitFontNameOf(el, themeFontNameRef.current))
+        let matches = !!baseFamily && families.has(baseFamily)
+        if (!matches && htmlContainsMath(html)) {
+          if (families.has(MATH_FONT_CHANGE_TOKEN)) matches = true
+          else {
+            for (const family of families) {
+              if (family.includes('katex')) { matches = true; break }
+            }
+          }
+        }
+        if (!matches && html.includes('font-family')) {
+          const lower = html.toLowerCase()
+          for (const family of families) {
+            if (family !== MATH_FONT_CHANGE_TOKEN && lower.includes(family)) {
+              matches = true
+              break
+            }
+          }
+        }
+        if (!matches) return
+      }
       sessionRef.current = null
       lastInnerRef.current = { width: 0, height: 0 }
       scheduleRef.current()
     }
     const unsubscribeFonts = subscribeTextFontChanges(refreshFonts)
-    if (typeof document !== 'undefined' && document.fonts?.ready) {
-      document.fonts.ready.then(refreshFonts).catch(() => {})
+    if (typeof document !== 'undefined' && document.fonts?.status === 'loading') {
+      document.fonts.ready.then(() => refreshFonts()).catch(() => {})
     }
-    scheduleRef.current()
     return () => {
       unsubscribeFonts()
       if (rafRef.current) cancelAnimationFrame(rafRef.current)

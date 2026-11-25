@@ -18,7 +18,44 @@ import { estimateInlineMathBox, isPlausibleInlineMathBox, MATH_CLASS } from './i
 
 /** ProseMirror's default text size (assets/styles/prosemirror.scss). */
 export const DEFAULT_TEXT_FONT_SIZE = 16;
+export const MATH_FONT_CHANGE_TOKEN = '__math__';
 let fontRevision = 0;
+let mathRevision = 0;
+const familyRevisions = new Map<string, number>();
+
+export function normalizeFontFamilyName(family: string | null | undefined): string {
+  if (!family) return '';
+  const primary = family.split(',')[0] || '';
+  return primary.replace(/^['"]+|['"]+$/g, '').trim().toLowerCase();
+}
+
+export function getFontRevision(): number {
+  return fontRevision;
+}
+
+export function getMathRevision(): number {
+  return mathRevision;
+}
+
+/**
+ * Revision scoped to the specific font families (and optional math) a slide uses,
+ * so unrelated font arrivals never invalidate unaffected thumbnail bitmaps.
+ */
+export function getScopedFontRevision(families: Iterable<string>, hasMath: boolean): string {
+  let acc = hasMath ? `m${mathRevision}` : 'm0';
+  for (const raw of families) {
+    const name = normalizeFontFamilyName(raw);
+    if (!name) continue;
+    const rev = familyRevisions.get(name);
+    if (rev) acc += `|${name}:${rev}`;
+  }
+  if (hasMath) {
+    for (const [name, rev] of familyRevisions) {
+      if (name.includes('katex')) acc += `|${name}:${rev}`;
+    }
+  }
+  return acc;
+}
 /**
  * Live text boxes use `$textElementFont` when the theme/element family is
  * empty. Canvas wrap must use the same stack — generic `sans-serif` is a
@@ -415,7 +452,25 @@ export const richInlineFromRun = (
 })
 
 const richInlineCache = new Map<string, ReturnType<typeof prepareRichInline>>()
-const RICH_INLINE_CACHE_MAX = 300
+const RICH_INLINE_CACHE_MAX = 600
+
+export const prepareRichInlineCached = (
+  items: Array<ReturnType<typeof richInlineFromRun>>,
+  whiteSpace?: TextFitBlock['whiteSpace'],
+  letterSpacing?: number,
+): ReturnType<typeof prepareRichInline> => {
+  const key = `${items.map(item => `${item.font}\0${item.text}\0${item.extraWidth ?? 0}\0${item.break ?? ''}`).join('\x1f')}\0${letterSpacing ?? 0}\0${whiteSpace ?? 'normal'}`
+  let prepared = richInlineCache.get(key)
+  if (!prepared) {
+    prepared = prepareRichInline(items, { whiteSpace })
+    if (richInlineCache.size >= RICH_INLINE_CACHE_MAX) {
+      const oldest = richInlineCache.keys().next().value
+      if (oldest !== undefined) richInlineCache.delete(oldest)
+    }
+    richInlineCache.set(key, prepared)
+  }
+  return prepared
+}
 
 /**
  * Exact height of a mixed-size block: rich-inline breaks lines across the
@@ -437,18 +492,7 @@ const measureRunsHeight = (
     sizeScale,
     letterSpacing,
   ))
-  // Prepared rich-inline handles are immutable — cache them like the block
-  // prepares so the fit search's repeated candidates stay cheap.
-  const key = `${items.map(item => `${item.font}\0${item.text}\0${item.extraWidth ?? 0}\0${item.break ?? ''}`).join('\x1f')}\0${letterSpacing ?? 0}\0${whiteSpace ?? 'normal'}`
-  let prepared = richInlineCache.get(key)
-  if (!prepared) {
-    prepared = prepareRichInline(items, { whiteSpace })
-    if (richInlineCache.size >= RICH_INLINE_CACHE_MAX) {
-      const oldest = richInlineCache.keys().next().value
-      if (oldest !== undefined) richInlineCache.delete(oldest)
-    }
-    richInlineCache.set(key, prepared)
-  }
+  const prepared = prepareRichInlineCached(items, whiteSpace, letterSpacing)
   const spaceRun = pickSpaceRun(runs)
   let height = 0
   walkEditorTextLines(prepared, Math.max(1, width), runFont(spaceRun, spaceRun.fontFamily || family, spaceRun.size * sizeScale), line => {
@@ -722,42 +766,59 @@ export function registerInlineMathMeasurer(measurer: InlineMathMeasurer) {
 
 export function notifyInlineMathReady() {
   fontRevision++
+  mathRevision++
   blocksMemo.clear()
   richInlineCache.clear()
   fitScaleMemo.clear()
-  for (const listener of fontChangeListeners) listener()
+  const changed = new Set<string>([MATH_FONT_CHANGE_TOKEN])
+  for (const listener of fontChangeListeners) listener(changed)
 }
 
 /**
- * Extraction memo: a resize drag changes box geometry every frame but the
- * authored html rarely — DOMParser + the run walk must not run per frame.
+ * Extraction memo: a resize drag or thumbnail scroll changes box geometry or
+ * remounts frames while the authored html rarely changes — DOMParser + the run
+ * walk + metric signature must not run per frame.
  */
-const blocksMemo = new Map<string, TextFitBlock[]>()
-const BLOCKS_MEMO_MAX = 80
-const extractBlocksCached = (
+type BlocksMemoEntry = {
+  blocks: TextFitBlock[]
+  metricKey: string
+}
+const blocksMemo = new Map<string, BlocksMemoEntry>()
+const BLOCKS_MEMO_MAX = 400
+const computeBlocksMetricKey = (blocks: TextFitBlock[]) => (
+  JSON.stringify(blocks, (key, value) => (key === 'color' || key === 'listColor') ? undefined : value)
+)
+
+export const extractBlocksCached = (
   html: string,
   fontFamily: string,
   defaultSize: number,
   defaultWeight?: number,
   defaultItalic?: boolean,
-) => {
-  const key = `${fontRevision}\0${fontFamily}\0${defaultSize}\0${defaultWeight ?? 400}\0${defaultItalic ? 1 : 0}\0${stripFitScale(html)}`
-  let blocks = blocksMemo.get(key)
-  if (!blocks) {
-    blocks = extractFitBlocksFromHtml(stripFitScale(html), {
+): BlocksMemoEntry => {
+  const normalized = stripFitScale(html)
+  const key = `${fontRevision}\0${fontFamily}\0${defaultSize}\0${defaultWeight ?? 400}\0${defaultItalic ? 1 : 0}\0${normalized}`
+  let entry = blocksMemo.get(key)
+  if (!entry) {
+    const blocks = extractFitBlocksFromHtml(normalized, {
       defaultFontFamily: fontFamily,
       defaultSize,
       defaultWeight,
       defaultItalic,
     }).blocks
     if (inlineMathMeasurer) applyMeasuredMathBoxes(blocks, inlineMathMeasurer)
+    entry = { blocks, metricKey: computeBlocksMetricKey(blocks) }
     if (blocksMemo.size >= BLOCKS_MEMO_MAX) {
       const oldest = blocksMemo.keys().next().value
       if (oldest !== undefined) blocksMemo.delete(oldest)
     }
-    blocksMemo.set(key, blocks)
+    blocksMemo.set(key, entry)
   }
-  return { blocks }
+  else {
+    blocksMemo.delete(key)
+    blocksMemo.set(key, entry)
+  }
+  return entry
 }
 
 type FitScaleOptions = {
@@ -779,11 +840,10 @@ type FitScaleOptions = {
 const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
   const fontFamily = resolvePaintFontFamily(options.defaultFontFamily)
   const defaultSize = options.defaultSize ?? DEFAULT_TEXT_FONT_SIZE
-  const { blocks } = extractBlocksCached(html, fontFamily, defaultSize, options.defaultWeight, options.defaultItalic)
+  const { metricKey } = extractBlocksCached(html, fontFamily, defaultSize, options.defaultWeight, options.defaultItalic)
   // Color rewrites and rendered CSS spelling do not change text geometry.
-  const metrics = JSON.stringify(blocks, (key, value) => (key === 'color' || key === 'listColor') ? undefined : value)
   const key = fitSessionKey(
-    metrics,
+    metricKey,
     fontFamily,
     options.lineHeight,
     options.letterSpacing || 0,
@@ -799,15 +859,34 @@ const fitScaleMemoKey = (html: string, options: FitScaleOptions) => {
  * later applies, and export reuse the corrected value instead of re-overflow.
  */
 const fitScaleListeners = new Set<(elementId: string) => void>()
-const fontChangeListeners = new Set<() => void>()
-export function subscribeTextFontChanges(listener: () => void) {
+const fitScaleElementVersions = new Map<string, number>()
+let fitScaleVersionSeq = 0
+
+export function getElementFitScaleVersion(elementId: string): number {
+  return fitScaleElementVersions.get(elementId) ?? 0
+}
+
+export type TextFontChangeListener = (families?: ReadonlySet<string>) => void
+const fontChangeListeners = new Set<TextFontChangeListener>()
+export function subscribeTextFontChanges(listener: TextFontChangeListener) {
   fontChangeListeners.add(listener)
   return () => { fontChangeListeners.delete(listener) }
 }
-if (typeof document !== 'undefined') document.fonts?.addEventListener('loadingdone', () => {
-  // A family name can now resolve to a different font than its fallback.
-  // Prepared handles and DOM-verified scales both contain the old metrics.
+
+const seenLoadedFontFaces = new Set<string>()
+let pendingFontFamilies: Set<string> | null = null
+let pendingFontFlushFrame = 0
+
+const flushPendingFontChanges = () => {
+  pendingFontFlushFrame = 0
+  const families = pendingFontFamilies
+  pendingFontFamilies = null
+  if (!families || families.size === 0) return
   fontRevision++
+  for (const family of families) {
+    familyRevisions.set(family, (familyRevisions.get(family) ?? 0) + 1)
+    if (family.includes('katex')) mathRevision++
+  }
   clearPretextCache()
   preparedHandleCache.clear()
   richInlineCache.clear()
@@ -816,7 +895,40 @@ if (typeof document !== 'undefined') document.fonts?.addEventListener('loadingdo
   spaceWidthCache.clear()
   blocksMemo.clear()
   fitScaleMemo.clear()
-  for (const listener of fontChangeListeners) listener()
+  for (const listener of fontChangeListeners) listener(families)
+}
+
+if (typeof document !== 'undefined') document.fonts?.addEventListener('loadingdone', (event) => {
+  // Collect only genuinely newly-loaded font faces; ignore already-seen faces
+  // so routine `document.fonts.load` checks never cause global invalidation.
+  const faces = (event as FontFaceSetLoadEvent | undefined)?.fontfaces
+  const newlyLoaded: string[] = []
+  if (faces && faces.length > 0) {
+    for (const face of faces) {
+      if (face.status && face.status !== 'loaded') continue
+      const family = normalizeFontFamilyName(face.family)
+      if (!family) continue
+      const faceKey = `${family}|${face.weight}|${face.style}|${face.unicodeRange}`
+      if (seenLoadedFontFaces.has(faceKey)) continue
+      seenLoadedFontFaces.add(faceKey)
+      newlyLoaded.push(family)
+    }
+    if (!newlyLoaded.length) return
+  }
+  else {
+    return
+  }
+  if (!pendingFontFamilies) pendingFontFamilies = new Set()
+  for (const family of newlyLoaded) pendingFontFamilies.add(family)
+  if (!pendingFontFlushFrame) {
+    if (typeof requestAnimationFrame === 'function') {
+      pendingFontFlushFrame = requestAnimationFrame(flushPendingFontChanges)
+    }
+    else {
+      pendingFontFlushFrame = 1
+      Promise.resolve().then(flushPendingFontChanges)
+    }
+  }
 })
 export function subscribeFitScaleChanges(listener: (elementId: string) => void) {
   fitScaleListeners.add(listener)
@@ -863,7 +975,10 @@ export function rememberFitScale(html: string, options: FitScaleOptions, scale: 
     if (oldest !== undefined) fitScaleMemo.delete(oldest)
   }
   fitScaleMemo.set(key, scale)
-  if (elementId) for (const listener of fitScaleListeners) listener(elementId)
+  if (elementId) {
+    fitScaleElementVersions.set(elementId, ++fitScaleVersionSeq)
+    for (const listener of fitScaleListeners) listener(elementId)
+  }
 }
 
 /**

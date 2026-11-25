@@ -12,7 +12,6 @@ import Modal from '@/components/Modal'
 const isCodeElement = (el: PPTElement): el is PPTCodeElement => el.type === 'code'
 
 const CodeEditorDialog = memo(() => {
-  const slidesStore = useSlidesStore()
   const { addHistorySnapshot } = useHistorySnapshot()
   const [visible, setVisible] = useState(false)
   const [editingElementId, setEditingElementId] = useState('')
@@ -27,13 +26,13 @@ const CodeEditorDialog = memo(() => {
   const updateCode = useCallback((payload: CodeEditorPayload) => {
     const id = editingElementId
     if (!id) return
-    slidesStore.updateElement({
+    useSlidesStore.getState().updateElement({
       id,
       props: payload,
     })
     addHistorySnapshot()
     setVisible(false)
-  }, [editingElementId, slidesStore, addHistorySnapshot])
+  }, [editingElementId, addHistorySnapshot])
 
   const close = useCallback(() => setVisible(false), [])
 

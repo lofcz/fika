@@ -28,7 +28,7 @@ const StaticTable = memo((props: IStaticTableProps) => {
   }, [colWidths, width]);
   const { hideCells } = useHideCells(data);
   const { themeColors } = useSubThemeColor(theme);
-  useMathReady(data);
+  const mathIsReady = useMathReady(data);
   return <div className={cx('static-table')} style={{ width: totalWidth + 'px' }}>
     <table
       className={cx({
@@ -59,7 +59,7 @@ const StaticTable = memo((props: IStaticTableProps) => {
           rowSpan={cell.rowspan}
           colSpan={cell.colspan}
         >
-          <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style, cell.textFormat === 'html')} dangerouslySetInnerHTML={{ __html: formatText(cell.text, cell.textFormat) }} />
+          <div className={cx('cell-text')} style={getTextStyle(cellMinHeight, cell.style, cell.textFormat === 'html')} dangerouslySetInnerHTML={{ __html: formatText(cell.text, cell.textFormat, mathIsReady ? 1 : 0) }} />
         </td>)}
       </tr>)}</tbody>
     </table>

@@ -1,6 +1,5 @@
 import {
   materializeRichInlineLineRange,
-  prepareRichInline,
 } from '@chenglou/pretext/rich-inline'
 
 import type { TextAlign, TextAlignVertical } from '@/types/slides'
@@ -14,7 +13,9 @@ import {
   LIST_MARKER_GAP_EM,
   applyMeasuredMathBoxes,
   walkEditorTextLines,
-  extractFitBlocksFromHtml,
+  extractBlocksCached,
+  normalizeFontFamilyName,
+  prepareRichInlineCached,
   blockLineBoxHeight,
   fixedLineMetrics,
   listColumnInset,
@@ -50,6 +51,7 @@ export type CanvasTextPaintOptions = {
   vertical?: boolean
   shadow?: { h: number; v: number; blur: number; color: string }
   invalidate?: () => void
+  onIncomplete?: () => void
 }
 
 type PreparedLine = {
@@ -75,11 +77,26 @@ const fontOf = (run: TextFitRun, fallbackFamily: string, scale: number) => {
 }
 
 const requestedFonts = new Set<string>()
+const GENERIC_FONT_FAMILIES = new Set([
+  'sans-serif',
+  'serif',
+  'monospace',
+  'system-ui',
+  'ui-sans-serif',
+  'ui-serif',
+  'ui-monospace',
+  '-apple-system',
+  'blinkmacsystemfont',
+  'cursive',
+  'fantasy',
+  'emoji',
+])
 
 /**
- * Canvas2D measureText/fillText does not trigger lazy `@font-face` downloads
- * for fonts only used on unvisited slides. Request unloaded faces proactively
- * so thumbnails settle before the user clicks a slide.
+ * Lightweight fallback for faces declared via `@font-face` that were not yet
+ * preloaded at deck load time. Skips generic stacks and undeclared system fonts,
+ * and relies on the coalesced `document.fonts` `loadingdone` handler instead of
+ * triggering per-run invalidations.
  */
 const ensurePaintFontLoaded = (
   run: Pick<TextFitRun, 'italic' | 'bold' | 'fontWeight' | 'fontFamily'>,
@@ -87,24 +104,33 @@ const ensurePaintFontLoaded = (
   invalidate?: () => void,
 ) => {
   if (typeof document === 'undefined' || !document.fonts?.load) return
+  const rawFamily = run.fontFamily || fallbackFamily
+  const primary = normalizeFontFamilyName(rawFamily)
+  if (!primary || GENERIC_FONT_FAMILIES.has(primary)) return
   const style = run.italic ? 'italic' : 'normal'
   const weight = run.bold ? '700' : String(run.fontWeight || 400)
-  const family = quoteFamily(run.fontFamily || fallbackFamily)
-  const faceKey = `${style} ${weight} 16px ${family}`
+  const faceKey = `${style} ${weight} 16px ${primary}`
   if (requestedFonts.has(faceKey)) return
+  requestedFonts.add(faceKey)
+  // Only load if a matching `@font-face` exists in `document.fonts` and is still unloaded.
+  let hasUnloadedDeclaredFace = false
   try {
-    if (document.fonts.check(faceKey)) {
-      requestedFonts.add(faceKey)
-      return
+    for (const face of document.fonts as unknown as Iterable<FontFace>) {
+      if (face.status === 'unloaded' && normalizeFontFamilyName(face.family) === primary) {
+        hasUnloadedDeclaredFace = true
+        break
+      }
     }
   }
   catch {
-    requestedFonts.add(faceKey)
     return
   }
-  requestedFonts.add(faceKey)
-  void document.fonts.load(faceKey).then(faces => {
-    if (faces.length) invalidate?.()
+  if (!hasUnloadedDeclaredFace) return
+  void document.fonts.load(`${style} ${weight} 16px ${quoteFamily(rawFamily)}`).then(faces => {
+    // Only invalidate if no global loadingdone event will cover it (e.g. mocked fonts).
+    if (faces.some(face => face.status === 'loaded') && typeof document.fonts.addEventListener !== 'function') {
+      invalidate?.()
+    }
   }).catch(() => {})
 }
 
@@ -211,9 +237,9 @@ const prepareLines = (
       color: run.color,
       fontFamily: run.fontFamily || block.fontFamily || family,
     }))
-    const prepared = prepareRichInline(items.map(run => (
+    const prepared = prepareRichInlineCached(items.map(run => (
       richInlineFromRun(run, fontOf(run, family, scale), scale, letterSpacing || undefined)
-    )), { whiteSpace: block.whiteSpace })
+    )), block.whiteSpace, letterSpacing || undefined)
     const firstLine = lines.length
     const lineWidth = Math.max(1, width - listColumnInset(block, scale))
     const spaceRun = pickSpaceRun(items)
@@ -259,31 +285,35 @@ export const paintRichText = (
   const lineHeight = options.lineHeight ?? 1.5
   const letterSpacing = options.letterSpacing || 0
   const paragraphSpace = options.paragraphSpace ?? 5
-  const { blocks } = extractFitBlocksFromHtml(html, {
-    defaultFontFamily: options.defaultFontFamily,
+  const { blocks: cachedBlocks } = extractBlocksCached(
+    html,
+    options.defaultFontFamily,
     defaultSize,
-    defaultWeight: options.defaultWeight,
-    defaultItalic: options.defaultItalic,
-  })
-  if (!blocks.length) return 0
-  for (const block of blocks) {
-    // Bare <p> after Enter inherits the slot (host text-align), not the
-    // previous paragraph — a left fragment must not left-align the next line.
-    // List items already carry the inner <p> align from extract; do not let a
-    // centered title slot recenter a left-aligned list.
-    if (!block.listItem) block.align ||= options.align
-    block.fontFamily ||= options.defaultFontFamily
-    if (block.runs) {
-      for (const run of block.runs) {
-        run.color ||= options.defaultColor
-        run.fontFamily ||= block.fontFamily
-        ensurePaintFontLoaded(run, options.defaultFontFamily, options.invalidate)
+    options.defaultWeight,
+    options.defaultItalic,
+  )
+  if (!cachedBlocks.length) return 0
+  // Shallow-clone blocks/runs before applying per-paint defaults so the shared
+  // extraction cache stays immutable across calls with different colors/aligns.
+  const blocks: TextFitBlock[] = cachedBlocks.map(block => {
+    const fontFamily = block.fontFamily || options.defaultFontFamily
+    const runs = block.runs?.map(run => {
+      const nextRun: TextFitRun = {
+        ...run,
+        color: run.color || options.defaultColor,
+        fontFamily: run.fontFamily || fontFamily,
       }
+      ensurePaintFontLoaded(nextRun, options.defaultFontFamily, options.invalidate)
+      return nextRun
+    })
+    if (!runs) ensurePaintFontLoaded(block, options.defaultFontFamily, options.invalidate)
+    return {
+      ...block,
+      align: block.listItem ? block.align : (block.align || options.align),
+      fontFamily,
+      ...(runs ? { runs } : {}),
     }
-    else {
-      ensurePaintFontLoaded(block, options.defaultFontFamily, options.invalidate)
-    }
-  }
+  })
   applyMeasuredMathBoxes(blocks, measureInlineMathBox)
   const fitScale = options.fit
     ? textFitScaleForHtml(html, {
@@ -388,14 +418,17 @@ export const paintRichText = (
           const dh = natH * scale
           ctx.drawImage(raster, x, chipY + Math.max(0, (chipH - dh) / 2), dw, dh)
         }
-        else if (chipW > 0) {
-          ctx.save()
-          ctx.font = fontOf({ ...run, italic: false }, options.defaultFontFamily, fitScale)
-          ctx.fillStyle = color
-          ctx.textAlign = 'left'
-          ctx.textBaseline = 'middle'
-          ctx.fillText(latexFallbackText(run.mathLatex), x, y + line.height / 2, chipW)
-          ctx.restore()
+        else {
+          options.onIncomplete?.()
+          if (chipW > 0) {
+            ctx.save()
+            ctx.font = fontOf({ ...run, italic: false }, options.defaultFontFamily, fitScale)
+            ctx.fillStyle = color
+            ctx.textAlign = 'left'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(latexFallbackText(run.mathLatex), x, y + line.height / 2, chipW)
+            ctx.restore()
+          }
         }
         x += fragment.occupiedWidth
         continue

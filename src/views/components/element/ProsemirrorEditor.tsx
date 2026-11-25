@@ -12,7 +12,7 @@ import type { EditorView } from 'prosemirror-view';
 import type { Mark, Node as ProsemirrorNode } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import { toggleMark, wrapIn, lift } from 'prosemirror-commands';
-import { initProsemirrorEditor, createDocument, normalizeFittedFontSizes } from '@/utils/prosemirror';
+import { initProsemirrorEditor, createDocument, normalizeFittedFontSizes, syncMathReadyInEditorView } from '@/utils/prosemirror';
 import { clearPendingCaret, consumePendingCaret, registerEditorView, unregisterEditorView } from '@/utils/prosemirror/caret';
 import { commitLiveEditorToStore, rememberEditorSource, resolveEditorMountHtml, richTextHtmlLooksEmpty, storeHtmlForElement } from '@/utils/prosemirror/commitEditor';
 import { registerCommitFlusher } from '@/utils/commitQueue';
@@ -32,7 +32,7 @@ import { KEYS } from '@/configs/hotkey';
 import { useI18nContext } from '@/i18n/useI18nContext';
 import { resolveFikaPortalTarget } from '@/utils/portal';
 import { followHyperlinkModifier, hyperlinkAnchorFromEvent, hyperlinkTooltipFromAnchor, isFollowHyperlinkClick, isSafeHyperlinkHref, openHyperlink, type HyperlinkHoverTooltip } from '@/utils/hyperlinkFollow';
-import { ensureMathliveReady, htmlContainsMath } from '@/utils/math';
+import { ensureMathliveReady, htmlContainsMath, mathReady, subscribeMathReady } from '@/utils/math';
 
 type HostFallthrough = Omit<HTMLAttributes<HTMLDivElement>, 'className' | 'onFocus' | 'onBlur' | 'onMouseDown' | 'children' | 'dangerouslySetInnerHTML'>;
 
@@ -305,9 +305,38 @@ const ProsemirrorEditorView = memo(forwardRef<ProsemirrorEditorHandle, IProsemir
   }, [callbacksRef]);
 
   const skipValueWatchRef = useRef(true);
+  const pendingMathRetypesetRef = useRef(false);
+  const retypesetMathInView = useCallback(() => {
+    const view = editorView.current;
+    if (!view) return;
+    if (editableRef.current || view.hasFocus()) {
+      pendingMathRetypesetRef.current = true;
+      return;
+    }
+    pendingMathRetypesetRef.current = false;
+    syncMathReadyInEditorView(view, valueRef.current, {
+      editing: false,
+      onBeforeDispatch: () => handleInput.cancel(),
+    });
+  }, [handleInput]);
   useEffect(() => {
-    if (htmlContainsMath(value)) void ensureMathliveReady().catch(() => {});
-  }, [value]);
+    if (!editable && pendingMathRetypesetRef.current && mathReady.value) {
+      retypesetMathInView();
+    }
+  }, [editable, retypesetMathInView]);
+  useEffect(() => {
+    if (!htmlContainsMath(value)) return;
+    if (mathReady.value) {
+      retypesetMathInView();
+      return;
+    }
+    void ensureMathliveReady().then(() => {
+      retypesetMathInView();
+    }).catch(() => {});
+    return subscribeMathReady(() => {
+      retypesetMathInView();
+    });
+  }, [value, retypesetMathInView]);
   useEffect(() => {
     if (skipValueWatchRef.current) {
       skipValueWatchRef.current = false;
